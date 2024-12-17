@@ -272,6 +272,7 @@ class Assembly(TimeStampedModel, ENADerivedModel):
                 cls.ASSEMBLY_UPLOADED: False,
                 cls.ASSEMBLY_UPLOAD_FAILED: False,
                 cls.ASSEMBLY_UPLOAD_BLOCKED: False,
+                cls.PRE_ASSEMBLY_QC_FAILED: False,
             }
 
     status = models.JSONField(
