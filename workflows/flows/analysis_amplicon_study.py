@@ -64,6 +64,7 @@ def get_analyses_to_attempt(
             **{
                 f"status__{analyses.models.Analysis.AnalysisStates.ANALYSIS_COMPLETED}": False,
                 f"status__{analyses.models.Analysis.AnalysisStates.ANALYSIS_BLOCKED}": False,
+                f"status__{analyses.models.Analysis.AnalysisStates.ANALYSIS_PRE_QC_FAILED}": False,
             }
         )
         .filter(experiment_type=for_experiment_type)
@@ -546,7 +547,7 @@ def set_post_analysis_states(amplicon_current_outdir: Path, amplicon_analyses: L
         if analysis.run.first_accession in qc_failed_runs:
             task_mark_analysis_status(
                 analysis,
-                status=analyses.models.Analysis.AnalysisStates.ANALYSIS_FAILED,
+                status=analyses.models.Analysis.AnalysisStates.ANALYSIS_PRE_QC_FAILED,
                 reason=qc_failed_runs[analysis.run.first_accession],
             )
         elif analysis.run.first_accession in qc_completed_runs:

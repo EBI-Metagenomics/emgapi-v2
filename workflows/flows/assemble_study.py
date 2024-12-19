@@ -126,6 +126,7 @@ def get_assemblies_to_attempt(study: analyses.models.Study) -> List[Union[str, i
         **{
             f"status__{analyses.models.Assembly.AssemblyStates.ASSEMBLY_COMPLETED}": False,
             f"status__{analyses.models.Assembly.AssemblyStates.ASSEMBLY_BLOCKED}": False,
+            f"status__{analyses.models.Assembly.AssemblyStates.PRE_ASSEMBLY_QC_FAILED}": False,
         }
     ).values_list("id", flat=True)
     return assemblies_worth_trying
