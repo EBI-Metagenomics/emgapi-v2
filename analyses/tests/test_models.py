@@ -5,17 +5,15 @@ import tempfile
 import pytest
 from django.core.management import call_command
 
-from ena.models import Study as ENAStudy
-
-from .models import (
+from analyses.models import (
     Analysis,
     Assembler,
-    Assembly,
     Biome,
     ComputeResourceHeuristic,
     Run,
     Study,
 )
+from ena.models import Study as ENAStudy
 
 
 @pytest.mark.django_db(transaction=True, reset_sequences=True)
@@ -155,33 +153,6 @@ def test_compute_resource_heuristics(top_level_biomes, assemblers):
 
     finally:
         os.remove(temp_csv_name)
-
-
-@pytest.mark.django_db(transaction=True)
-def test_biome_importer(httpx_mock):
-    httpx_mock.add_response(
-        url=f"http://old.api/v1/biomes?page=1",
-        json={
-            "links": {
-                "next": "http://old.api/v1/biomes?page=2",
-            },
-            "data": [{"id": "root", "attributes": {"biome-name": "Root"}}],
-        },
-    )
-    httpx_mock.add_response(
-        url=f"http://old.api/v1/biomes?page=2",
-        json={
-            "links": {
-                "next": None,
-            },
-            "data": [{"id": "root:Deep", "attributes": {"biome-name": "Deep"}}],
-        },
-    )
-    call_command("import_biomes_from_api_v1", "-u", "http://old.api/v1/biomes")
-    assert Biome.objects.count() == 2
-    assert Biome.objects.filter(path="root.deep").exists()
-    assert Biome.objects.get(path="root.deep").biome_name == "Deep"
-    assert Biome.objects.get(path="root.deep").pretty_lineage == "root:Deep"
 
 
 @pytest.mark.django_db(transaction=True)

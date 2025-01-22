@@ -128,6 +128,8 @@ def mock_legacy_emg_db_session(in_memory_legacy_emg_db, monkeypatch):
         if hasattr(module, "legacy_emg_db_session"):
             setattr(module, "legacy_emg_db_session", mock_legacy_session)
 
+    return mock_legacy_session
+
 
 @pytest.fixture
 def mock_mongo_client_for_taxonomy(monkeypatch):
@@ -156,3 +158,8 @@ def mock_mongo_client_for_taxonomy(monkeypatch):
     monkeypatch.setattr(pymongo, "MongoClient", lambda *args, **kwargs: mock_client)
 
     return mock_client
+    # biome = LegacyBiome(
+    #     id=1,
+    #     biome_name="Martian soil",
+    #     lineage="root:Environmental:Planetary:Martian soil",
+    # )

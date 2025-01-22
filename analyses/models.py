@@ -94,6 +94,9 @@ class Study(MGnifyAutomatedModel, ENADerivedModel, TimeStampedModel):
         ena.models.Study, on_delete=models.CASCADE, null=True, blank=True
     )
     biome = models.ForeignKey(Biome, on_delete=models.CASCADE, null=True, blank=True)
+    has_legacy_data = models.BooleanField(
+        default=False, help_text="If the study has legacy data (pre V6)"
+    )
 
     title = models.CharField(max_length=255)
 
