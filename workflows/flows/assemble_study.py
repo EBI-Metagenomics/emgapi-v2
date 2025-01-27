@@ -124,11 +124,12 @@ def get_assemblies_to_attempt(study: analyses.models.Study) -> List[Union[str, i
     :return:
     """
     study.refresh_from_db()
-    assemblies_worth_trying = study.assemblies_reads.filter(
-        **{
-            f"status__{analyses.models.Assembly.AssemblyStates.ASSEMBLY_COMPLETED}": False,
-            f"status__{analyses.models.Assembly.AssemblyStates.ASSEMBLY_BLOCKED}": False,
-        }
+    assemblies_worth_trying = study.assemblies_reads.exclude_by_statuses(
+        [
+            analyses.models.Assembly.AssemblyStates.PRE_ASSEMBLY_QC_FAILED,
+            analyses.models.Assembly.AssemblyStates.ASSEMBLY_COMPLETED,
+            analyses.models.Assembly.AssemblyStates.ASSEMBLY_BLOCKED,
+        ]
     ).values_list("id", flat=True)
     return assemblies_worth_trying
 

@@ -13,6 +13,12 @@ fileignoreconfig:
   checksum: 0e93196d244417801fd40ad6bfa01f53a6bf04257371378a1dc3e14cbc7a04d8
 - filename: slurm-dev-environment/fs/nfs/public/tests/amplicon_v6_output/SRR6180434/taxonomy-summary/SILVA-SSU/SRR6180434.html
   checksum: be322a6ac4686d8fa31b271a862510603403c2da8dbdce60dbb7ad3877aa7b47
+- filename: analyses/tests.py
+  allowed_patterns: [key]
+- filename: analyses/base_models/with_status_models.py
+  allowed_patterns: [key]
+- filename: analyses/tests/test_models.py
+  allowed_patterns: [key]
 allowed_patterns:
 - pagination_key
 - CommonMetadataKeys

@@ -6,6 +6,7 @@ from django.http import Http404
 from django.shortcuts import get_object_or_404
 from ninja import NinjaAPI
 from ninja.pagination import RouterPaginated
+from ninja.security import django_auth_superuser
 
 import analyses.models
 from analyses.schemas import (
@@ -234,6 +235,39 @@ def get_mgnify_analysis_with_annotations_of_type(
 )
 def list_mgnify_analyses(request):
     qs = analyses.models.Analysis.objects.all()
+    return qs
+
+
+#################################################################
+#                                                               #
+#                          My Data                             #
+#                                                               #
+#################################################################
+
+
+@api.get(
+    "/my-data/analyses",
+    response=List[MGnifyAnalysis],
+    tags=[ApiSections.ANALYSES.value],
+    summary="List all private analyses (MGYAs) available from MGnify",
+    operation_id="list_private_mgnify_analyses",
+    auth=django_auth_superuser,
+)
+def list_private_mgnify_analyses():
+    qs = analyses.models.Analysis.objects.private_only()
+    return qs
+
+
+@api.get(
+    "/my-data/studies",
+    response=List[MGnifyStudy],
+    tags=[ApiSections.STUDIES.value],
+    summary="List all private studies available from MGnify",
+    operation_id="list_private_mgnify_studies",
+    auth=django_auth_superuser,
+)
+def list_private_mgnify_studies():
+    qs = analyses.models.Study.objects.private_only()
     return qs
 
 

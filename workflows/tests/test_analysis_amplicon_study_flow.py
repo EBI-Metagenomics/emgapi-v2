@@ -505,7 +505,7 @@ async def test_prefect_analyse_amplicon_flow(
     # check failed runs
     assert (
         await analyses.models.Analysis.objects.filter(
-            status__analysis_failed=True
+            status__analysis_qc_failed=True
         ).acount()
         == 1
     )

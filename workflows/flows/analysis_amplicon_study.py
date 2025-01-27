@@ -45,6 +45,7 @@ from workflows.views import encode_samplesheet_path
 FASTQ_FTPS = analyses.models.Run.CommonMetadataKeys.FASTQ_FTPS
 METADATA__FASTQ_FTPS = f"{analyses.models.Run.metadata.field.name}__{FASTQ_FTPS}"
 EMG_CONFIG = settings.EMG_CONFIG
+AnalysisStates = analyses.models.Analysis.AnalysisStates
 
 
 @task(
@@ -62,16 +63,18 @@ def get_analyses_to_attempt(
     """
     study.refresh_from_db()
     analyses_worth_trying = (
-        study.analyses.filter(
-            **{
-                f"status__{analyses.models.Analysis.AnalysisStates.ANALYSIS_COMPLETED}": False,
-                f"status__{analyses.models.Analysis.AnalysisStates.ANALYSIS_BLOCKED}": False,
-            }
+        study.analyses.exclude_by_statuses(
+            [
+                analyses.models.Analysis.AnalysisStates.ANALYSIS_QC_FAILED,
+                analyses.models.Analysis.AnalysisStates.ANALYSIS_COMPLETED,
+                analyses.models.Analysis.AnalysisStates.ANALYSIS_BLOCKED,
+            ]
         )
-        .filter(experiment_type=for_experiment_type)
+        .filter(experiment_type=for_experiment_type.value)
         .order_by("id")
         .values_list("id", flat=True)
     )
+
     print(f"Got {len(analyses_worth_trying)} analyses to attempt")
     return analyses_worth_trying
 
@@ -111,12 +114,12 @@ def create_analyses(
 
 @task(log_prints=True)
 def mark_analysis_as_started(analysis: analyses.models.Analysis):
-    analysis.mark_status(analysis.AnalysisStates.ANALYSIS_STARTED)
+    analysis.mark_status(AnalysisStates.ANALYSIS_STARTED)
 
 
 @task(log_prints=True)
 def mark_analysis_as_failed(analysis: analyses.models.Analysis):
-    analysis.mark_status(analysis.AnalysisStates.ANALYSIS_FAILED)
+    analysis.mark_status(AnalysisStates.ANALYSIS_FAILED)
 
 
 @task(
@@ -474,7 +477,7 @@ def sanity_check_amplicon_results(
     if reason:
         task_mark_analysis_status(
             analysis,
-            status=analyses.models.Analysis.AnalysisStates.ANALYSIS_POST_SANITY_CHECK_FAILED,
+            status=AnalysisStates.ANALYSIS_POST_SANITY_CHECK_FAILED,
             reason=reason,
         )
 
@@ -485,7 +488,7 @@ def import_completed_analysis(
 ):
     for analysis in amplicon_analyses:
         analysis.refresh_from_db()
-        if not analysis.status.get(analysis.AnalysisStates.ANALYSIS_COMPLETED):
+        if not analysis.status.get(AnalysisStates.ANALYSIS_COMPLETED):
             print(f"{analysis} is not completed successfuly. Skipping.")
             continue
         if analysis.annotations.get(analysis.TAXONOMIES):
@@ -548,17 +551,17 @@ def set_post_analysis_states(amplicon_current_outdir: Path, amplicon_analyses: L
         if analysis.run.first_accession in qc_failed_runs:
             task_mark_analysis_status(
                 analysis,
-                status=analyses.models.Analysis.AnalysisStates.ANALYSIS_FAILED,
+                status=AnalysisStates.ANALYSIS_QC_FAILED,
                 reason=qc_failed_runs[analysis.run.first_accession],
             )
         elif analysis.run.first_accession in qc_completed_runs:
             task_mark_analysis_status(
                 analysis,
-                status=analyses.models.Analysis.AnalysisStates.ANALYSIS_COMPLETED,
+                status=AnalysisStates.ANALYSIS_COMPLETED,
                 reason=qc_completed_runs[analysis.run.first_accession],
                 unset_statuses=[
-                    analyses.models.Analysis.AnalysisStates.ANALYSIS_FAILED,
-                    analyses.models.Analysis.AnalysisStates.ANALYSIS_BLOCKED,
+                    AnalysisStates.ANALYSIS_FAILED,
+                    AnalysisStates.ANALYSIS_BLOCKED,
                 ],
             )
             sanity_check_amplicon_results(
@@ -568,7 +571,7 @@ def set_post_analysis_states(amplicon_current_outdir: Path, amplicon_analyses: L
         else:
             task_mark_analysis_status(
                 analysis,
-                status=analyses.models.Analysis.AnalysisStates.ANALYSIS_FAILED,
+                status=AnalysisStates.ANALYSIS_FAILED,
                 reason="Missing run in execution",
             )
 

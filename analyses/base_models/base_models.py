@@ -119,3 +119,23 @@ class TimeStampedModel(models.Model):
 
     class Meta:
         abstract = True
+
+
+class PrivacyFilterManagerMixin:
+    """
+    Base mixin providing common privacy filtering methods for studies
+    """
+
+    def get_queryset(self, include_private=False, private_only=False):
+        qs = super().get_queryset()
+        if private_only:
+            return qs.filter(is_private=True)
+        if not include_private:
+            return qs.filter(is_private=False)
+        return qs
+
+    def private_only(self):
+        """
+        Returns only private studies
+        """
+        return self.get_queryset(private_only=True)

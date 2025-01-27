@@ -20,11 +20,13 @@ from analyses.base_models.base_models import (
     ENADerivedManager,
     ENADerivedModel,
     MGnifyAutomatedModel,
+    PrivacyFilterManagerMixin,
     TimeStampedModel,
     VisibilityControlledModel,
 )
 from analyses.base_models.mgnify_accessioned_models import MGnifyAccessionField
 from analyses.base_models.with_downloads_models import WithDownloadsModel
+from analyses.base_models.with_status_models import SelectByStatusManagerMixin
 from emgapiv2.async_utils import anysync_property
 
 # Some models associated with MGnify Analyses (MGYS, MGYA etc).
@@ -86,7 +88,18 @@ class StudyManager(models.Manager):
         return study
 
 
+class PublicStudyManager(PrivacyFilterManagerMixin, StudyManager):
+    """
+    A custom manager that filters out private studies by default.
+    """
+
+    pass
+
+
 class Study(MGnifyAutomatedModel, ENADerivedModel, TimeStampedModel):
+    objects = PublicStudyManager()
+    all_objects = models.Manager()
+
     accession = MGnifyAccessionField(
         accession_prefix="MGYS", accession_length=8, db_index=True
     )
@@ -99,8 +112,6 @@ class Study(MGnifyAutomatedModel, ENADerivedModel, TimeStampedModel):
     )
 
     title = models.CharField(max_length=255)
-
-    objects: StudyManager = StudyManager()
 
     def __str__(self):
         return self.accession
@@ -209,7 +220,7 @@ class Assembler(TimeStampedModel):
         return f"{self.name} {self.version}" if self.version is not None else self.name
 
 
-class AssemblyManager(ENADerivedManager):
+class AssemblyManager(SelectByStatusManagerMixin, ENADerivedManager):
     def get_queryset(self):
         return super().get_queryset().select_related("run")
 
@@ -269,6 +280,7 @@ class Assembly(TimeStampedModel, ENADerivedModel):
         def default_status(cls):
             return {
                 cls.ASSEMBLY_STARTED: False,
+                cls.PRE_ASSEMBLY_QC_FAILED: False,
                 cls.ASSEMBLY_FAILED: False,
                 cls.ASSEMBLY_COMPLETED: False,
                 cls.ASSEMBLY_BLOCKED: False,
@@ -401,7 +413,7 @@ class ComputeResourceHeuristic(TimeStampedModel):
             return f"ComputeResourceHeuristic {self.id} ({self.process})"
 
 
-class AnalysisManagerDeferringAnnotations(models.Manager):
+class AnalysisManagerDeferringAnnotations(SelectByStatusManagerMixin, models.Manager):
     """
     The annotations field is a potentially large JSONB field.
     Defer it by default, since most queries don't need to transfer this large dataset.
@@ -411,9 +423,29 @@ class AnalysisManagerDeferringAnnotations(models.Manager):
         return super().get_queryset().defer("annotations")
 
 
-class AnalysisManagerIncludingAnnotations(models.Manager):
+class AnalysisManagerIncludingAnnotations(SelectByStatusManagerMixin, models.Manager):
     def get_queryset(self):
         return super().get_queryset()
+
+
+class PublicAnalysisManager(
+    PrivacyFilterManagerMixin, AnalysisManagerDeferringAnnotations
+):
+    """
+    A custom manager that filters out private analyses by default.
+    """
+
+    pass
+
+
+class PublicAnalysisManagerIncludingAnnotations(
+    PrivacyFilterManagerMixin, AnalysisManagerIncludingAnnotations
+):
+    """
+    A custom manager that includes annotations but still filters out private analyses by default.
+    """
+
+    pass
 
 
 class Analysis(
@@ -423,8 +455,11 @@ class Analysis(
     WithDownloadsModel,
     WithExperimentTypeModel,
 ):
-    objects = AnalysisManagerDeferringAnnotations()
-    objects_and_annotations = AnalysisManagerIncludingAnnotations()
+    objects = PublicAnalysisManager()
+    objects_and_annotations = PublicAnalysisManagerIncludingAnnotations()
+
+    all_objects = AnalysisManagerDeferringAnnotations()
+    all_objects_and_annotations = AnalysisManagerIncludingAnnotations()
 
     DOWNLOAD_PARENT_IDENTIFIER_ATTR = "accession"
 
@@ -514,6 +549,7 @@ class Analysis(
         def default_status(cls):
             return {
                 cls.ANALYSIS_STARTED: False,
+                cls.ANALYSIS_QC_FAILED: False,
                 cls.ANALYSIS_COMPLETED: False,
                 cls.ANALYSIS_BLOCKED: False,
                 cls.ANALYSIS_FAILED: False,
