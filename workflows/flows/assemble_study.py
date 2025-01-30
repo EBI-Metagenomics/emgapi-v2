@@ -325,7 +325,7 @@ async def run_assembler_for_samplesheet(
     )
 
     try:
-        await run_cluster_job(
+        run_cluster_job(
             name=f"Assemble study {mgnify_study.ena_study.accession} via samplesheet {file_path_shortener(samplesheet_csv, 1, 15, True)}",
             command=command,
             expected_time=timedelta(

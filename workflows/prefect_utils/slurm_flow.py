@@ -56,7 +56,7 @@ def slurm_timedelta(delta: timedelta) -> str:
     return f"{days:02}-{hours:02}:{minutes:02}:{seconds:02}"
 
 
-async def check_cluster_job(
+def check_cluster_job(
     orchestrated_cluster_job: OrchestratedClusterJob,
 ) -> str:
     """
@@ -76,7 +76,7 @@ async def check_cluster_job(
         logger.warning(f"Error talking to slurm for job {job_id}")
         orchestrated_cluster_job.last_known_state = SlurmStatus.unknown.value
         orchestrated_cluster_job.state_checked_at = now()
-        await orchestrated_cluster_job.asave()
+        orchestrated_cluster_job.save()
         return SlurmStatus.unknown.value
 
     logger.info(f"SLURM status of {job_id = } is {job.state}")
@@ -103,7 +103,7 @@ async def check_cluster_job(
             orchestrated_cluster_job.cluster_log = log
     else:
         logger.info(f"No Slurm Job Stdout available at {job_log_path}")
-    await orchestrated_cluster_job.asave()
+    orchestrated_cluster_job.save()
     return job.state
 
 
@@ -383,7 +383,7 @@ def store_nextflow_trace(orchestrated_cluster_job: OrchestratedClusterJob):
     persist_result=True,
     on_cancellation=[cancel_cluster_jobs_if_flow_cancelled],
 )
-async def run_cluster_job(
+def run_cluster_job(
     name: str,
     command: str,
     expected_time: timedelta,
@@ -416,7 +416,7 @@ async def run_cluster_job(
     logger = get_run_logger()
 
     # Potentially wait some time if our cluster queue is very full
-    space_on_cluster = delay_until_cluster_has_space()
+    delay_until_cluster_has_space()
 
     # Submit or attach to a job on the cluster.
     # Depending on the job history and Resubmit Policy, this job may be a new one, an already running one,
@@ -440,7 +440,7 @@ async def run_cluster_job(
     #  check will just tell us the job finished immediately / it'll wait for the EXISTING job to finish.
     is_job_in_terminal_state = False
     while not is_job_in_terminal_state:
-        job_state = await check_cluster_job(orchestrated_cluster_job)
+        job_state = check_cluster_job(orchestrated_cluster_job)
         if slurm_status_is_finished_successfully(job_state):
             logger.info(f"Job {orchestrated_cluster_job} finished successfully.")
             store_nextflow_trace(orchestrated_cluster_job)

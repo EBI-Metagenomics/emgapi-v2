@@ -355,7 +355,7 @@ async def submit_assembly_slurm(
         command += "-submit "
 
     try:
-        await run_cluster_job(
+        run_cluster_job(
             name=f"Upload assembly for {mgnify_assembly} to ENA",
             command=command,
             expected_time=timedelta(

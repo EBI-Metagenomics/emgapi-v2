@@ -617,7 +617,7 @@ async def perform_amplicons_in_parallel(
             "ALL,TOWER_WORKSPACE_ID"
             + f"{',TOWER_ACCESS_TOKEN' if settings.EMG_CONFIG.slurm.use_nextflow_tower else ''} "
         )
-        await run_cluster_job(
+        run_cluster_job(
             name=f"Analyse amplicon study {mgnify_study.ena_study.accession} via samplesheet {slugify(samplesheet)}",
             command=command,
             expected_time=timedelta(

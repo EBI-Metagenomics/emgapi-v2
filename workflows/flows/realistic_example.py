@@ -4,6 +4,7 @@ from typing import List
 
 import django
 import httpx
+from asgiref.sync import async_to_sync
 from django.conf import settings
 from prefect import flow, get_run_logger, suspend_flow_run, task
 from prefect.input import RunInput
@@ -69,7 +70,7 @@ class DownloadOptionsInput(RunInput):
     flow_run_name="Download read-runs for study: {accession}",
     task_runner=SequentialTaskRunner,
 )
-async def realistic_example(accession: str):
+def realistic_example(accession: str):
     """
     Example flow for Prefect, doing some "realistic" work.
     Downloads read-runs from ENA using a minimal nextflow pipeline, and integrated with the Django DB.
@@ -80,7 +81,7 @@ async def realistic_example(accession: str):
 
     # Make a study. Note we are using the async Django method aget_or_create here.
     # Async isn't strictly necessary, but does make it easier to use some parts of Prefect.
-    study, created = await Study.objects.aget_or_create(
+    study, created = Study.objects.get_or_create(
         accession=accession, defaults={"title": "unknown"}
     )
     if created:
@@ -89,7 +90,7 @@ async def realistic_example(accession: str):
     # Example of how to pause the flow to wait for input from the team.
     # This will stop the flow. It can be resumed by going to the Prefect admin panel, and filling in the
     # required info into the popup.
-    download_options: DownloadOptionsInput = await suspend_flow_run(
+    download_options: DownloadOptionsInput = async_to_sync(suspend_flow_run)(
         wait_for_input=DownloadOptionsInput.with_initial_data(
             samples_limit=10,
             description=f"""
@@ -120,7 +121,7 @@ Please pick how many samples (the max limit) to download for the study {study.ac
         # limit to five sequential jobs.
         # to achieve parallelisation, our approach is to use "samplesheets" in nextflow.
         try:
-            orchestrated_cluster_job = await run_cluster_job(
+            orchestrated_cluster_job = run_cluster_job(
                 name=f"Download read-runs for for study {study.accession} sample {sample_accession}",
                 command=(
                     f"nextflow run {settings.EMG_CONFIG.slurm.pipelines_root_dir}/download_read_runs.nf "
@@ -154,6 +155,6 @@ Please pick how many samples (the max limit) to download for the study {study.ac
     for sample, job_result in zip(sample_accessions, slurm_job_results):
         if job_result:
             print(f"Successfully ran nextflow pipeline for {sample}")
-            await notify_via_slack(f"✅ Downloaded read runs for {sample}")
+            notify_via_slack(f"✅ Downloaded read runs for {sample}")
         else:
             print(f"Something went wrong running nextflow pipeline for {sample}")

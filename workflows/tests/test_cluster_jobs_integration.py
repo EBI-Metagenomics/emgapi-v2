@@ -26,7 +26,7 @@ from workflows.prefect_utils.testing_utils import run_async_flow_and_capture_log
 @flow(log_prints=True, retries=2)
 async def intermittently_buggy_flow_that_includes_a_cluster_job_subflow(workdir: Path):
     print("starting flow")
-    orchestrated_job = await run_cluster_job(
+    orchestrated_job = run_cluster_job(
         name="test job in buggy flow",
         command="echo 'test'",
         expected_time=timedelta(minutes=1),
@@ -53,7 +53,7 @@ async def test_run_cluster_job_state_persistence(
     mock_check_cluster_job_all_completed,
     tmp_path,
 ):
-    job_initial = await run_cluster_job(
+    job_initial = run_cluster_job(
         name="test job",
         command="echo 'test'",
         expected_time=timedelta(minutes=1),
@@ -68,7 +68,7 @@ async def test_run_cluster_job_state_persistence(
     # exactly the same inputs should NOT start another cluster job
     # we assume identical calls should not usually start identical another job
 
-    job_repeat_call = await run_cluster_job(
+    job_repeat_call = run_cluster_job(
         name="test job",
         command="echo 'test'",
         expected_time=timedelta(minutes=1),
@@ -86,7 +86,7 @@ async def test_run_cluster_job_state_persistence(
     # in theory the updated_at should have increased, but not here because of the test mock
 
     # a change to the params should start a new job
-    job_altered_call = await run_cluster_job(
+    job_altered_call = run_cluster_job(
         name="test job",
         command="echo 'test but different'",
         expected_time=timedelta(minutes=1),
@@ -100,7 +100,7 @@ async def test_run_cluster_job_state_persistence(
     )  # slurm job ids just increment up. assumes tests are not being run in parallel :)
 
     # we can use a different policy to ensure a job is resubmitted even if it previously ran
-    job_explicitly_resubmitted_call = await run_cluster_job(
+    job_explicitly_resubmitted_call = run_cluster_job(
         name="test job",
         command="echo 'test'",
         expected_time=timedelta(minutes=1),
@@ -130,7 +130,7 @@ async def test_run_cluster_job_state_persistence(
         file.write("my,initial,params")
 
     # cluster jobs can accept a list of input files to hash
-    job_initial_with_hash = await run_cluster_job(
+    job_initial_with_hash = run_cluster_job(
         name="test job",
         command="echo 'test'",
         expected_time=timedelta(minutes=1),
@@ -142,7 +142,7 @@ async def test_run_cluster_job_state_persistence(
     )
 
     # if input file unchanged, should be same job
-    job_repeat_with_hash = await run_cluster_job(
+    job_repeat_with_hash = run_cluster_job(
         name="test job",
         command="echo 'test'",
         expected_time=timedelta(minutes=1),
@@ -158,7 +158,7 @@ async def test_run_cluster_job_state_persistence(
     with open(f"{tmp_path}/my_inputs.csv", "w") as file:
         file.write("my,altered,params")
 
-    job_repeat_with_hash = await run_cluster_job(
+    job_repeat_with_hash = run_cluster_job(
         name="test job",
         command="echo 'test'",
         expected_time=timedelta(minutes=1),
@@ -174,7 +174,7 @@ async def test_run_cluster_job_state_persistence(
     with open(f"{tmp_path}/my_inputs.csv", "w") as file:
         file.write("even,more,altered,params")
 
-    job_repeat_with_changed_hash = await run_cluster_job(
+    job_repeat_with_changed_hash = run_cluster_job(
         name="test job",
         command="echo 'test'",
         expected_time=timedelta(minutes=1),
