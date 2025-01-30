@@ -44,6 +44,7 @@ services:
       - "./fs/nfs/production:/nfs/production"
       - "./fs/hps:/hps"
       - "./fs/nfs/public:/publicnfs"
+      - "/var/run/docker.sock:/var/run/docker.sock"
     expose:
       - "6818"
     profiles: ["slurm", "all"]

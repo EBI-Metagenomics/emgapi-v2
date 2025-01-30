@@ -37,11 +37,19 @@ COPY entrypoints/worker-entrypoint.sh /usr/local/bin/worker-entrypoint.sh
 RUN chmod +x /usr/local/bin/worker-entrypoint.sh
 ENV SLURM_INCLUDE_DIR=/usr/include
 ENV SLURM_LIB_DIR=/usr/lib/x86_64-linux-gnu
+
+# Dependencies for NF and Apptariner
 RUN DEBIAN_FRONTEND=noninteractive \
     apt -y update && apt install -y default-jre
+
+# Nextflow
 RUN wget -qO- https://get.nextflow.io | bash
 RUN chmod +x nextflow
 RUN mv nextflow /usr/bin/
+# Docker
+RUN sudo apt update && \
+    sudo apt install -y docker.io
+
 COPY configs/slurm_prolog.sh /usr/local/bin/slurm_prolog.sh
 COPY configs/slurm_epilog.sh /usr/local/bin/slurm_epilog.sh
 

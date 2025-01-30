@@ -19,6 +19,9 @@ fileignoreconfig:
   allowed_patterns: [key]
 - filename: analyses/tests/test_models.py
   allowed_patterns: [key]
+- filename: workflows/nextflow_utils/trace.py
+  checksum: 1e0f3c08815970d6baaf8c58d7392bc3f8cb900d410f8f58f5bfbd16f2a5fa3a
+version: ""
 allowed_patterns:
 - pagination_key
 - CommonMetadataKeys
