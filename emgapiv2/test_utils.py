@@ -120,5 +120,5 @@ def test_enum_stringification():
         HELLO = "hello"
         WORLD = "world"
 
-    assert str(MyEnum.HELLO) == "hello"  # default in py3.10 would be MyEnum.HELLO
+    assert str(MyEnum.HELLO) == "hello"
     assert str(MyEnum.HELLO.value) == "hello"

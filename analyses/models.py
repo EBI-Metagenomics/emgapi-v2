@@ -497,7 +497,7 @@ class Analysis(
 
     TAXONOMIES = "taxonomies"
 
-    class TaxonomySources(Enum):
+    class TaxonomySources(FutureStrEnum):
         SSU: str = "ssu"
         LSU: str = "lsu"
         ITS_ONE_DB: str = "its_one_db"
