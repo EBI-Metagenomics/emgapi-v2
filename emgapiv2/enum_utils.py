@@ -1,7 +1,18 @@
-from enum import Enum
+import enum
+
+from django.utils.version import PY311
+
+# Define StrEnum for Python3.10, to work like 3.11+
+if PY311:  # or later
+    FutureStrEnum = enum.StrEnum
+else:
+
+    class FutureStrEnum(str, enum.Enum):
+        def __str__(self):
+            return str(self.value)
 
 
-class DjangoChoicesCompatibleStrEnum(str, Enum):
+class DjangoChoicesCompatibleStrEnum(FutureStrEnum):
     # TODO: after python 3.11 adopted everywhere switch str, Enum -> StrEnum
     """
     This is a str Enum that can also be easily converted to a Django Choices object.

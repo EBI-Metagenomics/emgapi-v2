@@ -8,6 +8,8 @@ from prefect import flow, get_run_logger, suspend_flow_run
 from prefect.input import RunInput
 from prefect.task_runners import SequentialTaskRunner
 
+from emgapiv2.enum_utils import FutureStrEnum
+
 django.setup()
 
 import analyses.models
@@ -31,7 +33,7 @@ from workflows.prefect_utils.slack_notification import notify_via_slack
 EMG_CONFIG = settings.EMG_CONFIG
 
 
-class AssemblerChoices(str, Enum):
+class AssemblerChoices(FutureStrEnum):
     # IDEA: it would be nice to sniff this from the pipeline schema
     pipeline_default = "pipeline_default"
     megahit = "megahit"

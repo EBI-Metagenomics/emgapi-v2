@@ -28,6 +28,7 @@ from analyses.base_models.mgnify_accessioned_models import MGnifyAccessionField
 from analyses.base_models.with_downloads_models import WithDownloadsModel
 from analyses.base_models.with_status_models import SelectByStatusManagerMixin
 from emgapiv2.async_utils import anysync_property
+from emgapiv2.enum_utils import FutureStrEnum
 
 # Some models associated with MGnify Analyses (MGYS, MGYA etc).
 
@@ -263,7 +264,7 @@ class Assembly(TimeStampedModel, ENADerivedModel):
 
     metadata = JSONField(default=dict, db_index=True, blank=True)
 
-    class AssemblyStates(str, Enum):
+    class AssemblyStates(FutureStrEnum):
         ENA_METADATA_SANITY_CHECK_FAILED = "ena_metadata_sanity_check_failed"
         ENA_DATA_QC_CHECK_FAILED = "ena_data_qc_check_failed"
         ASSEMBLY_STARTED = "assembly_started"
@@ -538,7 +539,7 @@ class Analysis(
         choices=PipelineVersions, max_length=5, default=PipelineVersions.v6
     )
 
-    class AnalysisStates(str, Enum):
+    class AnalysisStates(FutureStrEnum):
         ANALYSIS_STARTED = "analysis_started"
         ANALYSIS_COMPLETED = "analysis_completed"
         ANALYSIS_BLOCKED = "analysis_blocked"
