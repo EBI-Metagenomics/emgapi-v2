@@ -15,6 +15,7 @@ import analyses.models
 import ena.models
 from workflows.flows.assemble_study import AssemblerChoices, assemble_study
 from workflows.flows.assemble_study_tasks.assemble_samplesheets import (
+    get_reference_genome,
     update_assemblies_assemblers_from_samplesheet,
 )
 from workflows.flows.assemble_study_tasks.make_samplesheets import (
@@ -79,6 +80,7 @@ async def test_prefect_assemble_study_flow(
                 "library_strategy": "WGS",
                 "library_source": "METAGENOMIC",
                 "scientific_name": "metagenome",
+                "host_tax_id": "7460",
             },
             {
                 "sample_accession": "SAMN02",
@@ -91,6 +93,7 @@ async def test_prefect_assemble_study_flow(
                 "library_strategy": "WGS",
                 "library_source": "METAGENOMIC",
                 "scientific_name": "metagenome",
+                "host_tax_id": "7460",
             },
         ],
     )
@@ -273,3 +276,28 @@ def test_assembler_changed_in_samplesheet(
         ).count()
         > 1
     )
+
+
+@pytest.mark.django_db(transaction=True)
+def test_reference_genome_selection(prefect_harness, mgnify_assemblies, caplog):
+    study = analyses.models.Study.objects.first()
+
+    ref = get_reference_genome(study)
+    assert ref is None
+    assert f"Found no run in {study} with a host tax id" in caplog.text
+    caplog.clear()
+
+    run = study.runs.first()
+    run.metadata[analyses.models.Run.CommonMetadataKeys.HOST_TAX_ID] = (
+        999  # not a support tax id
+    )
+    run.save()
+    ref = get_reference_genome(study)
+    assert ref is None
+    assert f"Using run {run} for determining host" in caplog.text
+    caplog.clear()
+
+    run.metadata[analyses.models.Run.CommonMetadataKeys.HOST_TAX_ID] = 7460  # honeybee
+    run.save()
+    ref = get_reference_genome(study)
+    assert ref == "honeybee.fna"

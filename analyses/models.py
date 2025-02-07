@@ -159,6 +159,7 @@ class Run(
         LIBRARY_LAYOUT = "library_layout"
         LIBRARY_SOURCE = "library_source"
         SCIENTIFIC_NAME = "scientific_name"
+        HOST_TAX_ID = "host_tax_id"
 
     instrument_platform = models.CharField(
         db_column="instrument_platform", max_length=100, blank=True, null=True

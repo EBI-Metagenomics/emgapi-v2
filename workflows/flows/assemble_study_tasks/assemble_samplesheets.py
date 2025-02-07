@@ -2,7 +2,7 @@ import csv
 import json
 from datetime import timedelta
 from pathlib import Path
-from typing import Iterable
+from typing import Iterable, Optional
 
 import django
 import pandas as pd
@@ -26,6 +26,50 @@ from workflows.prefect_utils.slurm_policies import (
 )
 
 EMG_CONFIG = settings.EMG_CONFIG
+
+
+HOST_TAX_IDS_TO_REFERENCE_GENOME = {
+    "9031": "chicken.fna",  # Gallus gallus
+    "8030": "salmon.fna",  # Salmo salar
+    "8049": "cod.fna",  #  Gadus morhua
+    "9823": "pig.fna",  # Sus scrofa
+    "9913": "cow.fna",  # Bos taurus
+    "10090": "mouse.fna",  # Mus musculus
+    "7460": "honeybee.fna",  # Apis mellifera
+    "10116": "rat.fna",  # Rattus norvegicus
+    "8022": "rainbow_trout.fna",  # Oncorhynchus mykiss
+    "9940": "sheep.fna",  # Ovis aries
+    "3847": "soybean.fna",  # Glycine max
+    "7955": "zebrafish.fna",  #  Danio rerio
+}
+
+
+@task
+def get_reference_genome(
+    reads_study: analyses.models.Study,
+) -> Optional[str]:
+    logger = get_run_logger()
+    first_run_with_host_tax_id = reads_study.runs.filter(
+        **{
+            f"metadata__{analyses.models.Run.CommonMetadataKeys.HOST_TAX_ID}__isnull": False
+        }
+    ).first()
+    if not first_run_with_host_tax_id:
+        logger.warning(f"Found no run in {reads_study} with a host tax id")
+        return None
+    logger.info(
+        f"Using run {first_run_with_host_tax_id} for determining host reference genome"
+    )
+
+    host_tax_id = first_run_with_host_tax_id.metadata[
+        analyses.models.Run.CommonMetadataKeys.HOST_TAX_ID
+    ]
+    logger.info(f"Host tax id is {host_tax_id}")
+
+    ref = HOST_TAX_IDS_TO_REFERENCE_GENOME.get(str(host_tax_id), None)
+    logger.info(f"Reference genome will be: {ref}")
+
+    return ref
 
 
 @task
@@ -131,6 +175,7 @@ def run_assembler_for_samplesheet(
     )
 
     update_assemblies_assemblers_from_samplesheet(samplesheet_df)
+    host_reference = get_reference_genome(mgnify_study)
 
     for assembly in assemblies:
         # Mark assembly as started
@@ -156,6 +201,7 @@ def run_assembler_for_samplesheet(
         f"--outdir {miassembler_outdir} "
         f"--assembler {assembler.name.lower()} "
         f"{'-with-tower' if settings.EMG_CONFIG.slurm.use_nextflow_tower else ''} "
+        f"{f'--reference_genome {host_reference}' if host_reference else ''} "
         f"-name miassembler-samplesheet-{file_path_shortener(samplesheet_csv, 1, 15, True)} "
     )
 

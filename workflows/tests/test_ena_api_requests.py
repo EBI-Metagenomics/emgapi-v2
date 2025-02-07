@@ -155,6 +155,7 @@ def test_get_study_readruns_from_ena(
                 "library_strategy": "AMPLICON",
                 "library_source": "GENOMIC",
                 "scientific_name": "genome",
+                "host_tax_id": "7460",
             },
             {
                 "run_accession": "RUN2",
@@ -167,6 +168,7 @@ def test_get_study_readruns_from_ena(
                 "library_strategy": "AMPLICON",
                 "library_source": "METAGENOMIC",
                 "scientific_name": "metagenome",
+                "host_tax_id": "7460",
             },
             {
                 "run_accession": "RUN3",
@@ -179,6 +181,7 @@ def test_get_study_readruns_from_ena(
                 "library_strategy": "AMPLICON",
                 "library_source": "METAGENOME",
                 "scientific_name": "uncultured bacteria",
+                "host_tax_id": "7460",
             },
             {
                 "run_accession": "RUN4",
@@ -191,6 +194,7 @@ def test_get_study_readruns_from_ena(
                 "library_strategy": "AMPLICON",
                 "library_source": "METAGENOMIC",
                 "scientific_name": "metagenome",
+                "host_tax_id": "7460",
             },
             {
                 "run_accession": "RUN5",
@@ -203,6 +207,7 @@ def test_get_study_readruns_from_ena(
                 "library_strategy": "AMPLICON",
                 "library_source": "METAGENOMIC",
                 "scientific_name": "metagenome",
+                "host_tax_id": "7460",
             },
             {
                 "run_accession": "RUN6",
@@ -215,6 +220,7 @@ def test_get_study_readruns_from_ena(
                 "library_strategy": "AMPLICON",
                 "library_source": "METAGENOMIC",
                 "scientific_name": "metagenome",
+                "host_tax_id": "7460",
             },
         ],
     )
@@ -256,6 +262,7 @@ def test_get_study_readruns_from_ena(
             and "_1" in run.metadata["fastq_ftps"][0]
             and "_2" in run.metadata["fastq_ftps"][1]
         )
+        assert run.metadata["host_tax_id"] == "7460"
 
 
 def test_ena_api_query_maker(httpx_mock):

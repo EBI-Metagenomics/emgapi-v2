@@ -383,6 +383,7 @@ async def test_prefect_analyse_amplicon_flow(
                 "library_strategy": "AMPLICON",
                 "library_source": "METAGENOMIC",
                 "scientific_name": "metagenome",
+                "host_tax_id": "7460",
             },
             {
                 "sample_accession": "SAMN08514018",
@@ -395,6 +396,7 @@ async def test_prefect_analyse_amplicon_flow(
                 "library_strategy": "AMPLICON",
                 "library_source": "METAGENOMIC",
                 "scientific_name": "metagenome",
+                "host_tax_id": "7460",
             },
             {
                 "sample_accession": "SAMN08514019",
@@ -407,6 +409,7 @@ async def test_prefect_analyse_amplicon_flow(
                 "library_strategy": "AMPLICON",
                 "library_source": "METAGENOMIC",
                 "scientific_name": "metagenome",
+                "host_tax_id": "7460",
             },
             {
                 "sample_accession": "SAMN08514020",
@@ -419,6 +422,7 @@ async def test_prefect_analyse_amplicon_flow(
                 "library_strategy": "AMPLICON",
                 "library_source": "METAGENOMIC",
                 "scientific_name": "metagenome",
+                "host_tax_id": "7460",
             },
             {
                 "sample_accession": "SAMN08514021",
@@ -431,6 +435,7 @@ async def test_prefect_analyse_amplicon_flow(
                 "library_strategy": "AMPLICON",
                 "library_source": "METAGENOMIC",
                 "scientific_name": "metagenome",
+                "host_tax_id": "7460",
             },
         ],
     )
