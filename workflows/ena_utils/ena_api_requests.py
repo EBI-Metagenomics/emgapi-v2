@@ -526,6 +526,9 @@ def get_study_readruns_from_ena(
                     analyses.models.Run.CommonMetadataKeys.HOST_TAX_ID: read_run[
                         analyses.models.Run.CommonMetadataKeys.HOST_TAX_ID
                     ],
+                    analyses.models.Run.CommonMetadataKeys.HOST_SCIENTIFIC_NAME: read_run[
+                        analyses.models.Run.CommonMetadataKeys.HOST_SCIENTIFIC_NAME
+                    ],
                 }
             },
         )
