@@ -156,6 +156,7 @@ def test_get_study_readruns_from_ena(
                 "library_source": "GENOMIC",
                 "scientific_name": "genome",
                 "host_tax_id": "7460",
+                "host_scientific_name": "Apis mellifera",
             },
             {
                 "run_accession": "RUN2",
@@ -169,6 +170,7 @@ def test_get_study_readruns_from_ena(
                 "library_source": "METAGENOMIC",
                 "scientific_name": "metagenome",
                 "host_tax_id": "7460",
+                "host_scientific_name": "Apis mellifera",
             },
             {
                 "run_accession": "RUN3",
@@ -182,6 +184,7 @@ def test_get_study_readruns_from_ena(
                 "library_source": "METAGENOME",
                 "scientific_name": "uncultured bacteria",
                 "host_tax_id": "7460",
+                "host_scientific_name": "Apis mellifera",
             },
             {
                 "run_accession": "RUN4",
@@ -195,6 +198,7 @@ def test_get_study_readruns_from_ena(
                 "library_source": "METAGENOMIC",
                 "scientific_name": "metagenome",
                 "host_tax_id": "7460",
+                "host_scientific_name": "Apis mellifera",
             },
             {
                 "run_accession": "RUN5",
@@ -208,6 +212,7 @@ def test_get_study_readruns_from_ena(
                 "library_source": "METAGENOMIC",
                 "scientific_name": "metagenome",
                 "host_tax_id": "7460",
+                "host_scientific_name": "Apis mellifera",
             },
             {
                 "run_accession": "RUN6",
@@ -221,6 +226,7 @@ def test_get_study_readruns_from_ena(
                 "library_source": "METAGENOMIC",
                 "scientific_name": "metagenome",
                 "host_tax_id": "7460",
+                "host_scientific_name": "Apis mellifera",
             },
         ],
     )

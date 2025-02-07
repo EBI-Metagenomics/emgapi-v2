@@ -81,6 +81,7 @@ async def test_prefect_assemble_study_flow(
                 "library_source": "METAGENOMIC",
                 "scientific_name": "metagenome",
                 "host_tax_id": "7460",
+                "host_scientific_name": "Apis mellifera",
             },
             {
                 "sample_accession": "SAMN02",
@@ -94,6 +95,7 @@ async def test_prefect_assemble_study_flow(
                 "library_source": "METAGENOMIC",
                 "scientific_name": "metagenome",
                 "host_tax_id": "7460",
+                "host_scientific_name": "Apis mellifera",
             },
         ],
     )
@@ -284,7 +286,7 @@ def test_reference_genome_selection(prefect_harness, mgnify_assemblies, caplog):
 
     ref = get_reference_genome(study)
     assert ref is None
-    assert f"Found no run in {study} with a host tax id" in caplog.text
+    assert f"Found no run in {study} with host taxon info" in caplog.text
     caplog.clear()
 
     run = study.runs.first()
@@ -301,3 +303,11 @@ def test_reference_genome_selection(prefect_harness, mgnify_assemblies, caplog):
     run.save()
     ref = get_reference_genome(study)
     assert ref == "honeybee.fna"
+
+    run.metadata[analyses.models.Run.CommonMetadataKeys.HOST_TAX_ID] = None
+    run.metadata[analyses.models.Run.CommonMetadataKeys.HOST_SCIENTIFIC_NAME] = (
+        "Gallus gallus"  # chicken
+    )
+    run.save()
+    ref = get_reference_genome(study)
+    assert ref == "chicken.fna"

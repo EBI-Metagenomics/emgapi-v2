@@ -7,6 +7,7 @@ from typing import Iterable, Optional
 import django
 import pandas as pd
 from django.conf import settings
+from django.db.models import Q
 from prefect import flow, get_run_logger, task
 
 django.setup()
@@ -28,7 +29,7 @@ from workflows.prefect_utils.slurm_policies import (
 EMG_CONFIG = settings.EMG_CONFIG
 
 
-HOST_TAX_IDS_TO_REFERENCE_GENOME = {
+HOST_TAXON_TO_REFERENCE_GENOME = {
     "9031": "chicken.fna",  # Gallus gallus
     "8030": "salmon.fna",  # Salmo salar
     "8049": "cod.fna",  #  Gadus morhua
@@ -41,6 +42,18 @@ HOST_TAX_IDS_TO_REFERENCE_GENOME = {
     "9940": "sheep.fna",  # Ovis aries
     "3847": "soybean.fna",  # Glycine max
     "7955": "zebrafish.fna",  #  Danio rerio
+    "Gallus gallus": "chicken.fna",
+    "Salmo salar": "salmon.fna",
+    "Gadus morhua": "cod.fna",
+    "Sus scrofa": "pig.fna",
+    "Bos taurus": "cow.fna",
+    "Mus musculus": "mouse.fna",
+    "Apis mellifera": "honeybee.fna",
+    "Rattus norvegicus": "rat.fna",
+    "Oncorhynchus mykiss": "rainbow_trout.fna",
+    "Ovis aries": "sheep.fna",
+    "Glycine max": "soybean.fna",
+    "Danio rerio": "zebrafish.fna",
 }
 
 
@@ -49,27 +62,37 @@ def get_reference_genome(
     reads_study: analyses.models.Study,
 ) -> Optional[str]:
     logger = get_run_logger()
-    first_run_with_host_tax_id = reads_study.runs.filter(
-        **{
-            f"metadata__{analyses.models.Run.CommonMetadataKeys.HOST_TAX_ID}__isnull": False
-        }
+    first_run_with_host_taxon = reads_study.runs.filter(
+        Q(
+            **{
+                f"metadata__{analyses.models.Run.CommonMetadataKeys.HOST_TAX_ID}__isnull": False
+            }
+        )
+        | Q(
+            **{
+                f"metadata__{analyses.models.Run.CommonMetadataKeys.HOST_SCIENTIFIC_NAME}__isnull": False
+            }
+        )
     ).first()
-    if not first_run_with_host_tax_id:
-        logger.warning(f"Found no run in {reads_study} with a host tax id")
+    if not first_run_with_host_taxon:
+        logger.warning(f"Found no run in {reads_study} with host taxon info")
         return None
     logger.info(
-        f"Using run {first_run_with_host_tax_id} for determining host reference genome"
+        f"Using run {first_run_with_host_taxon} for determining host reference genome"
     )
 
-    host_tax_id = first_run_with_host_tax_id.metadata[
+    reference_genome = None
+    host_taxon = first_run_with_host_taxon.metadata.get(
         analyses.models.Run.CommonMetadataKeys.HOST_TAX_ID
-    ]
-    logger.info(f"Host tax id is {host_tax_id}")
+    ) or first_run_with_host_taxon.metadata.get(
+        analyses.models.Run.CommonMetadataKeys.HOST_SCIENTIFIC_NAME
+    )
+    if host_taxon:
+        logger.info(f"Host taxon is {host_taxon}")
+        reference_genome = HOST_TAXON_TO_REFERENCE_GENOME.get(str(host_taxon), None)
+        logger.info(f"Reference genome will be: {reference_genome}")
 
-    ref = HOST_TAX_IDS_TO_REFERENCE_GENOME.get(str(host_tax_id), None)
-    logger.info(f"Reference genome will be: {ref}")
-
-    return ref
+    return reference_genome
 
 
 @task
