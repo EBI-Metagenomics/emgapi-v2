@@ -10,6 +10,7 @@ class SlurmConfig(BaseModel):
     default_job_status_checks_limit: int = 10
     default_workdir: str = "/nfs/production/dev-slurm-work-dir"
     pipelines_root_dir: str = "/app/workflows/pipelines"
+    ftp_results_dir: str = '/nfs/ftp/public/databases/metagenomics/mgnify_results'
     user: str = "root"
 
     incomplete_job_limit: int = 100
