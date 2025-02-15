@@ -1,14 +1,14 @@
-from enum import Enum
+from emgapiv2.enum_utils import FutureStrEnum
 
 
-class ApiSections(Enum):
+class ApiSections(FutureStrEnum):
     STUDIES = "Studies"
     SAMPLES = "Samples"
     ANALYSES = "Analyses"
     REQUESTS = "Requests"
 
 
-class OpenApiKeywords(Enum):
+class OpenApiKeywords(FutureStrEnum):
     NAME = "name"
     DESCRIPTION = "description"
     RESPONSES = "responses"

@@ -43,7 +43,7 @@ def validate_samplesheet_path(filepath_encoded: str) -> Path:
     if not filepath.is_absolute():
         raise Http404("Invalid file path: not absolute")
 
-    if not filepath.suffix.lower() in [".csv", ".tsv"]:
+    if filepath.suffix.lower() not in [".csv", ".tsv"]:
         raise Http404(f"Invalid file type: {filepath.suffix.lower()}")
 
     if not filepath.is_relative_to(
@@ -90,7 +90,7 @@ def wait_for_flowrun_view(request, flowrun_id: str, next_url: str):
         flowrun: FlowRun = async_to_sync(wait_for_flow_run)(
             flow_run_id=flowrun_id, timeout=5, poll_interval=1
         )
-    except FlowRunWaitTimeout as e:
+    except FlowRunWaitTimeout:
         logger.info(f"Flowrun {flowrun_id} was not yet finished...")
         return render(
             request,
@@ -102,7 +102,7 @@ def wait_for_flowrun_view(request, flowrun_id: str, next_url: str):
                 **unfold_context,
             },
         )
-    except ObjectNotFound as e:
+    except ObjectNotFound:
         logger.error(f"Flowrun {flowrun_id} did not exist.")
         raise Http404
 

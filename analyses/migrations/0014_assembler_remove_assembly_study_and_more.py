@@ -78,7 +78,7 @@ class Migration(migrations.Migration):
         migrations.AddConstraint(
             model_name="assembly",
             constraint=models.CheckConstraint(
-                check=models.Q(
+                condition=models.Q(
                     ("reads_study__isnull", False),
                     ("assembly_study__isnull", False),
                     _connector="OR",

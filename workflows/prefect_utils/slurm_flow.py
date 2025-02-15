@@ -19,9 +19,11 @@ from emgapiv2.log_utils import mask_sensitive_data as safe
 from workflows.models import OrchestratedClusterJob
 from workflows.nextflow_utils.tower import maybe_get_nextflow_tower_browse_url
 from workflows.nextflow_utils.trace import maybe_get_nextflow_trace_df
-from workflows.prefect_utils.shell_task import run_shell_command
 from workflows.prefect_utils.slurm_limits import delay_until_cluster_has_space
-from workflows.prefect_utils.slurm_policies import _SlurmResubmitPolicy
+from workflows.prefect_utils.slurm_policies import (
+    _SlurmResubmitPolicy,
+    ResubmitAlwaysPolicy,
+)
 from workflows.prefect_utils.slurm_status import (
     SlurmStatus,
     slurm_status_is_finished_successfully,
@@ -34,7 +36,7 @@ if "PYTEST_CURRENT_TEST" in os.environ:
 else:
     try:
         import pyslurm
-    except:
+    except:  # noqa: E722
         logging.warning("No PySlurm available. Patching.")
         import workflows.prefect_utils.pyslurm_patch as pyslurm
 
@@ -56,7 +58,7 @@ def slurm_timedelta(delta: timedelta) -> str:
     return f"{days:02}-{hours:02}:{minutes:02}:{seconds:02}"
 
 
-async def check_cluster_job(
+def check_cluster_job(
     orchestrated_cluster_job: OrchestratedClusterJob,
 ) -> str:
     """
@@ -76,7 +78,7 @@ async def check_cluster_job(
         logger.warning(f"Error talking to slurm for job {job_id}")
         orchestrated_cluster_job.last_known_state = SlurmStatus.unknown.value
         orchestrated_cluster_job.state_checked_at = now()
-        await orchestrated_cluster_job.asave()
+        orchestrated_cluster_job.save()
         return SlurmStatus.unknown.value
 
     logger.info(f"SLURM status of {job_id = } is {job.state}")
@@ -103,7 +105,7 @@ async def check_cluster_job(
             orchestrated_cluster_job.cluster_log = log
     else:
         logger.info(f"No Slurm Job Stdout available at {job_log_path}")
-    await orchestrated_cluster_job.asave()
+    orchestrated_cluster_job.save()
     return job.state
 
 
@@ -193,7 +195,7 @@ def start_or_attach_cluster_job(
     job_workdir = workdir
     _ensure_absolute_workdir(job_workdir)
     if make_workdir_first and not job_workdir.exists():
-        os.mkdir(job_workdir)
+        job_workdir.mkdir(parents=True)
     logger.info(f"Will use {job_workdir=}")
 
     ### Prepare job submission description
@@ -253,9 +255,14 @@ def start_or_attach_cluster_job(
         logger.info(
             f"Policy {slurm_resubmit_policy.policy_name} requires a pre-resubmit command: {slurm_resubmit_policy.resubmit_needs_preparation_command}."
         )
-        run_shell_command(
+        run_cluster_job(
+            name=f"Preparation for: {name}",
             command=slurm_resubmit_policy.resubmit_needs_preparation_command,
-            workdir=job_workdir,
+            expected_time=timedelta(hours=1),
+            memory=EMG_CONFIG.slurm.preparation_command_job_memory_gb,
+            working_dir=job_workdir,
+            resubmit_policy=ResubmitAlwaysPolicy,
+            environment={},
         )
 
     # need to submit new job
@@ -279,7 +286,7 @@ def start_or_attach_cluster_job(
         markdown=_(
             f"""\
             # Slurm job {job_id}
-            [Orchestrated Cluster Job {ocj.id}]({reverse("admin:workflows_orchestratedclusterjob_change", kwargs={"object_id": ocj.id})})
+            [Orchestrated Cluster Job {ocj.id}]({EMG_CONFIG.service_urls.app_root}/{reverse("admin:workflows_orchestratedclusterjob_change", kwargs={"object_id": ocj.id})})
             Submitted a script to Slurm cluster:
             ~~~
             <<SCRIPT>>
@@ -383,7 +390,7 @@ def store_nextflow_trace(orchestrated_cluster_job: OrchestratedClusterJob):
     persist_result=True,
     on_cancellation=[cancel_cluster_jobs_if_flow_cancelled],
 )
-async def run_cluster_job(
+def run_cluster_job(
     name: str,
     command: str,
     expected_time: timedelta,
@@ -416,7 +423,7 @@ async def run_cluster_job(
     logger = get_run_logger()
 
     # Potentially wait some time if our cluster queue is very full
-    space_on_cluster = delay_until_cluster_has_space()
+    delay_until_cluster_has_space()
 
     # Submit or attach to a job on the cluster.
     # Depending on the job history and Resubmit Policy, this job may be a new one, an already running one,
@@ -440,7 +447,7 @@ async def run_cluster_job(
     #  check will just tell us the job finished immediately / it'll wait for the EXISTING job to finish.
     is_job_in_terminal_state = False
     while not is_job_in_terminal_state:
-        job_state = await check_cluster_job(orchestrated_cluster_job)
+        job_state = check_cluster_job(orchestrated_cluster_job)
         if slurm_status_is_finished_successfully(job_state):
             logger.info(f"Job {orchestrated_cluster_job} finished successfully.")
             store_nextflow_trace(orchestrated_cluster_job)

@@ -1,5 +1,4 @@
 import pytest
-from asgiref.sync import async_to_sync
 from django.core.exceptions import ValidationError
 from django.core.management import call_command
 from django.db import connection
@@ -12,7 +11,7 @@ from workflows.data_io_utils.legacy_emg_dbs import LegacyStudy
 @pytest.mark.django_db(transaction=True)
 def test_biome_importer(httpx_mock):
     httpx_mock.add_response(
-        url=f"http://old.api/v1/biomes?page=1",
+        url="http://old.api/v1/biomes?page=1",
         json={
             "links": {
                 "next": "http://old.api/v1/biomes?page=2",
@@ -21,7 +20,7 @@ def test_biome_importer(httpx_mock):
         },
     )
     httpx_mock.add_response(
-        url=f"http://old.api/v1/biomes?page=2",
+        url="http://old.api/v1/biomes?page=2",
         json={
             "links": {
                 "next": None,
@@ -50,8 +49,8 @@ def test_import_legacy_studies(
 ):
     # assume DB has been set up so that NEW studies are being created with accessions higher than some start point:
     with connection.cursor() as cursor:
-        cursor.execute(f"SELECT setval('analyses_study_id_seq', 7000, false);")
-        next_id = cursor.execute(f"SELECT nextval('analyses_study_id_seq');")
+        cursor.execute("SELECT setval('analyses_study_id_seq', 7000, false);")
+        next_id = cursor.execute("SELECT nextval('analyses_study_id_seq');")
         assert next_id.fetchone() == (7000,)
     # this is so that we are properly testing insertions at accessions below the current nextval
 
@@ -115,11 +114,7 @@ def test_import_legacy_studies(
     assert Study.objects.filter(has_legacy_data=True).count() == 2
 
     # get_or_create on a new MGnify study, for the ENA study imported as legacy, should return legacy MGYS not new one
-    ena_study = async_to_sync(ena.models.Study.objects.get_ena_study)(
-        "ERP3"
-    )  # should be MGYS00005002
+    ena_study = ena.models.Study.objects.get_ena_study("ERP3")  # should be MGYS00005002
 
-    mg_study: Study = async_to_sync(Study.objects.get_or_create_for_ena_study)(
-        ena_study
-    )
+    mg_study: Study = Study.objects.get_or_create_for_ena_study(ena_study)
     assert mg_study.accession == "MGYS00005002"

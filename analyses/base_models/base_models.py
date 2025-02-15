@@ -48,7 +48,7 @@ class VisibilityControlledModel(models.Model):
 
 
 class GetByENAAccessionManagerMixin:
-    async def get_by_accession(self, ena_accession):
+    def get_by_accession(self, ena_accession):
         qs = self.get_queryset().filter(ena_accessions__contains=ena_accession)
         if qs.count() > 1:
             raise self.MultipleObjectsReturned()

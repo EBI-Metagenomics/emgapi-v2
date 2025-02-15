@@ -33,7 +33,7 @@ class _SlurmResubmitPolicy(BaseModel):
     if_status_matches: Optional[
         Union[List[SlurmStatus], Callable[[SlurmStatus], bool]]
     ] = Field(
-        default=truth,
+        default_factory=lambda: truth,
         description="If a job is submitted and an identical job exists in one of these statues, its resubmission will be controlled by this policy.",
     )
     then_resubmit: bool = Field(

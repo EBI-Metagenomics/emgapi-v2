@@ -41,6 +41,9 @@ class SlurmConfig(BaseModel):
     samplesheet_editing_path_from_shared_filesystem: str = "temporary_samplesheet_edits"
     # allow django-admin access to edit csv/tsv files inside this dir
 
+    preparation_command_job_memory_gb: int = 2
+    # memory for jobs like `nextflow clean ...` or `rm -r ./work` that are run before bigger jobs
+
 
 class AssemblerConfig(BaseModel):
     assembly_pipeline_repo: str = "ebi-metagenomics/miassembler"
@@ -84,17 +87,23 @@ class AmpliconPipelineConfig(BaseModel):
 class WebinConfig(BaseModel):
     emg_webin_account: str = None
     emg_webin_password: str = None
+    dcc_account: str = "dcc_metagenome"
+    dcc_password: str = None
     submitting_center_name: str = "EMG"
     webin_cli_executor: str = "/usr/bin/webin-cli/webin-cli.jar"
+    broker_prefix: str = "mg-"
+    broker_password: str = None
 
 
 class ENAConfig(BaseModel):
     primary_study_accession_re: str = "(PRJ[EDN][A-Z][0-9]+)"
     assembly_accession_re: str = "([EDS]RZ[0-9]{6,})"
     portal_search_api: AnyHttpUrl = "https://www.ebi.ac.uk/ena/portal/api/search"
+    portal_search_api_max_retries: int = 4
+    portal_search_api_retry_delay_seconds: int = 15
     browser_view_url_prefix: AnyHttpUrl = "https://www.ebi.ac.uk/ena/browser/view"
     # TODO: migrate to the ENA Handler
-    study_metadata_fields: list = ["study_title", "secondary_study_accession"]
+    study_metadata_fields: list[str] = ["study_title", "secondary_study_accession"]
     # TODO: migrate to the ENA Handler
     readrun_metadata_fields: list = [
         "sample_accession",
@@ -106,6 +115,8 @@ class ENAConfig(BaseModel):
         "library_strategy",
         "library_source",
         "scientific_name",
+        "host_tax_id",
+        "host_scientific_name",
     ]
 
     ftp_prefix: str = "ftp.sra.ebi.ac.uk/vol1/"

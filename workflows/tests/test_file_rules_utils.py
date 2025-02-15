@@ -102,7 +102,7 @@ def test_csv_schema_rule_utils(tmp_path):
         fh.write(content)
 
     # should adhere to MGnify V6 Taxonomy schema
-    file = File(path=tsv_file, rules=[FileConformsToTaxonomyTSVSchemaRule])
+    File(path=tsv_file, rules=[FileConformsToTaxonomyTSVSchemaRule])
 
     # should work with no leading comment line
     content = """\
@@ -113,7 +113,7 @@ def test_csv_schema_rule_utils(tmp_path):
     with tsv_file.open("w", newline="") as fh:
         fh.write(content)
 
-    file = File(path=tsv_file, rules=[FileConformsToTaxonomyTSVSchemaRule])
+    File(path=tsv_file, rules=[FileConformsToTaxonomyTSVSchemaRule])
 
     # should work with no # comment character on header
     content = """\
@@ -124,7 +124,7 @@ OTU ID	SSU	taxonomy	taxid
     with tsv_file.open("w", newline="") as fh:
         fh.write(content)
 
-    file = File(path=tsv_file, rules=[FileConformsToTaxonomyTSVSchemaRule])
+    File(path=tsv_file, rules=[FileConformsToTaxonomyTSVSchemaRule])
 
     # should fail if missing taxonomy column
     content = """\
@@ -135,7 +135,7 @@ OTU ID	SSU	taxon	taxid
     with tsv_file.open("w", newline="") as fh:
         fh.write(content)
     with pytest.raises(ValidationError) as exc_info:
-        file = File(path=tsv_file, rules=[FileConformsToTaxonomyTSVSchemaRule])
+        File(path=tsv_file, rules=[FileConformsToTaxonomyTSVSchemaRule])
         assert "taxonomy" in exc_info.value
 
 

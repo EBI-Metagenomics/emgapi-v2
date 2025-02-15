@@ -79,7 +79,7 @@ def task_mark_analysis_status(
             )
 
 
-I = TypeVar("I")
+I = TypeVar("I")  # noqa: E741
 
 
 @task

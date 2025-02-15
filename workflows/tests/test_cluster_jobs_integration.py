@@ -20,13 +20,13 @@ from workflows.prefect_utils.slurm_policies import (
     ResubmitIfFailedPolicy,
 )
 from workflows.prefect_utils.slurm_status import SlurmStatus
-from workflows.prefect_utils.testing_utils import run_async_flow_and_capture_logs
+from workflows.prefect_utils.testing_utils import run_flow_and_capture_logs
 
 
 @flow(log_prints=True, retries=2)
-async def intermittently_buggy_flow_that_includes_a_cluster_job_subflow(workdir: Path):
+def intermittently_buggy_flow_that_includes_a_cluster_job_subflow(workdir: Path):
     print("starting flow")
-    orchestrated_job = await run_cluster_job(
+    orchestrated_job = run_cluster_job(
         name="test job in buggy flow",
         command="echo 'test'",
         expected_time=timedelta(minutes=1),
@@ -45,15 +45,14 @@ async def intermittently_buggy_flow_that_includes_a_cluster_job_subflow(workdir:
     return orchestrated_job.cluster_job_id
 
 
-@pytest.mark.asyncio
 @pytest.mark.django_db
-async def test_run_cluster_job_state_persistence(
+def test_run_cluster_job_state_persistence(
     prefect_harness,
     mock_cluster_can_accept_jobs_yes,
     mock_check_cluster_job_all_completed,
     tmp_path,
 ):
-    job_initial = await run_cluster_job(
+    job_initial = run_cluster_job(
         name="test job",
         command="echo 'test'",
         expected_time=timedelta(minutes=1),
@@ -68,7 +67,7 @@ async def test_run_cluster_job_state_persistence(
     # exactly the same inputs should NOT start another cluster job
     # we assume identical calls should not usually start identical another job
 
-    job_repeat_call = await run_cluster_job(
+    job_repeat_call = run_cluster_job(
         name="test job",
         command="echo 'test'",
         expected_time=timedelta(minutes=1),
@@ -86,7 +85,7 @@ async def test_run_cluster_job_state_persistence(
     # in theory the updated_at should have increased, but not here because of the test mock
 
     # a change to the params should start a new job
-    job_altered_call = await run_cluster_job(
+    job_altered_call = run_cluster_job(
         name="test job",
         command="echo 'test but different'",
         expected_time=timedelta(minutes=1),
@@ -100,7 +99,7 @@ async def test_run_cluster_job_state_persistence(
     )  # slurm job ids just increment up. assumes tests are not being run in parallel :)
 
     # we can use a different policy to ensure a job is resubmitted even if it previously ran
-    job_explicitly_resubmitted_call = await run_cluster_job(
+    job_explicitly_resubmitted_call = run_cluster_job(
         name="test job",
         command="echo 'test'",
         expected_time=timedelta(minutes=1),
@@ -114,7 +113,7 @@ async def test_run_cluster_job_state_persistence(
     )  # different job id
 
     # automatic retries of a buggy flow that fails after a cluster job should not resubmit cluster job
-    logged_buggy_flow = await run_async_flow_and_capture_logs(
+    logged_buggy_flow = run_flow_and_capture_logs(
         intermittently_buggy_flow_that_includes_a_cluster_job_subflow,
         workdir=tmp_path / "work-buggy",
     )
@@ -130,7 +129,7 @@ async def test_run_cluster_job_state_persistence(
         file.write("my,initial,params")
 
     # cluster jobs can accept a list of input files to hash
-    job_initial_with_hash = await run_cluster_job(
+    job_initial_with_hash = run_cluster_job(
         name="test job",
         command="echo 'test'",
         expected_time=timedelta(minutes=1),
@@ -142,7 +141,7 @@ async def test_run_cluster_job_state_persistence(
     )
 
     # if input file unchanged, should be same job
-    job_repeat_with_hash = await run_cluster_job(
+    job_repeat_with_hash = run_cluster_job(
         name="test job",
         command="echo 'test'",
         expected_time=timedelta(minutes=1),
@@ -158,7 +157,7 @@ async def test_run_cluster_job_state_persistence(
     with open(f"{tmp_path}/my_inputs.csv", "w") as file:
         file.write("my,altered,params")
 
-    job_repeat_with_hash = await run_cluster_job(
+    job_repeat_with_hash = run_cluster_job(
         name="test job",
         command="echo 'test'",
         expected_time=timedelta(minutes=1),
@@ -174,7 +173,7 @@ async def test_run_cluster_job_state_persistence(
     with open(f"{tmp_path}/my_inputs.csv", "w") as file:
         file.write("even,more,altered,params")
 
-    job_repeat_with_changed_hash = await run_cluster_job(
+    job_repeat_with_changed_hash = run_cluster_job(
         name="test job",
         command="echo 'test'",
         expected_time=timedelta(minutes=1),
@@ -241,10 +240,7 @@ def test_slurm_resubmit_policies():
 
     assert fully_matching_job == job1
 
-    assert (
-        fully_matching_job.should_resubmit_according_to_policy(ResubmitAlwaysPolicy)
-        == True
-    )
+    assert fully_matching_job.should_resubmit_according_to_policy(ResubmitAlwaysPolicy)
 
     # should not match if we only want to match previously failed jobs
     matching_jobs = OrchestratedClusterJob.objects.filter_similar_to_by_policy(
@@ -259,9 +255,8 @@ def test_slurm_resubmit_policies():
         )
     )
 
-    assert (
-        fully_matching_job.should_resubmit_according_to_policy(ResubmitIfFailedPolicy)
-        == False
+    assert not fully_matching_job.should_resubmit_according_to_policy(
+        ResubmitIfFailedPolicy
     )
 
     # but if previous job failed, we would expect an instruction to resubmit it
@@ -269,7 +264,7 @@ def test_slurm_resubmit_policies():
     job1.save()
     job1.refresh_from_db()
 
-    assert job1.should_resubmit_according_to_policy(ResubmitIfFailedPolicy) == True
+    assert job1.should_resubmit_according_to_policy(ResubmitIfFailedPolicy)
 
     # a novel job should match no previous
     jsd3 = OrchestratedClusterJob.SlurmJobSubmitDescription(

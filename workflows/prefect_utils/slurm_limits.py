@@ -14,7 +14,7 @@ if "PYTEST_CURRENT_TEST" in os.environ:
 else:
     try:
         import pyslurm
-    except:
+    except:  # noqa: E722
         logging.warning("No PySlurm available. Patching.")
         import workflows.prefect_utils.pyslurm_patch as pyslurm
 
@@ -27,7 +27,7 @@ def get_cluster_state_counts() -> dict[SlurmStatus, int]:
         our_jobs = pyslurm.db.JobFilter(users=[EMG_CONFIG.slurm.user])
         jobs = pyslurm.db.Jobs.load(our_jobs)
     except pyslurm.core.error.RPCError:
-        logger.warning(f"Error talking to slurm")
+        logger.warning("Error talking to slurm")
         return {}
     logger.info(f"SLURM job total count: {len(jobs)}")
     return Counter([job.state for job in jobs.values()])

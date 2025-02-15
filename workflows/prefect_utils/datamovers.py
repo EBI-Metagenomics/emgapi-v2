@@ -18,7 +18,7 @@ def move_data_flow_name() -> str:
 
 
 @flow(flow_run_name=move_data_flow_name)
-async def move_data(source: str, target: str, move_command: str = "cp", **kwargs):
+def move_data(source: str, target: str, move_command: str = "cp", **kwargs):
     """
     Move files on the cluster filesystem.
     This uses a slurm job running on the datamover partition.
@@ -33,10 +33,10 @@ async def move_data(source: str, target: str, move_command: str = "cp", **kwargs
     expected_time = kwargs.pop("expected_time", timedelta(hours=2))
     memory = kwargs.pop("memory", "1G")
 
-    if not "environment" in kwargs:
+    if "environment" not in kwargs:
         kwargs["environment"] = {}
 
-    return await run_cluster_job(
+    return run_cluster_job(
         name=f"Move {file_path_shortener(source)} to {file_path_shortener(target)}",
         command=f'{move_command} "{source}" "{target}"',
         expected_time=expected_time,

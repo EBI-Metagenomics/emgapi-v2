@@ -1,11 +1,12 @@
 import logging
 
-from asgiref.sync import async_to_sync
+# from asgiref.sync import async_to_sync
 from django.db.models.signals import post_save, pre_save
-from django.dispatch import receiver
-from prefect.deployments import run_deployment
 
-import analyses.models
+# from django.dispatch import receiver
+# from prefect.deployments import run_deployment
+
+# import analyses.models
 
 # Define signals (AKA hooks, AKA triggers) here, where they are needed to trigger Prefect work based on
 # Django model changes.
@@ -44,5 +45,5 @@ def get_handlers(signal):
 def ready():
     pre_save_hooks = get_handlers(pre_save)
     post_save_hooks = get_handlers(post_save)
-    logging.info(f"Hooks are: {pre_save_hooks + post_save_hooks}")
+    logging.debug(f"Hooks are: {pre_save_hooks + post_save_hooks}")
     return pre_save_hooks + post_save_hooks

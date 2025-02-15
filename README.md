@@ -64,7 +64,6 @@ It will ask you for a password, which is for a django admin user called `emgdev`
 
 #### Set up a couple of common flows for example
 ```shell
-task prefect -- block register -m prefect_slack.credentials  # this enables a prefect -> slack notification system
 FLOW=realistic_example task deploy-flow  # this "deploys" workflows/flows/realistic_example.py:realistic_example to your local prefect server
 # This flow is just a minimal demo to show how the prefect+django integration works.
 
@@ -136,7 +135,7 @@ task prefect -- deployment run "Download a study read-runs/realistic_example_dep
 * Prefer to use `pathlib` instead of `os.path`, e.g. for joining parts: `Path("/nfs/my/dir") / "subdir" / "file.txt"`
 * Config parameters (like the URL for ENA etc.) should use structured [Pydantic Settings](https://docs.pydantic.dev/latest/concepts/pydantic_settings/). See `settings.EMG_CONFIG`.
 * `EMG_CONFIG` should [always be imported via `django.conf.settings`](https://docs.djangoproject.com/en/5.1/topics/settings/#using-settings-in-python-code): e.g. `from django.conf import settings; EMG_CONFIG = settings.EMG_CONFIG`
-* When you have a list of acceptable options for something, use `Enum`s or `TextChoices` (a kind of enum for Django db fields): `class AssemblyStatuses(str, Enum):...`
+* When you have a list of acceptable options for something, use `Enum`s or `TextChoices` (a kind of enum for Django db fields): `class AssemblyStatuses(FutureStrEnum):...` or `DjangoChoicesCompatibleStrEnum` if it is used both as a general `Enum` and as `choice=` parameter of a Django field.
 * Use Django/postgres JSONFields liberally (they can save a load of complicated JOINs)
 * Apply a schema to JSONFields, using Enums, default dicts, custom pydantic types... see `WithDownloadsModel` for an example
 * Use class mixins and Django abstract models liberally, to add shared/similar functionality to multiple models

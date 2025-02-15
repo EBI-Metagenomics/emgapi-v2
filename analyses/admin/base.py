@@ -44,7 +44,7 @@ class StudyFilter(TextFilter):
 
 class StatusListFilter(admin.SimpleListFilter):
     def get_statuses(self) -> Iterable[str]:
-        raise NotImplemented
+        raise NotImplementedError
 
     title = "status"  # title of the filter
     parameter_name = "status"  # url param for the filter

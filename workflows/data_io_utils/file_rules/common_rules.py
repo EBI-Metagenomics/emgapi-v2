@@ -36,10 +36,12 @@ class __GlobHasFilesCountMetaclass(type):
             min_expected = expected_count.start or 0
             max_expected = expected_count.stop or math.inf
 
-            test = lambda matches: min_expected <= len(list(matches)) <= max_expected
+            test = (  # noqa: E731
+                lambda matches: min_expected <= len(list(matches)) <= max_expected
+            )
         elif isinstance(expected_count, int):
             # Assume a single expected_count means an exact match
-            test = lambda matches: len(list(matches)) == expected_count
+            test = lambda matches: len(list(matches)) == expected_count  # noqa: E731
         else:
             raise TypeError("expected_count must be int or slice.")
 

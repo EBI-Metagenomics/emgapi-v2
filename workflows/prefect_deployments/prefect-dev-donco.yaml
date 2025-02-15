@@ -14,72 +14,14 @@ pull:
 
 # the deployments section allows you to provide configuration for deploying flows
 deployments:
-- name: assemble_study_deployment
-  version:
-  tags: []
-  description: |-
-    Get a study from ENA, and input it to MGnify.
-    Kick off assembly pipeline.
-    :param accession: Study accession e.g. PRJxxxxxx
-    :param miassembler_profile: Name of the nextflow profile to use for MI Assembler.
-  entrypoint: workflows/flows/assemble_study.py:assemble_study
-  parameters: {}
-  work_pool:
-    name: slurm
-    work_queue_name:
-    job_variables: {}
-  schedules: []
 - name: realistic_example_deployment
   version:
   tags: []
+  concurrency_limit:
   description: "Example flow for Prefect, doing some \"realistic\" work.\nDownloads
     read-runs from ENA using a minimal nextflow pipeline, and integrated with the
     Django DB.\n\n:param accession: Accession of ENA Study to download\n:return:"
   entrypoint: workflows/flows/realistic_example.py:realistic_example
-  parameters: {}
-  work_pool:
-    name: slurm
-    work_queue_name:
-    job_variables: {}
-  schedules: []
-- name: analysis_amplicon_study_deployment
-  version:
-  tags: []
-  description: "Get a study from ENA, and input it to MGnify.\nKick off amplicon-v6
-    pipeline.\n:param study_accession: Study accession e.g. PRJxxxxxx\n:param profile:
-    Name of the nextflow profile to use for amplicon-v6."
-  entrypoint: workflows/flows/analysis_amplicon_study.py:analysis_amplicon_study
-  parameters: {}
-  work_pool:
-    name: slurm
-    work_queue_name:
-    job_variables: {}
-  schedules: []
-- name: upload_assembly_deployment
-  version:
-  tags: []
-  description: "This flow performs a sanity check and uploads an assembly for a specific
-    run to ENA.\n\nIt is intended to be executed *per run* after the assembly flow.
-    The assembly uploader\nscripts are executed using Prefect's `ShellOperation` command.
-    The assembly submission\nvia `webin-cli` is launched as a SLURM cluster job."
-  entrypoint: workflows/flows/upload_assembly.py:upload_assembly
-  parameters: {}
-  work_pool:
-    name: slurm
-    work_queue_name:
-    job_variables: {}
-  schedules: []
-- name: move_data_deployment
-  version:
-  tags: []
-  description: "Move files on the cluster filesystem.\nThis uses a slurm job running
-    on the datamover partition.\n\n:param source: fully qualified path of the source
-    location (file or folder)\n:param target: fully qualified path of the target location
-    (file or folder)\n:param move_command: tool command for the move. Default is `cp`,
-    but could be `mv` or `rsync` etc.\n:param kwargs: Other keywords to pass to run_cluster_job\n\
-    \    (e.g. expected_time, memory, or other slurm job-description parameters)\n
-    :return: Job ID of the datamover job."
-  entrypoint: workflows/prefect_utils/datamovers.py:move_data
   parameters: {}
   work_pool:
     name: slurm

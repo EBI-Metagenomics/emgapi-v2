@@ -58,7 +58,7 @@ class AssemblyAdmin(ENABrowserLinkMixin, JSONFieldWidgetOverridesMixin, ModelAdm
     ]
 
     def status_summary(self, obj):
-        if (not obj.status) or (not type(obj.status) is dict):
+        if (not obj.status) or (type(obj.status) is not dict):
             return None
         return " — ".join(
             [

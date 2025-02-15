@@ -315,11 +315,6 @@ LOGGING = {
             "level": "INFO",
             "propagate": True,
         },
-        "prefect": {
-            "handlers": ["console"],
-            "level": "INFO",
-            "propagate": True,
-        },
         "django.db.backends": {
             "handlers": ["console"],
             "level": "INFO",

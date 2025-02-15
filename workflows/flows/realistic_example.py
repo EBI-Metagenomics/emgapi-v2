@@ -1,5 +1,6 @@
 from datetime import timedelta
 from pathlib import Path
+from textwrap import dedent
 from typing import List
 
 import django
@@ -7,10 +8,7 @@ import httpx
 from django.conf import settings
 from prefect import flow, get_run_logger, suspend_flow_run, task
 from prefect.input import RunInput
-from prefect.task_runners import SequentialTaskRunner
 
-from workflows.prefect_utils.cache_control import context_agnostic_task_input_hash
-from workflows.prefect_utils.slack_notification import notify_via_slack
 from workflows.prefect_utils.slurm_policies import (
     ResubmitWithCleanedNextflowIfFailedPolicy,
 )
@@ -28,7 +26,6 @@ from workflows.prefect_utils.slurm_flow import (
     name="Sample fetcher",
     task_run_name="Get samples for {study_accession}",
     retries=2,
-    cache_key_fn=context_agnostic_task_input_hash,
     persist_result=True,
 )
 def fetch_samples(study_accession: str, limit: int) -> List[str]:
@@ -48,15 +45,23 @@ def fetch_samples(study_accession: str, limit: int) -> List[str]:
     logger.info(f"Will fetch study {study_accession} samples from ENA portal API")
     study = Study.objects.get(accession=study_accession)
     portal = httpx.get(
-        f"https://www.ebi.ac.uk/ena/portal/api/links/study?accession={study_accession}&result=sample&limit={limit}&format=json"
+        f'https://www.ebi.ac.uk/ena/portal/api/search?result=sample&query="study_accession={study_accession}"&limit={limit}&format=json'
     )
+    accessions_created = []
     if portal.status_code == httpx.codes.OK:
         for sample in portal.json():
-            Sample.objects.get_or_create(
-                accession=sample["sample_accession"], study=study
-            )
-    accessions = [sample["sample_accession"] for sample in portal.json()]
-    return accessions
+            if isinstance(sample, dict):
+                Sample.objects.get_or_create(
+                    accession=sample["sample_accession"], study=study
+                )
+                accessions_created.append(sample["sample_accession"])
+            else:
+                logger.warning(f"Portal API response looks strange... {sample}")
+    else:
+        logger.warning(
+            f"Bad response from portal api... {portal.status_code} {portal.text}"
+        )
+    return accessions_created
 
 
 class DownloadOptionsInput(RunInput):
@@ -65,11 +70,9 @@ class DownloadOptionsInput(RunInput):
 
 @flow(
     name="Download a study read-runs",
-    log_prints=True,
     flow_run_name="Download read-runs for study: {accession}",
-    task_runner=SequentialTaskRunner,
 )
-async def realistic_example(accession: str):
+def realistic_example(accession: str):
     """
     Example flow for Prefect, doing some "realistic" work.
     Downloads read-runs from ENA using a minimal nextflow pipeline, and integrated with the Django DB.
@@ -77,31 +80,34 @@ async def realistic_example(accession: str):
     :param accession: Accession of ENA Study to download
     :return:
     """
+    logger = get_run_logger()
+    logger.info("Hello from the realistic example")
 
-    # Make a study. Note we are using the async Django method aget_or_create here.
-    # Async isn't strictly necessary, but does make it easier to use some parts of Prefect.
-    study, created = await Study.objects.aget_or_create(
+    # Make a study.
+    study, created = Study.objects.get_or_create(
         accession=accession, defaults={"title": "unknown"}
     )
     if created:
-        print(f"I created an ENA study object: {study}")
+        logger.info(f"I created an ENA study object: {study}")
 
     # Example of how to pause the flow to wait for input from the team.
     # This will stop the flow. It can be resumed by going to the Prefect admin panel, and filling in the
     # required info into the popup.
-    download_options: DownloadOptionsInput = await suspend_flow_run(
+    download_options: DownloadOptionsInput = suspend_flow_run(
         wait_for_input=DownloadOptionsInput.with_initial_data(
             samples_limit=10,
-            description=f"""
-**ENA Downloader**
-This will download read-runs from ENA.
+            description=dedent(
+                f"""\
+                **ENA Downloader**
+                This will download read-runs from ENA.
 
-Please pick how many samples (the max limit) to download for the study {study.accession}.
-            """,
+                Please pick how many samples (the max limit) to download for the study {study.accession}.
+            """
+            ),
         )
     )
 
-    print(
+    logger.info(
         f"Will download up to {download_options.samples_limit} samples for {study.accession}"
     )
 
@@ -120,7 +126,7 @@ Please pick how many samples (the max limit) to download for the study {study.ac
         # limit to five sequential jobs.
         # to achieve parallelisation, our approach is to use "samplesheets" in nextflow.
         try:
-            orchestrated_cluster_job = await run_cluster_job(
+            orchestrated_cluster_job = run_cluster_job(
                 name=f"Download read-runs for for study {study.accession} sample {sample_accession}",
                 command=(
                     f"nextflow run {settings.EMG_CONFIG.slurm.pipelines_root_dir}/download_read_runs.nf "
@@ -131,13 +137,15 @@ Please pick how many samples (the max limit) to download for the study {study.ac
                     f"-with-trace trace-{sample_accession}.txt"
                 ),
                 expected_time=timedelta(hours=1),
-                memory=f"500M",
+                memory="500M",
                 resubmit_policy=ResubmitWithCleanedNextflowIfFailedPolicy,
                 # These policies control what happens when identical jobs are submitted in future,
                 #   including when a flow crashes and is restarted.
                 # This policy says that if an identical job is started in future, it won't actually start anything
                 #   in slurm, unless the last identical job resulted in a FAILED slurm job, in which case we will
                 #   start a new one to try again.
+                # The "cleaned nextflow" part refers the policy including a `nextflow clean` command that should be
+                #   run before the main command is resubmitted.
                 working_dir=Path(settings.EMG_CONFIG.slurm.default_workdir)
                 / "realistic-example"
                 / "realistic-example-workdir",
@@ -145,15 +153,16 @@ Please pick how many samples (the max limit) to download for the study {study.ac
             )
         except ClusterJobFailedException as e:
             # We can optionally handle errors by catching this exception, rather than crashing the entire flow.
-            print(f"Something went wrong running pipeline for {sample_accession}")
-            print(e)
+            logger.warning(
+                f"Something went wrong running pipeline for {sample_accession}"
+            )
+            logger.error(e)
             slurm_job_results.append(False)
         else:
             slurm_job_results.append(orchestrated_cluster_job)
 
     for sample, job_result in zip(sample_accessions, slurm_job_results):
         if job_result:
-            print(f"Successfully ran nextflow pipeline for {sample}")
-            await notify_via_slack(f"✅ Downloaded read runs for {sample}")
+            logger.info(f"Successfully ran nextflow pipeline for {sample}")
         else:
-            print(f"Something went wrong running nextflow pipeline for {sample}")
+            logger.error(f"Something went wrong running nextflow pipeline for {sample}")

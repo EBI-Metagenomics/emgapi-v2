@@ -1,5 +1,6 @@
 import csv
-from enum import Enum
+
+from emgapiv2.enum_utils import FutureStrEnum
 
 
 def move_file_pointer_past_comment_lines(
@@ -53,7 +54,7 @@ def move_file_pointer_past_comment_lines(
         f.seek(pos)
 
 
-class CSVDelimiter(str, Enum):
+class CSVDelimiter(FutureStrEnum):
     COMMA = ","
     TAB = "\t"
 

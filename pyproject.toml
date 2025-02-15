@@ -6,13 +6,16 @@ markers = [
 ]
 addopts = "--cov=/app --cov-report=term-missing --cov-report=html:coverage/htmlcov --cov-report=xml:coverage/coverage.xml -m 'not dev_data_maker'"
 env = [
-    "EMG_WEBIN__EMG_WEBIN_ACCOUNT=Webin-000",
-    "EMG_WEBIN__EMG_WEBIN_PASSWORD=password",
+    "PREFECT_TASKS_REFRESH_CACHE=true",  # so that a prefect test harness can be shared over the test session (much faster), without caching causing side effects between tests
+    "PREFECT_LOGGING_TO_API_BATCH_INTERVAL=0"  # write logs very quickly to api, so they are available immediately in tests
 ]
 filterwarnings = "ignore:.*is deprecated:DeprecationWarning"
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
 
 [tool.coverage.run]
 omit = ["*/tests/*", "*/migrations/*", "*settings*", "*asgi.py", "*wsgi.py", "*make_dev_data.py"]
 
-[tool.isort]
-profile = "black"
+[tool.ruff.lint]
+ignore = ["E402"]  # allow imports after django.setup()
+exclude = ["emgapiv2/settings_test.py"]

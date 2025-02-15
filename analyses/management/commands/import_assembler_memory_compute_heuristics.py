@@ -1,7 +1,7 @@
 import csv
 import logging
 
-from django.core.management.base import BaseCommand, CommandError
+from django.core.management.base import BaseCommand
 
 from analyses.models import Assembler, Biome, ComputeResourceHeuristic
 

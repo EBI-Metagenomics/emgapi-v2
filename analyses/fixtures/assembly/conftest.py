@@ -38,7 +38,7 @@ def mgnify_assemblies(raw_read_run, raw_reads_mgnify_study, assemblers):
             reads_study=raw_reads_mgnify_study,
             ena_study=raw_reads_mgnify_study.ena_study,
             assembler=assembler_megahit,
-            dir=f"/hps/tests/assembly_uploader",
+            dir="/hps/tests/assembly_uploader",
             metadata={"coverage": 10},
         )
         assembly_objects.append(assembly)

@@ -1,9 +1,10 @@
 from contextlib import contextmanager
-from typing import List, Optional
+from typing import List, Optional, TYPE_CHECKING
 
 import pymongo
 from django.conf import settings
 from prefect import get_run_logger, task
+from pymongo.synchronous.collection import Collection
 from sqlalchemy import Boolean, ForeignKey, Integer, String, create_engine
 from sqlalchemy.orm import (
     DeclarativeBase,
@@ -14,6 +15,9 @@ from sqlalchemy.orm import (
 )
 
 from analyses.base_models.with_downloads_models import DownloadFileType, DownloadType
+
+if TYPE_CHECKING:
+    import analyses.models
 
 
 class LegacyEMGBase(DeclarativeBase):
@@ -211,7 +215,7 @@ def get_taxonomy_from_api_v1_mongo(
     mongo_client = pymongo.MongoClient(mongo_dsn)
     db = mongo_client[settings.EMG_CONFIG.legacy_service.emg_mongo_db]
 
-    taxonomies_collection: pymongo.collection.Collection = db.analysis_job_taxonomy
+    taxonomies_collection: Collection = db.analysis_job_taxonomy
 
     mgya_taxonomies = taxonomies_collection.find_one({"accession": mgya})
 

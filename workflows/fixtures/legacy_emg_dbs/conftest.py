@@ -124,7 +124,8 @@ def mock_legacy_emg_db_session(in_memory_legacy_emg_db, monkeypatch):
     )
 
     # forceful mocking of the session manager everywhere because monkeypatch doesn't catch already cached imports
-    for module_name, module in sys.modules.items():
+    modules = [module for _, module in sys.modules.items()]
+    for module in modules:
         if hasattr(module, "legacy_emg_db_session"):
             setattr(module, "legacy_emg_db_session", mock_legacy_session)
 

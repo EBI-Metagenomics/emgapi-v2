@@ -4,13 +4,12 @@ from responses import matchers
 
 import analyses.models as mg_models
 import ena.models
-from workflows.flows.upload_assembly import process_study, upload_assembly
-from workflows.prefect_utils.testing_utils import run_async_flow_and_capture_logs
+from workflows.flows.upload_assembly import handle_tpa_study, upload_assembly
+from workflows.prefect_utils.testing_utils import run_flow_and_capture_logs
 
 
 @pytest.mark.django_db(transaction=True)
-@pytest.mark.asyncio
-async def test_prefect_assembly_upload_flow_assembly_metaspades(
+def test_prefect_assembly_upload_flow_assembly_metaspades(
     prefect_harness,
     mock_cluster_can_accept_jobs_yes,
     mock_start_cluster_job,
@@ -32,7 +31,7 @@ async def test_prefect_assembly_upload_flow_assembly_metaspades(
 
     registered_study = "PRJNA567089"
 
-    assembly = await mgnify_assemblies_completed.afirst()
+    assembly = mgnify_assemblies_completed.first()
 
     ena_api_study = responses.add(
         responses.POST,
@@ -92,7 +91,7 @@ async def test_prefect_assembly_upload_flow_assembly_metaspades(
         ],
     )
 
-    logged_uploader_result = await run_async_flow_and_capture_logs(
+    logged_uploader_result = run_flow_and_capture_logs(
         upload_assembly,
         assembly_id=assembly.id,
         dry_run=True,
@@ -114,21 +113,17 @@ async def test_prefect_assembly_upload_flow_assembly_metaspades(
     mock_check_cluster_job_all_completed.assert_called()
 
     assert (
-        await mg_models.Assembly.objects.filter(status__assembly_uploaded=True).acount()
-        == 1
+        mg_models.Assembly.objects.filter(status__assembly_uploaded=True).count() == 1
     )
 
     assert (
-        await mg_models.Assembly.objects.filter(
-            status__assembly_upload_failed=True
-        ).acount()
+        mg_models.Assembly.objects.filter(status__assembly_upload_failed=True).count()
         == 0
     )
 
 
 @pytest.mark.django_db(transaction=True)
-@pytest.mark.asyncio
-async def test_prefect_assembly_upload_flow_post_assembly_sanity_check_not_passed(
+def test_prefect_assembly_upload_flow_post_assembly_sanity_check_not_passed(
     prefect_harness,
     raw_reads_mgnify_study,
     raw_read_run,
@@ -142,9 +137,9 @@ async def test_prefect_assembly_upload_flow_post_assembly_sanity_check_not_passe
     Flow is running 1 metaspades assembly
     """
 
-    assembly = await mgnify_assembly_completed_uploader_sanity_check.afirst()
+    assembly = mgnify_assembly_completed_uploader_sanity_check.first()
 
-    logged_uploader_result = await run_async_flow_and_capture_logs(
+    logged_uploader_result = run_flow_and_capture_logs(
         upload_assembly,
         assembly_id=assembly.id,
         dry_run=True,
@@ -156,16 +151,12 @@ async def test_prefect_assembly_upload_flow_post_assembly_sanity_check_not_passe
     )
 
     assert (
-        await mg_models.Assembly.objects.filter(
-            status__post_assembly_qc_failed=True
-        ).acount()
+        mg_models.Assembly.objects.filter(status__post_assembly_qc_failed=True).count()
         == 1
     )
 
     assert (
-        await mg_models.Assembly.objects.filter(
-            status__post_assembly_completed=True
-        ).acount()
+        mg_models.Assembly.objects.filter(status__post_assembly_completed=True).count()
         == 0
     )
 
@@ -180,7 +171,7 @@ def test_process_study_multiple_assemblies(
     mgnify_assemblies,
     prefect_harness,
 ):
-    # On call of process_study for first assembly, a study should be made.
+    # On call of handle_tpa_study for first assembly, a study should be made.
     # Test that a call of if for SECOND assembly picks up the first assembly's assembly-study,
     #  by virtue of sharing the same reads_study.
 
@@ -200,7 +191,7 @@ def test_process_study_multiple_assemblies(
     first_assembly.assembly_study = assembly_study_mgnify
     first_assembly.save()
 
-    should_be_same_as_assembly_study = process_study(
+    should_be_same_as_assembly_study = handle_tpa_study(
         assembly=second_assembly,
         upload_folder=tmp_path,
         dry_run=True,

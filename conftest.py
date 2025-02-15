@@ -26,7 +26,7 @@ pytest_plugins = [
 ]
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def prefect_harness():
     with prefect_test_harness():
         yield

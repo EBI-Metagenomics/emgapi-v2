@@ -4,6 +4,7 @@ from django.db import models
 from pydantic import BaseModel
 
 from emgapiv2.async_utils import anysync_property
+from emgapiv2.enum_utils import FutureStrEnum
 from emgapiv2.log_utils import mask_sensitive_data
 from emgapiv2.model_utils import JSONFieldWithSchema
 
@@ -112,3 +113,12 @@ def test_json_field_with_schema():
 
     instance = TestModel2(my_data=[single_datum])
     assert TestSchema.model_validate(instance.my_data[0]).name == "X-wing"
+
+
+def test_enum_stringification():
+    class MyEnum(FutureStrEnum):
+        HELLO = "hello"
+        WORLD = "world"
+
+    assert str(MyEnum.HELLO) == "hello"
+    assert str(MyEnum.HELLO.value) == "hello"

@@ -6,8 +6,8 @@ from ena.models import Study as ENAStudy
 
 
 def create_analysis(is_private=False):
-    run = Run.objects.first()
-    return Analysis.objects.create(
+    run = Run.all_objects.first()
+    return Analysis.all_objects.create(
         study=run.study,
         run=run,
         ena_study=run.ena_study,

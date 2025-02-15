@@ -10,14 +10,13 @@ from assembly_uploader import assembly_manifest, study_xmls, submit_study
 from Bio import SeqIO
 from django.conf import settings
 
-from workflows.prefect_utils.env_context import TemporaryEnv
+from workflows.prefect_utils.env_context import TemporaryEnv, UNSET
 from workflows.prefect_utils.slurm_policies import ResubmitIfFailedPolicy
 
 django.setup()
 
 from django.core.exceptions import MultipleObjectsReturned, ObjectDoesNotExist
 from prefect import flow, get_run_logger, task
-from prefect.task_runners import SequentialTaskRunner
 
 import analyses.models
 import ena.models
@@ -160,7 +159,7 @@ def submit_study_xml(
     cache_key_fn=context_agnostic_task_input_hash,
     task_run_name="Check study registration, create study XML and submit to ENA",
 )
-def process_study(
+def handle_tpa_study(
     assembly: analyses.models.Assembly,
     upload_folder: Path,
     dry_run: bool,
@@ -284,13 +283,19 @@ def prepare_assembly(
     # assembly_uploader assembly_manifest
     logger.info("Will generate assembly manifests")
 
-    assembly_manifest_writer = assembly_manifest.AssemblyManifestGenerator(
-        study=mgnify_assembly.reads_study.first_accession,
-        assembly_study=mgnify_assembly.assembly_study.first_accession,
-        assemblies_csv=data_csv_path,
-        output_dir=upload_folder,
-    )
-    assembly_manifest_writer.write()
+    with TemporaryEnv(
+        ENA_WEBIN=EMG_CONFIG.webin.dcc_account if mgnify_assembly.is_private else UNSET,
+        ENA_WEBIN_PASSWORD=(
+            EMG_CONFIG.webin.dcc_password if mgnify_assembly.is_private else UNSET
+        ),
+    ):
+        assembly_manifest_writer = assembly_manifest.AssemblyManifestGenerator(
+            study=mgnify_assembly.reads_study.first_accession,
+            assembly_study=mgnify_assembly.assembly_study.first_accession,
+            assemblies_csv=data_csv_path,
+            output_dir=upload_folder,
+        )
+        assembly_manifest_writer.write()
 
     manifest = assembly_manifest_writer.upload_dir / Path(
         mgnify_assembly.run.first_accession + ".manifest"
@@ -302,9 +307,7 @@ def prepare_assembly(
     retries=2,
     task_run_name="Get assembly accession for {assembly}",
 )
-async def get_assigned_assembly_accession(
-    assembly: analyses.models.Assembly, manifest: Path
-):
+def get_assigned_assembly_accession(assembly: analyses.models.Assembly, manifest: Path):
     logger = get_run_logger()
     logger.info(f"Getting assembly accession for {assembly}")
     webin_cli_log = manifest.parent / Path("webin-cli.report")
@@ -336,18 +339,28 @@ def add_erz_accession(assembly: analyses.models.Assembly, erz_accession):
     cache_key_fn=context_agnostic_task_input_hash,
     task_run_name="Run Webin-cli to upload {mgnify_assembly}",
 )
-async def submit_assembly_slurm(
+def submit_assembly_slurm(
     manifest: Path,
     mgnify_assembly: analyses.models.Assembly,
     dry_run: bool,
 ):
+    username = (
+        f"{EMG_CONFIG.webin.broker_prefix}{mgnify_assembly.reads_study.webin_submitter}"
+        if mgnify_assembly.is_private
+        else EMG_CONFIG.webin.emg_webin_account
+    )
+    password = (
+        EMG_CONFIG.webin.broker_password
+        if mgnify_assembly.is_private
+        else EMG_CONFIG.webin.emg_webin_password
+    )
     logger = get_run_logger()
     command = (
-        f"java -Xms2G -jar {EMG_CONFIG.webin.webin_cli_executor} "
+        f"java -Xms4G -jar {EMG_CONFIG.webin.webin_cli_executor} "
         f"-context=genome "
         f"-manifest={manifest} "
-        f"-userName='{EMG_CONFIG.webin.emg_webin_account}' "
-        f"-password='{EMG_CONFIG.webin.emg_webin_password}' "
+        f"-userName='{username}' "
+        f"-password='{password}' "
     )
     if dry_run:
         command += "-test -validate "
@@ -355,7 +368,7 @@ async def submit_assembly_slurm(
         command += "-submit "
 
     try:
-        await run_cluster_job(
+        run_cluster_job(
             name=f"Upload assembly for {mgnify_assembly} to ENA",
             command=command,
             expected_time=timedelta(
@@ -386,9 +399,7 @@ async def submit_assembly_slurm(
             )
         else:
             # check webin.report for ERZ
-            erz_accession = await get_assigned_assembly_accession(
-                mgnify_assembly, manifest
-            )
+            erz_accession = get_assigned_assembly_accession(mgnify_assembly, manifest)
             if erz_accession:
                 logger.info(f"Upload completed for {mgnify_assembly}")
                 add_erz_accession(mgnify_assembly, erz_accession)
@@ -414,10 +425,9 @@ async def submit_assembly_slurm(
 
 @flow(
     name="Sanity check and upload an assembly",
-    flow_run_name=f"Sanity check and upload",
-    task_runner=SequentialTaskRunner,
+    flow_run_name="Sanity check and upload",
 )
-async def upload_assembly(
+def upload_assembly(
     assembly_id: int, dry_run: bool = True, custom_upload_folder: Optional[Path] = None
 ):
     """
@@ -434,7 +444,7 @@ async def upload_assembly(
 
     try:
         mgnify_assembly: analyses.models.Assembly = (
-            await analyses.models.Assembly.objects.aget(
+            analyses.models.Assembly.all_objects.get(
                 id=assembly_id,
             )
         )
@@ -442,7 +452,7 @@ async def upload_assembly(
         logger.error(f"Problem getting assembly {assembly_id = }")
         raise e
 
-    assembly_path = Path(await mgnify_assembly.dir_with_miassembler_suffix) / Path(
+    assembly_path = Path(mgnify_assembly.dir_with_miassembler_suffix) / Path(
         f"{mgnify_assembly.run.first_accession}.contigs.fa.gz"
     )
 
@@ -466,12 +476,19 @@ async def upload_assembly(
         )
         return
 
-    # Register study and submit to ENA (if was not submitted before)
-    registered_study = process_study(
-        mgnify_assembly,
-        upload_folder,
-        dry_run,
-    )
+    if (
+        mgnify_assembly.is_private or mgnify_assembly.reads_study.is_private
+    ):  # should be the same really
+        # we will broker assembly into the original reads study
+        mgnify_assembly.assembly_study = mgnify_assembly.reads_study
+        mgnify_assembly.save()
+    else:
+        # Register TPA study and submit to ENA, unless it was made before by another assembly in this reads study
+        handle_tpa_study(
+            mgnify_assembly,
+            upload_folder,
+            dry_run,
+        )
 
     # Create assembly manifest
     manifest = prepare_assembly(
@@ -481,4 +498,4 @@ async def upload_assembly(
     )
 
     # Submit assembly with Webin-cli
-    await submit_assembly_slurm(manifest, mgnify_assembly, dry_run)
+    submit_assembly_slurm(manifest, mgnify_assembly, dry_run)

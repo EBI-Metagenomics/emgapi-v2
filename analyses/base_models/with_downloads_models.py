@@ -1,14 +1,15 @@
 from __future__ import annotations
 
-from enum import Enum
 from pathlib import Path
 from typing import List, Optional, Union
 
 from django.db import models
 from pydantic import BaseModel, field_validator
 
+from emgapiv2.enum_utils import FutureStrEnum
 
-class DownloadType(str, Enum):
+
+class DownloadType(FutureStrEnum):
     SEQUENCE_DATA = "Sequence data"
     FUNCTIONAL_ANALYSIS = "Functional analysis"
     TAXONOMIC_ANALYSIS = "Taxonomic analysis"
@@ -19,7 +20,7 @@ class DownloadType(str, Enum):
     OTHER = "Other"
 
 
-class DownloadFileType(str, Enum):
+class DownloadFileType(FutureStrEnum):
     FASTA = "fasta"
     TSV = "tsv"
     BIOM = "biom"

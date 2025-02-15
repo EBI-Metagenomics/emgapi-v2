@@ -2,7 +2,6 @@ from pathlib import Path
 
 import django
 from prefect import flow, get_run_logger, task
-from prefect.task_runners import SequentialTaskRunner
 from sqlalchemy import select
 
 django.setup()
@@ -125,7 +124,6 @@ def make_run_from_legacy_emg_db(legacy_run: LegacyRun, study: Study) -> Run:
 @flow(
     name="Import V5 Amplicon Analyses",
     flow_run_name="Import V5 amplicon analyses from study: {mgys}",
-    task_runner=SequentialTaskRunner,
 )
 def import_v5_amplicon_analyses(mgys: str):
     """

@@ -196,7 +196,7 @@ items:
         spec:
           containers:
             - name: prefect-server
-              image: prefecthq/prefect:2.20.10-python3.12
+              image: prefecthq/prefect:3.2.2-python3.12
               resources:
                 requests:
                   memory: "1024Mi"
@@ -209,7 +209,7 @@ items:
                     name: proxy-config
               env:
                 - name: PREFECT_UI_URL
-                  value: http://prefect-dev.mgnify.org/api
+                  value: http://prefect-dev.mgnify.org
                 - name: PREFECT_API_URL
                   value: http://prefect-dev.mgnify.org/api
                 - name: PREFECT_UI_API_URL

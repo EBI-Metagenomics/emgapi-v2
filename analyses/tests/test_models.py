@@ -169,7 +169,7 @@ def test_compute_resource_heuristics(top_level_biomes, assemblers):
 @pytest.mark.django_db(transaction=True)
 def test_biome_importer(httpx_mock):
     httpx_mock.add_response(
-        url=f"http://old.api/v1/biomes?page=1",
+        url="http://old.api/v1/biomes?page=1",
         json={
             "links": {
                 "next": "http://old.api/v1/biomes?page=2",
@@ -178,7 +178,7 @@ def test_biome_importer(httpx_mock):
         },
     )
     httpx_mock.add_response(
-        url=f"http://old.api/v1/biomes?page=2",
+        url="http://old.api/v1/biomes?page=2",
         json={
             "links": {
                 "next": None,
@@ -216,7 +216,7 @@ def test_status_filtering(
         study=run.study, run=run, ena_study=run.ena_study, sample=run.sample
     )
     assert analysis.AnalysisStates.ANALYSIS_COMPLETED.value in analysis.status
-    assert analysis.status[analysis.AnalysisStates.ANALYSIS_COMPLETED.value] == False
+    assert not analysis.status[analysis.AnalysisStates.ANALYSIS_COMPLETED.value]
 
     assert run.study.analyses.count() == 1
 

@@ -6,9 +6,9 @@ from prefect_shell import ShellOperation
     retries=2,
     task_run_name="run shell command {command}",
 )
-async def run_shell_command(command, env=None, workdir=None):
+def run_shell_command(command, env=None, workdir=None):
     cmd = ShellOperation(
-        commands=[command], env=env, working_dir=workdir, stream_output=True
+        commands=[command], env=env or {}, working_dir=workdir, stream_output=True
     )
-    result = await cmd.run()
+    result = cmd.run()
     return result
