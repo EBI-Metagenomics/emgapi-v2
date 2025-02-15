@@ -5,7 +5,6 @@ from pathlib import Path
 import django
 from django.conf import settings
 from prefect import flow
-from prefect.task_runners import SequentialTaskRunner
 
 from workflows.prefect_utils.slurm_policies import (
     ResubmitWithCleanedNextflowIfFailedPolicy,
@@ -23,9 +22,8 @@ from workflows.prefect_utils.slurm_flow import (
     name="Run the assembler pipeline tests",
     log_prints=True,
     flow_run_name="Run the miassembler tests",
-    task_runner=SequentialTaskRunner,
 )
-async def run_assembly_pipeline_tests():
+def run_assembly_pipeline_tests():
     """
     It runs the miassembler pipeline test suite.
     """
@@ -41,7 +39,7 @@ async def run_assembly_pipeline_tests():
         shutil.rmtree(outdir, ignore_errors=True)
         outdir.mkdir(parents=True, exist_ok=True)
 
-        orchestrated_cluster_job = await run_cluster_job(
+        orchestrated_cluster_job = run_cluster_job(
             name="Run the mi-assembler tests",
             command=(
                 f"nextflow run ebi-metagenomics/miassembler -r dev "
