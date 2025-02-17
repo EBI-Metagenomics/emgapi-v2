@@ -2,16 +2,13 @@ from enum import Enum
 from textwrap import dedent as _
 from typing import Optional
 
-import django
-from django.conf import settings
 from django.urls import reverse_lazy
 from prefect import flow, get_run_logger, suspend_flow_run
 from prefect.input import RunInput
 
 from emgapiv2.enum_utils import FutureStrEnum
 
-django.setup()
-
+from activate_django_first import EMG_CONFIG
 import analyses.models
 import ena.models
 from workflows.ena_utils.ena_api_requests import (
@@ -28,8 +25,6 @@ from workflows.flows.assemble_study_tasks.make_samplesheets import (
     make_samplesheets_for_runs_to_assemble,
 )
 from workflows.flows.assemble_study_tasks.upload_assemblies import upload_assemblies
-
-EMG_CONFIG = settings.EMG_CONFIG
 
 
 class AssemblerChoices(FutureStrEnum):

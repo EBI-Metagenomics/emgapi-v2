@@ -3,17 +3,15 @@ from pathlib import Path
 from textwrap import dedent
 from typing import List
 
-import django
 import httpx
-from django.conf import settings
 from prefect import flow, get_run_logger, suspend_flow_run, task
 from prefect.input import RunInput
+
+from activate_django_first import EMG_CONFIG
 
 from workflows.prefect_utils.slurm_policies import (
     ResubmitWithCleanedNextflowIfFailedPolicy,
 )
-
-django.setup()
 
 from ena.models import Sample, Study
 from workflows.prefect_utils.slurm_flow import (
@@ -129,7 +127,7 @@ def realistic_example(accession: str):
             orchestrated_cluster_job = run_cluster_job(
                 name=f"Download read-runs for for study {study.accession} sample {sample_accession}",
                 command=(
-                    f"nextflow run {settings.EMG_CONFIG.slurm.pipelines_root_dir}/download_read_runs.nf "
+                    f"nextflow run {EMG_CONFIG.slurm.pipelines_root_dir}/download_read_runs.nf "
                     f"-resume "
                     f"-name fetch-read-runs-{study.accession}-{sample_accession} "
                     f"--sample {sample_accession} "
@@ -146,7 +144,7 @@ def realistic_example(accession: str):
                 #   start a new one to try again.
                 # The "cleaned nextflow" part refers the policy including a `nextflow clean` command that should be
                 #   run before the main command is resubmitted.
-                working_dir=Path(settings.EMG_CONFIG.slurm.default_workdir)
+                working_dir=Path(EMG_CONFIG.slurm.default_workdir)
                 / "realistic-example"
                 / "realistic-example-workdir",
                 environment="ALL",  # copy env vars from the prefect agent into the slurm job
