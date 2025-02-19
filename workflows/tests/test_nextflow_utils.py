@@ -1,16 +1,22 @@
 import csv
 import tempfile
+from datetime import timedelta
 from pathlib import Path
 
 import pytest
 
+from django.conf import settings
+
 import analyses.models
 import ena.models
+from workflows.prefect_utils.slurm_flow import run_cluster_job
+from workflows.prefect_utils.slurm_policies import ResubmitAlwaysPolicy
 from workflows.nextflow_utils.samplesheets import (
     SamplesheetColumnSource,
     queryset_hash,
     queryset_to_samplesheet,
 )
+from workflows.prefect_utils.slurm_status import SlurmStatus
 
 
 @pytest.mark.django_db(transaction=True, reset_sequences=True)
@@ -168,3 +174,79 @@ def test_queryset_hash(raw_reads_mgnify_study):
     studies = analyses.models.Study.objects.all()
     hash = queryset_hash(studies, "ena_study__title")
     assert hash == "3b387536d51e5c045256364275533aa4"  # md5 of "Project 1"
+
+
+@pytest.mark.django_db(transaction=True)
+def test_nextflow_trace_from_flag(
+    prefect_harness,
+    nextflow_hello_world_command,
+    write_nextflow_tracefile,
+    mock_start_cluster_job,
+    mock_cluster_can_accept_jobs_yes,
+    mock_check_cluster_job_all_completed,
+):
+    trace_file_location = (
+        Path(settings.EMG_CONFIG.slurm.default_workdir)
+        / "hello-nextflow"
+        / "trace-hello.txt"
+    )
+
+    def make_trace_file(*args, **kwargs):
+        write_nextflow_tracefile(trace_file_location)
+        return SlurmStatus.completed.value
+
+    mock_check_cluster_job_all_completed.side_effect = make_trace_file
+
+    hello_nextfow_flow = run_cluster_job(
+        name="Runs the nextflow hello world pipeline",
+        command=nextflow_hello_world_command(with_trace_flag=True),
+        expected_time=timedelta(minutes=10),
+        resubmit_policy=ResubmitAlwaysPolicy,
+        memory="100M",
+        environment="ALL",
+        working_dir=Path(settings.EMG_CONFIG.slurm.default_workdir) / "hello-nextflow",
+    )
+
+    assert len(hello_nextfow_flow.nextflow_trace)
+    # Fixture - data
+    assert hello_nextfow_flow.nextflow_trace[0]["hash"] == "c4/1f6cf1"
+
+    trace_file_location.unlink()
+
+
+@pytest.mark.django_db(transaction=True)
+def test_nextflow_trace_from_pipeline_info(
+    prefect_harness,
+    nextflow_hello_world_command,
+    write_nextflow_tracefile,
+    mock_start_cluster_job,
+    mock_cluster_can_accept_jobs_yes,
+    mock_check_cluster_job_all_completed,
+):
+    trace_file_location = (
+        Path(settings.EMG_CONFIG.slurm.default_workdir)
+        / "hello-nextflow"
+        / "pipeline_info/execution_trace_2025-05-01.txt"
+    )
+
+    def make_trace_file(*args, **kwargs):
+        write_nextflow_tracefile(trace_file_location)
+        return SlurmStatus.completed.value
+
+    mock_check_cluster_job_all_completed.side_effect = make_trace_file
+
+    hello_nextfow_flow = run_cluster_job(
+        name="Runs the nextflow hello world pipeline",
+        command=nextflow_hello_world_command(with_trace_flag=False),
+        expected_time=timedelta(minutes=10),
+        resubmit_policy=ResubmitAlwaysPolicy,
+        memory="100M",
+        environment="ALL",
+        working_dir=Path(settings.EMG_CONFIG.slurm.default_workdir) / "hello-nextflow",
+    )
+
+    assert len(hello_nextfow_flow.nextflow_trace)
+    # Fixture - data
+    assert hello_nextfow_flow.nextflow_trace[0]["hash"] == "c4/1f6cf1"
+
+    trace_file_location.unlink()

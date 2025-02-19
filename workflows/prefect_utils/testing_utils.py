@@ -21,7 +21,7 @@ class LoggedFlowRunResult:
     result: Any
 
 
-def run_flow_and_capture_logs(flow: Callable, *args, **kwargs):
+def run_flow_and_capture_logs(flow: Callable, *args, **kwargs) -> LoggedFlowRunResult:
     """
     Run a prefect flow, and then pull the logs for it from the prefect server API.
     This is a tedious workaround for buggy behaviour in capturing prefect logs with pytest caplog.
@@ -64,7 +64,9 @@ async def run_async_flow_and_capture_logs(flow: Callable, *args, **kwargs):
     """
     state: State = await flow(*args, return_state=True, **kwargs)
     logs = get_logs_for_flow_run(state.state_details.flow_run_id)
-    return LoggedFlowRunResult(logs=logs, result=state.result())
+    return LoggedFlowRunResult(
+        logs=logs, result=state.result(), flow_run_id=state.state_details.flow_run_id
+    )
 
 
 def should_not_mock_httpx_requests_to_prefect_server(request):
