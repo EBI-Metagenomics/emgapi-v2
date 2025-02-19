@@ -17,6 +17,7 @@ django.setup()
 
 import analyses.models
 from workflows.ena_utils.ena_file_fetching import convert_ena_ftp_to_fire_fastq
+from workflows.ena_utils.ena_api_requests import SINGLE_END_LIBRARY_LAYOUT
 from workflows.nextflow_utils.samplesheets import (
     SamplesheetColumnSource,
     queryset_hash,
@@ -78,7 +79,12 @@ def make_samplesheet(
                 ),
             ),
             "assembler": SamplesheetColumnSource(
-                lookup_string="id", renderer=lambda _: assembler.name.lower()
+                lookup_string="id",
+                renderer=lambda assembly: (
+                    analyses.models.Assembler.MEGAHIT
+                    if assembly.run.metadata.get(analyses.models.Run.CommonMetadataKeys.LIBRARY_LAYOUT, "") == SINGLE_END_LIBRARY_LAYOUT
+                    else assembler.name.lower()
+                ),
             ),
             "assembly_memory": SamplesheetColumnSource(
                 lookup_string="id", renderer=lambda _: memory
