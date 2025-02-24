@@ -5,15 +5,13 @@ from datetime import timedelta
 from pathlib import Path
 from typing import Optional
 
-import django
 from assembly_uploader import assembly_manifest, study_xmls, submit_study
 from Bio import SeqIO
-from django.conf import settings
+
+from activate_django_first import EMG_CONFIG
 
 from workflows.prefect_utils.env_context import TemporaryEnv, UNSET
 from workflows.prefect_utils.slurm_policies import ResubmitIfFailedPolicy
-
-django.setup()
 
 from django.core.exceptions import MultipleObjectsReturned, ObjectDoesNotExist
 from prefect import flow, get_run_logger, task
@@ -27,7 +25,6 @@ from workflows.prefect_utils.slurm_flow import (
     run_cluster_job,
 )
 
-EMG_CONFIG = settings.EMG_CONFIG
 
 OPTIONAL_SPADES_FILES = [
     ".assembly_graph.fastg.gz",

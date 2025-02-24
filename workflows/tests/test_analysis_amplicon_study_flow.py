@@ -330,7 +330,7 @@ MockFileIsNotEmptyRule = FileRule(
 
 @pytest.mark.httpx_mock(should_mock=should_not_mock_httpx_requests_to_prefect_server)
 @pytest.mark.django_db(transaction=True)
-@patch("workflows.flows.analysis_amplicon_study.queryset_hash")
+@patch("workflows.flows.analyse_study_tasks.make_samplesheet_amplicon.queryset_hash")
 @patch(
     "workflows.data_io_utils.mgnify_v6_utils.amplicon.FileIsNotEmptyRule",
     MockFileIsNotEmptyRule,

@@ -19,3 +19,9 @@ omit = ["*/tests/*", "*/migrations/*", "*settings*", "*asgi.py", "*wsgi.py", "*m
 [tool.ruff.lint]
 ignore = ["E402"]  # allow imports after django.setup()
 exclude = ["emgapiv2/settings_test.py"]
+
+#TODO, when ruff supports custom section-ordering
+#[tool.ruff.isort]
+#section-order = ["future", "standard-library", "third-party", "activate_django_first", "first-party", "local-folder"]
+#[tool.ruff.isort.sections]
+#django = ["activate_django_first"]

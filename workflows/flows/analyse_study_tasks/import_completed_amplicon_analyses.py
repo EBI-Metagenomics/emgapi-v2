@@ -1,0 +1,41 @@
+from pathlib import Path
+from typing import List
+
+from prefect import task
+
+import analyses.models
+from workflows.data_io_utils.mgnify_v6_utils.amplicon import import_qc, import_taxonomy
+from workflows.flows.analyse_study_tasks.analysis_states import AnalysisStates
+
+
+@task(log_prints=True)
+def import_completed_analysis(
+    amplicon_current_outdir: Path, amplicon_analyses: List[analyses.models.Analysis]
+):
+    for analysis in amplicon_analyses:
+        analysis.refresh_from_db()
+        if not analysis.status.get(AnalysisStates.ANALYSIS_COMPLETED):
+            print(f"{analysis} is not completed successfuly. Skipping.")
+            continue
+        if analysis.annotations.get(analysis.TAXONOMIES):
+            print(f"{analysis} already has taxonomic annotations. Skipping.")
+            continue
+
+        dir_for_analysis = amplicon_current_outdir / analysis.run.first_accession
+
+        analysis.results_dir = str(dir_for_analysis)
+        analysis.save()
+
+        import_qc(analysis, dir_for_analysis)
+
+        for source in analyses.models.Analysis.TaxonomySources:
+            if source in [
+                analyses.models.Analysis.TaxonomySources.DADA2_PR2,
+                analyses.models.Analysis.TaxonomySources.DADA2_SILVA,
+            ]:
+                print(f"IGNORING RESULTS FROM {source}! Not implemented yet.")
+                # TODO: handle variable region naming conventions...
+                continue
+            import_taxonomy(
+                analysis, dir_for_analysis, source=source, allow_non_exist=True
+            )

@@ -4,15 +4,13 @@ from datetime import timedelta
 from pathlib import Path
 from typing import Iterable, Optional
 
-import django
 import pandas as pd
-from django.conf import settings
 from django.db.models import Q
 from prefect import flow, get_run_logger, task
 
 from workflows.prefect_utils.build_cli_command import cli_command
 
-django.setup()
+from activate_django_first import EMG_CONFIG
 
 import analyses.models
 from workflows.data_io_utils.filenames import (
@@ -27,8 +25,6 @@ from workflows.prefect_utils.slurm_flow import (
 from workflows.prefect_utils.slurm_policies import (
     ResubmitWithCleanedNextflowIfFailedPolicy,
 )
-
-EMG_CONFIG = settings.EMG_CONFIG
 
 
 HOST_TAXON_TO_REFERENCE_GENOME = {
@@ -224,7 +220,7 @@ def run_assembler_for_samplesheet(
             ("--samplesheet", samplesheet_csv),
             mgnify_study.is_private and "--private_study",
             ("--outdir", miassembler_outdir),
-            settings.EMG_CONFIG.slurm.use_nextflow_tower and "-with-tower",
+            EMG_CONFIG.slurm.use_nextflow_tower and "-with-tower",
             host_reference and ("--reference_genome", host_reference),
             (
                 "-name",
