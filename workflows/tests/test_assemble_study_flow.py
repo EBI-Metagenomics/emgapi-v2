@@ -46,6 +46,7 @@ def test_prefect_assemble_study_flow(
 ):
     ### ENA MOCKING ###
     accession = "SRP1"
+    number_of_runs = 3
 
     httpx_mock.add_response(
         url=f"{EMG_CONFIG.ena.portal_search_api}?"
@@ -110,6 +111,20 @@ def test_prefect_assemble_study_flow(
                 "host_tax_id": "7460",
                 "host_scientific_name": "Apis mellifera",
             },
+            {
+                "sample_accession": "SAMN03",
+                "sample_title": "Wookie hair 3",
+                "secondary_sample_accession": "SRS3",
+                "run_accession": "SRR3",
+                "fastq_md5": "123;abc",
+                "fastq_ftp": "ftp.sra.example.org/vol/fastq/SRR3/SRR3.fastq.gz",
+                "library_layout": "SINGLE",
+                "library_strategy": "WGS",
+                "library_source": "METAGENOMIC",
+                "scientific_name": "metagenome",
+                "host_tax_id": "7460",
+                "host_scientific_name": "Apis mellifera",
+            },
         ],
     )
 
@@ -135,20 +150,32 @@ def test_prefect_assemble_study_flow(
     os.mkdir(assembly_folder)
 
     with open(f"{assembly_folder}/assembled_runs.csv", "w") as file:
-        file.write("SRR1,metaspades,3.15.5")
+        file.write("SRR1,metaspades,3.15.5\n")
+        file.write("SRR3,megahit,1.2.9")
 
     with open(f"{assembly_folder}/qc_failed_runs.csv", "w") as file:
         file.write("SRR2,filter_ratio_threshold_exceeded")
 
+    # create fake results folders
     os.makedirs(
         f"{assembly_folder}/PRJNA1/PRJNA1/SRR1/SRR1/assembly/metaspades/3.15.5/coverage/",
         exist_ok=True,
     )
+    os.makedirs(
+        f"{assembly_folder}/PRJNA1/PRJNA1/SRR3/SRR3/assembly/megahit/1.2.9/coverage/",
+        exist_ok=True,
+    )
+    # create fake coverage files
     with open(
         f"{assembly_folder}/PRJNA1/PRJNA1/SRR1/SRR1/assembly/metaspades/3.15.5/coverage/SRR1_coverage.json",
         "w",
     ) as file:
         json.dump({"coverage": 0.04760503915318373, "coverage_depth": 273.694}, file)
+    with open(
+        f"{assembly_folder}/PRJNA1/PRJNA1/SRR3/SRR3/assembly/megahit/1.2.9/coverage/SRR3_coverage.json",
+        "w",
+    ) as file:
+        json.dump({"coverage": 0.04960503915318373, "coverage_depth": 273.694}, file)
 
     ### RUN WORKFLOW ###
     assemble_study(accession, upload=False)
@@ -162,7 +189,7 @@ def test_prefect_assemble_study_flow(
     assembly_samplesheet_table = Artifact.get("miassembler-initial-sample-sheet")
     assert assembly_samplesheet_table.type == "table"
     table_data = json.loads(assembly_samplesheet_table.data)
-    assert len(table_data) == 2
+    assert len(table_data) == number_of_runs
 
     ### DB OBJECTS WERE CREATED AS EXPECTED ###
     assert ena.models.Study.objects.count() == 1
@@ -170,10 +197,10 @@ def test_prefect_assemble_study_flow(
     mgys = analyses.models.Study.objects.select_related("ena_study").first()
     assert mgys.ena_study == ena.models.Study.objects.first()
 
-    assert ena.models.Sample.objects.count() == 2
-    assert analyses.models.Sample.objects.count() == 2
-    assert analyses.models.Run.objects.count() == 2
-    assert analyses.models.Assembly.objects.count() == 2
+    assert ena.models.Sample.objects.count() == number_of_runs
+    assert analyses.models.Sample.objects.count() == number_of_runs
+    assert analyses.models.Run.objects.count() == number_of_runs
+    assert analyses.models.Assembly.objects.count() == number_of_runs
 
     assembly = analyses.models.Assembly.objects.filter(
         run__ena_accessions__contains="SRR1"
@@ -184,7 +211,20 @@ def test_prefect_assemble_study_flow(
 
     assert (
         analyses.models.Assembly.objects.filter(status__assembly_completed=True).count()
+        == 2
+    )
+    # for SE assembler should be swapped to megahit
+    assert (
+        analyses.models.Assembly.objects.filter(
+            assembler__name__iexact="megahit"
+        ).count()
         == 1
+    )
+    assert (
+        analyses.models.Assembly.objects.filter(
+            assembler__name__iexact="metaspades"
+        ).count()
+        == 2
     )
 
     failed_assembly: analyses.models.Assembly = analyses.models.Assembly.objects.get(

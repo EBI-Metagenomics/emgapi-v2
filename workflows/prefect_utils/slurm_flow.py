@@ -355,7 +355,7 @@ def cancel_cluster_jobs_if_flow_cancelled(
 
 @task
 def compute_hash_of_input_file(
-    input_files_to_hash: Optional[List[Union[Path, str]]] = None
+    input_files_to_hash: Optional[List[Union[Path, str]]] = None,
 ) -> str:
     logger = get_run_logger()
     input_files_hash = hashlib.new("blake2b")

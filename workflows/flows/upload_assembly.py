@@ -245,7 +245,7 @@ def generate_assembly_csv(
         line = ",".join(
             [
                 assembly.run.first_accession,
-                str(assembly.metadata.get(assembly.CommonMetadataKeys.COVERAGE)),
+                str(assembly.metadata.get(assembly.CommonMetadataKeys.COVERAGE_DEPTH)),
                 assembly.assembler.name,
                 str(assembly.assembler.version),
                 os.path.abspath(assembly_path),

@@ -97,7 +97,6 @@ def get_reference_genome(
 def update_assembly_metadata(
     miassembler_outdir: Path,
     assembly: analyses.models.Assembly,
-    assembler: analyses.models.Assembler,
 ) -> None:
     """
     Update assembly with post-assembly metadata like assembler and coverage.
@@ -106,7 +105,6 @@ def update_assembly_metadata(
     run_accession = assembly.run.first_accession
     study_accession = assembly.reads_study.ena_study.accession
 
-    assembly.assembler = assembler
     assembly.dir = (
         miassembler_outdir
         / accession_prefix_separated_dir_path(study_accession, 7)
@@ -186,7 +184,6 @@ def update_assemblies_assemblers_from_samplesheet(
 def run_assembler_for_samplesheet(
     mgnify_study: analyses.models.Study,
     samplesheet_csv: Path,
-    assembler: analyses.models.Assembler,
 ):
     samplesheet_df = pd.read_csv(samplesheet_csv, sep=",")
     assemblies: Iterable[analyses.models.Assembly] = (
@@ -301,7 +298,7 @@ def run_assembler_for_samplesheet(
                         analyses.models.Assembly.AssemblyStates.ASSEMBLY_FAILED
                     ],
                 )
-                update_assembly_metadata(miassembler_outdir, assembly, assembler)
+                update_assembly_metadata(miassembler_outdir, assembly)
             else:
                 task_mark_assembly_status(
                     assembly,

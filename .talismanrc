@@ -12,13 +12,13 @@ fileignoreconfig:
   allowed_patterns: [key]
 
 - filename: emgapiv2/config.py
-  checksum: cdf92fafe4bdde18107114352a9cbafd3d8d4a1d8cfa34e9cb4d62c3d82043d9
+  checksum: 6d16d6eb32fc66afcef849c34d0f3e095b6f27b172d4d0d6692f80ccaa64acb3
 
 - filename: emgapiv2/settings.py
   ignore_detectors: [filename]
 
 - filename: emgapiv2/settings_test.py
-  checksum: 1db8f3e416512afdacad24bb4543bac98fea40a00d900b520e18864d3f421d13
+  checksum: ded898400b4eda7e3cf75694af1b66235975a85eb5b8f49f3a2c708163a7aad4
 
 - filename: emgapiv2/test_utils.py
   checksum: ab3eefe0d1b722d23b8dd55ba55a364e5f6593403f0d96898d0745c900f7926f

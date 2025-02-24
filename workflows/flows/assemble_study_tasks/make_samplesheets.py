@@ -15,6 +15,7 @@ from workflows.flows.assemble_study_tasks.get_assemblies_to_attempt import (
 
 import analyses.models
 from workflows.ena_utils.ena_file_fetching import convert_ena_ftp_to_fire_fastq
+from workflows.ena_utils.ena_api_requests import SINGLE_END_LIBRARY_LAYOUT
 from workflows.nextflow_utils.samplesheets import (
     SamplesheetColumnSource,
     queryset_hash,
@@ -74,7 +75,12 @@ def make_samplesheet(
                 ),
             ),
             "assembler": SamplesheetColumnSource(
-                lookup_string="id", renderer=lambda _: assembler.name.lower()
+                lookup_string=f"run__metadata__{analyses.models.Run.CommonMetadataKeys.LIBRARY_LAYOUT}",
+                renderer=lambda layout: (
+                    analyses.models.Assembler.MEGAHIT
+                    if layout == SINGLE_END_LIBRARY_LAYOUT
+                    else assembler.name.lower()
+                ),
             ),
             "assembly_memory": SamplesheetColumnSource(
                 lookup_string="id", renderer=lambda _: memory

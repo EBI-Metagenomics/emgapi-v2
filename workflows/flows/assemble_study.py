@@ -150,7 +150,6 @@ def assemble_study(
         run_assembler_for_samplesheet(
             mgnify_study,
             samplesheet,
-            assembler,
         )
 
     if upload:

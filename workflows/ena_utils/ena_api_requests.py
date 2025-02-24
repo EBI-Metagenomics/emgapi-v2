@@ -574,8 +574,9 @@ def get_study_readruns_from_ena(
                 "is_private": mgys_study.is_private,
             },
         )
-        run.set_experiment_type_by_ena_library_strategy(
-            read_run[analyses.models.Run.CommonMetadataKeys.LIBRARY_STRATEGY]
+        run.set_experiment_type_by_metadata(
+            read_run[analyses.models.Run.CommonMetadataKeys.LIBRARY_STRATEGY],
+            read_run[analyses.models.Run.CommonMetadataKeys.LIBRARY_SOURCE],
         )
         run_accessions.append(run.first_accession)
 
@@ -634,7 +635,7 @@ def is_ena_study_available_privately(accession: str):
 
 @flow
 def sync_privacy_state_of_ena_study_and_derived_objects(
-    ena_study: Union[ena.models.Study, str]
+    ena_study: Union[ena.models.Study, str],
 ):
     logger = get_run_logger()
 
