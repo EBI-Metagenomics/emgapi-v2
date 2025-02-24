@@ -19,7 +19,9 @@ from workflows.flows.analyse_study_tasks.analysis_states import (
     mark_analysis_as_started,
     mark_analysis_as_failed,
 )
-from workflows.flows.set_post_analysies_states import set_post_analysis_states
+from workflows.flows.analyse_study_tasks.set_post_analysies_states import (
+    set_post_analysis_states,
+)
 from workflows.prefect_utils.slurm_flow import (
     run_cluster_job,
     ClusterJobFailedException,
