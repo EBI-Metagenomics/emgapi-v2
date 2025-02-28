@@ -186,6 +186,7 @@ def import_v5_amplicon_analyses(mgys: str):
                         download_type=LEGACY_DOWNLOAD_TYPE_MAP.get(
                             legacy_download.group_id, DownloadType.OTHER
                         ),
+                        download_group="all",
                         file_type=LEGACY_FILE_FORMATS_MAP.get(
                             legacy_download.format_id, DownloadFileType.OTHER
                         ),

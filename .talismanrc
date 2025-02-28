@@ -69,3 +69,4 @@ allowed_patterns:
 - key2=val2
 - pagination_key
 - primary_key
+- KnownMetadataKeys

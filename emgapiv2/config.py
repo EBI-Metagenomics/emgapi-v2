@@ -78,7 +78,6 @@ class AmpliconPipelineConfig(BaseModel):
     asv_folder: str = "asv"
     primer_identification_folder: str = "primer-identification"
     taxonomy_summary_folder: str = "taxonomy-summary"
-    qc_folder: str = "qc"
 
     amplicon_nextflow_master_job_memory_gb: int = 1
     amplicon_pipeline_time_limit_days: int = 5

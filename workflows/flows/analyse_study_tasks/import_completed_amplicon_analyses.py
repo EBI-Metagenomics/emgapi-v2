@@ -4,7 +4,11 @@ from typing import List
 from prefect import task
 
 import analyses.models
-from workflows.data_io_utils.mgnify_v6_utils.amplicon import import_qc, import_taxonomy
+from workflows.data_io_utils.mgnify_v6_utils.amplicon import (
+    import_qc,
+    import_taxonomy,
+    import_asv,
+)
 from workflows.flows.analyse_study_tasks.analysis_states import AnalysisStates
 
 
@@ -15,7 +19,7 @@ def import_completed_analysis(
     for analysis in amplicon_analyses:
         analysis.refresh_from_db()
         if not analysis.status.get(AnalysisStates.ANALYSIS_COMPLETED):
-            print(f"{analysis} is not completed successfuly. Skipping.")
+            print(f"{analysis} is not completed successfully. Skipping.")
             continue
         if analysis.annotations.get(analysis.TAXONOMIES):
             print(f"{analysis} already has taxonomic annotations. Skipping.")
@@ -29,13 +33,7 @@ def import_completed_analysis(
         import_qc(analysis, dir_for_analysis)
 
         for source in analyses.models.Analysis.TaxonomySources:
-            if source in [
-                analyses.models.Analysis.TaxonomySources.DADA2_PR2,
-                analyses.models.Analysis.TaxonomySources.DADA2_SILVA,
-            ]:
-                print(f"IGNORING RESULTS FROM {source}! Not implemented yet.")
-                # TODO: handle variable region naming conventions...
-                continue
             import_taxonomy(
                 analysis, dir_for_analysis, source=source, allow_non_exist=True
             )
+        import_asv(analysis, dir_for_analysis)
