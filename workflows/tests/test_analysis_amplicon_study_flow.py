@@ -35,6 +35,11 @@ def generate_fake_pipeline_all_results(amplicon_run_folder, run):
         "w",
     ) as fastp:
         json.dump({"summary": {"before_filtering": {"total_bases": 10}}}, fastp)
+    with open(
+        f"{amplicon_run_folder}/{EMG_CONFIG.amplicon_pipeline.qc_folder}/{run}_multiqc_report.html",
+        "w",
+    ):
+        pass
 
     # PRIMER IDENTIFICATION
     os.makedirs(
@@ -330,7 +335,7 @@ MockFileIsNotEmptyRule = FileRule(
 
 @pytest.mark.httpx_mock(should_mock=should_not_mock_httpx_requests_to_prefect_server)
 @pytest.mark.django_db(transaction=True)
-@patch("workflows.flows.analysis_amplicon_study.queryset_hash")
+@patch("workflows.flows.analyse_study_tasks.make_samplesheet_amplicon.queryset_hash")
 @patch(
     "workflows.data_io_utils.mgnify_v6_utils.amplicon.FileIsNotEmptyRule",
     MockFileIsNotEmptyRule,
