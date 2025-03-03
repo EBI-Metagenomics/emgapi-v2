@@ -1,0 +1,8 @@
+ASV	Superkingdom	Kingdom	Phylum	Class	Order	Family	Genus	Species
+seq_1	sk__Bacteria	k__	p__Pseudomonadota	c__Gammaproteobacteria	o__Pseudomonadales	f__Pseudomonadaceae	g__Pseudomonas	NA
+seq_2	sk__Bacteria	k__	p__Actinomycetota	c__Actinomycetes	o__Micrococcales	f__Micrococcaceae	g__Pseudarthrobacter	NA
+seq_3	sk__Bacteria	k__	p__Bacillota	c__Clostridia	o__Eubacteriales	f__Clostridiaceae	NA	NA
+seq_4	sk__Bacteria	k__	p__Bacillota	c__Bacilli	o__Bacillales	f__Bacillaceae	g__Bacillus	NA
+seq_5	sk__Bacteria	k__	p__Pseudomonadota	c__Gammaproteobacteria	o__Xanthomonadales	f__Xanthomonadaceae	g__Xanthomonas	NA
+seq_6	sk__Bacteria	k__	p__Nitrospirota	c__Nitrospiria	o__Nitrospirales	f__Nitrospiraceae	g__Leptospirillum	NA
+seq_7	sk__Bacteria	k__	p__Pseudomonadota	c__Gammaproteobacteria	o__Xanthomonadales	f__Rhodanobacteraceae	g__Rhodanobacter	NA

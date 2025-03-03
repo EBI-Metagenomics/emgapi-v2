@@ -248,6 +248,9 @@ def generate_fake_pipeline_no_asvs(amplicon_run_folder, run):
     with open(
         f"{amplicon_run_folder}/{EMG_CONFIG.amplicon_pipeline.qc_folder}/{run}_seqfu.tsv",
         "w",
+    ), open(
+        f"{amplicon_run_folder}/{EMG_CONFIG.amplicon_pipeline.qc_folder}/{run}_multiqc_report.html",
+        "w",
     ):
         pass
 
@@ -494,6 +497,20 @@ def test_prefect_analyse_amplicon_flow(
         f"{amplicon_folder}/{amplicon_run_extra_dada2}/{EMG_CONFIG.amplicon_pipeline.taxonomy_summary_folder}/DADA2-SILVA",
         exist_ok=True,
     )
+    with open(
+        f"{amplicon_folder}/{amplicon_run_extra_dada2}/{EMG_CONFIG.amplicon_pipeline.taxonomy_summary_folder}/DADA2-SILVA/{amplicon_run_extra_dada2}.html",
+        "w",
+    ), open(
+        f"{amplicon_folder}/{amplicon_run_extra_dada2}/{EMG_CONFIG.amplicon_pipeline.taxonomy_summary_folder}/DADA2-SILVA/{amplicon_run_extra_dada2}_DADA2-SILVA.mseq",
+        "w",
+    ), open(
+        f"{amplicon_folder}/{amplicon_run_extra_dada2}/{EMG_CONFIG.amplicon_pipeline.taxonomy_summary_folder}/DADA2-SILVA/{amplicon_run_extra_dada2}_DADA2-SILVA.tsv",
+        "w",
+    ), open(
+        f"{amplicon_folder}/{amplicon_run_extra_dada2}/{EMG_CONFIG.amplicon_pipeline.taxonomy_summary_folder}/DADA2-SILVA/{amplicon_run_extra_dada2}_DADA2-SILVA.txt",
+        "w",
+    ):
+        pass
 
     # RUN MAIN FLOW
     analysis_amplicon_study(study_accession=study_accession)

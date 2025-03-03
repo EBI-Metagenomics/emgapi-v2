@@ -41,7 +41,8 @@ GlobOfQcFolderHasFastpAndMultiqc = GlobRule(
 )
 
 GlobOfAsvFolderHasRegionFolders = GlobRule(
-    rule_name="Folder should contain one or two region subfolders with asv-read-count files",
+    rule_name="Folder should contain either one region subfolder, or two regions plus a concatenation, with asv-read-count files",
     glob_patten="*/*_asv_read_counts.tsv",
-    test=lambda files: 1 <= len(files) <= 2,
+    test=lambda files: len(list(files))
+    in [1, 3],  # e.g. ["16S-V3-V4"] or ["18S-V9", "16S-V3-V4", "concat"]
 )

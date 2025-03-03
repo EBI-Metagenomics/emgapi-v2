@@ -553,7 +553,8 @@ class Analysis(
         f"{TAXONOMIES}.closed_reference.",
         f"{TAXONOMIES}.asv.",
         "quality_control",
-        "primer_identification" "asv",
+        "primer_identification",
+        "asv",
     ]
 
     @staticmethod

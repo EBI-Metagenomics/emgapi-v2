@@ -23,6 +23,18 @@ fileignoreconfig:
 - filename: emgapiv2/test_utils.py
   checksum: ab3eefe0d1b722d23b8dd55ba55a364e5f6593403f0d96898d0745c900f7926f
 
+- filename: slurm-dev-environment/fs/nfs/public/tests/amplicon_v6_output/SRR1111111/taxonomy-summary/DADA2-SILVA/SRR1111111_16S-V3-V4.html
+  checksum: cbba3d78df18143c2d69885815740506ea76787d481f94748c79627737222ce4
+
+- filename: slurm-dev-environment/fs/nfs/public/tests/amplicon_v6_output/SRR1111111/taxonomy-summary/DADA2-PR2/SRR1111111_16S-V3-V4.html
+  checksum: 09de3fa253a99185607f28cd0f235a422bb317de6a0dc017f731369308e0dc96
+
+- filename: slurm-dev-environment/fs/nfs/public/tests/amplicon_v6_output/SRR1111111/taxonomy-summary/UNITE/SRR1111111.html
+  checksum: 736d4a269445b871b77361b3593cae7fabf30eb22bd57a16666ee0e549e2b975
+
+- filename: slurm-dev-environment/fs/nfs/public/tests/amplicon_v6_output/SRR1111111/taxonomy-summary/SILVA-SSU/SRR1111111.html
+  checksum: bfa4d4aa1e4d1bef1554cbde5073373eb16313b149b2ed568dad4f19d25730b6
+
 - filename: slurm-dev-environment/fs/nfs/public/tests/amplicon_v6_output/SRR6180434/taxonomy-summary/SILVA-SSU/SRR6180434.html
   checksum: be322a6ac4686d8fa31b271a862510603403c2da8dbdce60dbb7ad3877aa7b47
 

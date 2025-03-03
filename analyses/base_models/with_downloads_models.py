@@ -96,7 +96,7 @@ class WithDownloadsModel(models.Model):
             )
         ):
             raise Exception(
-                f"Download group {download.download_group} is not allowed for model {self.__class__.__name__}: only {self.ALLOWED_DOWNLOAD_GROUP_PREFIXES}*"
+                f"Download group {download.download_group} is not allowed for model {self.__class__.__name__}: only prefixes {self.ALLOWED_DOWNLOAD_GROUP_PREFIXES}"
             )
 
         self.downloads.append(download.model_dump(exclude={"parent_identifier"}))
