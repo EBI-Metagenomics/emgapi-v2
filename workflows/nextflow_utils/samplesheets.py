@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class SamplesheetColumnSource:
-    lookup_string: str
+    lookup_string: str | list[str]
     renderer: Callable[[Any], str] = lambda x: x
 
 
@@ -81,13 +81,24 @@ def queryset_to_samplesheet(
             samplesheet, fieldnames=_column_map.keys(), delimiter=delimiter
         )
         writer.writeheader()
-        values_qs = queryset.values(
-            *[source.lookup_string for source in _column_map.values()]
-        )
+        all_lookups_requested = []
+        for source in _column_map.values():
+            if isinstance(source.lookup_string, list):
+                all_lookups_requested.extend(source.lookup_string)
+            else:
+                all_lookups_requested.append(source.lookup_string)
+
+        values_qs = queryset.values(*all_lookups_requested)
         for obj in values_qs:
             writer.writerow(
                 {
-                    col: source.renderer(obj[source.lookup_string])
+                    col: (
+                        source.renderer(
+                            *[obj[lookup] for lookup in source.lookup_string]
+                        )
+                        if isinstance(source.lookup_string, list)
+                        else source.renderer(obj[source.lookup_string])
+                    )
                     for col, source in _column_map.items()
                 }
             )

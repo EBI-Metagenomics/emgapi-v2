@@ -25,3 +25,4 @@ deployment/**/auth
 *env/
 dev-db.json
 talisman_report/
+slurm-dev-environment/fs/nfs/ftp/public/databases/metagenomics/mgnify_results/*

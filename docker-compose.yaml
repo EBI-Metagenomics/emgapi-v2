@@ -23,7 +23,7 @@ services:
     networks: [emg]
 
   app-database:
-    image: postgres:16
+    image: postgres:17
     restart: always
     container_name: app-database
     environment:
@@ -99,6 +99,7 @@ services:
       - jobdir:/opt/jobs
       - ./prefectserver:/root/.prefect
       - "./slurm-dev-environment/fs/nfs/production:/nfs/production"
+      - "./slurm-dev-environment/fs/nfs/ftp:/nfs/ftp"
       - "./slurm-dev-environment/fs/hps:/hps"
 
   app:

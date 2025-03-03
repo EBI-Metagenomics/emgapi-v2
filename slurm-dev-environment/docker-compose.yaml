@@ -42,6 +42,7 @@ services:
       - "./configs/slurm_epilog.sh:/usr/local/bin/slurm_epilog.sh"
       - "./entrypoints/single-node-entrypoint.sh:/usr/local/bin/worker-entrypoint.sh"
       - "./fs/nfs/production:/nfs/production"
+      - "./fs/nfs/ftp:/nfs/ftp"
       - "./fs/hps:/hps"
       - "./fs/nfs/public:/publicnfs"
     expose:

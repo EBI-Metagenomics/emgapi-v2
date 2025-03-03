@@ -12,7 +12,7 @@ fileignoreconfig:
   allowed_patterns: [key]
 
 - filename: emgapiv2/config.py
-  checksum: 6d16d6eb32fc66afcef849c34d0f3e095b6f27b172d4d0d6692f80ccaa64acb3
+  checksum: 1e1a8f41069509ddfe643f09455c5c8a52c98ecfa3e3f467cca9798ef0639030
 
 - filename: emgapiv2/settings.py
   ignore_detectors: [filename]
@@ -60,7 +60,7 @@ fileignoreconfig:
   allowed_patterns: [key]
 
 - filename: workflows/flows/assemble_study_tasks/make_samplesheets.py
-  allowed_patterns: [key]
+  allowed_patterns: [key, InstrumentPlatformKeys]
 
 - filename: workflows/flows/upload_assembly.py
   allowed_patterns: ["-password='{password}'"]

@@ -56,14 +56,6 @@ def make_samplesheet(
                 lookup_string="run__ena_accessions",
                 renderer=lambda accessions: accessions[0],
             ),
-            "library_strategy": SamplesheetColumnSource(
-                lookup_string="run__experiment_type",
-                renderer=EXPERIMENT_TYPES_TO_MIASSEMBLER_LIBRARY_STRATEGY.get,
-            ),
-            "library_layout": SamplesheetColumnSource(
-                lookup_string=f"run__metadata__{analyses.models.Run.CommonMetadataKeys.LIBRARY_LAYOUT}",
-                renderer=lambda layout: str(layout).lower(),
-            ),
             "fastq_1": SamplesheetColumnSource(
                 lookup_string=f"run__metadata__{analyses.models.Run.CommonMetadataKeys.FASTQ_FTPS}",
                 renderer=lambda ftps: convert_ena_ftp_to_fire_fastq(ftps[0]),
@@ -74,12 +66,49 @@ def make_samplesheet(
                     convert_ena_ftp_to_fire_fastq(ftps[1]) if len(ftps) > 1 else ""
                 ),
             ),
-            "assembler": SamplesheetColumnSource(
+            "library_strategy": SamplesheetColumnSource(
+                lookup_string="run__experiment_type",
+                renderer=EXPERIMENT_TYPES_TO_MIASSEMBLER_LIBRARY_STRATEGY.get,
+            ),
+            "library_layout": SamplesheetColumnSource(
                 lookup_string=f"run__metadata__{analyses.models.Run.CommonMetadataKeys.LIBRARY_LAYOUT}",
-                renderer=lambda layout: (
-                    analyses.models.Assembler.MEGAHIT
-                    if layout == SINGLE_END_LIBRARY_LAYOUT
-                    else assembler.name.lower()
+                renderer=lambda layout: str(layout).lower(),
+            ),
+            "platform": SamplesheetColumnSource(
+                lookup_string=f"run__metadata__{analyses.models.Run.CommonMetadataKeys.INSTRUMENT_PLATFORM}",
+                renderer=lambda platform: {
+                    analyses.models.Run.InstrumentPlatformKeys.PACBIO_SMRT: "pb",
+                    analyses.models.Run.InstrumentPlatformKeys.OXFORD_NANOPORE: "ont",
+                    analyses.models.Run.InstrumentPlatformKeys.ION_TORRENT: "iontorrent",
+                }.get(platform, str(platform).lower()),
+            ),
+            "assembler": SamplesheetColumnSource(
+                lookup_string=[
+                    f"run__metadata__{analyses.models.Run.CommonMetadataKeys.LIBRARY_LAYOUT}",
+                    f"run__metadata__{analyses.models.Run.CommonMetadataKeys.INSTRUMENT_PLATFORM}",
+                ],
+                # PACBIO_SMRT and OXFORD_NANOPORE - flye
+                # SE platform ION_TORRENT         - spades
+                # other SE                        - megahit
+                # all the rest (mostly illumina)  - metaspades
+                renderer=lambda layout, platform: (
+                    analyses.models.Assembler.FLYE
+                    if platform
+                    in {
+                        analyses.models.Run.InstrumentPlatformKeys.PACBIO_SMRT,
+                        analyses.models.Run.InstrumentPlatformKeys.OXFORD_NANOPORE,
+                    }
+                    else (
+                        analyses.models.Assembler.SPADES
+                        if layout == SINGLE_END_LIBRARY_LAYOUT
+                        and platform
+                        == analyses.models.Run.InstrumentPlatformKeys.ION_TORRENT
+                        else (
+                            analyses.models.Assembler.MEGAHIT
+                            if layout == SINGLE_END_LIBRARY_LAYOUT
+                            else assembler.name.lower()
+                        )
+                    )
                 ),
             ),
             "assembly_memory": SamplesheetColumnSource(

@@ -168,6 +168,26 @@ def test_queryset_to_samplesheet(raw_reads_mgnify_study):
         assert first_line["fastq2"] == "/path/to/fastq_2.fastq.gz"
     samplesheet_ret.unlink(missing_ok=True)
 
+    # should support multiple lookup strings
+    samplesheet_ret = queryset_to_samplesheet(
+        queryset=run_qs,
+        filename=samplesheet,
+        column_map={
+            "metadata": SamplesheetColumnSource(
+                lookup_string=["ena_study", "metadata__fastq_ftps"],
+                renderer=lambda accession, fastq: f"{accession}_{len(fastq)}",
+            ),
+        },
+        bludgeon=True,
+    )
+    with open(samplesheet_ret) as f:
+        csv_reader = csv.DictReader(f, delimiter=",")
+        first_line = next(csv_reader)
+        assert (
+            first_line["metadata"] == f"{raw_reads_mgnify_study.ena_study.accession}_2"
+        )
+    samplesheet_ret.unlink(missing_ok=True)
+
 
 @pytest.mark.django_db(transaction=True)
 def test_queryset_hash(raw_reads_mgnify_study):

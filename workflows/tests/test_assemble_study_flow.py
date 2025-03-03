@@ -46,7 +46,8 @@ def test_prefect_assemble_study_flow(
 ):
     ### ENA MOCKING ###
     accession = "SRP1"
-    number_of_runs = 3
+    number_of_runs = 5
+    number_not_assembled_runs = 1
 
     httpx_mock.add_response(
         url=f"{EMG_CONFIG.ena.portal_search_api}?"
@@ -85,7 +86,7 @@ def test_prefect_assemble_study_flow(
         json=[
             {
                 "sample_accession": "SAMN01",
-                "sample_title": "Wookie hair 1",
+                "sample_title": "Wookie hair 1 (PE assembled with metaspades)",
                 "secondary_sample_accession": "SRS1",
                 "run_accession": "SRR1",
                 "fastq_md5": "123;abc",
@@ -96,10 +97,12 @@ def test_prefect_assemble_study_flow(
                 "scientific_name": "metagenome",
                 "host_tax_id": "7460",
                 "host_scientific_name": "Apis mellifera",
+                "instrument_platform": "ILLUMINA",
+                "instrument_model": "Illumina MiSeq",
             },
             {
                 "sample_accession": "SAMN02",
-                "sample_title": "Wookie hair 2",
+                "sample_title": "Wookie hair 2 (PE failed assembling with metaspades)",
                 "secondary_sample_accession": "SRS2",
                 "run_accession": "SRR2",
                 "fastq_md5": "456;xyz",
@@ -110,10 +113,12 @@ def test_prefect_assemble_study_flow(
                 "scientific_name": "metagenome",
                 "host_tax_id": "7460",
                 "host_scientific_name": "Apis mellifera",
+                "instrument_platform": "ILLUMINA",
+                "instrument_model": "Illumina MiSeq",
             },
             {
                 "sample_accession": "SAMN03",
-                "sample_title": "Wookie hair 3",
+                "sample_title": "Wookie hair 3 (SE should be assembled with megahit)",
                 "secondary_sample_accession": "SRS3",
                 "run_accession": "SRR3",
                 "fastq_md5": "123;abc",
@@ -124,6 +129,40 @@ def test_prefect_assemble_study_flow(
                 "scientific_name": "metagenome",
                 "host_tax_id": "7460",
                 "host_scientific_name": "Apis mellifera",
+                "instrument_platform": "ILLUMINA",
+                "instrument_model": "Illumina MiSeq",
+            },
+            {
+                "sample_accession": "SAMN04",
+                "sample_title": "Wookie hair 4 (LR should be assembled with flye)",
+                "secondary_sample_accession": "SRS4",
+                "run_accession": "SRR4",
+                "fastq_md5": "123;abc",
+                "fastq_ftp": "ftp.sra.example.org/vol/fastq/SRR4/SRR4.fastq.gz",
+                "library_layout": "SINGLE",
+                "library_strategy": "WGS",
+                "library_source": "METAGENOMIC",
+                "scientific_name": "metagenome",
+                "host_tax_id": "7460",
+                "host_scientific_name": "Apis mellifera",
+                "instrument_platform": "OXFORD_NANOPORE",
+                "instrument_model": "MinION",
+            },
+            {
+                "sample_accession": "SAMN05",
+                "sample_title": "Wookie hair 5 (ION_TORRENT should be assembled with spades)",
+                "secondary_sample_accession": "SRS5",
+                "run_accession": "SRR5",
+                "fastq_md5": "123;abc",
+                "fastq_ftp": "ftp.sra.example.org/vol/fastq/SRR5/SRR5.fastq.gz",
+                "library_layout": "SINGLE",
+                "library_strategy": "WGS",
+                "library_source": "METAGENOMIC",
+                "scientific_name": "metagenome",
+                "host_tax_id": "7460",
+                "host_scientific_name": "Apis mellifera",
+                "instrument_platform": "ION_TORRENT",
+                "instrument_model": "Ion Torrent Proton",
             },
         ],
     )
@@ -151,7 +190,9 @@ def test_prefect_assemble_study_flow(
 
     with open(f"{assembly_folder}/assembled_runs.csv", "w") as file:
         file.write("SRR1,metaspades,3.15.5\n")
-        file.write("SRR3,megahit,1.2.9")
+        file.write("SRR3,megahit,1.2.9\n")
+        file.write("SRR4,flye,2.9.5\n")
+        file.write("SRR5,spades,3.15.5")
 
     with open(f"{assembly_folder}/qc_failed_runs.csv", "w") as file:
         file.write("SRR2,filter_ratio_threshold_exceeded")
@@ -165,6 +206,14 @@ def test_prefect_assemble_study_flow(
         f"{assembly_folder}/PRJNA1/PRJNA1/SRR3/SRR3/assembly/megahit/1.2.9/coverage/",
         exist_ok=True,
     )
+    os.makedirs(
+        f"{assembly_folder}/PRJNA1/PRJNA1/SRR4/SRR4/assembly/flye/2.9.5/coverage/",
+        exist_ok=True,
+    )
+    os.makedirs(
+        f"{assembly_folder}/PRJNA1/PRJNA1/SRR5/SRR5/assembly/spades/3.15.5/coverage/",
+        exist_ok=True,
+    )
     # create fake coverage files
     with open(
         f"{assembly_folder}/PRJNA1/PRJNA1/SRR1/SRR1/assembly/metaspades/3.15.5/coverage/SRR1_coverage.json",
@@ -176,6 +225,16 @@ def test_prefect_assemble_study_flow(
         "w",
     ) as file:
         json.dump({"coverage": 0.04960503915318373, "coverage_depth": 273.694}, file)
+    with open(
+        f"{assembly_folder}/PRJNA1/PRJNA1/SRR4/SRR4/assembly/flye/2.9.5/coverage/SRR4_coverage.json",
+        "w",
+    ) as file:
+        json.dump({"coverage": 0.049, "coverage_depth": 276.694}, file)
+    with open(
+        f"{assembly_folder}/PRJNA1/PRJNA1/SRR5/SRR5/assembly/spades/3.15.5/coverage/SRR5_coverage.json",
+        "w",
+    ) as file:
+        json.dump({"coverage": 0.049, "coverage_depth": 276.694}, file)
 
     ### RUN WORKFLOW ###
     assemble_study(accession, upload=False)
@@ -190,6 +249,10 @@ def test_prefect_assemble_study_flow(
     assert assembly_samplesheet_table.type == "table"
     table_data = json.loads(assembly_samplesheet_table.data)
     assert len(table_data) == number_of_runs
+    # OXFORD_NANOPORE platform should be converted to 'ont' in samplesheet
+    assert table_data[3]["platform"] == "ont"
+    # ION_TORRENT should be iontorrent
+    assert table_data[4]["platform"] == "iontorrent"
 
     ### DB OBJECTS WERE CREATED AS EXPECTED ###
     assert ena.models.Study.objects.count() == 1
@@ -211,7 +274,7 @@ def test_prefect_assemble_study_flow(
 
     assert (
         analyses.models.Assembly.objects.filter(status__assembly_completed=True).count()
-        == 2
+        == number_of_runs - number_not_assembled_runs
     )
     # for SE assembler should be swapped to megahit
     assert (
@@ -220,11 +283,24 @@ def test_prefect_assemble_study_flow(
         ).count()
         == 1
     )
+    # but platform ION_TORRENT SE should be assembled with spades
+    assert (
+        analyses.models.Assembly.objects.filter(
+            assembler__name__iexact="spades"
+        ).count()
+        == 1
+    )
+    # illumina PE reads assembled with metaspades
     assert (
         analyses.models.Assembly.objects.filter(
             assembler__name__iexact="metaspades"
         ).count()
         == 2
+    )
+    # platform OXFORD_NANOPORE should be assembled with Flye as LR
+    assert (
+        analyses.models.Assembly.objects.filter(assembler__name__iexact="flye").count()
+        == 1
     )
 
     failed_assembly: analyses.models.Assembly = analyses.models.Assembly.objects.get(
@@ -325,6 +401,8 @@ def test_prefect_assemble_private_study_flow(
                 "scientific_name": "metagenome",
                 "host_tax_id": "7460",
                 "host_scientific_name": "Apis mellifera",
+                "instrument_platform": "ILLUMINA",
+                "instrument_model": "Illumina MiSeq",
             },
             {
                 "sample_accession": "SAMN02",
@@ -339,6 +417,8 @@ def test_prefect_assemble_private_study_flow(
                 "scientific_name": "metagenome",
                 "host_tax_id": "7460",
                 "host_scientific_name": "Apis mellifera",
+                "instrument_platform": "ILLUMINA",
+                "instrument_model": "Illumina MiSeq",
             },
         ],
     )

@@ -33,6 +33,7 @@ class AssemblerChoices(FutureStrEnum):
     megahit = "megahit"
     metaspades = "metaspades"
     spades = "spades"
+    flye = "flye"
 
 
 def get_biomes_as_choices():

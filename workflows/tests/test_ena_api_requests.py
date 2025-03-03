@@ -223,6 +223,8 @@ def test_get_study_readruns_from_ena(
                 "scientific_name": "genome",
                 "host_tax_id": "7460",
                 "host_scientific_name": "Apis mellifera",
+                "instrument_platform": "ILLUMINA",
+                "instrument_model": "Illumina MiSeq",
             },
             {
                 "run_accession": "RUN2",
@@ -237,6 +239,8 @@ def test_get_study_readruns_from_ena(
                 "scientific_name": "metagenome",
                 "host_tax_id": "7460",
                 "host_scientific_name": "Apis mellifera",
+                "instrument_platform": "ILLUMINA",
+                "instrument_model": "Illumina MiSeq",
             },
             {
                 "run_accession": "RUN3",
@@ -251,6 +255,8 @@ def test_get_study_readruns_from_ena(
                 "scientific_name": "uncultured bacteria",
                 "host_tax_id": "7460",
                 "host_scientific_name": "Apis mellifera",
+                "instrument_platform": "ILLUMINA",
+                "instrument_model": "Illumina MiSeq",
             },
             {
                 "run_accession": "RUN4",
@@ -265,6 +271,8 @@ def test_get_study_readruns_from_ena(
                 "scientific_name": "metagenome",
                 "host_tax_id": "7460",
                 "host_scientific_name": "Apis mellifera",
+                "instrument_platform": "ILLUMINA",
+                "instrument_model": "Illumina MiSeq",
             },
             {
                 "run_accession": "RUN5",
@@ -279,6 +287,8 @@ def test_get_study_readruns_from_ena(
                 "scientific_name": "metagenome",
                 "host_tax_id": "7460",
                 "host_scientific_name": "Apis mellifera",
+                "instrument_platform": "ILLUMINA",
+                "instrument_model": "Illumina MiSeq",
             },
             {
                 "run_accession": "RUN6",
@@ -293,6 +303,8 @@ def test_get_study_readruns_from_ena(
                 "scientific_name": "metagenome",
                 "host_tax_id": "7460",
                 "host_scientific_name": "Apis mellifera",
+                "instrument_platform": "ILLUMINA",
+                "instrument_model": "Illumina MiSeq",
             },
         ],
     )
