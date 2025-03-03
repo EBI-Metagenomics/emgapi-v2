@@ -1,12 +1,10 @@
-import django
 from prefect import flow
 
 from workflows.prefect_utils.datamovers import move_data
 
-django.setup()
+from activate_django_first import EMG_CONFIG
 
 from analyses.models import Analysis
-from workflows.data_io_utils.mgnify_v6_utils.amplicon import EMG_CONFIG
 
 
 @flow(

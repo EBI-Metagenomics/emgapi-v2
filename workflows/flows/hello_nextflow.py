@@ -3,15 +3,11 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from textwrap import dedent as _
 
-import django
 from prefect import flow
 
+from activate_django_first import EMG_CONFIG
+
 from workflows.prefect_utils.slurm_policies import ResubmitAlwaysPolicy
-
-django.setup()
-
-from django.conf import settings
-
 from workflows.prefect_utils.slurm_flow import run_cluster_job
 
 
@@ -22,7 +18,7 @@ from workflows.prefect_utils.slurm_flow import run_cluster_job
 def hello_nextflow(with_trace_flag: True):
     command = "nextflow run hello -ansi-log false"
 
-    workdir = Path(settings.EMG_CONFIG.slurm.default_workdir) / "hello-nextflow"
+    workdir = Path(EMG_CONFIG.slurm.default_workdir) / "hello-nextflow"
 
     shutil.rmtree(workdir, ignore_errors=True)
     workdir.mkdir(exist_ok=True)
