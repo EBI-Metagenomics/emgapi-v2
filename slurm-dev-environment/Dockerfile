@@ -1,7 +1,7 @@
 FROM ubuntu:jammy as base
 LABEL authors="mgnify team"
 
-RUN apt -y update && apt -y upgrade && apt -y install curl nano wget zip bzip2
+RUN apt -y update && apt -y upgrade && apt -y install curl nano wget zip bzip2 rsync
 
 RUN apt -y install munge python3-pip python-is-python3
 

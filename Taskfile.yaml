@@ -82,7 +82,7 @@ tasks:
     cmds:
       - docker compose --profile all down
       - docker volume rm -f emgapiv2_appdb  # force so that no error if volume doesn't exist.
-      - docker compose run --entrypoint /bin/bash app -c "pytest -m dev_data_maker --no-cov"  # dumps a json to dev-db.json
+      - docker compose run --entrypoint /bin/bash app -c "pytest -m dev_data_maker --no-cov -s"  # dumps a json to dev-db.json
       - docker compose run app migrate
       - docker compose run app loaddata dev-db.json
       - docker compose run app createsuperuser --username emgdev --email emg@example.org

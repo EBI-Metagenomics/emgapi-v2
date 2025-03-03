@@ -17,7 +17,13 @@ def move_data_flow_name() -> str:
 
 
 @flow(flow_run_name=move_data_flow_name)
-def move_data(source: str, target: str, move_command: str = "cp", **kwargs):
+def move_data(
+    source: str,
+    target: str,
+    move_command: str = "cp",
+    make_target: bool = True,
+    **kwargs,
+):
     """
     Move files on the cluster filesystem.
     This uses a slurm job running on the datamover partition.
@@ -25,6 +31,7 @@ def move_data(source: str, target: str, move_command: str = "cp", **kwargs):
     :param source: fully qualified path of the source location (file or folder)
     :param target: fully qualified path of the target location (file or folder)
     :param move_command: tool command for the move. Default is `cp`, but could be `mv` or `rsync` etc.
+    :param make_target: mkdir the target location path before copying.
     :param kwargs: Other keywords to pass to run_cluster_job
         (e.g. expected_time, memory, or other slurm job-description parameters)
     :return: Job ID of the datamover job.
@@ -34,6 +41,9 @@ def move_data(source: str, target: str, move_command: str = "cp", **kwargs):
 
     if "environment" not in kwargs:
         kwargs["environment"] = {}
+
+    if make_target:
+        move_command = f'mkdir -p "{target}" && ' + move_command
 
     return run_cluster_job(
         name=f"Move {file_path_shortener(source)} to {file_path_shortener(target)}",

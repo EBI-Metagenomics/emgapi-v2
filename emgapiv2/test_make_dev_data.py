@@ -1,4 +1,5 @@
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 from django.core.management import call_command
@@ -10,7 +11,12 @@ from workflows.flows.analyse_study_tasks.import_completed_amplicon_analyses impo
 
 
 @pytest.fixture
-def amplicon_analysis_with_downloads(raw_reads_mgnify_study, raw_reads_mgnify_sample):
+@patch(
+    "workflows.flows.analyse_study_tasks.import_completed_amplicon_analyses.copy_amplicon_pipeline_results"
+)
+def amplicon_analysis_with_downloads(
+    mock_copy_flow, raw_reads_mgnify_study, raw_reads_mgnify_sample
+):
     sample = raw_reads_mgnify_sample[0]
     study = raw_reads_mgnify_study
 

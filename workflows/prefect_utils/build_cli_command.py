@@ -6,7 +6,7 @@ def cli_command(parts: List[Optional[Union[str, tuple[str]]]]) -> str:
     """
     Construct a CLI command string from a list of parts.
     Uses `shlex.join`, but also allows for falsey parts to be ignored.
-    This is helpful where you want to possibly specify a CLI flag, but its presnce should be dependent on python condition.
+    This is helpful where you want to possibly specify a CLI flag, but its presence should be dependent on python condition.
 
     Example:
     cli_command(["nextflow", "run", "my_pipe.nf", f"thing={value}", study.is_private and "--private-data", "-resume", ("-r", "main")])

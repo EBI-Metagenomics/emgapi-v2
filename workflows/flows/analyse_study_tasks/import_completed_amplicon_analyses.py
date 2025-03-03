@@ -1,7 +1,7 @@
 from pathlib import Path
 from typing import List
 
-from prefect import task
+from prefect import flow
 
 import analyses.models
 from workflows.data_io_utils.mgnify_v6_utils.amplicon import (
@@ -10,9 +10,12 @@ from workflows.data_io_utils.mgnify_v6_utils.amplicon import (
     import_asv,
 )
 from workflows.flows.analyse_study_tasks.analysis_states import AnalysisStates
+from workflows.flows.analyse_study_tasks.copy_amplicon_pipeline_results import (
+    copy_amplicon_pipeline_results,
+)
 
 
-@task(log_prints=True)
+@flow(log_prints=True)
 def import_completed_analysis(
     amplicon_current_outdir: Path, amplicon_analyses: List[analyses.models.Analysis]
 ):
@@ -37,3 +40,4 @@ def import_completed_analysis(
                 analysis, dir_for_analysis, source=source, allow_non_exist=True
             )
         import_asv(analysis, dir_for_analysis)
+        copy_amplicon_pipeline_results(analysis.accession)
