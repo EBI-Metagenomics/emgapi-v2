@@ -33,6 +33,8 @@ There is also a docker-compose setup of [Slurm](https://slurm.schedmd.com), so t
 This creates a tiny slurm cluster called `donco` (not `codon`).
 This is in the `slurm-dev-environment` directory: see [slurm-dev-environment/README.md](slurm-dev-environment/README.md) for more.
 
+There is also an apache web server, as a mock "transfer services area" for serving data files over HTTP.
+
 #### Set up docker-compose
 E.g. following [the docker docs](https://docs.docker.com/compose/install/) or using Podman or Colima, as you prefer. In theory all should work.
 (There is a docker compose file rooted at `./docker-compose.yaml`,
@@ -77,7 +79,7 @@ FILE=workflows/prefect_utils/datamovers.py FLOW=move_data task deploy-flow
 task run
 ```
 > ##### Details
-> Be aware this runs 7 containers using ~2GB of RAM. Configure your Podman Machine / Docker Desktop / Colima setup accordingly.
+> Be aware this runs 8 containers using ~2GB of RAM. Configure your Podman Machine / Docker Desktop / Colima setup accordingly.
 >
 > You'll see logs from all the containers.
 >
