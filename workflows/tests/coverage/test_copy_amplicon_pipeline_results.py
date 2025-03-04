@@ -19,7 +19,8 @@ def test_copy_amplicon_pipeline_results(raw_read_analyses):
     # Make sure we're patching the correct path
     # You might need to adjust this path based on your actual import structure
     with patch(
-        "workflows.flows.copy_amplicon_pipeline_results.move_data", mock_move_data
+        "workflows.flows.analyse_study_tasks.copy_amplicon_pipeline_results.move_data",
+        mock_move_data,
     ):
         # Call the function synchronously using .fn()
         copy_amplicon_pipeline_results.fn(analysis.accession)
@@ -83,7 +84,8 @@ def test_copy_amplicon_pipeline_results_disallowed_extensions(raw_read_analyses)
     mock_move_data = Mock(return_value="mock_job_id")
 
     with patch(
-        "workflows.flows.copy_amplicon_pipeline_results.move_data", mock_move_data
+        "workflows.flows.analyse_study_tasks.copy_amplicon_pipeline_results.move_data",
+        mock_move_data,
     ):
         copy_amplicon_pipeline_results.fn(analysis.accession)
 
