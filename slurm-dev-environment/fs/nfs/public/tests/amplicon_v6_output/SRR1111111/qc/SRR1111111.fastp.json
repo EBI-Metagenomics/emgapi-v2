@@ -1,0 +1,39 @@
+{
+  "summary": {
+    "fastp_version": "0.23.4",
+    "sequencing": "paired end (301 cycles + 301 cycles)",
+    "before_filtering": {
+      "total_reads": 66124,
+      "total_bases": 19889477,
+      "q20_bases": 19384324,
+      "q30_bases": 18519356,
+      "q20_rate": 0.974602,
+      "q30_rate": 0.931113,
+      "read1_mean_length": 300,
+      "read2_mean_length": 300,
+      "gc_content": 0.419853
+    },
+    "after_filtering": {
+      "total_reads": 31521,
+      "total_bases": 13793930,
+      "q20_bases": 13727335,
+      "q30_bases": 13468111,
+      "q20_rate": 0.995172,
+      "q30_rate": 0.97638,
+      "read1_mean_length": 437,
+      "gc_content": 0.423493
+    }
+  },
+  "filtering_result": {
+    "passed_filter_reads": 64782,
+    "corrected_reads": 4522,
+    "corrected_bases": 5214,
+    "low_quality_reads": 18,
+    "too_many_N_reads": 0,
+    "too_short_reads": 1324,
+    "too_long_reads": 0
+  },
+  "duplication": {
+    "rate": 0.676184
+  }
+}

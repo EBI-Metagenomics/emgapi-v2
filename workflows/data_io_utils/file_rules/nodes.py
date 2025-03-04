@@ -1,3 +1,4 @@
+import inspect
 import logging
 from pathlib import Path
 from typing import List
@@ -75,6 +76,16 @@ class Directory(File):
                 if not passes:
                     failures.append(rule)
         if failures:
+            for failure in failures:
+                matched_failed = "\n\t ├─> ".join(
+                    [str(p) for p in self.path.glob(failure.glob_patten)]
+                )
+                logging.warning(
+                    f"Glob rule failure for {failure.rule_name}:"
+                    f"\n\t {failure.glob_patten}"
+                    f"\n\t ├─> {matched_failed}"
+                    f"\n\t Test: {inspect.getsource(failure.test)}"
+                )
             raise ValueError(
                 f"Rules {[f.rule_name for f in failures]} failed for {self}"
             )

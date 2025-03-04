@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from typing import List, Optional, Union
 
 from django.conf import settings
@@ -8,6 +9,7 @@ from typing_extensions import Annotated
 
 import analyses.models
 from analyses.base_models.with_downloads_models import DownloadFile
+from analyses.models import Analysis
 from emgapiv2.enum_utils import FutureStrEnum
 
 EMG_CONFIG = settings.EMG_CONFIG
@@ -42,9 +44,14 @@ class MGnifyAnalysisDownloadFile(Schema, DownloadFile):
 
     @staticmethod
     def resolve_url(obj: MGnifyAnalysisDownloadFile):
-        return EMG_CONFIG.legacy_service.emg_analysis_download_url_pattern.format(
-            id=obj.parent_identifier, alias=obj.alias
-        )
+        analysis = Analysis.objects.get(accession=obj.parent_identifier)
+        if not analysis:
+            logging.warning(
+                f"No parent Analysis object found with identified {obj.parent_identifier}"
+            )
+            return None
+
+        return f"{EMG_CONFIG.service_urls.transfer_services_url_root.rstrip('/')}/{analysis.results_dir}/{obj.path}"
 
 
 class MGnifyAnalysis(ModelSchema):

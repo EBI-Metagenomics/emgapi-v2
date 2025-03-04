@@ -4,16 +4,14 @@ from pathlib import Path
 from textwrap import dedent as _
 from typing import List, Union
 
-import django
-from django.conf import settings
 from prefect import task
 from prefect.artifacts import create_table_artifact
+
+from activate_django_first import EMG_CONFIG
 
 from workflows.flows.assemble_study_tasks.get_assemblies_to_attempt import (
     get_assemblies_to_attempt,
 )
-
-django.setup()
 
 import analyses.models
 from workflows.ena_utils.ena_file_fetching import convert_ena_ftp_to_fire_fastq
@@ -26,8 +24,6 @@ from workflows.nextflow_utils.samplesheets import (
 from workflows.prefect_utils.analyses_models_helpers import chunk_list
 from workflows.prefect_utils.cache_control import context_agnostic_task_input_hash
 from workflows.views import encode_samplesheet_path
-
-EMG_CONFIG = settings.EMG_CONFIG
 
 
 @task(

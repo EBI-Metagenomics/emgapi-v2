@@ -23,6 +23,18 @@ fileignoreconfig:
 - filename: emgapiv2/test_utils.py
   checksum: ab3eefe0d1b722d23b8dd55ba55a364e5f6593403f0d96898d0745c900f7926f
 
+- filename: slurm-dev-environment/fs/nfs/public/tests/amplicon_v6_output/SRR1111111/taxonomy-summary/DADA2-SILVA/SRR1111111_16S-V3-V4.html
+  checksum: cbba3d78df18143c2d69885815740506ea76787d481f94748c79627737222ce4
+
+- filename: slurm-dev-environment/fs/nfs/public/tests/amplicon_v6_output/SRR1111111/taxonomy-summary/DADA2-PR2/SRR1111111_16S-V3-V4.html
+  checksum: 09de3fa253a99185607f28cd0f235a422bb317de6a0dc017f731369308e0dc96
+
+- filename: slurm-dev-environment/fs/nfs/public/tests/amplicon_v6_output/SRR1111111/taxonomy-summary/UNITE/SRR1111111.html
+  checksum: 736d4a269445b871b77361b3593cae7fabf30eb22bd57a16666ee0e549e2b975
+
+- filename: slurm-dev-environment/fs/nfs/public/tests/amplicon_v6_output/SRR1111111/taxonomy-summary/SILVA-SSU/SRR1111111.html
+  checksum: bfa4d4aa1e4d1bef1554cbde5073373eb16313b149b2ed568dad4f19d25730b6
+
 - filename: slurm-dev-environment/fs/nfs/public/tests/amplicon_v6_output/SRR6180434/taxonomy-summary/SILVA-SSU/SRR6180434.html
   checksum: be322a6ac4686d8fa31b271a862510603403c2da8dbdce60dbb7ad3877aa7b47
 
@@ -34,6 +46,15 @@ fileignoreconfig:
 
 - filename: workflows/ena_utils/ena_auth.py
   checksum: 4920257f382f89084ed4a2ba3b88e7a5cff76ee23ddde9929ec6435e5b4c86fe
+
+- filename: workflows/flows/analyse_study_tasks/make_samplesheet_amplicon.py
+  allowed_patterns: [key]
+
+- filename: workflows/flows/analyse_study_tasks/set_post_analysies_states.py
+  allowed_patterns: [qc_passed_runs.csv]
+
+- filename: workflows/flows/analyse_study_tasks/sanity_check_amplicon_results.py
+  checksum: 6f0d0012faefa871ada95216a04997ce6ae54ff3e508b57399cccc859e1eccfa
 
 - filename: workflows/flows/assemble_study_tasks/assemble_samplesheets.py
   allowed_patterns: [key]
@@ -48,6 +69,9 @@ fileignoreconfig:
   checksum: 8f5e11c7e0038bc4a648dc61ec657a679356857f77e557f744e2dd769ad88def
   ignore_detectors: [filename]
 
+- filename: workflows/tests/test_import_v5_amplicon_analyses.py
+  checksum: ac644b851d31913ca9328d5a83516146c4c76874201df0a2d7086df6b60435c8
+
 allowed_patterns:
 - cache_key_fn
 - CommonMetadataKeys
@@ -60,3 +84,4 @@ allowed_patterns:
 - key2=val2
 - pagination_key
 - primary_key
+- KnownMetadataKeys

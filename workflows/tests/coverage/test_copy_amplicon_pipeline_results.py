@@ -3,7 +3,7 @@ from unittest.mock import Mock, patch
 import pytest
 
 from workflows.data_io_utils.mgnify_v6_utils.amplicon import EMG_CONFIG
-from workflows.flows.copy_amplicon_pipeline_results import (
+from workflows.flows.analyse_study_tasks.copy_amplicon_pipeline_results import (
     copy_amplicon_pipeline_results,
 )
 
@@ -19,7 +19,8 @@ def test_copy_amplicon_pipeline_results(raw_read_analyses):
     # Make sure we're patching the correct path
     # You might need to adjust this path based on your actual import structure
     with patch(
-        "workflows.flows.copy_amplicon_pipeline_results.move_data", mock_move_data
+        "workflows.flows.analyse_study_tasks.copy_amplicon_pipeline_results.move_data",
+        mock_move_data,
     ):
         # Call the function synchronously using .fn()
         copy_amplicon_pipeline_results.fn(analysis.accession)
@@ -33,9 +34,7 @@ def test_copy_amplicon_pipeline_results(raw_read_analyses):
         print(call_args)
 
         # Check source path
-        expected_source = (
-            f"/nfs/production/rdf/metagenomics/results/{analysis.results_dir}"
-        )
+        expected_source = analysis.results_dir
         assert call_args[0] == expected_source
 
         # Check target path structure
@@ -52,13 +51,10 @@ def test_copy_amplicon_pipeline_results(raw_read_analyses):
         assert expected_target in call_args[1]
 
         # Verify command structure
-        command = call_args[2]
+        command: str = call_args[2]
 
         # Check basic command structure
-        assert command.startswith("mkdir -p")
-        assert "find . -type f" in command
-        assert "-print0" in command  # Check for null-terminated output
-        assert "while IFS= read -r -d $'\\0'" in command
+        assert "rsync" in command
 
         # Check all extensions are included
         expected_extensions = {
@@ -75,11 +71,10 @@ def test_copy_amplicon_pipeline_results(raw_read_analyses):
             "csv",
         }
         for ext in expected_extensions:
-            assert f"-name '*.{ext}'" in command
-
-        # Verify proper escaping in command
-        assert "\\(" in command  # Check for escaped parentheses
-        assert "\\)" in command
+            assert f"--include=*.{ext}" in command
+        assert command.endswith(
+            "'--exclude=*'"
+        )  # excludes anything not explicitly included
 
 
 @pytest.mark.django_db(transaction=True)
@@ -89,7 +84,8 @@ def test_copy_amplicon_pipeline_results_disallowed_extensions(raw_read_analyses)
     mock_move_data = Mock(return_value="mock_job_id")
 
     with patch(
-        "workflows.flows.copy_amplicon_pipeline_results.move_data", mock_move_data
+        "workflows.flows.analyse_study_tasks.copy_amplicon_pipeline_results.move_data",
+        mock_move_data,
     ):
         copy_amplicon_pipeline_results.fn(analysis.accession)
 
@@ -120,36 +116,5 @@ def test_copy_amplicon_pipeline_results_disallowed_extensions(raw_read_analyses)
         # Check that none of the disallowed extensions are in the find command
         for ext in disallowed_extensions:
             assert (
-                f"-name '*.{ext}'" not in command
+                f"--include='*.{ext}'" not in command
             ), f"Found disallowed extension: {ext}"
-            # Also check for uppercase variants
-            assert (
-                f"-name '*.{ext.upper()}'" not in command
-            ), f"Found disallowed extension: {ext.upper()}"
-
-        # Verify that the command only includes the allowed extensions
-        allowed_extensions = {
-            "yml",
-            "yaml",
-            "txt",
-            "tsv",
-            "mseq",
-            "html",
-            "fa",
-            "json",
-            "gz",
-            "fasta",
-            "csv",
-        }
-
-        # Extract all -name patterns from the command
-        import re
-
-        name_patterns = re.findall(r"-name '\*\.[a-zA-Z0-9]+\'", command)
-
-        # Verify each pattern in the command is for an allowed extension
-        for pattern in name_patterns:
-            ext = pattern.split(".")[-1].rstrip("'")
-            assert (
-                ext.lower() in allowed_extensions
-            ), f"Found unexpected extension pattern: {ext}"

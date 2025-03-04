@@ -558,6 +558,15 @@ class Analysis(
     TAXONOMIES_DADA2_SILVA = f"{TAXONOMIES}__{TaxonomySources.DADA2_SILVA.value}"
     TAXONOMIES_DADA2_PR2 = f"{TAXONOMIES}__{TaxonomySources.DADA2_PR2.value}"
 
+    ALLOWED_DOWNLOAD_GROUP_PREFIXES = [
+        "all",  # catch-all for legacy
+        f"{TAXONOMIES}.closed_reference.",
+        f"{TAXONOMIES}.asv.",
+        "quality_control",
+        "primer_identification",
+        "asv",
+    ]
+
     @staticmethod
     def default_annotations():
         return {
@@ -574,6 +583,11 @@ class Analysis(
 
     annotations = models.JSONField(default=default_annotations.__func__)
     quality_control = models.JSONField(default=dict, blank=True)
+
+    class KnownMetadataKeys:
+        MARKER_GENE_SUMMARY = "marker_gene_summary"  # for amplicon analyses
+
+    metadata = models.JSONField(default=dict, blank=True)
 
     class PipelineVersions(models.TextChoices):
         v5 = "V5", "v5.0"

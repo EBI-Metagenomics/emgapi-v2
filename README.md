@@ -33,6 +33,8 @@ There is also a docker-compose setup of [Slurm](https://slurm.schedmd.com), so t
 This creates a tiny slurm cluster called `donco` (not `codon`).
 This is in the `slurm-dev-environment` directory: see [slurm-dev-environment/README.md](slurm-dev-environment/README.md) for more.
 
+There is also an apache web server, as a mock "transfer services area" for serving data files over HTTP.
+
 #### Set up docker-compose
 E.g. following [the docker docs](https://docs.docker.com/compose/install/) or using Podman or Colima, as you prefer. In theory all should work.
 (There is a docker compose file rooted at `./docker-compose.yaml`,
@@ -77,7 +79,7 @@ FILE=workflows/prefect_utils/datamovers.py FLOW=move_data task deploy-flow
 task run
 ```
 > ##### Details
-> Be aware this runs 7 containers using ~2GB of RAM. Configure your Podman Machine / Docker Desktop / Colima setup accordingly.
+> Be aware this runs 8 containers using ~2GB of RAM. Configure your Podman Machine / Docker Desktop / Colima setup accordingly.
 >
 > You'll see logs from all the containers.
 >
@@ -133,8 +135,9 @@ task prefect -- deployment run "Download a study read-runs/realistic_example_dep
 ### Code style guide
 * Use type hinting: `def my_func(param: List[str]) -> int:`
 * Prefer to use `pathlib` instead of `os.path`, e.g. for joining parts: `Path("/nfs/my/dir") / "subdir" / "file.txt"`
-* Config parameters (like the URL for ENA etc.) should use structured [Pydantic Settings](https://docs.pydantic.dev/latest/concepts/pydantic_settings/). See `settings.EMG_CONFIG`.
+* Config parameters (like the URL for ENA etc.) should use structured [Pydantic Settings](https://docs.pydantic.dev/latest/concepts/pydantic_settings/). See `emgapiv2/settings.py:EMG_CONFIG`.
 * `EMG_CONFIG` should [always be imported via `django.conf.settings`](https://docs.djangoproject.com/en/5.1/topics/settings/#using-settings-in-python-code): e.g. `from django.conf import settings; EMG_CONFIG = settings.EMG_CONFIG`
+  * In flows, you can fetch it and ALSO ensure Django is properly activated by using `from activate_django_first import EMG_CONFIG`. This should be near the top of every Prefect flow, ABOVE any model imports.
 * When you have a list of acceptable options for something, use `Enum`s or `TextChoices` (a kind of enum for Django db fields): `class AssemblyStatuses(FutureStrEnum):...` or `DjangoChoicesCompatibleStrEnum` if it is used both as a general `Enum` and as `choice=` parameter of a Django field.
 * Use Django/postgres JSONFields liberally (they can save a load of complicated JOINs)
 * Apply a schema to JSONFields, using Enums, default dicts, custom pydantic types... see `WithDownloadsModel` for an example

@@ -7,12 +7,24 @@ PARTITION_NAME=$SLURM_JOB_PARTITION
 HIDDEN_NFS_SOURCE="/publicnfs"
 NFS_TARGET="/nfs/public"
 
+HIDDEN_FTP_SOURCE="/publicftp"
+FTP_TARGET="/nfs/ftp"
+
 if [ "$PARTITION_NAME" == "datamover" ]; then
+    # NFS PUBLIC
     if [ -e "$NFS_TARGET" ]; then
         rm -rf "$NFS_TARGET"
     fi
-    # Create the symbolic link
     ln -s "$HIDDEN_NFS_SOURCE" "$NFS_TARGET"
+
+
+    # FTP
+    if [ -e "$FTP_TARGET" ]; then
+        rm -rf "$FTP_TARGET"
+    fi
+    ln -s "$HIDDEN_FTP_SOURCE" "$FTP_TARGET"
+
+    sleep 5
 fi
 
 exit 0

@@ -124,6 +124,17 @@ services:
       - "8000:8000"
     networks: [emg]
 
+  transfer-services:
+    image: httpd:latest  # apache web server
+    container_name: transfer-services
+    ports:
+      - "8080:80"
+    volumes:
+      - "./slurm-dev-environment/fs/nfs/ftp/public:/usr/local/apache2/htdocs/pub/"
+    restart: unless-stopped
+    networks: [emg]
+    profiles: ["all"]
+
 volumes:
   prefectdb:
   appdb:

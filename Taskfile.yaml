@@ -72,12 +72,21 @@ tasks:
     cmds:
       - docker compose run --entrypoint /bin/bash app -c "pytest {{.CLI_ARGS}}"
 
+  testk:
+    desc: "Run pytest for a subset of unit tests, without coverage noise. E.g. `task testk -- amplicon`"
+    cmds:
+      - docker compose run --entrypoint /bin/bash app -c "pytest --no-cov -k {{.CLI_ARGS}}"
+
   make-dev-data:
     desc: "Populate the app database with some demo data for development purposes"
     cmds:
       - docker compose --profile all down
       - docker volume rm -f emgapiv2_appdb  # force so that no error if volume doesn't exist.
-      - docker compose run --entrypoint /bin/bash app -c "pytest -m dev_data_maker"  # dumps a json to dev-db.json
+      - docker compose run --entrypoint /bin/bash app -c "pytest -m dev_data_maker --no-cov -s"  # dumps a json to dev-db.json
       - docker compose run app migrate
       - docker compose run app loaddata dev-db.json
       - docker compose run app createsuperuser --username emgdev --email emg@example.org
+      - rm -fr slurm-dev-environment/fs/nfs/ftp/public/databases/metagenomics/mgnify_results/PRJNA398
+      - mkdir -p slurm-dev-environment/fs/nfs/ftp/public/databases/metagenomics/mgnify_results/PRJNA398/PRJNA398089/SRR1111/SRR1111111/V6/
+      - cp -r slurm-dev-environment/fs/nfs/public/tests/amplicon_v6_output/SRR1111111 slurm-dev-environment/fs/nfs/ftp/public/databases/metagenomics/mgnify_results/PRJNA398/PRJNA398089/SRR1111/SRR1111111/V6/amplicon
+      - docker compose run app shell -c "from analyses.models import Analysis; a=Analysis.objects.get(accession='MGYA00000004'); a.results_dir='PRJNA398/PRJNA398089/SRR1111/SRR1111111/V6/amplicon'; a.save()"

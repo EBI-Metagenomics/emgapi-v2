@@ -39,10 +39,9 @@ def cluster_can_accept_jobs() -> int:
     :return: Zero if there is no space. Otherwise, positive int of how many jobs can be taken.
     """
     current_job_state_counts = get_cluster_state_counts()
-    job_load = (
-        current_job_state_counts[SlurmStatus.running]
-        + current_job_state_counts[SlurmStatus.pending]
-    )
+    job_load = current_job_state_counts.get(
+        SlurmStatus.running, 0
+    ) + current_job_state_counts.get(SlurmStatus.pending, 0)
     space = EMG_CONFIG.slurm.incomplete_job_limit - job_load
     return max(space, 0)
 
