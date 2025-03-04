@@ -69,6 +69,9 @@ fileignoreconfig:
   checksum: 8f5e11c7e0038bc4a648dc61ec657a679356857f77e557f744e2dd769ad88def
   ignore_detectors: [filename]
 
+- filename: workflows/tests/test_import_v5_amplicon_analyses.py
+  checksum: ac644b851d31913ca9328d5a83516146c4c76874201df0a2d7086df6b60435c8
+
 allowed_patterns:
 - cache_key_fn
 - CommonMetadataKeys

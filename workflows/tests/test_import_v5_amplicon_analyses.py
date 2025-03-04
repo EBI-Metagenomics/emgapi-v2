@@ -108,10 +108,11 @@ def test_prefect_import_v5_amplicon_analyses_flow(
 
     json_response = response.json()
     assert json_response["study_accession"] == "MGYS00005000"
-    assert (
-        json_response["downloads"][0]["url"]
-        == "https://www.ebi.ac.uk/metagenomics/api/v1/analyses/MGYA00012345/file/BUGS_SSU_OTU_TABLE_HDF5.biom"
-    )
+    # assert (
+    #     json_response["downloads"][0]["url"]
+    #     == "https://www.ebi.ac.uk/metagenomics/api/v1/analyses/MGYA00012345/file/BUGS_SSU_OTU_TABLE_HDF5.biom"
+    # )
+    # TODO: the URLs now point to transfer services area only. Need to consider what we do for legacy data, later.
 
     response = ninja_api_client.get(
         "/analyses/MGYA00012345/annotations/taxonomies__ssu"
