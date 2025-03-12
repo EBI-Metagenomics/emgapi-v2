@@ -1,12 +1,12 @@
 FROM ubuntu:jammy as base
 LABEL authors="sandyr"
 
-RUN apt -y update && apt -y upgrade
 ENV DEBIAN_FRONTEND="noninteractive" TZ="Etc/UTC"
-RUN apt -y install libpq-dev python3-pip python-is-python3 tzdata
+RUN apt -y update && apt -y upgrade && apt -y install libpq-dev python3-pip python-is-python3 tzdata git
 
 WORKDIR /app
 COPY requirements.txt .
+RUN pip install --upgrade pip setuptools wheel
 RUN pip install -r requirements.txt
 
 FROM base as django

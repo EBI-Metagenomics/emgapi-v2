@@ -9,6 +9,9 @@ EMG_CONFIG.webin.dcc_account = "dcc_fake"
 EMG_CONFIG.webin.dcc_password = "not-a-dcc-pw"
 EMG_CONFIG.ena.portal_search_api_max_retries = 0  # failfast in unit tests
 EMG_CONFIG.ena.portal_search_api_retry_delay_seconds = 1
+EMG_CONFIG.amplicon_pipeline.allow_non_insdc_run_names = True
+
+LOGGING["root"]["level"] = "DEBUG"
 
 STORAGES = {
     "staticfiles": {

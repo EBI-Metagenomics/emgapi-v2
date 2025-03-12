@@ -1,1 +1,3 @@
 assembly-uploader==1.1.0
+#mgnify-pipelines-toolkit==0.2.2
+git+https://github.com/ebi-metagenomics/mgnify-pipelines-toolkit.git@678f1f6

@@ -111,6 +111,7 @@ class Study(MGnifyAutomatedModel, ENADerivedModel, TimeStampedModel):
     )
 
     title = models.CharField(max_length=4000)  # same max as ENA DB
+    results_dir = models.CharField(max_length=100, null=True, blank=True)
 
     def __str__(self):
         return self.accession
@@ -515,7 +516,7 @@ class Analysis(
     study = models.ForeignKey(
         Study, on_delete=models.CASCADE, to_field="accession", related_name="analyses"
     )
-    results_dir = models.CharField(max_length=100)
+    results_dir = models.CharField(max_length=100, null=True, blank=True)
     sample = models.ForeignKey(
         Sample, on_delete=models.CASCADE, related_name="analyses"
     )

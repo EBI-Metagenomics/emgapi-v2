@@ -22,6 +22,9 @@ from workflows.flows.analyse_study_tasks.analysis_states import (
 from workflows.flows.analyse_study_tasks.set_post_analysies_states import (
     set_post_analysis_states,
 )
+from workflows.flows.analyse_study_tasks.shared.study_summary import (
+    generate_study_summary_for_pipeline_run,
+)
 from workflows.prefect_utils.slurm_flow import (
     run_cluster_job,
     ClusterJobFailedException,
@@ -89,3 +92,7 @@ def run_amplicon_pipeline_in_chunks(
         # assume that if job finished, all finished... set statuses
         set_post_analysis_states(amplicon_current_outdir, amplicon_analyses)
         import_completed_analysis(amplicon_current_outdir, amplicon_analyses)
+        generate_study_summary_for_pipeline_run(
+            pipeline_outdir=amplicon_current_outdir,
+            mgnify_study_accession=mgnify_study.accession,
+        )
