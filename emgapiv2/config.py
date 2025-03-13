@@ -90,6 +90,7 @@ class AmpliconPipelineConfig(BaseModel):
     amplicon_pipeline_time_limit_days: int = 5
 
     allow_non_insdc_run_names: bool = False
+    keep_study_summary_partials: bool = False
 
 
 class WebinConfig(BaseModel):

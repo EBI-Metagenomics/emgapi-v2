@@ -11,7 +11,12 @@ from django.db.models import Q
 from prefect.artifacts import Artifact
 
 import analyses.models
-from workflows.data_io_utils.file_rules.base_rules import FileRule
+from workflows.data_io_utils.file_rules.base_rules import FileRule, GlobRule
+from workflows.data_io_utils.file_rules.common_rules import GlobHasFilesCountRule
+from workflows.data_io_utils.file_rules.nodes import Directory
+from workflows.flows.analyse_study_tasks.shared.study_summary import (
+    merge_study_summaries,
+)
 from workflows.flows.analysis_amplicon_study import analysis_amplicon_study
 from workflows.prefect_utils.testing_utils import (
     should_not_mock_httpx_requests_to_prefect_server,
@@ -665,3 +670,41 @@ def test_prefect_analyse_amplicon_flow(
     ][analyses.models.Analysis.TaxonomySources.SSU.value]
     assert len(ssu) == 3
     assert ssu[0]["organism"] == "sk__Bacteria;k__;p__Bacillota;c__Bacilli"
+
+    study = analyses.models.Study.objects.get_or_create_for_ena_study(study_accession)
+    assert (
+        study.results_dir == f"{EMG_CONFIG.slurm.default_workdir}/{study_accession}_v6"
+    )
+
+    Directory(
+        path=study.results_dir,
+        glob_rules=[
+            GlobHasFilesCountRule[12]
+        ],  # 6 for the samplesheet, same 6 for the "merge"
+    )
+
+    with (
+        Path(study.results_dir) / "abc123_DADA2-SILVA_18S-V9_asv_study_summary.tsv"
+    ).open("r") as summary:
+        lines = summary.readlines()
+        assert lines[0] == "taxonomy\tSRR_all_results\n"  # one run (the one with ASVs)
+        assert "100" in lines[-1]
+        assert "g__Aeromicrobium" in lines[-1]
+
+    # manually remove the merged study summaries
+    for file in Path(study.results_dir).glob(f"{study.first_accession}*"):
+        file.unlink()
+
+    # test merging of study summaries again, with cleanup enabled
+    merge_study_summaries(mgnify_study_accession=study.accession, cleanup_partials=True)
+    Directory(
+        path=study.results_dir,
+        glob_rules=[
+            GlobHasFilesCountRule[6],
+            GlobRule(
+                rule_name="All files are study level",
+                glob_patten=f"{study.first_accession}*study_summary.tsv",
+                test=lambda f: len(list(f)) == 6,
+            ),
+        ],
+    )
