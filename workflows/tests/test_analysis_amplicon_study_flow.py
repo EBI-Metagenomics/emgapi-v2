@@ -708,3 +708,6 @@ def test_prefect_analyse_amplicon_flow(
             ),
         ],
     )
+
+    study.refresh_from_db()
+    assert len(study.downloads_as_objects) == 6

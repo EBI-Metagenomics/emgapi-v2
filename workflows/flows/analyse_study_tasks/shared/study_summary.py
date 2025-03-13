@@ -6,9 +6,14 @@ from mgnify_pipelines_toolkit.analysis.shared.study_summary_generator import (
     summarise_analyses,
     merge_summaries,
 )
-from prefect import flow, get_run_logger
+from prefect import flow, get_run_logger, task
 
 from activate_django_first import EMG_CONFIG
+from analyses.base_models.with_downloads_models import (
+    DownloadFile,
+    DownloadType,
+    DownloadFileType,
+)
 
 from analyses.models import Study
 from workflows.data_io_utils.file_rules.common_rules import (
@@ -139,3 +144,37 @@ def merge_study_summaries(
                 study.first_accession
             )  # ensure we do not delete merged files
             file.unlink()
+
+
+@task
+def add_study_summaries_to_downloads(mgnify_study_accession: str):
+    logger = get_run_logger()
+    study = Study.objects.get(accession=mgnify_study_accession)
+
+    for summary_file in Path(study.results_dir).glob(
+        f"{study.first_accession}*study_summary.tsv"
+    ):
+        db_or_region = (
+            summary_file.stem.split("_")[1].rstrip("_study_summary.tsv").rstrip("asv")
+        )
+        try:
+            study.add_download(
+                DownloadFile(
+                    path=summary_file.relative_to(study.results_dir),
+                    download_type=DownloadType.TAXONOMIC_ANALYSIS,
+                    download_group="study_summary",
+                    file_type=DownloadFileType.TSV,
+                    short_description=f"Summary of {db_or_region} taxonomies",
+                    long_description=f"Summary of {db_or_region} taxonomic assignments, across all runs in the study",
+                    alias=summary_file.name,
+                )
+            )
+        except FileExistsError:
+            logger.warning(
+                f"File {summary_file} already exists in downloads list, skipping"
+            )
+        logger.info(f"Added {summary_file} to downloads of {study}")
+    study.refresh_from_db()
+    logger.info(
+        f"Study download aliases are now {[d.alias for d in study.downloads_as_objects]}"
+    )

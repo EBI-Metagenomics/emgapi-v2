@@ -95,9 +95,14 @@ class PublicStudyManager(PrivacyFilterManagerMixin, StudyManager):
     pass
 
 
-class Study(MGnifyAutomatedModel, ENADerivedModel, TimeStampedModel):
+class Study(
+    MGnifyAutomatedModel, ENADerivedModel, WithDownloadsModel, TimeStampedModel
+):
     objects = StudyManager()
     public_objects = PublicStudyManager()
+
+    DOWNLOAD_PARENT_IDENTIFIER_ATTR = "accession"
+    ALLOWED_DOWNLOAD_GROUP_PREFIXES = ["study_summary"]
 
     accession = MGnifyAccessionField(
         accession_prefix="MGYS", accession_length=8, db_index=True
