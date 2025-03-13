@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from typing import List, Optional, Union
+from typing import List, Optional, Union, Dict, Any
 
 from django.conf import settings
 from ninja import Field, ModelSchema, Schema
@@ -110,6 +110,18 @@ class MGnifyAnalysisDetail(MGnifyAnalysis):
                 "after_filtering": {"total_bases": 700000},
             }
         ],
+    )
+
+    results_dir: Optional[str] = Field(
+        None,
+        description="Directory path where analysis results are stored",
+        examples=["http://example.org/data/analyses/MGYA00000001/results"],
+    )
+
+    metadata: Optional[Dict[str, Any]] = Field(
+        None,
+        description="Additional metadata associated with the analysis",
+        examples=[{"marker_gene_summary": {"ssu": {"total_read_count": 11}}}],
     )
 
     class Meta:
