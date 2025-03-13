@@ -32,11 +32,11 @@ class MGnifyStudy(ModelSchema):
     accession: str = Field(..., examples=["MGYS00000001"])
     ena_accessions: List[str] = Field(..., examples=[["SRP135937", "PRJNA438545"]])
     title: str = Field(..., examples=["ISS Metagenomes"])
-    biome: Biome
+    biome: Optional[Biome]
 
     @staticmethod
     def resolve_biome_name(obj: analyses.models.Study):
-        return obj.biome.biome_name
+        return obj.biome.biome_name if obj.biome else None
 
     class Meta:
         model = analyses.models.Study
