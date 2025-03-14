@@ -48,7 +48,7 @@ fileignoreconfig:
   allowed_patterns: [password=EMG_CONFIG.webin.emg_webin_password]
 
 - filename: workflows/ena_utils/ena_auth.py
-  checksum: 4920257f382f89084ed4a2ba3b88e7a5cff76ee23ddde9929ec6435e5b4c86fe
+  checksum: e8122d8429dad2fcb68f7fe2f5c6068d077ebb7707653eb61dd9a5ef54d2137f
 
 - filename: workflows/flows/analyse_study_tasks/make_samplesheet_amplicon.py
   allowed_patterns: [key]
@@ -71,6 +71,9 @@ fileignoreconfig:
 - filename: workflows/prefect_utils/env_context.py
   checksum: 8f5e11c7e0038bc4a648dc61ec657a679356857f77e557f744e2dd769ad88def
   ignore_detectors: [filename]
+
+- filename: workflows/tests/test_env_context.py
+  checksum: 6d3d6b0c08bc5c564a2b7f79c21fb3f10244dc9b770eac0d2344766bdb358fa0
 
 - filename: workflows/tests/test_import_v5_amplicon_analyses.py
   checksum: ac644b851d31913ca9328d5a83516146c4c76874201df0a2d7086df6b60435c8

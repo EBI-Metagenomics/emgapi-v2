@@ -83,7 +83,7 @@ class WithDownloadsModel(models.Model):
 
     def add_download(self, download: DownloadFile):
         if download.alias in [dl.get("alias") for dl in self.downloads]:
-            raise Exception(
+            raise FileExistsError(
                 f"Duplicate download alias found in {self}.downloads list - not adding {download.path}"
             )
 
@@ -95,7 +95,7 @@ class WithDownloadsModel(models.Model):
                 for prefix in self.ALLOWED_DOWNLOAD_GROUP_PREFIXES
             )
         ):
-            raise Exception(
+            raise ValueError(
                 f"Download group {download.download_group} is not allowed for model {self.__class__.__name__}: only prefixes {self.ALLOWED_DOWNLOAD_GROUP_PREFIXES}"
             )
 

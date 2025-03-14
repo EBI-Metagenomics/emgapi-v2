@@ -2,6 +2,7 @@ import json
 import os
 import shutil
 from pathlib import Path
+from textwrap import dedent
 from unittest.mock import patch
 
 import pytest
@@ -10,7 +11,12 @@ from django.db.models import Q
 from prefect.artifacts import Artifact
 
 import analyses.models
-from workflows.data_io_utils.file_rules.base_rules import FileRule
+from workflows.data_io_utils.file_rules.base_rules import FileRule, GlobRule
+from workflows.data_io_utils.file_rules.common_rules import GlobHasFilesCountRule
+from workflows.data_io_utils.file_rules.nodes import Directory
+from workflows.flows.analyse_study_tasks.shared.study_summary import (
+    merge_study_summaries,
+)
 from workflows.flows.analysis_amplicon_study import analysis_amplicon_study
 from workflows.prefect_utils.testing_utils import (
     should_not_mock_httpx_requests_to_prefect_server,
@@ -189,12 +195,27 @@ def generate_fake_pipeline_all_results(amplicon_run_folder, run):
     ), open(
         f"{amplicon_run_folder}/{EMG_CONFIG.amplicon_pipeline.taxonomy_summary_folder}/PR2/{run}_PR2.txt",
         "w",
-    ):
-        pass
+    ) as pr2_tax:
+        pr2_tax.write(
+            dedent(
+                """\
+        7	d__Bacteria
+        2	d__Bacteria	sg__CCD
+        1	d__Bacteria	sg__CCD	dv__Chloroflexi	sdv__Chloroflexi_X	c__Anaerolineae	o__Anaerolineales
+        1	d__Bacteria	sg__CCD	dv__Chloroflexi	sdv__Chloroflexi_X	c__Chloroflexia	o__Chloroflexales	f__Roseiflexaceae
+        1	d__Bacteria	sg__CCD	dv__Chloroflexi	sdv__Chloroflexi_X	c__Dehalococcoidia
+        1	d__Bacteria	sg__CCD	dv__Chloroflexi	sdv__Chloroflexi_X	c__Dehalococcoidia	o__S085
+        1	d__Bacteria	sg__CCD	dv__Patescibacteria	sdv__Patescibacteria_X	c__Parcubacteria	o__Candidatus_Adlerbacteria
+        1	d__Bacteria	sg__CCD	dv__Patescibacteria	sdv__Patescibacteria_X	c__Parcubacteria	o__Candidatus_Kaiserbacteria
+        8	d__Bacteria	sg__CCD	dv__Patescibacteria	sdv__Patescibacteria_X	c__Saccharimonadia	o__Saccharimonadales
+        19	d__Bacteria	sg__CCD	dv__Patescibacteria	sdv__Patescibacteria_X	c__Saccharimonadia	o__Saccharimonadales	f__Saccharimonadales_X
+        """
+            )
+        )
     with open(
         f"{amplicon_run_folder}/{EMG_CONFIG.amplicon_pipeline.taxonomy_summary_folder}/DADA2-SILVA/{run}_16S-V3-V4_DADA2-SILVA_asv_krona_counts.txt",
         "w",
-    ), open(
+    ) as dada2_16s_krona_count, open(
         f"{amplicon_run_folder}/{EMG_CONFIG.amplicon_pipeline.taxonomy_summary_folder}/DADA2-SILVA/{run}_16S-V3-V4.html",
         "w",
     ), open(
@@ -203,21 +224,36 @@ def generate_fake_pipeline_all_results(amplicon_run_folder, run):
     ), open(
         f"{amplicon_run_folder}/{EMG_CONFIG.amplicon_pipeline.taxonomy_summary_folder}/DADA2-SILVA/{run}_18S-V9_DADA2-SILVA_asv_krona_counts.txt",
         "w",
-    ), open(
+    ) as dada2_18s_krona_count, open(
         f"{amplicon_run_folder}/{EMG_CONFIG.amplicon_pipeline.taxonomy_summary_folder}/DADA2-SILVA/{run}_18S-V9.html",
         "w",
     ), open(
         f"{amplicon_run_folder}/{EMG_CONFIG.amplicon_pipeline.taxonomy_summary_folder}/DADA2-SILVA/{run}_concat_DADA2-SILVA_asv_krona_counts.txt",
         "w",
-    ), open(
+    ) as dada2_concat_krona_count, open(
         f"{amplicon_run_folder}/{EMG_CONFIG.amplicon_pipeline.taxonomy_summary_folder}/DADA2-SILVA/{run}_concat.html",
         "w",
     ):
-        pass
+        for file in [
+            dada2_16s_krona_count,
+            dada2_18s_krona_count,
+            dada2_concat_krona_count,
+        ]:
+            file.write(
+                dedent(
+                    """\
+            54	sk__Bacteria	k__	p__Actinomycetota	c__Actinomycetes	o__Kitasatosporales	f__Streptomycetaceae	g__Streptomyces
+            20	sk__Bacteria	k__	p__Actinomycetota	c__Actinomycetes	o__Micrococcales	f__Microbacteriaceae
+            9	sk__Bacteria	k__	p__Actinomycetota	c__Actinomycetes	o__Micrococcales	f__Micrococcaceae	g__Arthrobacter
+            28	sk__Bacteria	k__	p__Actinomycetota	c__Actinomycetes	o__Micrococcales	f__Micrococcaceae	g__Pseudarthrobacter
+            100	sk__Bacteria	k__	p__Actinomycetota	c__Actinomycetes	o__Propionibacteriales	f__Nocardioidaceae	g__Aeromicrobium
+            """
+                )
+            )
     with open(
         f"{amplicon_run_folder}/{EMG_CONFIG.amplicon_pipeline.taxonomy_summary_folder}/DADA2-PR2/{run}_16S-V3-V4_DADA2-PR2_asv_krona_counts.txt",
         "w",
-    ), open(
+    ) as dada2_16s_pr2_krona_count, open(
         f"{amplicon_run_folder}/{EMG_CONFIG.amplicon_pipeline.taxonomy_summary_folder}/DADA2-PR2/{run}_16S-V3-V4.html",
         "w",
     ), open(
@@ -226,17 +262,32 @@ def generate_fake_pipeline_all_results(amplicon_run_folder, run):
     ), open(
         f"{amplicon_run_folder}/{EMG_CONFIG.amplicon_pipeline.taxonomy_summary_folder}/DADA2-PR2/{run}_18S-V9_DADA2-PR2_asv_krona_counts.txt",
         "w",
-    ), open(
+    ) as dada2_18s_pr2_krona_count, open(
         f"{amplicon_run_folder}/{EMG_CONFIG.amplicon_pipeline.taxonomy_summary_folder}/DADA2-PR2/{run}_18S-V9.html",
         "w",
     ), open(
         f"{amplicon_run_folder}/{EMG_CONFIG.amplicon_pipeline.taxonomy_summary_folder}/DADA2-PR2/{run}_concat_DADA2-PR2_asv_krona_counts.txt",
         "w",
-    ), open(
+    ) as dada2_concat_pr2_krona_count, open(
         f"{amplicon_run_folder}/{EMG_CONFIG.amplicon_pipeline.taxonomy_summary_folder}/DADA2-PR2/{run}_concat.html",
         "w",
     ):
-        pass
+        for file in [
+            dada2_16s_pr2_krona_count,
+            dada2_18s_pr2_krona_count,
+            dada2_concat_pr2_krona_count,
+        ]:
+            file.write(
+                dedent(
+                    """\
+            2776	d__Bacteria	sg__FCB	dv__Bacteroidetes	sdv__Bacteroidetes_X	c__Bacteroidia	o__Chitinophagales	f__Chitinophagaceae	g__Chitinophaga	s__Chitinophaga_sp.
+            1566	d__Bacteria	sg__FCB	dv__Bacteroidetes	sdv__Bacteroidetes_X	c__Bacteroidia	o__Cytophagales	f__Spirosomaceae	g__Dyadobacter	s__Dyadobacter_sp.
+            135696	d__Bacteria	sg__FCB	dv__Bacteroidetes	sdv__Bacteroidetes_X	c__Bacteroidia	o__Flavobacteriales	f__Flavobacteriaceae	g__Flavobacterium	s__Flavobacterium_sp.
+            10847	d__Bacteria	sg__FCB	dv__Bacteroidetes	sdv__Bacteroidetes_X	c__Bacteroidia	o__Sphingobacteriales	f__Sphingobacteriaceae	g__Pedobacter	s__Pedobacter_sp.
+            192	d__Bacteria	sg__PANNAM	dv__Proteobacteria	sdv__Proteobacteria_X	c__Alphaproteobacteria	o__Caulobacterales	f__Caulobacteraceae	g__Caulobacter	s__Caulobacter_sp.
+            """
+                )
+            )
 
 
 def generate_fake_pipeline_no_asvs(amplicon_run_folder, run):
@@ -519,8 +570,23 @@ def test_prefect_analyse_amplicon_flow(
     ), open(
         f"{amplicon_folder}/{amplicon_run_extra_dada2}/{EMG_CONFIG.amplicon_pipeline.taxonomy_summary_folder}/DADA2-SILVA/{amplicon_run_extra_dada2}_DADA2-SILVA.txt",
         "w",
-    ):
-        pass
+    ) as dada2_silva_txt:
+        dada2_silva_txt.write(
+            dedent(
+                """\
+        54	sk__Bacteria	k__	p__Actinomycetota	c__Actinomycetes	o__Kitasatosporales	f__Streptomycetaceae	g__Streptomyces
+        20	sk__Bacteria	k__	p__Actinomycetota	c__Actinomycetes	o__Micrococcales	f__Microbacteriaceae
+        9	sk__Bacteria	k__	p__Actinomycetota	c__Actinomycetes	o__Micrococcales	f__Micrococcaceae	g__Arthrobacter
+        28	sk__Bacteria	k__	p__Actinomycetota	c__Actinomycetes	o__Micrococcales	f__Micrococcaceae	g__Pseudarthrobacter
+        100	sk__Bacteria	k__	p__Actinomycetota	c__Actinomycetes	o__Propionibacteriales	f__Nocardioidaceae	g__Aeromicrobium
+        137	sk__Bacteria	k__	p__Actinomycetota	c__Actinomycetes	o__Propionibacteriales	f__Nocardioidaceae	g__Nocardioides
+        433	sk__Bacteria	k__	p__Bacillota	c__Bacilli	o__Bacillales	f__Paenibacillaceae	g__Paenibacillus
+        2776	sk__Bacteria	k__	p__Bacteroidota	c__Chitinophagia	o__Chitinophagales	f__Chitinophagaceae	g__Chitinophaga
+        1566	sk__Bacteria	k__	p__Bacteroidota	c__Cytophagia	o__Cytophagales	f__Spirosomataceae	g__Dyadobacter
+        135696	sk__Bacteria	k__	p__Bacteroidota	c__Flavobacteriia	o__Flavobacteriales	f__Flavobacteriaceae	g__Flavobacterium
+        """
+            )
+        )
 
     # RUN MAIN FLOW
     analysis_amplicon_study(study_accession=study_accession)
@@ -604,3 +670,44 @@ def test_prefect_analyse_amplicon_flow(
     ][analyses.models.Analysis.TaxonomySources.SSU.value]
     assert len(ssu) == 3
     assert ssu[0]["organism"] == "sk__Bacteria;k__;p__Bacillota;c__Bacilli"
+
+    study = analyses.models.Study.objects.get_or_create_for_ena_study(study_accession)
+    assert (
+        study.results_dir == f"{EMG_CONFIG.slurm.default_workdir}/{study_accession}_v6"
+    )
+
+    Directory(
+        path=study.results_dir,
+        glob_rules=[
+            GlobHasFilesCountRule[12]
+        ],  # 6 for the samplesheet, same 6 for the "merge"
+    )
+
+    with (
+        Path(study.results_dir) / "abc123_DADA2-SILVA_18S-V9_asv_study_summary.tsv"
+    ).open("r") as summary:
+        lines = summary.readlines()
+        assert lines[0] == "taxonomy\tSRR_all_results\n"  # one run (the one with ASVs)
+        assert "100" in lines[-1]
+        assert "g__Aeromicrobium" in lines[-1]
+
+    # manually remove the merged study summaries
+    for file in Path(study.results_dir).glob(f"{study.first_accession}*"):
+        file.unlink()
+
+    # test merging of study summaries again, with cleanup enabled
+    merge_study_summaries(mgnify_study_accession=study.accession, cleanup_partials=True)
+    Directory(
+        path=study.results_dir,
+        glob_rules=[
+            GlobHasFilesCountRule[6],
+            GlobRule(
+                rule_name="All files are study level",
+                glob_patten=f"{study.first_accession}*study_summary.tsv",
+                test=lambda f: len(list(f)) == 6,
+            ),
+        ],
+    )
+
+    study.refresh_from_db()
+    assert len(study.downloads_as_objects) == 6

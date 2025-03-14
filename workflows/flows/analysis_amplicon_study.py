@@ -16,6 +16,10 @@ from workflows.ena_utils.ena_api_requests import (
     get_study_from_ena,
     get_study_readruns_from_ena,
 )
+from workflows.flows.analyse_study_tasks.shared.study_summary import (
+    merge_study_summaries,
+    add_study_summaries_to_downloads,
+)
 from workflows.prefect_utils.analyses_models_helpers import (
     chunk_list,
 )
@@ -77,3 +81,9 @@ def analysis_amplicon_study(study_accession: str):
             f"Working on amplicon analyses: {analyses_chunk[0]}-{analyses_chunk[-1]}"
         )
         run_amplicon_pipeline_in_chunks(mgnify_study, analyses_chunk)
+
+    merge_study_summaries(
+        mgnify_study.accession,
+        cleanup_partials=not EMG_CONFIG.amplicon_pipeline.keep_study_summary_partials,
+    )
+    add_study_summaries_to_downloads(mgnify_study.accession)

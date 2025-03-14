@@ -20,6 +20,7 @@ from analyses.schemas import (
     MGnifyFunctionalAnalysisAnnotationType,
     MGnifyStudy,
     EMG_CONFIG,
+    MGnifyStudyDetail,
 )
 from emgapiv2.schema_utils import (
     ApiSections,
@@ -88,11 +89,12 @@ api = NinjaAPI(
 
 @api.get(
     "/studies/{accession}",
-    response=MGnifyStudy,
+    response=MGnifyStudyDetail,
     tags=[ApiSections.STUDIES.value],
     summary="Get the detail of a single study analysed by MGnify",
     description="MGnify studies inherit directly from studies (or projects) in ENA.",
     operation_id="get_mgnify_study",
+    by_alias=True,
 )
 def get_mgnify_study(request, accession: str):
     study = get_object_or_404(analyses.models.Study.public_objects, accession=accession)

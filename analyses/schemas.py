@@ -15,19 +15,47 @@ from emgapiv2.enum_utils import FutureStrEnum
 EMG_CONFIG = settings.EMG_CONFIG
 
 
-class MGnifyStudy(ModelSchema):
-    # accession: str
-    # url: str
-    # ena_study: Optional[str] = None
+class Biome(ModelSchema):
+    biome_name: str = Field(..., examples=["Mammals", "Engineered"])
+    lineage: str = Field(None, examples=["root:Host-associated:Mammals"])
 
-    # @staticmethod
-    # def resolve_url(obj: analyses.models.Study) -> str:
-    #     return reverse("api:get_mgnify_study", kwargs={"accession": obj.accession})
+    @staticmethod
+    def resolve_lineage(obj: analyses.models.Biome) -> str:
+        return obj.pretty_lineage
+
+    class Meta:
+        model = analyses.models.Biome
+        fields = ["biome_name"]
+
+
+class MGnifyStudy(ModelSchema):
+    accession: str = Field(..., examples=["MGYS00000001"])
+    ena_accessions: List[str] = Field(..., examples=[["SRP135937", "PRJNA438545"]])
+    title: str = Field(..., examples=["ISS Metagenomes"])
+    biome: Optional[Biome]
+
+    @staticmethod
+    def resolve_biome_name(obj: analyses.models.Study):
+        return obj.biome.biome_name if obj.biome else None
 
     class Meta:
         model = analyses.models.Study
-        fields = ["accession", "ena_study"]
+        fields = ["accession", "ena_accessions", "title", "biome"]
         fields_optional = ["ena_study"]
+
+
+class MGnifyStudyDetail(MGnifyStudy):
+    downloads: List[MGnifyAnalysisDownloadFile] = Field(
+        ..., alias="downloads_as_objects"
+    )
+
+    class Meta:
+        model = analyses.models.Study
+        fields = [
+            "accession",
+            "ena_study",
+            "title",
+        ]
 
 
 class MGnifySample(ModelSchema):

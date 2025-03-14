@@ -145,6 +145,13 @@ class StudyAdmin(ENABrowserLinkMixin, JSONFieldWidgetOverridesMixin, ModelAdmin)
                 ],
             },
         ),
+        (
+            "Files",
+            {
+                "fields": ["results_dir", "downloads"],
+                "classes": ["tab"],
+            },
+        ),
     )
 
     @display(description="ENA Accessions", label=True)

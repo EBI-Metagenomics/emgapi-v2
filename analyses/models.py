@@ -95,9 +95,14 @@ class PublicStudyManager(PrivacyFilterManagerMixin, StudyManager):
     pass
 
 
-class Study(MGnifyAutomatedModel, ENADerivedModel, TimeStampedModel):
+class Study(
+    MGnifyAutomatedModel, ENADerivedModel, WithDownloadsModel, TimeStampedModel
+):
     objects = StudyManager()
     public_objects = PublicStudyManager()
+
+    DOWNLOAD_PARENT_IDENTIFIER_ATTR = "accession"
+    ALLOWED_DOWNLOAD_GROUP_PREFIXES = ["study_summary"]
 
     accession = MGnifyAccessionField(
         accession_prefix="MGYS", accession_length=8, db_index=True
@@ -111,6 +116,7 @@ class Study(MGnifyAutomatedModel, ENADerivedModel, TimeStampedModel):
     )
 
     title = models.CharField(max_length=4000)  # same max as ENA DB
+    results_dir = models.CharField(max_length=100, null=True, blank=True)
 
     def __str__(self):
         return self.accession
@@ -515,7 +521,7 @@ class Analysis(
     study = models.ForeignKey(
         Study, on_delete=models.CASCADE, to_field="accession", related_name="analyses"
     )
-    results_dir = models.CharField(max_length=100)
+    results_dir = models.CharField(max_length=100, null=True, blank=True)
     sample = models.ForeignKey(
         Sample, on_delete=models.CASCADE, related_name="analyses"
     )

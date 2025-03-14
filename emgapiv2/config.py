@@ -89,6 +89,9 @@ class AmpliconPipelineConfig(BaseModel):
     amplicon_nextflow_master_job_memory_gb: int = 1
     amplicon_pipeline_time_limit_days: int = 5
 
+    allow_non_insdc_run_names: bool = False
+    keep_study_summary_partials: bool = False
+
 
 class WebinConfig(BaseModel):
     emg_webin_account: str = None

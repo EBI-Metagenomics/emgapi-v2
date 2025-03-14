@@ -75,7 +75,7 @@ tasks:
   testk:
     desc: "Run pytest for a subset of unit tests, without coverage noise. E.g. `task testk -- amplicon`"
     cmds:
-      - docker compose run --entrypoint /bin/bash app -c "pytest --no-cov -k {{.CLI_ARGS}}"
+      - docker compose run --entrypoint /bin/bash app -c "pytest --no-cov -s -k {{.CLI_ARGS}}"
 
   make-dev-data:
     desc: "Populate the app database with some demo data for development purposes"
