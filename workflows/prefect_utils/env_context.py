@@ -25,6 +25,7 @@ class TemporaryEnv:
         self.temporary_env_vars = {k: v for k, v in kwargs.items() if not v == UNSET}
 
     def __enter__(self):
+        self.previously_set = [k for k in os.environ.keys()]
         self.previous_values = {
             key: os.environ.get(key, "") for key in self.temporary_env_vars.keys()
         }
@@ -32,3 +33,7 @@ class TemporaryEnv:
 
     def __exit__(self, exc_type, exc_value, exc_traceback):
         os.environ.update(self.previous_values)
+
+        for k, v in os.environ.items():
+            if k not in self.previously_set:
+                del os.environ[k]

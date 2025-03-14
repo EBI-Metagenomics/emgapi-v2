@@ -1,4 +1,3 @@
-import os
 from pathlib import Path
 
 import click
@@ -22,6 +21,7 @@ from workflows.data_io_utils.file_rules.common_rules import (
     FileIsNotEmptyRule,
 )
 from workflows.data_io_utils.file_rules.nodes import Directory, File
+from workflows.prefect_utils.dir_context import chdir
 
 
 @flow
@@ -73,16 +73,15 @@ def generate_study_summary_for_pipeline_run(
     logger.info(
         f"Study results_dir, where summaries will be made, is {study.results_dir}"
     )
-    os.chdir(study.results_dir)
-
-    with click.Context(summarise_analyses) as ctx:
-        ctx.invoke(
-            summarise_analyses,
-            runs=results_dir.files[0].path,
-            analyses_dir=results_dir.path,
-            non_insdc=EMG_CONFIG.amplicon_pipeline.allow_non_insdc_run_names,
-            output_prefix=pipeline_outdir.name,  # e.g. a hash of the samplesheet
-        )
+    with chdir(study.results_dir):
+        with click.Context(summarise_analyses) as ctx:
+            ctx.invoke(
+                summarise_analyses,
+                runs=results_dir.files[0].path,
+                analyses_dir=results_dir.path,
+                non_insdc=EMG_CONFIG.amplicon_pipeline.allow_non_insdc_run_names,
+                output_prefix=pipeline_outdir.name,  # e.g. a hash of the samplesheet
+            )
 
     generated_files = list(
         study_dir.path.glob(f"{pipeline_outdir.name}*_study_summary.tsv")
@@ -115,19 +114,17 @@ def merge_study_summaries(
     logger.info(
         f"Study results_dir, where summaries will be merged, is {study.results_dir}"
     )
-    os.chdir(study.results_dir)
-
     study_dir = Directory(
         path=Path(study.results_dir),
         rules=[DirectoryExistsRule],
     )
-
-    with click.Context(merge_summaries) as ctx:
-        ctx.invoke(
-            merge_summaries,
-            analyses_dir=study_dir.path,
-            output_prefix=study.first_accession,
-        )
+    with chdir(study.results_dir):
+        with click.Context(merge_summaries) as ctx:
+            ctx.invoke(
+                merge_summaries,
+                analyses_dir=study_dir.path,
+                output_prefix=study.first_accession,
+            )
 
     generated_files = list(
         study_dir.path.glob(f"{study.first_accession}*_study_summary.tsv")
