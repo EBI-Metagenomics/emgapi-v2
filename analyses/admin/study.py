@@ -115,7 +115,7 @@ class StudyReadsInline(TabularInlinePaginatedWithTabSupport):
 class StudyAdmin(ENABrowserLinkMixin, JSONFieldWidgetOverridesMixin, ModelAdmin):
     inlines = [StudyRunsInline, StudyAssembliesInline, StudyReadsInline]
     list_display = ["accession", "updated_at", "title", "display_accessions"]
-    list_filter = ["updated_at", "created_at", "is_private"]
+    list_filter = ["updated_at", "created_at", "is_private", "watchers"]
     search_fields = [
         "accession",
         "title",
@@ -149,6 +149,13 @@ class StudyAdmin(ENABrowserLinkMixin, JSONFieldWidgetOverridesMixin, ModelAdmin)
             "Files",
             {
                 "fields": ["results_dir", "downloads"],
+                "classes": ["tab"],
+            },
+        ),
+        (
+            "Notifications",
+            {
+                "fields": ["watchers"],
                 "classes": ["tab"],
             },
         ),
@@ -322,4 +329,12 @@ def jump_to_latest_study_admin(request):
         reverse_lazy(
             "admin:analyses_study_change", kwargs={"object_id": latest_study.pk}
         )
+    )
+
+
+@staff_member_required
+def jump_to_watched_studies_admin(request):
+    return redirect(
+        reverse_lazy("admin:analyses_study_changelist")
+        + f"?watchers__id__exact={request.user.id}"
     )

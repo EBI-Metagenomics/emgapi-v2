@@ -251,6 +251,12 @@ UNFOLD = {
                         "link": reverse_lazy("admin_jump_latest_study"),
                         "permission": lambda request: request.user.is_superuser,
                     },
+                    {
+                        "title": _("⤷ Watching"),
+                        "icon": "remove_red_eye",
+                        "link": reverse_lazy("admin_jump_watched_studies"),
+                        "permission": lambda request: request.user.is_superuser,
+                    },
                 ],
             },
             {

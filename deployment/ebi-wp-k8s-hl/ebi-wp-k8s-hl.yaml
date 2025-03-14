@@ -196,7 +196,7 @@ items:
         spec:
           containers:
             - name: prefect-server
-              image: prefecthq/prefect:3.2.2-python3.12
+              image: prefecthq/prefect:3.2.12-python3.12
               resources:
                 requests:
                   memory: "1024Mi"

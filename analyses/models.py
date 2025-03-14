@@ -25,6 +25,7 @@ from analyses.base_models.base_models import (
 from analyses.base_models.mgnify_accessioned_models import MGnifyAccessionField
 from analyses.base_models.with_downloads_models import WithDownloadsModel
 from analyses.base_models.with_status_models import SelectByStatusManagerMixin
+from analyses.base_models.with_watchers_models import WithWatchersModel
 from emgapiv2.async_utils import anysync_property
 from emgapiv2.enum_utils import FutureStrEnum
 
@@ -96,7 +97,11 @@ class PublicStudyManager(PrivacyFilterManagerMixin, StudyManager):
 
 
 class Study(
-    MGnifyAutomatedModel, ENADerivedModel, WithDownloadsModel, TimeStampedModel
+    MGnifyAutomatedModel,
+    ENADerivedModel,
+    WithDownloadsModel,
+    TimeStampedModel,
+    WithWatchersModel,
 ):
     objects = StudyManager()
     public_objects = PublicStudyManager()
