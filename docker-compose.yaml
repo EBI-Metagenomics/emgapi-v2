@@ -40,7 +40,7 @@ services:
     networks: [emg]
 
   prefect-server:
-    image: prefecthq/prefect:3.2.2-python3.12
+    image: prefecthq/prefect:3.2.12-python3.12
     restart: always
     container_name: prefect-server
     volumes:

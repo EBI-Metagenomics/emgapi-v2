@@ -1,5 +1,7 @@
+from enum import Enum
 from typing import List, TypeVar
 
+from django.contrib.auth.models import User
 from prefect import task
 
 from analyses.models import Analysis, Assembly
@@ -92,3 +94,11 @@ def chunk_list(items: List[I], chunk_size: int) -> List[List[I]]:
     :return: List of chunks, each chunk is a list of items up to chunk_size
     """
     return [items[j : j + chunk_size] for j in range(0, len(items), chunk_size)]
+
+
+def get_users_as_choices():
+    users = {
+        user.username: f"{user.username} ({user.email})" for user in User.objects.all()
+    }
+    UserChoices = Enum("UserChoices", users)
+    return UserChoices

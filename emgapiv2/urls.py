@@ -17,13 +17,21 @@ Including another URLconf
 from django.contrib import admin
 from django.urls import include, path
 
-from analyses.admin.study import jump_to_latest_study_admin
+from analyses.admin.study import (
+    jump_to_latest_study_admin,
+    jump_to_watched_studies_admin,
+)
 
 from .api import api
 
 urlpatterns = [
     path(
         "admin/latest_study", jump_to_latest_study_admin, name="admin_jump_latest_study"
+    ),
+    path(
+        "admin/watched_studies",
+        jump_to_watched_studies_admin,
+        name="admin_jump_watched_studies",
     ),
     path("admin/", admin.site.urls),
     path("api/v2/", api.urls),

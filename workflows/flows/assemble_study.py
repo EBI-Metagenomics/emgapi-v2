@@ -1,10 +1,14 @@
 from enum import Enum
 from textwrap import dedent as _
-from typing import Optional
+from typing import Optional, List
 
+from django.contrib.auth.models import User
 from django.urls import reverse_lazy
 from prefect import flow, get_run_logger, suspend_flow_run
+from prefect.events import emit_event
 from prefect.input import RunInput
+from prefect.runtime import flow_run, deployment
+from pydantic import Field
 
 from emgapiv2.enum_utils import FutureStrEnum
 
@@ -25,6 +29,7 @@ from workflows.flows.assemble_study_tasks.make_samplesheets import (
     make_samplesheets_for_runs_to_assemble,
 )
 from workflows.flows.assemble_study_tasks.upload_assemblies import upload_assemblies
+from workflows.prefect_utils.analyses_models_helpers import get_users_as_choices
 
 
 class AssemblerChoices(FutureStrEnum):
@@ -89,11 +94,19 @@ def assemble_study(
 
     # define this within flow because it dynamically creates options from DB.
     BiomeChoices = get_biomes_as_choices()
+    UserChoices = get_users_as_choices()
 
     class AssembleStudyInput(RunInput):
         biome: BiomeChoices
         assembler: AssemblerChoices
-        webin_owner: Optional[str]
+        watchers: Optional[List[UserChoices]] = Field(
+            None,
+            description="Admin users watching this study will get status notifications.",
+        )
+        webin_owner: Optional[str] = Field(
+            None,
+            description="Webin ID of study owner, if data is private. Can be left as None, if public.",
+        )
 
     assemble_study_input: AssembleStudyInput = suspend_flow_run(
         wait_for_input=AssembleStudyInput.with_initial_data(
@@ -122,6 +135,17 @@ def assemble_study(
         )
     )
 
+    if assemble_study_input.webin_owner:
+        webin_owner = assemble_study_input.webin_owner.title()
+        assert webin_owner.startswith("Webin-")
+    else:
+        webin_owner = None
+
+    if assemble_study_input.watchers:
+        for watcher in assemble_study_input.watchers:
+            user = User.objects.get(username=watcher.name)
+            mgnify_study.watchers.add(user)
+
     biome = analyses.models.Biome.objects.get(path=assemble_study_input.biome.name)
 
     mgnify_study.biome = biome
@@ -141,8 +165,8 @@ def assemble_study(
     )
     # assumes latest version...
 
-    if assemble_study_input.webin_owner:
-        ena_study.webin_submitter = assemble_study_input.webin_owner
+    if webin_owner:
+        ena_study.webin_submitter = webin_owner
         ena_study.save()
 
     get_or_create_assemblies_for_runs(mgnify_study, read_runs)
@@ -155,3 +179,29 @@ def assemble_study(
 
     if upload:
         upload_assemblies(mgnify_study, dry_run=use_ena_dropbox_dev)
+
+    emit_event(
+        event="flow.assembly.finished",
+        resource={"prefect.resource.id": f"prefect.flow-run.{flow_run.id}"},
+        related=[
+            {
+                "prefect.resource.id": f"prefect.deployment.{deployment.id}",
+                "prefect.resource.role": "deployment",
+            }
+        ],
+        payload={
+            "successful": mgnify_study.assemblies_reads.filter_by_statuses(
+                [analyses.models.Assembly.AssemblyStates.ASSEMBLY_COMPLETED]
+            ).count(),
+            "failed": mgnify_study.assemblies_reads.filter_by_statuses(
+                [analyses.models.Assembly.AssemblyStates.ASSEMBLY_FAILED]
+            ).count(),
+            "uploaded": mgnify_study.assemblies_reads.filter_by_statuses(
+                [analyses.models.Assembly.AssemblyStates.ASSEMBLY_UPLOADED]
+            ).count(),
+            "total": mgnify_study.assemblies_reads.count(),
+            "study_watchers": [
+                watcher.username for watcher in mgnify_study.watchers.all()
+            ],
+        },
+    )

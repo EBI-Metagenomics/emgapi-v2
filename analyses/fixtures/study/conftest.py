@@ -7,7 +7,7 @@ import analyses.models as mg_models
 
 
 @pytest.fixture
-def raw_reads_mgnify_study(raw_read_ena_study, top_level_biomes):
+def raw_reads_mgnify_study(raw_read_ena_study, top_level_biomes, admin_user):
     study = mg_models.Study.objects.get_or_create(
         ena_study=raw_read_ena_study, title=raw_read_ena_study.title
     )[0]
