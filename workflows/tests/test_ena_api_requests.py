@@ -4,21 +4,25 @@ from prefect import State
 
 import analyses.models
 import ena.models
+from workflows.ena_utils.ena_accession_matching import extract_all_accessions
 from workflows.ena_utils.ena_api_requests import (
-    ENAAPIRequest,
-    ENAPortalResultType,
-    ENAQueryClause,
-    ENAQueryOperators,
-    ENAQueryPair,
-    ENAStudyFields,
-    ENAStudyQuery,
     get_study_from_ena,
     get_study_readruns_from_ena,
     is_ena_study_available_privately,
     is_ena_study_public,
     sync_privacy_state_of_ena_study_and_derived_objects,
-    ENAAvailabilityException,
+)
+from workflows.ena_utils.requestors import (
+    ENAAPIRequest,
     ENAAccessException,
+    ENAAvailabilityException,
+)
+from workflows.ena_utils.study import ENAStudyQuery, ENAStudyFields
+from workflows.ena_utils.abstract import (
+    ENAPortalResultType,
+    ENAQueryOperators,
+    ENAQueryClause,
+    ENAQueryPair,
 )
 from workflows.prefect_utils.testing_utils import (
     should_not_mock_httpx_requests_to_prefect_server,
@@ -499,3 +503,18 @@ def test_sync_privacy_state_of_ena_study_and_derived_objects(
 
     assert ena_study.is_private
     assert not ena_study.is_suppressed
+
+
+def test_ena_accession_parsing():
+    assert extract_all_accessions("ERP1;ERP2") == ["ERP1", "ERP2"]
+    assert extract_all_accessions(["ERP1;ERP2"]) == ["ERP1", "ERP2"]
+    assert extract_all_accessions("ERP1") == ["ERP1"]
+    assert extract_all_accessions(["ERP1"]) == ["ERP1"]
+    assert extract_all_accessions(["ERP1", "ERP2"]) == ["ERP1", "ERP2"]
+    assert extract_all_accessions(["ERP1", "ERP2;ERP3"]) == ["ERP1", "ERP2", "ERP3"]
+    assert extract_all_accessions(["ERP1", "ERP1;ERP2;ERP3"]) == [
+        "ERP1",
+        "ERP2",
+        "ERP3",
+    ]
+    assert extract_all_accessions("") == []

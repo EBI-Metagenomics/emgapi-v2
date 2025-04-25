@@ -140,3 +140,10 @@ tasks:
       you can verify that the slurm job actually continued to run or completed in the background and is
       "reconnected" to by the restarted flow.
       This is desired behaviour.
+
+  generate-ena-util-stub:
+    desc: "(Re)Generate an ena utils request stub file for a given result type of the ENA Portal API. Usage: task generate-ena-util-study -- study"
+    cmds:
+      - docker compose run --entrypoint /bin/bash app -c "python workflows/ena_utils/generate_ena_model.py {{.CLI_ARGS}}" >> workflows/ena_utils/{{.CLI_ARGS}}.py
+      - echo "See ./workflows/ena_utils/{{.CLI_ARGS}}.py"
+      - echo "You may also need to update workflows/ena_utils/requestors.py:ENAAPIRequest"

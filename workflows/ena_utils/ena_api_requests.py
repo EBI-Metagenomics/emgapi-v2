@@ -1,20 +1,18 @@
-from datetime import date
-from enum import Enum
-from json import JSONDecodeError
-from typing import List, Literal, Optional, Type, TypeVar, Union, Dict, Any
+from typing import List, Optional, Type, Union
 
 import httpx
 from django.conf import settings
 from httpx import Auth
 from prefect import flow, get_run_logger, task
 from prefect.tasks import task_input_hash
-from pydantic import BaseModel, Field, computed_field, field_serializer, model_validator
-from typing_extensions import Self
 
 import analyses.models
 import ena.models
-from emgapiv2.enum_utils import FutureStrEnum
+from workflows.ena_utils.abstract import ENAPortalResultType
+from workflows.ena_utils.ena_accession_matching import extract_all_accessions
 from workflows.ena_utils.ena_auth import dcc_auth
+from workflows.ena_utils.requestors import ENAAPIRequest, ENAAvailabilityException
+from workflows.ena_utils.study import ENAStudyQuery, ENAStudyFields
 
 ALLOWED_LIBRARY_SOURCE: list = ["METAGENOMIC", "METATRANSCRIPTOMIC"]
 SINGLE_END_LIBRARY_LAYOUT: str = "SINGLE"
@@ -27,283 +25,6 @@ RETRIES = EMG_CONFIG.ena.portal_search_api_max_retries
 RETRY_DELAY = EMG_CONFIG.ena.portal_search_api_retry_delay_seconds
 
 
-class ENAPortalResultType(str, Enum):
-    ANALYSIS = "analysis"  # Nucelotide sequence analyses from reads
-    ANALYSIS_STUDY = (
-        "analysis_study"  # Studies used for nucleotide sequence analyses from reads
-    )
-    ASSEMBLY = "assembly"  # Genome assemblies
-    CODING = "coding"  # Coding sequences
-    NONCODING = "noncoding"  # Non-coding sequences
-    READ_EXPERIMENT = "read_experiment"  # Experiments used for raw reads
-    READ_RUN = "read_run"  # Raw reads
-    READ_STUDY = "read_study"  # Studies used for raw reads
-    SAMPLE = "sample"
-    STUDY = "study"
-    TAXON = "taxon"  # Taxonomic classification
-    TLS_SET = "tls_set"  # Targeted locus study contig sets (TLS)
-    TSA_SET = "tsa_set"  # Transcriptome assembly contig sets (TSA)
-    WGS_SET = "wgs_set"  # Genome assembly contig set (WGS)
-
-
-class ENAQueryOperators(str, Enum):
-    OR = "OR"
-    AND = "AND"
-    NOT = "NOT"
-
-
-class ENAQueryClause(BaseModel):
-    search_field: str
-    value: Union[str, int, date]
-    is_not: bool = Field(default=False)
-
-    def __str__(self):
-        value = self.value
-        if isinstance(value, date):
-            value = value.strftime("%Y-%m-%d")
-        return f"{ENAQueryOperators.NOT if self.is_not else ''} {self.search_field}={value}".strip()
-
-    def __or__(self, other: Union[Self, "ENAQueryPair"]) -> "ENAQueryPair":
-        return ENAQueryPair(left=self, operator=ENAQueryOperators.OR, right=other)
-
-    def __and__(self, other: Union[Self, "ENAQueryPair"]) -> "ENAQueryPair":
-        return ENAQueryPair(left=self, operator=ENAQueryOperators.AND, right=other)
-
-    def __invert__(self) -> Self:
-        return ENAQueryClause(
-            search_field=self.search_field, value=self.value, is_not=not self.is_not
-        )
-
-
-ENAQuerySetType = TypeVar("ENAQuerySetType", bound="_ENAQueryConditions")
-
-
-class ENAQueryPair(BaseModel):
-    operator: ENAQueryOperators = Field(ENAQueryOperators.AND)
-    left: Union[ENAQueryClause, Self, ENAQuerySetType]
-    right: Union[ENAQueryClause, Self, ENAQuerySetType]
-    is_not: bool = Field(default=False)
-
-    def __str__(self):
-        return f"{ENAQueryOperators.NOT + ' ' if self.is_not else ''}({str(self.left)} {self.operator.value} {str(self.right)})"
-
-    def __or__(self, other: Union[ENAQueryClause, Self, ENAQuerySetType]) -> Self:
-        return self.__class__(left=self, operator=ENAQueryOperators.OR, right=other)
-
-    def __and__(self, other: Union[ENAQueryClause, Self, ENAQuerySetType]) -> Self:
-        return self.__class__(left=self, operator=ENAQueryOperators.AND, right=other)
-
-    def __invert__(self) -> Self:
-        return self.__class__(
-            left=self.left,
-            operator=self.operator,
-            right=self.right,
-            is_not=not self.is_not,
-        )
-
-
-class _ENAQueryConditions(BaseModel):
-    is_not: bool = Field(default=False)
-
-    # Define specific fields on inheriting models e.g.:
-    # class ENAStudyQuery(ENAQueryConditions):
-    #     description: Optional[str] = Field(None, description="brief sequence description")
-
-    @computed_field
-    @property
-    def queries(self) -> Union[ENAQueryPair, ENAQueryClause]:
-        # combine all set fields with an AND.
-        # technically this makes nested pairs, which is not optimal, but is reasonable for most use cases.
-        # e.g. ((study_description=hello AND tax_id=1) AND broker_name=EMG)
-        # could be simplified to (study_description=hello AND tax_id=1 AND broker_name=EMG)
-        clauses = None
-        for search_field, value in self.model_dump(
-            exclude={"is_not", "queries"}
-        ).items():
-            if value is None:
-                continue
-            if clauses:
-                clauses &= ENAQueryClause(search_field=search_field, value=value)
-            else:
-                clauses = ENAQueryClause(search_field=search_field, value=value)
-
-        return clauses
-
-    def __str__(self):
-        return str(self.queries)
-
-    def __or__(self, other: ENAQuerySetType) -> ENAQueryPair:
-        return ENAQueryPair(left=self, operator=ENAQueryOperators.OR, right=other)
-
-    def __and__(self, other: ENAQuerySetType) -> ENAQueryPair:
-        return ENAQueryPair(left=self, operator=ENAQueryOperators.AND, right=other)
-
-    def __invert__(self) -> Self:
-        already_set = self.model_dump(exclude={"is_not"})
-        return self.__class__(**already_set, is_not=not self.is_not)
-
-
-class ENAStudyQuery(_ENAQueryConditions):
-    # From: https://www.ebi.ac.uk/ena/portal/api/searchFields?dataPortal=metagenome&result=study 2025/01/23
-    # Some are controlled values not yet controlled here (e.g. datahub)
-    breed: Optional[str] = Field(None, description="Breed")
-    broker_name: Optional[str] = Field(None, description="broker name")
-    center_name: Optional[str] = Field(None, description="Submitting center")
-    cultivar: Optional[str] = Field(
-        None,
-        description="cultivar (cultivated variety) of plant from which sample was obtained",
-    )
-    datahub: Optional[str] = Field(None, description="DCC datahub name")
-    description: Optional[str] = Field(None, description="brief sequence description")
-    first_public: Optional[date] = Field(None, description="date when made public")
-    geo_accession: Optional[str] = Field(None, description="GEO accession")
-    isolate: Optional[str] = Field(
-        None, description="individual isolate from which sample was obtained"
-    )
-    keywords: Optional[str] = Field(
-        None, description="keywords associated with sequence"
-    )
-    last_updated: Optional[date] = Field(None, description="date when last updated")
-    parent_study_accession: Optional[str] = Field(
-        None, description="parent study accession"
-    )
-    project_name: Optional[str] = Field(
-        None,
-        description="name of the project within which the sequencing was organized",
-    )
-    scientific_name: Optional[str] = Field(
-        None, description="scientific name of an organism"
-    )
-    secondary_study_accession: Optional[str] = Field(
-        None, description="secondary study accession number"
-    )
-    secondary_study_alias: Optional[str] = Field(None, description="Submitting center")
-    secondary_study_center_name: Optional[str] = Field(
-        None, description="Submitting center"
-    )
-    status: Optional[int] = Field(None, description="Status")
-    strain: Optional[str] = Field(
-        None, description="strain from which sample was obtained"
-    )
-    study_accession: Optional[str] = Field(None, description="study accession number")
-    study_alias: Optional[str] = Field(
-        None, description="Submitter's name for the study"
-    )
-    study_description: Optional[str] = Field(
-        None, description="detailed sequencing study description"
-    )
-    study_name: Optional[str] = Field(None, description="sequencing study name")
-    study_title: Optional[str] = Field(
-        None, description="brief sequencing study description"
-    )
-    submission_tool: Optional[str] = Field(None, description="Submission tool")
-    tag: Optional[str] = Field(None, description="Classification Tags")
-    tax_division: Optional[str] = Field(None, description="taxonomic division")
-    tax_id: Optional[str] = Field(None, description="NCBI taxonomic classification")
-
-
-class ENAStudyFields(FutureStrEnum):
-    # from https://www.ebi.ac.uk/ena/portal/api/returnFields?dataPortal=metagenome&result=study 2025-01-23
-    BREED = "breed"  # breed
-    BROKER_NAME = "broker_name"  # broker name
-    CENTER_NAME = "center_name"  # Submitting center
-    CULTIVAR = "cultivar"  # cultivar (cultivated variety) of plant from which sample was obtained
-    DATAHUB = "datahub"  # DCC datahub name
-    DESCRIPTION = "description"  # brief sequence description
-    FIRST_PUBLIC = "first_public"  # date when made public
-    GEO_ACCESSION = "geo_accession"  # GEO accession
-    ISOLATE = "isolate"  # individual isolate from which sample was obtained
-    KEYWORDS = "keywords"  # keywords associated with sequence
-    LAST_UPDATED = "last_updated"  # date when last updated
-    PARENT_STUDY_ACCESSION = "parent_study_accession"  # parent study accession
-    PROJECT_NAME = (
-        "project_name"  # name of the project within which the sequencing was organized
-    )
-    SCIENTIFIC_NAME = "scientific_name"  # scientific name of an organism
-    SECONDARY_STUDY_ACCESSION = (
-        "secondary_study_accession"  # secondary study accession number
-    )
-    SECONDARY_STUDY_ALIAS = "secondary_study_alias"  # Submitting center
-    SECONDARY_STUDY_CENTER_NAME = "secondary_study_center_name"  # Submitting center
-    STATUS = "status"  # Status
-    STRAIN = "strain"  # strain from which sample was obtained
-    STUDY_ACCESSION = "study_accession"  # study accession number
-    STUDY_ALIAS = "study_alias"  # submitter's name for the study
-    STUDY_DESCRIPTION = "study_description"  # detailed sequencing study description
-    STUDY_NAME = "study_name"  # sequencing study name
-    STUDY_TITLE = "study_title"  # brief sequencing study description
-    SUBMISSION_TOOL = "submission_tool"  # Submission tool
-    TAG = "tag"  # Classification Tags
-    TAX_DIVISION = "tax_division"  # taxonomic division
-    TAX_ID = "tax_id"  # NCBI taxonomic classification
-    TAX_LINEAGE = "tax_lineage"  # Complete taxonomic lineage for an organism
-
-
-class ENAAPIRequest(BaseModel):
-    result: ENAPortalResultType
-    query: Union[ENAQuerySetType, ENAQueryClause, ENAQueryPair]
-    fields: Union[List[ENAStudyFields]]
-    limit: Optional[int] = Field(None, description="Max number of results to return")
-    format: Literal["tsv", "json"] = Field("json")
-
-    @model_validator(mode="after")
-    def result_and_query_and_return_fields_align(self):
-        if self.result == ENAPortalResultType.STUDY:
-            assert isinstance(self.fields, List)
-            assert isinstance(self.fields[0], ENAStudyFields)
-            self._assert_query_conditions_are_of_type(self.query, self.result)
-        return self
-
-    def _assert_query_conditions_are_of_type(
-        self,
-        query_part: Union[ENAQuerySetType, ENAQueryClause, ENAQueryPair],
-        result_type: ENAPortalResultType,
-    ):
-        if type(query_part) is ENAQuerySetType:
-            if result_type == ENAPortalResultType.STUDY:
-                assert isinstance(query_part, ENAStudyQuery)
-            elif isinstance(query_part, ENAQueryPair):
-                self._assert_query_conditions_are_of_type(query_part.left, result_type)
-                self._assert_query_conditions_are_of_type(query_part.right, result_type)
-
-    @field_serializer("query")
-    def serialize_query(self, query: Type[_ENAQueryConditions], _info):
-        return f'"{query}"'
-
-    @field_serializer("fields")
-    def serialize_fields(self, fields: Union[List[ENAStudyFields]], _info):
-        return ",".join(fields)
-
-    @field_serializer("result")
-    def serialize_result_type(self, result: ENAPortalResultType):
-        return result.value
-
-    def _parse_response(self, response: httpx.Response):
-        if self.format == "json":
-            try:
-                j = response.json()
-            except JSONDecodeError:
-                raise ENAAccessException("Bad JSON response.")
-            if isinstance(j, dict) and "message" in j:
-                raise ENAAccessException(f"Error response: {j['message']}")
-            elif isinstance(j, list) and len(j) == 0:
-                raise ENAAvailabilityException("Empty response.")
-            return j
-        return response.text  # TODO: tsv
-
-    def get(self, auth: Type[Auth] = None) -> Union[List[Dict[str, Any]], str]:
-        url = EMG_CONFIG.ena.portal_search_api
-        params = self.model_dump()
-        r = httpx.get(
-            url=url,
-            params=params,
-            auth=auth,
-        )
-        if httpx.codes.is_error(r.status_code):
-            raise ENAAccessException(r.text)
-        return self._parse_response(r)
-
-
 def create_ena_api_request(result_type, query, limit, fields, result_format="json"):
     return (
         f"{EMG_CONFIG.ena.portal_search_api}?"
@@ -313,12 +34,6 @@ def create_ena_api_request(result_type, query, limit, fields, result_format="jso
         f"format={result_format}&"
         f"fields={fields}"
     )
-
-
-class ENAAccessException(Exception): ...
-
-
-class ENAAvailabilityException(Exception): ...
 
 
 @task(
@@ -360,16 +75,11 @@ def get_study_from_ena(accession: str, limit: int = 10) -> ena.models.Study:
     s = portal[0]
 
     # Check secondary accession
-    secondary_accession: str = s["secondary_study_accession"]
-    additional_accessions: list = []
-    if not secondary_accession:
+    additional_accessions = extract_all_accessions(s["secondary_study_accession"])
+    if len(additional_accessions) > 1:
+        logger.warning(f"Study {accession} has more than one secondary_accession")
+    if not additional_accessions:
         logger.warning(f"Study {accession} secondary_accession is not available")
-    else:
-        if len(secondary_accession.split(";")) > 1:
-            logger.warning(f"Study {accession} has more than one secondary_accession")
-            additional_accessions = secondary_accession.split(";")
-        else:
-            additional_accessions = [secondary_accession]
 
     # Check primary accession
     if not s[ENAStudyFields.STUDY_ACCESSION]:

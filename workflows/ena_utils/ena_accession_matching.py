@@ -8,3 +8,16 @@ INSDC_PROJECT_ACCESSION_GLOB: str = "PRJ[NED][AB][0-9]*"
 
 ENA_ASSEMBLY_ACCESSION_REGEX: str = f"([{_INSDC_CENTRE_PREFIXES}]RZ[0-9]{{6,}})"
 ENA_ASSEMBLY_ACCESSION_GLOB: str = f"[{_INSDC_CENTRE_PREFIXES}]RZ[0-9]*"
+
+
+def extract_all_accessions(accessions_from_api: str | list[str]) -> list[str]:
+    all_accessions = set()
+    for accession in (
+        accessions_from_api
+        if isinstance(accessions_from_api, list)
+        else [accessions_from_api]
+    ):
+        for acc in accession.split(";"):
+            if acc:
+                all_accessions.add(acc)
+    return sorted(all_accessions)
