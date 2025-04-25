@@ -1,9 +1,11 @@
+from datetime import timedelta
 from typing import List, Optional, Type, Union
 
 import httpx
 from django.conf import settings
 from httpx import Auth
 from prefect import flow, get_run_logger, task
+from prefect.cache_policies import DEFAULT
 from prefect.tasks import task_input_hash
 
 import analyses.models
@@ -380,3 +382,73 @@ def sync_privacy_state_of_ena_study_and_derived_objects(
     else:
         ena_study.is_private = private
     ena_study.save()
+
+
+@task(
+    retries=RETRIES,
+    retry_delay_seconds=RETRY_DELAY,
+    cache_policy=DEFAULT,
+    cache_expiration=timedelta(days=1),
+    cache_key_fn=task_input_hash,
+    task_run_name="Get study assemblies from ENA: {accession}",
+)
+def get_study_assemblies_from_ena(accession: str, limit: int = 10) -> List[str]:
+    """
+    Fetches a list of assemblies from the European Nucleotide Archive (ENA) for a given study accession.
+
+    This function queries the ENA Portal API to retrieve assemblies associated with the given study
+    accession. The query returns a limited number of results, which can be configured via the `limit`
+    parameter. Authenticated requests may be sent to fetch private data if the `dcc_auth` is configured
+    correctly.
+
+    :param accession: The ENA accession identifier of the study for which to fetch assemblies.
+    An analysis.study must already exist for this accession.
+    :type accession: str
+    :param limit: The maximum number of assemblies to retrieve. Default is 10.
+    :type limit: int
+    :return: A list of assembly accession strings fetched from ENA.
+    :rtype: List[str]
+    """
+    logger = get_run_logger()
+    logger.info(f"Will fetch Assemblies from ENA Portal API for Study {accession}")
+
+    # study = analyses.models.Study.objects.get(ena_study__accession__contains=accession)
+    #
+    # _ = ENAAnalysisFields
+
+    # ena_auth = dcc_auth if study.is_private else None
+
+    # portal = ENAAPIRequest(
+    #     result=ENAPortalResultType.ANALYSIS,
+    #     fields=[
+    #         _.SAMPLE_ACCESSION,
+    #         _.SAMPLE_TITLE,
+    #         _.SECONDARY_SAMPLE_ACCESSION,
+    #         _.RUN_ACCESSION,
+    #         _.ANALYSIS_ACCESSION,
+    #         _.COMPLETENESS_SCORE,
+    #         _.CONTAMINATION_SCORE,
+    #         _.SCIENTIFIC_NAME,
+    #     ],
+    #     limit=limit,
+    #     query=ENAAnalysisQuery(study_accession=accession)
+    #     | ENAAnalysisQuery(secondary_study_accession=accession),
+    # ).get(auth=ena_auth)
+
+    # TODO: related samples/runs etc
+
+    # assemblies = []
+    # for assembly_data in portal:
+    #
+    #     assembly = analyses.models.Assembly.objects.update_or_create(
+    #         ena_accessions=assembly_data[_.ANALYSIS_ACCESSION],
+    #         defaults={
+    #             "sample": study.sample,
+    #             "ena_accessions": [
+    #                 assembly_data[_.SAMPLE_ACCESSION],
+    #                 assembly_data[_.SECONDARY_SAMPLE_ACCESSION],
+    #             ],
+    #             "ena_study": study.ena_study,
+    #             "is_private": study.is_private,
+    #         },
+    #     )

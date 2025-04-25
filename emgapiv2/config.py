@@ -93,6 +93,14 @@ class AmpliconPipelineConfig(BaseModel):
     keep_study_summary_partials: bool = False
 
 
+class AssemblyPipelineConfig(BaseModel):
+    pipeline_repo: str = "ebi-metagenomics/assembly-analysis-pipeline"
+    pipeline_git_revision: str = "main"
+    pipeline_nf_profile: str = "codon_slurm"
+    samplesheet_chunk_size: int = 10
+    library_strategy: str = "AMPLICON"
+
+
 class WebinConfig(BaseModel):
     emg_webin_account: str = None
     emg_webin_password: str = None
