@@ -464,10 +464,10 @@ def test_prefect_analyse_amplicon_flow(
     httpx_mock.add_response(
         url=f"{EMG_CONFIG.ena.portal_search_api}?"
         f"result=read_run"
-        f"&query=%22(study_accession={study_accession}%20OR%20secondary_study_accession={study_accession})%20AND%20library_strategy=AMPLICON%22"
+        f"&query=%22%28%28study_accession={study_accession}+OR+secondary_study_accession={study_accession}%29%20AND%20library_strategy=AMPLICON%29%22"
         f"&limit=10000"
         f"&format=json"
-        f"&fields={','.join(EMG_CONFIG.ena.readrun_metadata_fields)}"
+        f"&fields=run_accession%2Csample_accession%2Csample_title%2Csecondary_sample_accession%2Cfastq_md5%2Cfastq_ftp%2Clibrary_layout%2Clibrary_strategy%2Clibrary_source%2Cscientific_name%2Chost_tax_id%2Chost_scientific_name%2Cinstrument_platform%2Cinstrument_model%2Clocation%2Clat%2Clon"
         f"&dataPortal=metagenome",
         json=[
             {
@@ -485,6 +485,9 @@ def test_prefect_analyse_amplicon_flow(
                 "host_scientific_name": "Apis mellifera",
                 "instrument_platform": "ILLUMINA",
                 "instrument_model": "Illumina MiSeq",
+                "lat": "52",
+                "lon": "0",
+                "location": "hinxton",
             },
             {
                 "sample_accession": "SAMN08514018",
@@ -501,6 +504,9 @@ def test_prefect_analyse_amplicon_flow(
                 "host_scientific_name": "Apis mellifera",
                 "instrument_platform": "ILLUMINA",
                 "instrument_model": "Illumina MiSeq",
+                "lat": "52",
+                "lon": "0",
+                "location": "hinxton",
             },
             {
                 "sample_accession": "SAMN08514019",
@@ -517,6 +523,9 @@ def test_prefect_analyse_amplicon_flow(
                 "host_scientific_name": "Apis mellifera",
                 "instrument_platform": "ILLUMINA",
                 "instrument_model": "Illumina MiSeq",
+                "lat": "52",
+                "lon": "0",
+                "location": "hinxton",
             },
             {
                 "sample_accession": "SAMN08514020",
@@ -533,6 +542,9 @@ def test_prefect_analyse_amplicon_flow(
                 "host_scientific_name": "Apis mellifera",
                 "instrument_platform": "ILLUMINA",
                 "instrument_model": "Illumina MiSeq",
+                "lat": "52",
+                "lon": "0",
+                "location": "hinxton",
             },
             {
                 "sample_accession": "SAMN08514021",
@@ -549,6 +561,9 @@ def test_prefect_analyse_amplicon_flow(
                 "host_scientific_name": "Apis mellifera",
                 "instrument_platform": "ILLUMINA",
                 "instrument_model": "Illumina MiSeq",
+                "lat": "52",
+                "lon": "0",
+                "location": "hinxton",
             },
         ],
     )
@@ -655,7 +670,7 @@ def test_prefect_analyse_amplicon_flow(
 
     assert (
         analyses.models.Analysis.objects.filter(
-            run__ena_accessions__contains=amplicon_run_all_results
+            run__ena_accessions__contains=[amplicon_run_all_results]
         ).count()
         == 1
     )
@@ -711,7 +726,7 @@ def test_prefect_analyse_amplicon_flow(
 
     analysis_which_should_have_taxonomies_imported: analyses.models.Analysis = (
         analyses.models.Analysis.objects_and_annotations.get(
-            run__ena_accessions__contains=amplicon_run_all_results
+            run__ena_accessions__contains=[amplicon_run_all_results]
         )
     )
     assert (

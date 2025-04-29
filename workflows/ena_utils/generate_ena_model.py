@@ -13,38 +13,48 @@ Example:
 
 This will generate an ENAAnalysisQuery model based on the fields returned by
 https://www.ebi.ac.uk/ena/portal/api/searchFields?dataPortal=metagenome&result=analysis
+and an ENAAnalysisFields enum based on the fields returned by
+https://www.ebi.ac.uk/ena/portal/api/returnFields?dataPortal=metagenome&result=analysis.
 """
 import argparse
 import sys
 from datetime import date
+from typing import Literal
 
 import pandas as pd
+from caseconverter import pascalcase
 from django.utils.html import escape
 
 
-def fetch_ena_fields(result: str, data_portal: str = "metagenome") -> pd.DataFrame:
-    url = f"https://www.ebi.ac.uk/ena/portal/api/searchFields?dataPortal={data_portal}&result={result}"
+def fetch_ena_fields(
+    result: str,
+    which_fields: Literal["search", "return"],
+    data_portal: str = "metagenome",
+) -> pd.DataFrame:
+    url = f"https://www.ebi.ac.uk/ena/portal/api/{which_fields}Fields?dataPortal={data_portal}&result={result}"
     return pd.read_csv(url, sep="\t")
 
 
-def generate_pydantic_model(fields: pd.DataFrame, result_type: str) -> str:
+def generate_pydantic_model(result_type: str, data_portal: str = "metagenome") -> str:
     """
     Generate a Pydantic model from the parsed fields.
 
     Args:
-        fields: DataFrame with columns 'columnId', 'description', and 'type'
         result_type: The result type used to name the model
+        data_portal: The ENA data portal to fetch from
 
     Returns:
         A string containing the Pydantic model code
     """
-    class_name = f"ENA{result_type.capitalize()}Query"
+    class_name = f"ENA{pascalcase(result_type)}Query"
 
     model_code = [
         f"class {class_name}(_ENAQueryConditions):",
         f"    # From: https://www.ebi.ac.uk/ena/portal/api/searchFields?dataPortal=metagenome&result={result_type} {date.today().strftime('%Y/%m/%d')}",
         "    # Some are controlled values not yet controlled here",
     ]
+
+    fields = fetch_ena_fields(result_type, "search", data_portal)
 
     for _, row in fields.iterrows():
         field_name = row["columnId"]
@@ -63,7 +73,7 @@ def generate_pydantic_model(fields: pd.DataFrame, result_type: str) -> str:
 
     model_code.append("")
 
-    enum_class_name = f"ENA{result_type.capitalize()}Fields"
+    enum_class_name = f"ENA{pascalcase(result_type)}Fields"
     model_code.extend(
         [
             "",
@@ -71,6 +81,8 @@ def generate_pydantic_model(fields: pd.DataFrame, result_type: str) -> str:
             f"    # from https://www.ebi.ac.uk/ena/portal/api/returnFields?dataPortal=metagenome&result={result_type} {date.today().strftime('%Y-%m-%d')}",
         ]
     )
+
+    fields = fetch_ena_fields(result_type, "return", data_portal)
 
     for _, row in fields.iterrows():
         field_name = row["columnId"]
@@ -96,9 +108,7 @@ def main():
     args = parser.parse_args()
 
     try:
-        fields = fetch_ena_fields(args.result, args.data_portal)
-
-        model_code = generate_pydantic_model(fields, args.result)
+        model_code = generate_pydantic_model(args.result, args.data_portal)
 
         print(model_code)
 

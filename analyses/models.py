@@ -22,7 +22,6 @@ from analyses.base_models.base_models import (
     PrivacyFilterManagerMixin,
     TimeStampedModel,
     VisibilityControlledModel,
-    GetByENAAccessionManagerMixin,
 )
 from analyses.base_models.mgnify_accessioned_models import MGnifyAccessionField
 from analyses.base_models.with_downloads_models import WithDownloadsModel
@@ -31,6 +30,8 @@ from analyses.base_models.with_watchers_models import WithWatchersModel
 from emgapiv2.async_utils import anysync_property
 from emgapiv2.enum_utils import FutureStrEnum
 from emgapiv2.model_utils import JSONFieldWithSchema
+from workflows.ena_utils.read_run import ENAReadRunFields
+from workflows.ena_utils.sample import ENASampleFields
 
 
 # Some models associated with MGnify Analyses (MGYS, MGYA etc).
@@ -70,7 +71,7 @@ class Biome(TreeModel):
         return re.sub(r"[^a-zA-Z0-9._]", "", underscore_punctuated)
 
 
-class StudyManager(models.Manager):
+class StudyManager(ENADerivedManager):
     def get_or_create_for_ena_study(self, ena_study_accession):
         logging.info(f"Will get/create MGnify study for {ena_study_accession}")
         try:
@@ -162,18 +163,20 @@ class Study(
         )
 
 
-class PublicSampleManager(
-    PrivacyFilterManagerMixin, GetByENAAccessionManagerMixin, models.Manager
-): ...
+class PublicSampleManager(PrivacyFilterManagerMixin, ENADerivedManager): ...
 
 
 class Sample(ENADerivedModel, TimeStampedModel):
-    objects = models.Manager()
+    CommonMetadataKeys = ENASampleFields
+
+    objects = ENADerivedManager()
     public_objects = PublicSampleManager()
 
     id = models.AutoField(primary_key=True)
     ena_sample = models.ForeignKey(ena.models.Sample, on_delete=models.CASCADE)
     studies = models.ManyToManyField(Study)
+
+    metadata = models.JSONField(default=dict, blank=True)
 
     def __str__(self):
         return f"Sample {self.id}: {self.ena_sample}"
@@ -204,17 +207,10 @@ class PublicRunManager(PrivacyFilterManagerMixin, models.Manager): ...
 
 
 class Run(TimeStampedModel, ENADerivedModel, WithExperimentTypeModel):
-    class CommonMetadataKeys:
-        # TODO replace this with ENA result type pydantic model once available
-        INSTRUMENT_PLATFORM = "instrument_platform"
-        INSTRUMENT_MODEL = "instrument_model"
-        FASTQ_FTPS = "fastq_ftps"
-        LIBRARY_STRATEGY = "library_strategy"
-        LIBRARY_LAYOUT = "library_layout"
-        LIBRARY_SOURCE = "library_source"
-        SCIENTIFIC_NAME = "scientific_name"
-        HOST_TAX_ID = "host_tax_id"
-        HOST_SCIENTIFIC_NAME = "host_scientific_name"
+    CommonMetadataKeys = ENAReadRunFields
+    CommonMetadataKeys.FASTQ_FTPS = (
+        "fastq_ftps"  # plural convention mismatch to ENA; TODO
+    )
 
     class InstrumentPlatformKeys:
         BGISEQ = "BGISEQ"
@@ -224,7 +220,7 @@ class Run(TimeStampedModel, ENADerivedModel, WithExperimentTypeModel):
         PACBIO_SMRT = "PACBIO_SMRT"
         ION_TORRENT = "ION_TORRENT"
 
-    objects = models.Manager()
+    objects = ENADerivedManager()
     public_objects = PublicRunManager()
 
     id = models.AutoField(primary_key=True)

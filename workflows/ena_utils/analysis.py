@@ -8,13 +8,13 @@ from workflows.ena_utils.abstract import _ENAQueryConditions
 
 
 class ENAAnalysisQuery(_ENAQueryConditions):
-    # From: https://www.ebi.ac.uk/ena/portal/api/searchFields?dataPortal=metagenome&result=analysis 2025/04/24
+    # From: https://www.ebi.ac.uk/ena/portal/api/searchFields?dataPortal=metagenome&result=analysis 2025/04/28
     # Some are controlled values not yet controlled here
     age: Optional[str] = Field(None, description="Age when the sample was taken")
     altitude: Optional[int] = Field(None, description="Altitude (m)")
     analysis_accession: Optional[str] = Field(None, description="accession number")
     analysis_alias: Optional[str] = Field(
-        None, description="submitter's name for the analysis"
+        None, description="submitter&#x27;s name for the analysis"
     )
     analysis_code_repository: Optional[str] = Field(
         None,
@@ -99,7 +99,7 @@ class ENAAnalysisQuery(_ENAQueryConditions):
     )
     environmental_medium: Optional[str] = Field(
         None,
-        description="Report the environmental material(s) immediately surrounding the sample or specimen at the time of sampling. We recommend using subclasses of 'environmental material' (http://purl.obolibrary.org/obo/ENVO_00010483). EnvO documentation about how to use the field: https://github.com/EnvironmentOntology/envo/wiki/Using-ENVO-with-MIxS . Terms from other OBO ontologies are permissible as long as they reference mass/volume nouns (e.g. air, water, blood) and not discrete, countable entities (e.g. a tree, a leaf, a table top).",
+        description="Report the environmental material(s) immediately surrounding the sample or specimen at the time of sampling. We recommend using subclasses of &#x27;environmental material&#x27; (http://purl.obolibrary.org/obo/ENVO_00010483). EnvO documentation about how to use the field: https://github.com/EnvironmentOntology/envo/wiki/Using-ENVO-with-MIxS . Terms from other OBO ontologies are permissible as long as they reference mass/volume nouns (e.g. air, water, blood) and not discrete, countable entities (e.g. a tree, a leaf, a table top).",
     )
     environmental_sample: Optional[str] = Field(
         None,
@@ -158,7 +158,7 @@ class ENAAnalysisQuery(_ENAQueryConditions):
     last_updated: Optional[date] = Field(None, description="date when last updated")
     local_environmental_context: Optional[str] = Field(
         None,
-        description="Report the entity or entities which are in the sample or specimen’s local vicinity and which you believe have significant causal influences on your sample or specimen. We recommend using EnvO terms which are of smaller spatial grain than your entry for 'broad-scale environmental context'. Terms, such as anatomical sites, from other OBO Library ontologies which interoperate with EnvO (e.g. UBERON) are accepted in this field. EnvO documentation about how to use the field: https://github.com/EnvironmentOntology/envo/wiki/Using-ENVO-with-MIxS.",
+        description="Report the entity or entities which are in the sample or specimen’s local vicinity and which you believe have significant causal influences on your sample or specimen. We recommend using EnvO terms which are of smaller spatial grain than your entry for &quot;broad-scale environmental context&quot;. Terms, such as anatomical sites, from other OBO Library ontologies which interoperate with EnvO (e.g. UBERON) are accepted in this field. EnvO documentation about how to use the field: https://github.com/EnvironmentOntology/envo/wiki/Using-ENVO-with-MIxS.",
     )
     location: Optional[str] = Field(
         None, description="geographic location of isolation of the sample"
@@ -197,7 +197,7 @@ class ENAAnalysisQuery(_ENAQueryConditions):
     )
     reference_genome: Optional[str] = Field(
         None,
-        description="The reference genome used in the analysis. Use 'not applicable' if a reference genome was not required for this analysis type.",
+        description="The reference genome used in the analysis. Use &#x27;not applicable&#x27; if a reference genome was not required for this analysis type.",
     )
     related_analysis_accession: Optional[str] = Field(
         None, description="related analysis accession number"
@@ -206,7 +206,7 @@ class ENAAnalysisQuery(_ENAQueryConditions):
     salinity: Optional[int] = Field(None, description="Salinity (PSU)")
     sample_accession: Optional[str] = Field(None, description="sample accession number")
     sample_alias: Optional[str] = Field(
-        None, description="submitter's name for the sample"
+        None, description="submitter&#x27;s name for the sample"
     )
     sample_capture_status: Optional[str] = Field(
         None, description="Sample capture status"
@@ -261,7 +261,7 @@ class ENAAnalysisQuery(_ENAQueryConditions):
     )
     study_accession: Optional[str] = Field(None, description="study accession number")
     study_alias: Optional[str] = Field(
-        None, description="submitter's name for the study"
+        None, description="submitter&#x27;s name for the study"
     )
     study_title: Optional[str] = Field(
         None, description="brief sequencing study description"
@@ -312,7 +312,7 @@ class ENAAnalysisQuery(_ENAQueryConditions):
 
 
 class ENAAnalysisFields(FutureStrEnum):
-    # from https://www.ebi.ac.uk/ena/portal/api/returnFields?dataPortal=metagenome&result=analysis 2025-04-24
+    # from https://www.ebi.ac.uk/ena/portal/api/returnFields?dataPortal=metagenome&result=analysis 2025-04-28
     AGE = "age"  # Age when the sample was taken
     ALTITUDE = "altitude"  # Altitude (m)
     ANALYSIS_ACCESSION = "analysis_accession"  # accession number
@@ -323,6 +323,7 @@ class ENAAnalysisFields(FutureStrEnum):
     ANALYSIS_PROTOCOL = "analysis_protocol"  # Link to analysis protocol description, an overview of the full analysis including names, references and versions of any software employed.
     ANALYSIS_TITLE = "analysis_title"  # brief sequence analysis description
     ANALYSIS_TYPE = "analysis_type"  # type of sequence analysis
+    ASSEMBLY_QUALITY = "assembly_quality"  # Quality of assembly
     ASSEMBLY_SOFTWARE = "assembly_software"  # Assembly software
     ASSEMBLY_TYPE = "assembly_type"  # analysis Assembly type
     BINNING_SOFTWARE = "binning_software"  # Binning software
@@ -334,12 +335,16 @@ class ENAAnalysisFields(FutureStrEnum):
     CENTER_NAME = "center_name"  # Submitting center
     CHECKLIST = "checklist"  # ENA metadata reporting standard used to register the biosample (Checklist used)
     COLLECTED_BY = "collected_by"  # name of the person who collected the specimen
+    COLLECTION_DATE = "collection_date"  # Time when specimen was collected
+    COLLECTION_DATE_END = "collection_date_end"  # Time when specimen was collected
+    COLLECTION_DATE_START = "collection_date_start"  # Time when specimen was collected
     COMPLETENESS_SCORE = "completeness_score"  # Completeness score (%)
     CONTAMINATION_SCORE = "contamination_score"  # Contamination score (%)
     COUNTRY = "country"  # locality of sample isolation: country names, oceans or seas, followed by regions and localities
     CULTIVAR = "cultivar"  # cultivar (cultivated variety) of plant from which sample was obtained
     CULTURE_COLLECTION = "culture_collection"  # identifier for the sample culture including institute and collection code
     DATAHUB = "datahub"  # DCC datahub name
+    DEPTH = "depth"  # Depth (m)
     DESCRIPTION = "description"  # brief sequence description
     DEV_STAGE = "dev_stage"  # sample obtained from an organism in a specific developmental stage
     DISEASE = "disease"  # Disease associated with the sample
@@ -356,6 +361,12 @@ class ENAAnalysisFields(FutureStrEnum):
     )
     FIRST_CREATED = "first_created"  # date when first created
     FIRST_PUBLIC = "first_public"  # date when made public
+    GENERATED_ASPERA = "generated_aspera"  # Aspera links for generated files. Use era-fasp or datahub name as username.
+    GENERATED_BYTES = "generated_bytes"  # size (in bytes) of generated files
+    GENERATED_FORMAT = "generated_format"  # Format for generated reads
+    GENERATED_FTP = "generated_ftp"  # FTP links for generated files
+    GENERATED_GALAXY = "generated_galaxy"  # Galaxy links for generated files
+    GENERATED_MD5 = "generated_md5"  # MD5 checksum of generated files
     GERMLINE = "germline"  # the sample is an unrearranged molecule that was inherited from the parental germline
     HOST = "host"  # natural (as opposed to laboratory) host to the organism from which sample was obtained
     HOST_BODY_SITE = (
@@ -378,13 +389,16 @@ class ENAAnalysisFields(FutureStrEnum):
     ISOLATE = "isolate"  # individual isolate from which sample was obtained
     ISOLATION_SOURCE = "isolation_source"  # describes the physical, environmental and/or local geographical source of the sample
     LAST_UPDATED = "last_updated"  # date when last updated
+    LAT = "lat"  # Latitude
     LOCAL_ENVIRONMENTAL_CONTEXT = "local_environmental_context"  # Report the entity or entities which are in the sample or specimen’s local vicinity and which you believe have significant causal influences on your sample or specimen. We recommend using EnvO terms which are of smaller spatial grain than your entry for "broad-scale environmental context". Terms, such as anatomical sites, from other OBO Library ontologies which interoperate with EnvO (e.g. UBERON) are accepted in this field. EnvO documentation about how to use the field: https://github.com/EnvironmentOntology/envo/wiki/Using-ENVO-with-MIxS.
     LOCATION = "location"  # geographic location of isolation of the sample
     LOCATION_END = "location_end"  # latlon
     LOCATION_START = "location_start"  # latlon
+    LON = "lon"  # Longitude
     MARINE_REGION = "marine_region"  # geographical origin of the sample as defined by the marine region
     MATING_TYPE = "mating_type"  # mating type of the organism from which the sequence was obtained
     NCBI_REPORTING_STANDARD = "ncbi_reporting_standard"  # NCBI metadata reporting standard used to register the biosample (Package used)
+    PH = "ph"  # pH
     PIPELINE_NAME = "pipeline_name"  # analysis pipeline name
     PIPELINE_VERSION = "pipeline_version"  # analysis pipeline version
     PROJECT_NAME = (
@@ -442,12 +456,17 @@ class ENAAnalysisFields(FutureStrEnum):
     SUB_STRAIN = "sub_strain"  # name or identifier of a genetically or otherwise modified strain from which sample was obtained
     SUBMISSION_ACCESSION = "submission_accession"  # submission accession number
     SUBMISSION_TOOL = "submission_tool"  # Submission tool
+    SUBMITTED_ASPERA = "submitted_aspera"  # Aspera links for submitted files. Use era-fasp or datahub name as username.
+    SUBMITTED_BYTES = "submitted_bytes"  # size (in bytes) of submitted files
     SUBMITTED_FORMAT = "submitted_format"  # format of submitted reads
+    SUBMITTED_FTP = "submitted_ftp"  # FTP links for submitted files
+    SUBMITTED_GALAXY = "submitted_galaxy"  # Galaxy links for submitted files
     SUBMITTED_HOST_SEX = "submitted_host_sex"  # physical sex of the host
     SUBMITTED_MD5 = "submitted_md5"  # MD5 checksum of submitted files
     TAG = "tag"  # Classification Tags
     TARGET_GENE = "target_gene"  # targeted gene or locus name for marker gene studies
     TAX_ID = "tax_id"  # NCBI taxonomic classification
+    TAX_LINEAGE = "tax_lineage"  # Complete taxonomic lineage for an organism
     TAXONOMIC_CLASSIFICATION = "taxonomic_classification"  # Taxonomic classification
     TAXONOMIC_IDENTITY_MARKER = "taxonomic_identity_marker"  # Taxonomic identity marker
     TEMPERATURE = "temperature"  # Temperature (C)

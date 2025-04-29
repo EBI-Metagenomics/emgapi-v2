@@ -1,7 +1,6 @@
 from datetime import timedelta
 from typing import List, Optional, Type, Union
 
-import httpx
 from django.conf import settings
 from httpx import Auth
 from prefect import flow, get_run_logger, task
@@ -10,9 +9,14 @@ from prefect.tasks import task_input_hash
 
 import analyses.models
 import ena.models
-from workflows.ena_utils.abstract import ENAPortalResultType
-from workflows.ena_utils.ena_accession_matching import extract_all_accessions
+from workflows.ena_utils.abstract import ENAPortalResultType, ENAPortalDataPortal
+from workflows.ena_utils.analysis import ENAAnalysisFields, ENAAnalysisQuery
+from workflows.ena_utils.ena_accession_matching import (
+    extract_all_accessions,
+    extract_study_accession_from_study_title,
+)
 from workflows.ena_utils.ena_auth import dcc_auth
+from workflows.ena_utils.read_run import ENAReadRunFields, ENAReadRunQuery
 from workflows.ena_utils.requestors import ENAAPIRequest, ENAAvailabilityException
 from workflows.ena_utils.study import ENAStudyQuery, ENAStudyFields
 
@@ -72,6 +76,7 @@ def get_study_from_ena(accession: str, limit: int = 10) -> ena.models.Study:
         limit=limit,
         query=ENAStudyQuery(study_accession=accession)
         | ENAStudyQuery(secondary_study_accession=accession),
+        data_portal=ENAPortalDataPortal.METAGENOME,
     ).get(auth=ena_auth)
 
     s = portal[0]
@@ -110,23 +115,25 @@ def get_study_from_ena(accession: str, limit: int = 10) -> ena.models.Study:
     return study
 
 
-def check_reads_fastq(fastq: list, run_accession: str, library_layout: str):
+def check_reads_fastq(
+    fastq: list[str], run_accession: str, library_layout: str
+) -> list[str] | None:
     logger = get_run_logger()
     sorted_fastq = sorted(fastq)  # to keep order [_1, _2, _3(?)]
     if not len(sorted_fastq):
         logger.warning(f"No fastq files for run {run_accession}")
-        return False
+        return None
     # potential single end
     elif len(sorted_fastq) == 1:
         if library_layout == PAIRED_END_LIBRARY_LAYOUT:
             logger.warning(
                 f"Incorrect library_layout for {run_accession} having one fastq file"
             )
-            return False
+            return None
         if "_2.f" in sorted_fastq[0]:
             # we accept _1 be in SE fastq path
             logger.warning(f"Single fastq file contains _2 for run {run_accession}")
-            return False
+            return None
         else:
             logger.info(f"One fastq for {run_accession}: {sorted_fastq}")
             return sorted_fastq
@@ -136,7 +143,7 @@ def check_reads_fastq(fastq: list, run_accession: str, library_layout: str):
             logger.warning(
                 f"Incorrect library_layout for {run_accession} having two fastq files"
             )
-            return False
+            return None
         if "_1.f" in sorted_fastq[0] and "_2.f" in sorted_fastq[1]:
             logger.info(f"Two fastqs for {run_accession}: {sorted_fastq}")
             return sorted_fastq
@@ -144,15 +151,18 @@ def check_reads_fastq(fastq: list, run_accession: str, library_layout: str):
             logger.warning(
                 f"Incorrect names of fastq files for run {run_accession} (${sorted_fastq})"
             )
-            return False
+            return None
     elif len(fastq) > 2:
         logger.info(f"More than 2 fastq files provided for run {run_accession}")
         return sorted_fastq[:2]
+    return None
 
 
 @task(
     retries=RETRIES,
     retry_delay_seconds=RETRY_DELAY,
+    cache_policy=DEFAULT,
+    cache_expiration=timedelta(days=1),
     cache_key_fn=task_input_hash,
     task_run_name="Get study readruns from ENA: {accession}",
 )
@@ -160,7 +170,6 @@ def get_study_readruns_from_ena(
     accession: str,
     limit: int = 20,
     filter_library_strategy: str = None,
-    extra_cache_hash: str = None,
 ) -> List[str]:
     """
     Retrieve a list of read_runs from the ENA Portal API, for a given study.
@@ -169,52 +178,60 @@ def get_study_readruns_from_ena(
     :param accession: Study accession on ENA
     :param limit: Maximum number of read_runs to fetch
     :param filter_library_strategy: E.g. AMPLICON, to only fetch library-strategy: amplicon reads
-    :param extra_cache_hash: A string/hash that, when changed, will cause the cache to invalidate and so the task will run again.
     :return: A list of run accessions that have been fetched and matched the specified library strategy. Study may also contain other non-matching runs.
     """
-    # TODO: rewrite using ena-api-handler once available
 
     logger = get_run_logger()
-    if extra_cache_hash:
-        logger.info(f"Cache has additional hash of {extra_cache_hash}")
+    logger.info(f"Will fetch Read Runs from ENA Portal API for Study {accession}")
 
-    # api call arguments
-    query = f'"(study_accession={accession} OR secondary_study_accession={accession})"'
+    mgys_study = analyses.models.Study.objects.get(
+        ena_study__accession__contains=accession
+    )
+
+    ena_auth = dcc_auth if mgys_study.is_private else None
+
+    query = ENAReadRunQuery(study_accession=accession) | ENAReadRunQuery(
+        secondary_study_accession=accession
+    )
     if filter_library_strategy:
-        query = f'{query[:-1]} AND library_strategy={filter_library_strategy}"'
-    query = query.replace('"', "%22")
+        query &= ENAReadRunQuery(library_strategy=filter_library_strategy)
 
-    fields = ",".join(EMG_CONFIG.ena.readrun_metadata_fields)
-    result_type = "read_run"
+    _ = ENAReadRunFields
 
     logger.info(f"Will fetch study {accession} read-runs from ENA portal API")
 
-    mgys_study = analyses.models.Study.objects.get(ena_study__accession=accession)
-
-    if mgys_study.is_private:
-        auth = dcc_auth
-        logger.info("Using dcc authentication as study is private")
-    else:
-        auth = None
-
-    portal = httpx.get(
-        create_ena_api_request(
-            result_type=result_type, query=query, limit=limit, fields=fields
-        )
-        + "&dataPortal=metagenome",
-        auth=auth,
-    )
-    if not portal.status_code == httpx.codes.OK:
-        raise Exception(f"Bad status! {portal.status_code} {portal}")
-
-    logger.info("ENA portal responded ok.")
+    portal_read_runs = ENAAPIRequest(
+        result=ENAPortalResultType.READ_RUN,
+        fields=[
+            _.RUN_ACCESSION,
+            _.SAMPLE_ACCESSION,
+            _.SAMPLE_TITLE,
+            _.SECONDARY_SAMPLE_ACCESSION,
+            _.FASTQ_MD5,
+            _.FASTQ_FTP,
+            _.LIBRARY_LAYOUT,
+            _.LIBRARY_STRATEGY,
+            _.LIBRARY_SOURCE,
+            _.SCIENTIFIC_NAME,
+            _.HOST_TAX_ID,
+            _.HOST_SCIENTIFIC_NAME,
+            _.INSTRUMENT_PLATFORM,
+            _.INSTRUMENT_MODEL,
+            _.LOCATION,
+            _.LAT,
+            _.LON,
+        ],
+        limit=limit,
+        query=query,
+        data_portal=ENAPortalDataPortal.METAGENOME,
+    ).get(auth=ena_auth)
 
     run_accessions = []
-    for read_run in portal.json():
+    for read_run in portal_read_runs:
         # check scientific name and metagenome source
         if (
-            METAGENOME_SCIENTIFIC_NAME not in read_run["scientific_name"]
-            and read_run["library_source"] not in ALLOWED_LIBRARY_SOURCE
+            METAGENOME_SCIENTIFIC_NAME not in read_run[_.SCIENTIFIC_NAME]
+            and read_run[_.LIBRARY_SOURCE] not in ALLOWED_LIBRARY_SOURCE
         ):
             logger.warning(
                 f"Run {read_run['run_accession']} is not in metagenome taxa and not in allowed library_sources. "
@@ -224,9 +241,9 @@ def get_study_readruns_from_ena(
 
         # check fastq files order/presence
         fastq_ftp_reads = check_reads_fastq(
-            fastq=read_run["fastq_ftp"].split(";"),
-            run_accession=read_run["run_accession"],
-            library_layout=read_run["library_layout"],
+            fastq=read_run[_.FASTQ_FTP].split(";"),
+            run_accession=read_run[_.RUN_ACCESSION],
+            library_layout=read_run[_.LIBRARY_LAYOUT],
         )
         if not fastq_ftp_reads:
             logger.warning(
@@ -234,67 +251,88 @@ def get_study_readruns_from_ena(
             )
             continue
 
-        logger.info(f"Creating objects for {read_run['run_accession']}")
-        ena_sample, _ = ena.models.Sample.objects.get_or_create(
-            accession=read_run["sample_accession"],
+        logger.info(f"Creating objects for {read_run[_.RUN_ACCESSION]}")
+        ena_sample, __ = ena.models.Sample.objects.update_or_create(
+            accession__in=[
+                read_run[_.SAMPLE_ACCESSION],
+                read_run[_.SECONDARY_SAMPLE_ACCESSION],
+            ],
             defaults={
-                "metadata": {"sample_title": read_run["sample_title"]},
-                "study": mgys_study.ena_study,
+                "metadata": {
+                    "sample_title": read_run[_.SAMPLE_TITLE],
+                    "lat": read_run[_.LAT],
+                    "lon": read_run[_.LON],
+                },
+            },
+            create_defaults={
+                "accession": read_run[_.SAMPLE_ACCESSION],
+                "additional_accessions": [read_run[_.SECONDARY_SAMPLE_ACCESSION]],
+                "study": mgys_study.ena_study,  # TODO could be more than one...
             },
         )
 
-        mgnify_sample, _ = analyses.models.Sample.objects.update_or_create(
-            ena_sample=ena_sample,
-            defaults={
-                "ena_accessions": [
+        mgnify_sample, __ = (
+            analyses.models.Sample.objects.update_or_create_by_accession(
+                known_accessions=[
                     read_run["sample_accession"],
                     read_run["secondary_sample_accession"],
                 ],
-                "ena_study": mgys_study.ena_study,
-                "is_private": mgys_study.is_private,
-            },
+                defaults={
+                    "is_private": mgys_study.is_private,
+                    "metadata": {
+                        analyses.models.Sample.CommonMetadataKeys.LAT: read_run[_.LAT],
+                        analyses.models.Sample.CommonMetadataKeys.LON: read_run[_.LON],
+                    },
+                },
+                create_defaults={
+                    "ena_sample": ena_sample,
+                    "ena_study": mgys_study.ena_study,
+                },
+            )
         )
         mgnify_sample.studies.add(mgys_study)
 
-        run, _ = analyses.models.Run.objects.update_or_create(
-            ena_accessions=[read_run["run_accession"]],
-            study=mgys_study,
-            ena_study=mgys_study.ena_study,
-            sample=mgnify_sample,
+        run, __ = analyses.models.Run.objects.update_or_create_by_accession(
+            known_accessions=[read_run[_.RUN_ACCESSION]],
             defaults={
-                analyses.models.Run.metadata.field.name: {
+                "metadata": {
                     analyses.models.Run.CommonMetadataKeys.LIBRARY_STRATEGY: read_run[
-                        analyses.models.Run.CommonMetadataKeys.LIBRARY_STRATEGY
+                        _.LIBRARY_STRATEGY
                     ],
                     analyses.models.Run.CommonMetadataKeys.LIBRARY_LAYOUT: read_run[
-                        analyses.models.Run.CommonMetadataKeys.LIBRARY_LAYOUT
+                        _.LIBRARY_LAYOUT
                     ],
                     analyses.models.Run.CommonMetadataKeys.LIBRARY_SOURCE: read_run[
-                        analyses.models.Run.CommonMetadataKeys.LIBRARY_SOURCE
+                        _.LIBRARY_SOURCE
                     ],
                     analyses.models.Run.CommonMetadataKeys.SCIENTIFIC_NAME: read_run[
-                        analyses.models.Run.CommonMetadataKeys.SCIENTIFIC_NAME
+                        _.SCIENTIFIC_NAME
                     ],
                     analyses.models.Run.CommonMetadataKeys.FASTQ_FTPS: fastq_ftp_reads,
                     analyses.models.Run.CommonMetadataKeys.HOST_TAX_ID: read_run[
-                        analyses.models.Run.CommonMetadataKeys.HOST_TAX_ID
+                        _.HOST_TAX_ID
                     ],
                     analyses.models.Run.CommonMetadataKeys.HOST_SCIENTIFIC_NAME: read_run[
-                        analyses.models.Run.CommonMetadataKeys.HOST_SCIENTIFIC_NAME
+                        _.HOST_SCIENTIFIC_NAME
                     ],
                     analyses.models.Run.CommonMetadataKeys.INSTRUMENT_MODEL: read_run[
-                        analyses.models.Run.CommonMetadataKeys.INSTRUMENT_MODEL
+                        _.INSTRUMENT_MODEL
                     ],
                     analyses.models.Run.CommonMetadataKeys.INSTRUMENT_PLATFORM: read_run[
-                        analyses.models.Run.CommonMetadataKeys.INSTRUMENT_PLATFORM
+                        _.INSTRUMENT_PLATFORM
                     ],
                 },
                 "is_private": mgys_study.is_private,
             },
+            create_defaults={
+                "study": mgys_study,
+                "ena_study": mgys_study.ena_study,
+                "sample": mgnify_sample,
+            },
         )
         run.set_experiment_type_by_metadata(
-            read_run[analyses.models.Run.CommonMetadataKeys.LIBRARY_STRATEGY],
-            read_run[analyses.models.Run.CommonMetadataKeys.LIBRARY_SOURCE],
+            read_run[_.LIBRARY_STRATEGY],
+            read_run[_.LIBRARY_SOURCE],
         )
         run_accessions.append(run.first_accession)
 
@@ -318,6 +356,7 @@ def is_study_available(accession: str, auth: Optional[Type[Auth]] = None) -> boo
             ),
             format="json",
             fields=[ENAStudyFields.STUDY_ACCESSION],
+            data_portal=ENAPortalDataPortal.METAGENOME,
         ).get(auth=auth)
     except ENAAvailabilityException as e:
         logger.info(f"Looks like an error-free empty response from ENA: {e}")
@@ -412,43 +451,79 @@ def get_study_assemblies_from_ena(accession: str, limit: int = 10) -> List[str]:
     logger = get_run_logger()
     logger.info(f"Will fetch Assemblies from ENA Portal API for Study {accession}")
 
-    # study = analyses.models.Study.objects.get(ena_study__accession__contains=accession)
-    #
-    # _ = ENAAnalysisFields
+    study = analyses.models.Study.objects.get(ena_study__accession__contains=accession)
 
-    # ena_auth = dcc_auth if study.is_private else None
+    _ = ENAAnalysisFields
 
-    # portal = ENAAPIRequest(
-    #     result=ENAPortalResultType.ANALYSIS,
-    #     fields=[
-    #         _.SAMPLE_ACCESSION,
-    #         _.SAMPLE_TITLE,
-    #         _.SECONDARY_SAMPLE_ACCESSION,
-    #         _.RUN_ACCESSION,
-    #         _.ANALYSIS_ACCESSION,
-    #         _.COMPLETENESS_SCORE,
-    #         _.CONTAMINATION_SCORE,
-    #         _.SCIENTIFIC_NAME,
-    #     ],
-    #     limit=limit,
-    #     query=ENAAnalysisQuery(study_accession=accession)
-    #     | ENAAnalysisQuery(secondary_study_accession=accession),
-    # ).get(auth=ena_auth)
+    ena_auth = dcc_auth if study.is_private else None
 
-    # TODO: related samples/runs etc
+    portal_assemblies = ENAAPIRequest(
+        result=ENAPortalResultType.ANALYSIS,
+        fields=[
+            _.SAMPLE_ACCESSION,
+            _.SAMPLE_TITLE,
+            _.SECONDARY_SAMPLE_ACCESSION,
+            _.RUN_ACCESSION,
+            _.ANALYSIS_ACCESSION,
+            _.COMPLETENESS_SCORE,
+            _.CONTAMINATION_SCORE,
+            _.SCIENTIFIC_NAME,
+            _.LOCATION,
+        ],
+        limit=limit,
+        query=ENAAnalysisQuery(study_accession=accession)
+        | ENAAnalysisQuery(secondary_study_accession=accession),
+        data_portal=ENAPortalDataPortal.METAGENOME,
+    ).get(auth=ena_auth)
 
-    # assemblies = []
-    # for assembly_data in portal:
-    #
-    #     assembly = analyses.models.Assembly.objects.update_or_create(
-    #         ena_accessions=assembly_data[_.ANALYSIS_ACCESSION],
-    #         defaults={
-    #             "sample": study.sample,
-    #             "ena_accessions": [
-    #                 assembly_data[_.SAMPLE_ACCESSION],
-    #                 assembly_data[_.SECONDARY_SAMPLE_ACCESSION],
-    #             ],
-    #             "ena_study": study.ena_study,
-    #             "is_private": study.is_private,
-    #         },
-    #     )
+    portal_runs = get_study_readruns_from_ena(
+        accession=accession,
+        limit=limit,
+    )
+
+    if study.assemblies_assembly.exists():
+        # Looks like a study we assembled / already know the connection to a reads study for
+        reads_study = study.assemblies_assembly.first().reads_study
+    elif (
+        reads_study_accession := extract_study_accession_from_study_title(study.title)
+        and not portal_runs
+    ):
+        # Looks like a TPA study – no read-runs within it, and an accession in title
+        ena_reads_study = ena.models.Study.objects.get_ena_study(reads_study_accession)
+        if not ena_reads_study:
+            ena_reads_study = get_study_from_ena(reads_study_accession)
+            ena_reads_study.refresh_from_db()
+        reads_study: analyses.models.Study = (
+            analyses.models.Study.objects.get_or_create_for_ena_study(
+                reads_study_accession
+            )
+        )
+    else:
+        # No easily determined reads-study, so the assemblies may be missing links to samples/reads etc.
+        # This is the case for assembly-only studies where raw reads were not uploaded to ENA.
+        logger.warning(
+            f"No reads study could be found for the assemblies of {accession}"
+        )
+        reads_study = None
+
+    if reads_study:
+        get_study_readruns_from_ena(
+            accession=reads_study.first_accession,
+            limit=limit,
+        )
+
+    assemblies = []
+    for assembly_data in portal_assemblies:
+        assembly = analyses.models.Assembly.objects.update_or_create(
+            ena_accessions__contains=[assembly_data[_.ANALYSIS_ACCESSION]],
+            defaults={
+                "sample": study.sample,
+                "ena_accessions": [
+                    assembly_data[_.SAMPLE_ACCESSION],
+                    assembly_data[_.SECONDARY_SAMPLE_ACCESSION],
+                ],
+                "ena_study": study.ena_study,
+                "is_private": study.is_private,
+            },
+        )
+        assemblies.append(assembly)

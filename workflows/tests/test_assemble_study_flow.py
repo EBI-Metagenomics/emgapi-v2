@@ -62,7 +62,8 @@ def test_prefect_assemble_study_flow(
         f"query=%22%28study_accession%3D{accession}+OR+secondary_study_accession%3D{accession}%29%22&"
         f"fields=study_accession&"
         f"limit=&"
-        f"format=json",
+        f"format=json&"
+        f"dataPortal=metagenome",
         json=[{"study_accession": accession}],
     )
 
@@ -72,7 +73,8 @@ def test_prefect_assemble_study_flow(
         f"query=%22%28study_accession={accession}%20OR%20secondary_study_accession={accession}%29%22&"
         f"limit=10&"
         f"format=json&"
-        f"fields={','.join(EMG_CONFIG.ena.study_metadata_fields)}",
+        f"fields={','.join(EMG_CONFIG.ena.study_metadata_fields)}&"
+        f"dataPortal=metagenome",
         json=[
             {
                 "study_title": "Metagenome of a wookie",
@@ -88,7 +90,7 @@ def test_prefect_assemble_study_flow(
         f"&query=%22%28study_accession=PRJNA1%20OR%20secondary_study_accession=PRJNA1%29%22"
         f"&limit=5000"
         f"&format=json"
-        f"&fields={','.join(EMG_CONFIG.ena.readrun_metadata_fields)}"
+        f"&fields=run_accession%2Csample_accession%2Csample_title%2Csecondary_sample_accession%2Cfastq_md5%2Cfastq_ftp%2Clibrary_layout%2Clibrary_strategy%2Clibrary_source%2Cscientific_name%2Chost_tax_id%2Chost_scientific_name%2Cinstrument_platform%2Cinstrument_model%2Clocation%2Clat%2Clon"
         f"&dataPortal=metagenome",
         json=[
             {
@@ -106,6 +108,9 @@ def test_prefect_assemble_study_flow(
                 "host_scientific_name": "Apis mellifera",
                 "instrument_platform": "ILLUMINA",
                 "instrument_model": "Illumina MiSeq",
+                "lat": "52",
+                "lon": "0",
+                "location": "hinxton",
             },
             {
                 "sample_accession": "SAMN02",
@@ -122,6 +127,9 @@ def test_prefect_assemble_study_flow(
                 "host_scientific_name": "Apis mellifera",
                 "instrument_platform": "ILLUMINA",
                 "instrument_model": "Illumina MiSeq",
+                "lat": "52",
+                "lon": "0",
+                "location": "hinxton",
             },
             {
                 "sample_accession": "SAMN03",
@@ -138,6 +146,9 @@ def test_prefect_assemble_study_flow(
                 "host_scientific_name": "Apis mellifera",
                 "instrument_platform": "ILLUMINA",
                 "instrument_model": "Illumina MiSeq",
+                "lat": "52",
+                "lon": "0",
+                "location": "hinxton",
             },
             {
                 "sample_accession": "SAMN04",
@@ -154,6 +165,9 @@ def test_prefect_assemble_study_flow(
                 "host_scientific_name": "Apis mellifera",
                 "instrument_platform": "OXFORD_NANOPORE",
                 "instrument_model": "MinION",
+                "lat": "52",
+                "lon": "0",
+                "location": "hinxton",
             },
             {
                 "sample_accession": "SAMN05",
@@ -170,6 +184,9 @@ def test_prefect_assemble_study_flow(
                 "host_scientific_name": "Apis mellifera",
                 "instrument_platform": "ION_TORRENT",
                 "instrument_model": "Ion Torrent Proton",
+                "lat": "52",
+                "lon": "0",
+                "location": "hinxton",
             },
         ],
     )
@@ -281,7 +298,7 @@ def test_prefect_assemble_study_flow(
     assert analyses.models.Assembly.objects.count() == number_of_runs
 
     assembly = analyses.models.Assembly.objects.filter(
-        run__ena_accessions__contains="SRR1"
+        run__ena_accessions__contains=["SRR1"]
     ).first()
     assert 0.0475 < assembly.metadata.get("coverage") < 0.0477
 
@@ -357,7 +374,8 @@ def test_prefect_assemble_private_study_flow(
         f"query=%22%28study_accession%3D{accession}+OR+secondary_study_accession%3D{accession}%29%22&"
         f"fields=study_accession&"
         f"limit=&"
-        f"format=json",
+        f"format=json&"
+        f"dataPortal=metagenome",
         match_headers={
             "Authorization": "Basic ZGNjX2Zha2U6bm90LWEtZGNjLXB3"
         },  # dcc_fake:not-a-dcc-pw
@@ -370,7 +388,8 @@ def test_prefect_assemble_private_study_flow(
         f"query=%22%28study_accession%3D{accession}+OR+secondary_study_accession%3D{accession}%29%22&"
         f"fields=study_accession&"
         f"limit=&"
-        f"format=json",
+        f"format=json&"
+        f"dataPortal=metagenome",
         match_headers={},  # public call should not find private study
         json=[],
     )
@@ -381,7 +400,8 @@ def test_prefect_assemble_private_study_flow(
         f"query=%22%28study_accession={accession}%20OR%20secondary_study_accession={accession}%29%22&"
         f"limit=10&"
         f"format=json&"
-        f"fields={','.join(EMG_CONFIG.ena.study_metadata_fields)}",
+        f"fields={','.join(EMG_CONFIG.ena.study_metadata_fields)}&"
+        f"dataPortal=metagenome",
         match_headers={
             "Authorization": "Basic ZGNjX2Zha2U6bm90LWEtZGNjLXB3"
         },  # dcc_fake:not-a-dcc-pw
@@ -400,7 +420,7 @@ def test_prefect_assemble_private_study_flow(
         f"&query=%22%28study_accession=PRJNA1%20OR%20secondary_study_accession=PRJNA1%29%22"
         f"&limit=5000"
         f"&format=json"
-        f"&fields={','.join(EMG_CONFIG.ena.readrun_metadata_fields)}"
+        f"&fields=run_accession%2Csample_accession%2Csample_title%2Csecondary_sample_accession%2Cfastq_md5%2Cfastq_ftp%2Clibrary_layout%2Clibrary_strategy%2Clibrary_source%2Cscientific_name%2Chost_tax_id%2Chost_scientific_name%2Cinstrument_platform%2Cinstrument_model%2Clocation%2Clat%2Clon"
         f"&dataPortal=metagenome",
         match_headers={
             "Authorization": "Basic ZGNjX2Zha2U6bm90LWEtZGNjLXB3"
@@ -421,6 +441,9 @@ def test_prefect_assemble_private_study_flow(
                 "host_scientific_name": "Apis mellifera",
                 "instrument_platform": "ILLUMINA",
                 "instrument_model": "Illumina MiSeq",
+                "lat": "52",
+                "lon": "0",
+                "location": "hinxton",
             },
             {
                 "sample_accession": "SAMN02",
@@ -437,6 +460,9 @@ def test_prefect_assemble_private_study_flow(
                 "host_scientific_name": "Apis mellifera",
                 "instrument_platform": "ILLUMINA",
                 "instrument_model": "Illumina MiSeq",
+                "lat": "52",
+                "lon": "0",
+                "location": "hinxton",
             },
         ],
     )

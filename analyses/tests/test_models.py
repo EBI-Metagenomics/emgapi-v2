@@ -368,3 +368,79 @@ def test_status_filtering(
         .count()
         == 1
     )
+
+
+@pytest.mark.django_db(transaction=True)
+def test_update_or_create_by_accession(raw_reads_mgnify_study):
+    ena_study = raw_reads_mgnify_study.ena_study
+    # start with just one accession in db
+    assert ena_study.additional_accessions == []
+    assert raw_reads_mgnify_study.ena_accessions == ["PRJNA398089"]
+
+    # updating nothing should be equivalent to get by single accession
+    assert Study.objects.update_or_create_by_accession(
+        known_accessions=["PRJNA398089"],
+    ) == (raw_reads_mgnify_study, False)
+
+    # updating nothing but using additional known accession should set the additional accession in db
+    study, created = Study.objects.update_or_create_by_accession(
+        known_accessions=["PRJNA398089", "ERP1"],
+    )
+    assert not created
+    assert set(study.ena_accessions) == {"PRJNA398089", "ERP1"}
+    raw_reads_mgnify_study.refresh_from_db()
+    assert set(raw_reads_mgnify_study.ena_accessions) == {"PRJNA398089", "ERP1"}
+
+    # secondary accession should now be equivalent to first - usable for get/update etc and not create nor overwrite
+    study, created = Study.objects.update_or_create_by_accession(
+        known_accessions=["ERP1"],
+    )
+    assert not created
+    assert set(study.ena_accessions) == {"PRJNA398089", "ERP1"}
+    raw_reads_mgnify_study.refresh_from_db()
+    assert set(raw_reads_mgnify_study.ena_accessions) == {"PRJNA398089", "ERP1"}
+
+    # update other fields should work too – create-only defaults should not be set though
+    study, created = Study.objects.update_or_create_by_accession(
+        known_accessions=["ERP1"],
+        defaults={"results_dir": "/has/been/set"},
+        create_defaults={"title": "Unchanged"},
+    )
+    assert not created
+    assert set(study.ena_accessions) == {"PRJNA398089", "ERP1"}
+    assert not study.title == "Unchanged"
+    assert study.results_dir == "/has/been/set"
+
+    # create defaults setting should work for new objects
+    study, created = Study.objects.update_or_create_by_accession(
+        known_accessions=["ERP2", "PRJ2"],
+        defaults={"results_dir": "/has/been/set"},
+        create_defaults={"title": "Set at create"},
+        include_update_defaults_in_create_defaults=False,
+    )
+    assert created
+    assert set(study.ena_accessions) == {"PRJ2", "ERP2"}
+    assert study.title == "Set at create"
+    assert not study.results_dir  # not set because update-only, not create
+
+    # unspecified create defaults should then use update defaults, like django default
+    study, created = Study.objects.update_or_create_by_accession(
+        known_accessions=["ERP3", "PRJ3"],
+        defaults={"results_dir": "/has/been/set", "title": "Set always"},
+    )
+    assert created
+    assert set(study.ena_accessions) == {"PRJ3", "ERP3"}
+    assert study.title == "Set always"
+    assert study.results_dir == "/has/been/set"
+
+    # create defaults should include update defaults if requested (default, unlike django)
+    study, created = Study.objects.update_or_create_by_accession(
+        known_accessions=["ERP4", "PRJ4"],
+        defaults={"results_dir": "/has/been/set"},
+        create_defaults={"title": "Set at create"},
+        include_update_defaults_in_create_defaults=True,
+    )
+    assert created
+    assert set(study.ena_accessions) == {"PRJ4", "ERP4"}
+    assert study.title == "Set at create"
+    assert study.results_dir == "/has/been/set"

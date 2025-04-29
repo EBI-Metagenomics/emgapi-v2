@@ -8,7 +8,7 @@ from workflows.ena_utils.abstract import _ENAQueryConditions
 
 
 class ENASampleQuery(_ENAQueryConditions):
-    # From: https://www.ebi.ac.uk/ena/portal/api/searchFields?dataPortal=metagenome&result=sample 2025/04/25
+    # From: https://www.ebi.ac.uk/ena/portal/api/searchFields?dataPortal=metagenome&result=sample 2025/04/28
     # Some are controlled values not yet controlled here
     age: Optional[str] = Field(None, description="Age when the sample was taken")
     altitude: Optional[int] = Field(None, description="Altitude (m)")
@@ -259,9 +259,10 @@ class ENASampleQuery(_ENAQueryConditions):
 
 
 class ENASampleFields(FutureStrEnum):
-    # from https://www.ebi.ac.uk/ena/portal/api/returnFields?dataPortal=metagenome&result=sample 2025-04-25
+    # from https://www.ebi.ac.uk/ena/portal/api/returnFields?dataPortal=metagenome&result=sample 2025-04-28
     AGE = "age"  # Age when the sample was taken
     ALTITUDE = "altitude"  # Altitude (m)
+    ASSEMBLY_QUALITY = "assembly_quality"  # Quality of assembly
     ASSEMBLY_SOFTWARE = "assembly_software"  # Assembly software
     BINNING_SOFTWARE = "binning_software"  # Binning software
     BIO_MATERIAL = "bio_material"  # identifier for biological material including institute and collection code
@@ -272,12 +273,16 @@ class ENASampleFields(FutureStrEnum):
     CENTER_NAME = "center_name"  # Submitting center
     CHECKLIST = "checklist"  # ENA metadata reporting standard used to register the biosample (Checklist used)
     COLLECTED_BY = "collected_by"  # name of the person who collected the specimen
+    COLLECTION_DATE = "collection_date"  # Time when specimen was collected
+    COLLECTION_DATE_END = "collection_date_end"  # Time when specimen was collected
+    COLLECTION_DATE_START = "collection_date_start"  # Time when specimen was collected
     COMPLETENESS_SCORE = "completeness_score"  # Completeness score (%)
     CONTAMINATION_SCORE = "contamination_score"  # Contamination score (%)
     COUNTRY = "country"  # locality of sample isolation: country names, oceans or seas, followed by regions and localities
     CULTIVAR = "cultivar"  # cultivar (cultivated variety) of plant from which sample was obtained
     CULTURE_COLLECTION = "culture_collection"  # identifier for the sample culture including institute and collection code
     DATAHUB = "datahub"  # DCC datahub name
+    DEPTH = "depth"  # Depth (m)
     DESCRIPTION = "description"  # brief sequence description
     DEV_STAGE = "dev_stage"  # sample obtained from an organism in a specific developmental stage
     DISEASE = "disease"  # Disease associated with the sample
@@ -315,13 +320,16 @@ class ENASampleFields(FutureStrEnum):
     ISOLATION_SOURCE = "isolation_source"  # describes the physical, environmental and/or local geographical source of the sample
     KEYWORDS = "keywords"  # keywords associated with sequence
     LAST_UPDATED = "last_updated"  # date when last updated
+    LAT = "lat"  # Latitude
     LOCAL_ENVIRONMENTAL_CONTEXT = "local_environmental_context"  # Report the entity or entities which are in the sample or specimen’s local vicinity and which you believe have significant causal influences on your sample or specimen. We recommend using EnvO terms which are of smaller spatial grain than your entry for "broad-scale environmental context". Terms, such as anatomical sites, from other OBO Library ontologies which interoperate with EnvO (e.g. UBERON) are accepted in this field. EnvO documentation about how to use the field: https://github.com/EnvironmentOntology/envo/wiki/Using-ENVO-with-MIxS.
     LOCATION = "location"  # geographic location of isolation of the sample
     LOCATION_END = "location_end"  # latlon
     LOCATION_START = "location_start"  # latlon
+    LON = "lon"  # Longitude
     MARINE_REGION = "marine_region"  # geographical origin of the sample as defined by the marine region
     MATING_TYPE = "mating_type"  # mating type of the organism from which the sequence was obtained
     NCBI_REPORTING_STANDARD = "ncbi_reporting_standard"  # NCBI metadata reporting standard used to register the biosample (Package used)
+    PH = "ph"  # pH
     PROJECT_NAME = (
         "project_name"  # name of the project within which the sequencing was organized
     )
@@ -364,6 +372,7 @@ class ENASampleFields(FutureStrEnum):
     TAG = "tag"  # Classification Tags
     TARGET_GENE = "target_gene"  # targeted gene or locus name for marker gene studies
     TAX_ID = "tax_id"  # NCBI taxonomic classification
+    TAX_LINEAGE = "tax_lineage"  # Complete taxonomic lineage for an organism
     TAXONOMIC_CLASSIFICATION = "taxonomic_classification"  # Taxonomic classification
     TAXONOMIC_IDENTITY_MARKER = "taxonomic_identity_marker"  # Taxonomic identity marker
     TEMPERATURE = "temperature"  # Temperature (C)

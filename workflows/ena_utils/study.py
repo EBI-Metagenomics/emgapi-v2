@@ -8,9 +8,9 @@ from workflows.ena_utils.abstract import _ENAQueryConditions
 
 
 class ENAStudyQuery(_ENAQueryConditions):
-    # From: https://www.ebi.ac.uk/ena/portal/api/searchFields?dataPortal=metagenome&result=study 2025/01/23
-    # Some are controlled values not yet controlled here (e.g. datahub)
-    breed: Optional[str] = Field(None, description="Breed")
+    # From: https://www.ebi.ac.uk/ena/portal/api/searchFields?dataPortal=metagenome&result=study 2025/04/28
+    # Some are controlled values not yet controlled here
+    breed: Optional[str] = Field(None, description="breed")
     broker_name: Optional[str] = Field(None, description="broker name")
     center_name: Optional[str] = Field(None, description="Submitting center")
     cultivar: Optional[str] = Field(
@@ -51,7 +51,7 @@ class ENAStudyQuery(_ENAQueryConditions):
     )
     study_accession: Optional[str] = Field(None, description="study accession number")
     study_alias: Optional[str] = Field(
-        None, description="Submitter's name for the study"
+        None, description="submitter&#x27;s name for the study"
     )
     study_description: Optional[str] = Field(
         None, description="detailed sequencing study description"
@@ -67,7 +67,7 @@ class ENAStudyQuery(_ENAQueryConditions):
 
 
 class ENAStudyFields(FutureStrEnum):
-    # from https://www.ebi.ac.uk/ena/portal/api/returnFields?dataPortal=metagenome&result=study 2025-01-23
+    # from https://www.ebi.ac.uk/ena/portal/api/returnFields?dataPortal=metagenome&result=study 2025-04-28
     BREED = "breed"  # breed
     BROKER_NAME = "broker_name"  # broker name
     CENTER_NAME = "center_name"  # Submitting center

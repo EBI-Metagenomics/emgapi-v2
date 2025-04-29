@@ -68,7 +68,6 @@ def analysis_amplicon_study(study_accession: str):
         ena_study.accession,
         limit=10000,
         filter_library_strategy=EMG_CONFIG.amplicon_pipeline.amplicon_library_strategy,
-        extra_cache_hash=ena_study.fetched_at.isoformat(),  # if ENA study is deleted/updated, the cache should be invalidated
     )
     logger.info(f"Returned {len(read_runs)} run from ENA portal API")
 

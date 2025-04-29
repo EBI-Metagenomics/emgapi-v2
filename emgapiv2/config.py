@@ -121,22 +121,6 @@ class ENAConfig(BaseModel):
     browser_view_url_prefix: AnyHttpUrl = "https://www.ebi.ac.uk/ena/browser/view"
     # TODO: migrate to the ENA Handler
     study_metadata_fields: list[str] = ["study_title", "secondary_study_accession"]
-    # TODO: migrate to the ENA Handler
-    readrun_metadata_fields: list = [
-        "sample_accession",
-        "sample_title",
-        "secondary_sample_accession",
-        "fastq_md5",
-        "fastq_ftp",
-        "library_layout",
-        "library_strategy",
-        "library_source",
-        "scientific_name",
-        "host_tax_id",
-        "host_scientific_name",
-        "instrument_platform",
-        "instrument_model",
-    ]
 
     ftp_prefix: str = "ftp.sra.ebi.ac.uk/vol1/"
     fire_prefix: str = "s3://era-public/"

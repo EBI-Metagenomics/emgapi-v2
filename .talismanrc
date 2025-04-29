@@ -2,6 +2,9 @@ fileignoreconfig:
 - filename: .github/workflows/release_k8s.yml
   checksum: 0e93196d244417801fd40ad6bfa01f53a6bf04257371378a1dc3e14cbc7a04d8
 
+- filename: analyses/base_models/base_models.py
+  allowed_patterns: [key]
+
 - filename: analyses/base_models/with_status_models.py
   allowed_patterns: [key]
 

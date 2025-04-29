@@ -7,12 +7,12 @@ RUN apt -y update && apt -y upgrade && apt -y install libpq-dev python3-pip pyth
 WORKDIR /app
 COPY requirements.txt .
 RUN pip install --upgrade pip setuptools wheel
-RUN pip install -r requirements.txt
+RUN pip install --upgrade -r requirements.txt
 
 FROM base AS django
 COPY . .
-RUN pip install -r requirements-dev.txt
-RUN pip install -r requirements-tools.txt
+RUN pip install --upgrade -r requirements-dev.txt
+RUN pip install --upgrade -r requirements-tools.txt
 ENTRYPOINT ["python3", "manage.py"]
 
 FROM base AS agent
@@ -40,7 +40,7 @@ RUN pip install https://github.com/PySlurm/pyslurm/archive/refs/tags/v21.8.1.tar
 ENV TZ="Etc/UTC"
 
 COPY . .
-RUN pip install -r requirements-dev.txt
-RUN pip install -r requirements-tools.txt
+RUN pip install --upgrade -r requirements-dev.txt
+RUN pip install --upgrade -r requirements-tools.txt
 
 ENTRYPOINT ["/usr/local/bin/submitter-entrypoint.sh", "python3", "manage.py"]

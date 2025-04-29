@@ -29,6 +29,13 @@ class ENAPortalResultType(str, Enum):
     WGS_SET = "wgs_set"  # Genome assembly contig set (WGS)
 
 
+class ENAPortalDataPortal(str, Enum):
+    ENA = "ena"
+    METAGENOME = "metagenome"
+    FAANG = "faang"
+    PATHOGEN = "pathogen"
+
+
 class ENAQueryOperators(str, Enum):
     OR = "OR"
     AND = "AND"

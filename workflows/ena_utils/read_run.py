@@ -8,7 +8,7 @@ from workflows.ena_utils.abstract import _ENAQueryConditions
 
 
 class ENAReadRunQuery(_ENAQueryConditions):
-    # From: https://www.ebi.ac.uk/ena/portal/api/searchFields?dataPortal=metagenome&result=read_run 2025/04/25
+    # From: https://www.ebi.ac.uk/ena/portal/api/searchFields?dataPortal=metagenome&result=read_run 2025/04/28
     # Some are controlled values not yet controlled here
     age: Optional[str] = Field(None, description="Age when the sample was taken")
     altitude: Optional[int] = Field(None, description="Altitude (m)")
@@ -371,10 +371,17 @@ class ENAReadRunQuery(_ENAQueryConditions):
 
 
 class ENAReadRunFields(FutureStrEnum):
-    # from https://www.ebi.ac.uk/ena/portal/api/returnFields?dataPortal=metagenome&result=read_run 2025-04-25
+    # from https://www.ebi.ac.uk/ena/portal/api/returnFields?dataPortal=metagenome&result=read_run 2025-04-28
     AGE = "age"  # Age when the sample was taken
+    ALIGNED = "aligned"  # boolean
     ALTITUDE = "altitude"  # Altitude (m)
+    ASSEMBLY_QUALITY = "assembly_quality"  # Quality of assembly
     ASSEMBLY_SOFTWARE = "assembly_software"  # Assembly software
+    BAM_ASPERA = "bam_aspera"  # Aspera links for generated bam files. Use era-fasp or datahub name as username.
+    BAM_BYTES = "bam_bytes"  # size (in bytes) of generated BAM files
+    BAM_FTP = "bam_ftp"  # FTP links for generated bam files
+    BAM_GALAXY = "bam_galaxy"  # Galaxy links for generated bam files
+    BAM_MD5 = "bam_md5"  # MD5 checksum of generated BAM files
     BASE_COUNT = "base_count"  # number of base pairs
     BINNING_SOFTWARE = "binning_software"  # Binning software
     BIO_MATERIAL = "bio_material"  # identifier for biological material including institute and collection code
@@ -390,6 +397,9 @@ class ENAReadRunFields(FutureStrEnum):
     CHIP_PROTOCOL = "chip_protocol"  # text
     CHIP_TARGET = "chip_target"  # Chip target
     COLLECTED_BY = "collected_by"  # name of the person who collected the specimen
+    COLLECTION_DATE = "collection_date"  # Time when specimen was collected
+    COLLECTION_DATE_END = "collection_date_end"  # Time when specimen was collected
+    COLLECTION_DATE_START = "collection_date_start"  # Time when specimen was collected
     COMPLETENESS_SCORE = "completeness_score"  # Completeness score (%)
     CONTAMINATION_SCORE = "contamination_score"  # Contamination score (%)
     CONTROL_EXPERIMENT = "control_experiment"  # Control experiment
@@ -397,6 +407,7 @@ class ENAReadRunFields(FutureStrEnum):
     CULTIVAR = "cultivar"  # cultivar (cultivated variety) of plant from which sample was obtained
     CULTURE_COLLECTION = "culture_collection"  # identifier for the sample culture including institute and collection code
     DATAHUB = "datahub"  # DCC datahub name
+    DEPTH = "depth"  # Depth (m)
     DESCRIPTION = "description"  # brief sequence description
     DEV_STAGE = "dev_stage"  # sample obtained from an organism in a specific developmental stage
     DISEASE = "disease"  # Disease associated with the sample
@@ -420,6 +431,12 @@ class ENAReadRunFields(FutureStrEnum):
     FAANG_LIBRARY_SELECTION = (
         "faang_library_selection"  # Library Selection for FAANG WGS/BS-Seq experiments
     )
+    FASTQ_ASPERA = "fastq_aspera"  # Aspera links for fastq files. Use era-fasp or datahub name as username.
+    FASTQ_BYTES = "fastq_bytes"  # size (in bytes) of FASTQ files
+    FASTQ_FTP = "fastq_ftp"  # FTP links for fastq files
+    FASTQ_GALAXY = "fastq_galaxy"  # Galaxy links for fastq files
+    FASTQ_MD5 = "fastq_md5"  # MD5 checksum of FASTQ files
+    FILE_LOCATION = "file_location"  # text
     FIRST_CREATED = "first_created"  # date when first created
     FIRST_PUBLIC = "first_public"  # date when made public
     GERMLINE = "germline"  # the sample is an unrearranged molecule that was inherited from the parental germline
@@ -451,6 +468,7 @@ class ENAReadRunFields(FutureStrEnum):
     ISOLATE = "isolate"  # individual isolate from which sample was obtained
     ISOLATION_SOURCE = "isolation_source"  # describes the physical, environmental and/or local geographical source of the sample
     LAST_UPDATED = "last_updated"  # date when last updated
+    LAT = "lat"  # Latitude
     LIBRARY_CONSTRUCTION_PROTOCOL = (
         "library_construction_protocol"  # Library construction protocol
     )
@@ -474,6 +492,7 @@ class ENAReadRunFields(FutureStrEnum):
     LOCATION = "location"  # geographic location of isolation of the sample
     LOCATION_END = "location_end"  # latlon
     LOCATION_START = "location_start"  # latlon
+    LON = "lon"  # Longitude
     MARINE_REGION = "marine_region"  # geographical origin of the sample as defined by the marine region
     MATING_TYPE = "mating_type"  # mating type of the organism from which the sequence was obtained
     NCBI_REPORTING_STANDARD = "ncbi_reporting_standard"  # NCBI metadata reporting standard used to register the biosample (Package used)
@@ -482,6 +501,7 @@ class ENAReadRunFields(FutureStrEnum):
         "nominal_sdev"  # standard deviation of fragmentation size of paired reads
     )
     PCR_ISOLATION_PROTOCOL = "pcr_isolation_protocol"  # text
+    PH = "ph"  # pH
     PROJECT_NAME = (
         "project_name"  # name of the project within which the sequencing was organized
     )
@@ -499,6 +519,7 @@ class ENAReadRunFields(FutureStrEnum):
     RT_PREP_PROTOCOL = "rt_prep_protocol"  # text
     RUN_ACCESSION = "run_accession"  # accession number
     RUN_ALIAS = "run_alias"  # submitter's name for the run
+    RUN_DATE = "run_date"  # date
     SALINITY = "salinity"  # Salinity (PSU)
     SAMPLE_ACCESSION = "sample_accession"  # sample accession number
     SAMPLE_ALIAS = "sample_alias"  # submitter's name for the sample
@@ -540,6 +561,11 @@ class ENAReadRunFields(FutureStrEnum):
     SEROVAR = "serovar"  # serological variety of a species (usually a prokaryote) characterized by its antigenic properties
     SEX = "sex"  # sex of the organism from which the sample was obtained
     SPECIMEN_VOUCHER = "specimen_voucher"  # identifier for the sample culture including institute and collection code
+    SRA_ASPERA = "sra_aspera"  # Aspera links for SRA data files. Use era-fasp or datahub name as username.
+    SRA_BYTES = "sra_bytes"  # size (in bytes) of SRA files
+    SRA_FTP = "sra_ftp"  # FTP links for SRA data files
+    SRA_GALAXY = "sra_galaxy"  # Galaxy links for SRA data files
+    SRA_MD5 = "sra_md5"  # MD5 checksum of atchived files
     STATUS = "status"  # Status
     STRAIN = "strain"  # strain from which sample was obtained
     STUDY_ACCESSION = "study_accession"  # study accession number
@@ -551,13 +577,18 @@ class ENAReadRunFields(FutureStrEnum):
     SUB_STRAIN = "sub_strain"  # name or identifier of a genetically or otherwise modified strain from which sample was obtained
     SUBMISSION_ACCESSION = "submission_accession"  # submission accession number
     SUBMISSION_TOOL = "submission_tool"  # Submission tool
+    SUBMITTED_ASPERA = "submitted_aspera"  # Aspera links for submitted files. Use era-fasp or datahub name as username.
+    SUBMITTED_BYTES = "submitted_bytes"  # size (in bytes) of submitted files
     SUBMITTED_FORMAT = "submitted_format"  # format of submitted reads
+    SUBMITTED_FTP = "submitted_ftp"  # FTP links for submitted files
+    SUBMITTED_GALAXY = "submitted_galaxy"  # Galaxy links for submitted files
     SUBMITTED_HOST_SEX = "submitted_host_sex"  # physical sex of the host
     SUBMITTED_MD5 = "submitted_md5"  # MD5 checksum of submitted files
     SUBMITTED_READ_TYPE = "submitted_read_type"  # submitted FASTQ read type
     TAG = "tag"  # Classification Tags
     TARGET_GENE = "target_gene"  # targeted gene or locus name for marker gene studies
     TAX_ID = "tax_id"  # NCBI taxonomic classification
+    TAX_LINEAGE = "tax_lineage"  # Complete taxonomic lineage for an organism
     TAXONOMIC_CLASSIFICATION = "taxonomic_classification"  # Taxonomic classification
     TAXONOMIC_IDENTITY_MARKER = "taxonomic_identity_marker"  # Taxonomic identity marker
     TEMPERATURE = "temperature"  # Temperature (C)

@@ -12,6 +12,7 @@ from workflows.ena_utils.abstract import (
     ENAQueryClause,
     ENAQueryPair,
     _ENAQueryConditions,
+    ENAPortalDataPortal,
 )
 from workflows.ena_utils.read_run import ENAReadRunFields, ENAReadRunQuery
 from workflows.ena_utils.sample import ENASampleFields, ENASampleQuery
@@ -33,6 +34,11 @@ class ENAAPIRequest(BaseModel):
     ]
     limit: Optional[int] = Field(None, description="Max number of results to return")
     format: Literal["tsv", "json"] = Field("json")
+    data_portal: ENAPortalDataPortal = Field(
+        ENAPortalDataPortal.ENA,
+        description="The ENA Portal API data portal to query.",
+        serialization_alias="dataPortal",
+    )
 
     @model_validator(mode="after")
     def result_and_query_and_return_fields_align(self):
@@ -85,6 +91,10 @@ class ENAAPIRequest(BaseModel):
     def serialize_result_type(self, result: ENAPortalResultType):
         return result.value
 
+    @field_serializer("data_portal")
+    def serialize_data_portal(self, result: ENAPortalDataPortal):
+        return result.value
+
     def _parse_response(self, response: httpx.Response):
         if self.format == "json":
             try:
@@ -100,7 +110,7 @@ class ENAAPIRequest(BaseModel):
 
     def get(self, auth: Type[Auth] = None) -> Union[List[Dict[str, Any]], str]:
         url = EMG_CONFIG.ena.portal_search_api
-        params = self.model_dump()
+        params = self.model_dump(by_alias=True)
         r = httpx.get(
             url=url,
             params=params,
