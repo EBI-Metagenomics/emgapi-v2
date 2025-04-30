@@ -6,7 +6,7 @@ import analyses.models
 import ena.models
 from workflows.ena_utils.ena_api_requests import (
     get_study_from_ena,
-    get_study_readruns_from_ena,
+    get_study_assemblies_from_ena,
 )
 
 
@@ -20,6 +20,7 @@ def analysis_assembly_study(study_accession: str):
     :param study_accession: e.g. PRJ or ERP accession
     """
     logger = get_run_logger()
+    EMG_CONFIG
 
     # Study fetching and creation
     ena_study = ena.models.Study.objects.get_ena_study(study_accession)
@@ -36,9 +37,8 @@ def analysis_assembly_study(study_accession: str):
     logger.info(f"MGnify study is {mgnify_study.accession}: {mgnify_study.title}")
 
     # Get assemble-able runs
-    read_runs = get_study_readruns_from_ena(
+    assemblies = get_study_assemblies_from_ena(
         ena_study.accession,
         limit=10000,
-        filter_library_strategy=EMG_CONFIG.amplicon_pipeline.amplicon_library_strategy,
     )
-    logger.info(f"Returned {len(read_runs)} run from ENA portal API")
+    logger.info(f"Returned {len(assemblies)} assemblies from ENA portal API")

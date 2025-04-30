@@ -514,16 +514,26 @@ def get_study_assemblies_from_ena(accession: str, limit: int = 10) -> List[str]:
 
     assemblies = []
     for assembly_data in portal_assemblies:
-        assembly = analyses.models.Assembly.objects.update_or_create(
-            ena_accessions__contains=[assembly_data[_.ANALYSIS_ACCESSION]],
+        try:
+            sample = analyses.models.Sample.objects.get_by_accession(
+                assembly_data[_.SAMPLE_ACCESSION]
+            )
+        except analyses.models.Sample.DoesNotExist:
+            logger.warning(
+                f"Sample {assembly_data[_.SAMPLE_ACCESSION]} not found for assembly {assembly_data[_.ANALYSIS_ACCESSION]}"
+            )
+            continue
+        assembly = analyses.models.Assembly.objects.update_or_create_by_accession(
+            known_accessions=[assembly_data[_.ANALYSIS_ACCESSION]],
             defaults={
-                "sample": study.sample,
-                "ena_accessions": [
-                    assembly_data[_.SAMPLE_ACCESSION],
-                    assembly_data[_.SECONDARY_SAMPLE_ACCESSION],
-                ],
-                "ena_study": study.ena_study,
+                "sample": sample,
                 "is_private": study.is_private,
             },
+            create_defaults={
+                "assembly_study": study,
+                "reads_study": reads_study,
+                "ena_study": study.ena_study,
+            },
+            include_update_defaults_in_create_defaults=True,
         )
         assemblies.append(assembly)
