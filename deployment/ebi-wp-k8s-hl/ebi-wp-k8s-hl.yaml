@@ -174,7 +174,7 @@ items:
       namespace: emgapiv2-hl-exp
       annotations:
         nginx.ingress.kubernetes.io/rewrite-target: /$1
-        nginx.ingress.kubernetes.io/permanent-redirect: "https://www.ebi.ac.uk/metagenomics/$1"
+        nginx.ingress.kubernetes.io/permanent-redirect: "https://www.ebi.ac.uk/metagenomics/api/v2/$1"
         nginx.ingress.kubernetes.io/permanent-redirect-code: "301"
     spec:
       rules:
