@@ -9,6 +9,7 @@ from prefect.testing.utilities import prefect_test_harness
 django.setup()
 
 from emgapiv2.api import api
+from django.db import connections
 
 # model fixtures
 pytest_plugins = [
@@ -49,3 +50,21 @@ def ninja_api_client():
 def ninja_namespace_workaround():
     # https://github.com/vitalik/django-ninja/issues/1195#issuecomment-2307007575
     os.environ["NINJA_SKIP_REGISTRY"] = "yes"
+
+
+@pytest.fixture(scope="session", autouse=True)
+def django_db_modify_db_settings_for_xdist():
+    """
+    Configure the database for parallel test execution with pytest-xdist.
+    This fixture ensures each worker gets its own isolated database.
+    """
+    worker_id = os.environ.get("PYTEST_XDIST_WORKER", "")
+    if not worker_id:
+        # not running with xdist
+        return
+
+    # Modify database name for each worker
+    for db_name in connections.databases:
+        db_settings = connections.databases[db_name]
+        if "NAME" in db_settings:
+            db_settings["NAME"] = f"{db_settings['NAME']}_{worker_id}"
