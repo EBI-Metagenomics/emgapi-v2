@@ -28,15 +28,18 @@ class Command(BaseCommand):
         )
 
         for ena_id in dup_ena_study_ids:
-            logging.info(f"ENA accession {ena_id} is linked to multiple MGnify Studies:")
-            mgnify_studies = Study.objects.filter(ena_study_id=ena_id).order_by("accession")
+            logging.info(
+                f"ENA accession {ena_id} is linked to multiple MGnify Studies:"
+            )
+            mgnify_studies = Study.objects.filter(ena_study_id=ena_id).order_by(
+                "accession"
+            )
 
             for mgys in mgnify_studies:
                 logging.info(f"{mgys.accession}")
 
             old_study, new_study = mgnify_studies[0], mgnify_studies[1]
             self.reassign_runs_and_assemblies(old_study, new_study)
-
 
     def reassign_runs_and_assemblies(self, old_study, new_study):
         """
@@ -49,19 +52,28 @@ class Command(BaseCommand):
         old_run_accessions = set(a for obj in old_runs for a in obj.ena_accessions)
         new_run_accessions = set(a for obj in new_runs for a in obj.ena_accessions)
         if old_run_accessions & new_run_accessions:
-            logging.info(f"DUPLICATE RUNS FOUND IN BOTH STUDIES: old {old_study} and new {new_study}. No further action performed.") 
+            logging.info(
+                f"DUPLICATE RUNS FOUND IN BOTH STUDIES: old {old_study} and new {new_study}. No further action performed."
+            )
             return
-        
 
         new_assemblies = Assembly.objects.filter(assembly_study=new_study)
         if self.dry_run:
-            logging.info(f"Dry run. Real run would move {new_assemblies.count()} assemblies to {old_study}")
-            logging.info(f"Dry run. Real run would move {new_runs.count()} runs to {old_study}")
+            logging.info(
+                f"Dry run. Real run would move {new_assemblies.count()} assemblies to {old_study}"
+            )
+            logging.info(
+                f"Dry run. Real run would move {new_runs.count()} runs to {old_study}"
+            )
         else:
-            logging.info(f"Moving {new_assemblies.count()} assemblies from {new_study} to {old_study}")
+            logging.info(
+                f"Moving {new_assemblies.count()} assemblies from {new_study} to {old_study}"
+            )
             new_assemblies.update(assembly_study=old_study)
 
-            logging.info(f"Moving {new_runs.count()} runs from {new_study} to {old_study}")
+            logging.info(
+                f"Moving {new_runs.count()} runs from {new_study} to {old_study}"
+            )
             new_runs.update(study=old_study)
 
         # Check if new_study is void of runs, assemblies, and analyses
