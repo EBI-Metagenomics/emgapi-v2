@@ -18,3 +18,6 @@ STORAGES = {
         "BACKEND": "whitenoise.storage.CompressedStaticFilesStorage",
     },
 }
+
+LOGGING["loggers"]["prefect"] = {"level": "WARNING"}
+LOGGING["loggers"]["httpx"] = {"level": "WARNING"}
