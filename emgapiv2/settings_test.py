@@ -19,5 +19,5 @@ STORAGES = {
     },
 }
 
-LOGGING["loggers"]["prefect"] = {"level": "WARNING"}
+LOGGING["loggers"]["prefect.events.clients"] = {"level": "WARNING"}
 LOGGING["loggers"]["httpx"] = {"level": "WARNING"}
