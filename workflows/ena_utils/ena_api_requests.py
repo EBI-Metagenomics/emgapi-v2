@@ -4,7 +4,6 @@ from typing import List, Optional, Type, Union
 from django.conf import settings
 from httpx import Auth
 from prefect import flow, get_run_logger, task
-from prefect.cache_policies import DEFAULT
 from prefect.tasks import task_input_hash
 
 import analyses.models
@@ -161,7 +160,6 @@ def check_reads_fastq(
 @task(
     retries=RETRIES,
     retry_delay_seconds=RETRY_DELAY,
-    cache_policy=DEFAULT,
     cache_expiration=timedelta(days=1),
     cache_key_fn=task_input_hash,
     task_run_name="Get study readruns from ENA: {accession}",
@@ -426,12 +424,11 @@ def sync_privacy_state_of_ena_study_and_derived_objects(
 @task(
     retries=RETRIES,
     retry_delay_seconds=RETRY_DELAY,
-    cache_policy=DEFAULT,
     cache_expiration=timedelta(days=1),
     cache_key_fn=task_input_hash,
     task_run_name="Get study assemblies from ENA: {accession}",
 )
-def get_study_assemblies_from_ena(accession: str, limit: int = 10) -> List[str]:
+def get_study_assemblies_from_ena(accession: str, limit: int = 10) -> list[str]:
     """
     Fetches a list of assemblies from the European Nucleotide Archive (ENA) for a given study accession.
 
@@ -537,3 +534,4 @@ def get_study_assemblies_from_ena(accession: str, limit: int = 10) -> List[str]:
             include_update_defaults_in_create_defaults=True,
         )
         assemblies.append(assembly)
+    return assemblies
