@@ -98,11 +98,12 @@ allowed_patterns:
 - CommonMetadataKeys
 - context_agnostic_task_input_hash
 - delay_key
+- ForeignKey
 - idempotency_key
 - keywords
 - KEYWORDS
 - key1=val1
 - key2=val2
+- KnownMetadataKeys
 - pagination_key
 - primary_key
-- KnownMetadataKeys

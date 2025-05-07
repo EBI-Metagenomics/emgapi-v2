@@ -28,6 +28,7 @@ def mgnify_assemblies(raw_read_run, raw_reads_mgnify_study, assemblers):
             assembler=assembler_metaspades,
             dir="slurm-dev-environment/fs/hps/tests/assembly_uploader",
             metadata={"coverage": 20},
+            sample=run.sample,
         )
         assembly_objects.append(assembly_obj)
 
@@ -40,6 +41,7 @@ def mgnify_assemblies(raw_read_run, raw_reads_mgnify_study, assemblers):
             assembler=assembler_megahit,
             dir="/hps/tests/assembly_uploader",
             metadata={"coverage": 10},
+            sample=run.sample,
         )
         assembly_objects.append(assembly)
     return assembly_objects

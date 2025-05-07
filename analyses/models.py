@@ -317,7 +317,14 @@ class Assembly(TimeStampedModel, ENADerivedModel):
     dir = models.CharField(max_length=200, null=True, blank=True)
     run = models.ForeignKey(
         Run, on_delete=models.CASCADE, related_name="assemblies", null=True, blank=True
-    )
+    )  # TODO: coassembly
+    sample = models.ForeignKey(
+        Sample,
+        on_delete=models.CASCADE,
+        related_name="assemblies",
+        null=True,
+        blank=True,
+    )  # TODO: coassembly
     # raw reads study that was used as resource for assembly
     reads_study = models.ForeignKey(
         Study,
