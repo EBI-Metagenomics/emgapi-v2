@@ -1,2 +1,2 @@
 assembly-uploader==1.2.0
-mgnify-pipelines-toolkit==1.0.4
+git+https://github.com/EBI-Metagenomics/mgnify-pipelines-toolkit.git@dev#egg=mgnify-pipelines-toolkit

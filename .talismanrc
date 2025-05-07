@@ -68,8 +68,14 @@ fileignoreconfig:
 - filename: workflows/flows/analyse_study_tasks/make_samplesheet_amplicon.py
   allowed_patterns: [key]
 
+- filename: workflows/flows/analyse_study_tasks/make_samplesheet_assembly.py
+  allowed_patterns: [key]
+
 - filename: workflows/flows/analyse_study_tasks/set_post_analysies_states.py
   allowed_patterns: [qc_passed_runs.csv]
+
+- filename: workflows/flows/analyse_study_tasks/set_post_assembly_analysis_states.py
+  allowed_patterns: [qc_passed_assemblies.csv]
 
 - filename: workflows/flows/analyse_study_tasks/sanity_check_amplicon_results.py
   checksum: 6f0d0012faefa871ada95216a04997ce6ae54ff3e508b57399cccc859e1eccfa

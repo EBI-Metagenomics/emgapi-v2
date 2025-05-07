@@ -131,6 +131,7 @@ def analysis_amplicon_study(study_accession: str):
     merge_study_summaries(
         mgnify_study.accession,
         cleanup_partials=not EMG_CONFIG.amplicon_pipeline.keep_study_summary_partials,
+        analysis_type="amplicon",
     )
     add_study_summaries_to_downloads(mgnify_study.accession)
     copy_amplicon_study_summaries(mgnify_study.accession)

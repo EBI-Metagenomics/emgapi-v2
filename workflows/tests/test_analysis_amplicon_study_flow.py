@@ -782,7 +782,9 @@ def test_prefect_analyse_amplicon_flow(
 
     # test merging of study summaries again, with cleanup disabled
     merge_study_summaries(
-        mgnify_study_accession=study.accession, cleanup_partials=False
+        mgnify_study_accession=study.accession,
+        cleanup_partials=False,
+        analysis_type="amplicon",
     )
     Directory(
         path=study.results_dir,
@@ -806,6 +808,7 @@ def test_prefect_analyse_amplicon_flow(
         merge_study_summaries,
         mgnify_study_accession=study.accession,
         cleanup_partials=True,
+        analysis_type="amplicon",
     )
     assert (
         logged_run.logs.count(
