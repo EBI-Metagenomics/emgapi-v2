@@ -103,6 +103,8 @@ class AssemblyAnalysisPipelineConfig(BaseModel):
     nextflow_master_job_memory_gb: int = 1
     completed_assemblies_csv: str = "qc_passed_assemblies.csv"
     failed_assemblies_csv: str = "qc_failed_assemblies.csv"
+    taxonomy_folder: str = "taxonomy"
+    functional_folder: str = "functional-annotation"
 
 
 class WebinConfig(BaseModel):

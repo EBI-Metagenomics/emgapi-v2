@@ -59,6 +59,9 @@ fileignoreconfig:
 - filename: workflows/data_io_utils/file_rules.py
   checksum: 18b7d98b4778cf50b81961e026ef5ce8936692b2a2db11038656aca7940b6301
 
+- filename: workflows/data_io_utils/mgnify_v6_utils/assembly.py
+  allowed_patterns: [_key]
+
 - filename: workflows/ena_utils/ena_api_requests.py
   allowed_patterns: [password=EMG_CONFIG.webin.emg_webin_password]
 

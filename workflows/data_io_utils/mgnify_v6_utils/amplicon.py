@@ -34,6 +34,8 @@ from workflows.data_io_utils.file_rules.nodes import Directory, File
 EMG_CONFIG = settings.EMG_CONFIG
 
 _TAXONOMY = analyses.models.Analysis.TAXONOMIES
+_CLOSED_REFERENCE = analyses.models.Analysis.CLOSED_REFERENCE
+_ASV = analyses.models.Analysis.ASV
 
 
 class AmpliconV6TaxonomyFolderSchema(BaseModel):
@@ -47,30 +49,30 @@ class AmpliconV6TaxonomyFolderSchema(BaseModel):
 RESULT_SCHEMAS_FOR_TAXONOMY_SOURCES = {
     analyses.models.Analysis.TaxonomySources.SSU: AmpliconV6TaxonomyFolderSchema(
         taxonomy_summary_folder_name=Path("SILVA-SSU"),
-        reference_type="closed_reference",
+        reference_type=_CLOSED_REFERENCE,
     ),
     analyses.models.Analysis.TaxonomySources.LSU: AmpliconV6TaxonomyFolderSchema(
         taxonomy_summary_folder_name=Path("SILVA-LSU"),
-        reference_type="closed_reference",
+        reference_type=_CLOSED_REFERENCE,
     ),
     analyses.models.Analysis.TaxonomySources.PR2: AmpliconV6TaxonomyFolderSchema(
-        taxonomy_summary_folder_name=Path("PR2"), reference_type="closed_reference"
+        taxonomy_summary_folder_name=Path("PR2"), reference_type=_CLOSED_REFERENCE
     ),
     analyses.models.Analysis.TaxonomySources.UNITE: AmpliconV6TaxonomyFolderSchema(
-        taxonomy_summary_folder_name=Path("UNITE"), reference_type="closed_reference"
+        taxonomy_summary_folder_name=Path("UNITE"), reference_type=_CLOSED_REFERENCE
     ),
     analyses.models.Analysis.TaxonomySources.ITS_ONE_DB: AmpliconV6TaxonomyFolderSchema(
-        taxonomy_summary_folder_name=Path("ITSoneDB"), reference_type="closed_reference"
+        taxonomy_summary_folder_name=Path("ITSoneDB"), reference_type=_CLOSED_REFERENCE
     ),
     analyses.models.Analysis.TaxonomySources.DADA2_PR2: AmpliconV6TaxonomyFolderSchema(
         taxonomy_summary_folder_name=Path("DADA2-PR2"),
         expect_tsv=False,
-        reference_type="asv",
+        reference_type=_ASV,
     ),
     analyses.models.Analysis.TaxonomySources.DADA2_SILVA: AmpliconV6TaxonomyFolderSchema(
         taxonomy_summary_folder_name=Path("DADA2-SILVA"),
         expect_tsv=False,
-        reference_type="asv",
+        reference_type=_ASV,
     ),
 }
 

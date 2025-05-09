@@ -14,6 +14,9 @@ from workflows.ena_utils.ena_api_requests import (
     get_study_from_ena,
     get_study_assemblies_from_ena,
 )
+from workflows.flows.analyse_study_tasks.copy_v6_pipeline_results import (
+    copy_v6_study_summaries,
+)
 from workflows.flows.analyse_study_tasks.create_analyses_for_assemblies import (
     create_analyses_for_assemblies,
 )
@@ -140,6 +143,7 @@ def analysis_assembly_study(study_accession: str):
         analysis_type="assembly",
     )
     add_study_summaries_to_downloads(mgnify_study.accession)
+    copy_v6_study_summaries(mgnify_study.accession)
 
     mgnify_study.refresh_from_db()
     mgnify_study.features.has_v6_analyses = mgnify_study.analyses.filter(

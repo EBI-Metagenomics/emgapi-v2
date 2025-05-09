@@ -4,6 +4,11 @@ from typing import List
 from prefect import flow, task
 
 import analyses.models
+from workflows.data_io_utils.mgnify_v6_utils.assembly import (
+    import_taxonomy,
+    import_qc,
+    import_functions,
+)
 from workflows.flows.analyse_study_tasks.analysis_states import AnalysisStates
 from workflows.prefect_utils.analyses_models_helpers import task_mark_analysis_status
 
@@ -15,15 +20,17 @@ def import_completed_assembly_analysis(analysis: analyses.models.Analysis):
     :param analysis: The analysis to import results for
     """
     analysis.refresh_from_db()
-    # dir_for_analysis = Path(analysis.results_dir)
+    dir_for_analysis = Path(analysis.results_dir)
+
+    import_qc(analysis, dir_for_analysis, allow_non_exist=False)
 
     # Import taxonomy
-    # TODO: Implement import_taxonomy for assembly analyses
-    # import_taxonomy(analysis, dir_for_analysis)
+    import_taxonomy(analysis, dir_for_analysis)
 
     # Import functional annotations
-    # TODO: Implement import_functional_annotations for assembly analyses
-    # import_functional_annotations(analysis, dir_for_analysis)
+    import_functions(analysis, dir_for_analysis)
+
+    # TODO: Import pathways
 
     # Mark the analysis as having its annotations imported
     task_mark_analysis_status(

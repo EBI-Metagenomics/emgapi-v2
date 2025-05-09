@@ -10,8 +10,8 @@ from workflows.data_io_utils.mgnify_v6_utils.amplicon import (
     import_asv,
 )
 from workflows.flows.analyse_study_tasks.analysis_states import AnalysisStates
-from workflows.flows.analyse_study_tasks.copy_amplicon_pipeline_results import (
-    copy_amplicon_pipeline_results,
+from workflows.flows.analyse_study_tasks.copy_v6_pipeline_results import (
+    copy_v6_pipeline_results,
 )
 from workflows.prefect_utils.analyses_models_helpers import task_mark_analysis_status
 
@@ -23,10 +23,19 @@ def import_completed_analysis(analysis: analyses.models.Analysis):
 
     import_qc(analysis, dir_for_analysis, allow_non_exist=False)
 
-    for source in analyses.models.Analysis.TaxonomySources:
+    t = analyses.models.Analysis.TaxonomySources
+    for source in [
+        t.UNITE,
+        t.DADA2_PR2,
+        t.DADA2_SILVA,
+        t.ITS_ONE_DB,
+        t.LSU,
+        t.SSU,
+        t.PR2,
+    ]:
         import_taxonomy(analysis, dir_for_analysis, source=source, allow_non_exist=True)
     import_asv(analysis, dir_for_analysis)
-    copy_amplicon_pipeline_results(analysis.accession)
+    copy_v6_pipeline_results(analysis.accession)
     task_mark_analysis_status(
         analysis,
         analysis.AnalysisStates.ANALYSIS_ANNOTATIONS_IMPORTED,

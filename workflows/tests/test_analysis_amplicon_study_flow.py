@@ -681,42 +681,29 @@ def test_prefect_analyse_amplicon_flow(
     assert admin_user == study.watchers.first()
 
     # check completed runs (all runs in completed list - might contain sanity check not passed as well)
-    assert (
-        analyses.models.Analysis.objects.filter(status__analysis_completed=True).count()
-        == 4
-    )
+    assert study.analyses.filter(status__analysis_completed=True).count() == 4
     # check failed runs
-    assert (
-        analyses.models.Analysis.objects.filter(status__analysis_qc_failed=True).count()
-        == 1
-    )
+    assert study.analyses.filter(status__analysis_qc_failed=True).count() == 1
     # check sanity check runs
     assert (
-        analyses.models.Analysis.objects.filter(
-            status__analysis_post_sanity_check_failed=True
-        ).count()
+        study.analyses.filter(status__analysis_post_sanity_check_failed=True).count()
         == 3  # 2 fail sanity check for missing qc, a third fails import
     )
     assert (
-        analyses.models.Analysis.objects.filter(
-            status__analysis_completed_reason="all_results"
-        ).count()
+        study.analyses.filter(status__analysis_completed_reason="all_results").count()
         == 1
     )
     assert (
-        analyses.models.Analysis.objects.filter(
-            status__analysis_completed_reason="no_asvs"
-        ).count()
-        == 3
+        study.analyses.filter(status__analysis_completed_reason="no_asvs").count() == 3
     )
     assert (
-        analyses.models.Analysis.objects.filter(
+        study.analyses.filter(
             status__analysis_post_sanity_check_failed_reason="No qc folder"
         ).count()
         == 1
     )
     assert (
-        analyses.models.Analysis.objects.filter(
+        study.analyses.filter(
             Q(
                 status__analysis_post_sanity_check_failed_reason__icontains="DADA2-SILVA in taxonomy-summary"
             )

@@ -600,8 +600,12 @@ class Analysis(
     KEGG_ORTHOLOGS = "kegg_orthologs"
     ANTISMASH_GENE_CLUSTERS = "antismash_gene_clusters"
     PFAMS = "pfams"
+    RHEA_REACTIONS = "rhea_reactions"
 
     TAXONOMIES = "taxonomies"
+    CLOSED_REFERENCE = "closed_reference"
+    ASV = "asv"
+    FUNCTIONAL_ANNOTATION = "functional_annotation"
 
     class TaxonomySources(FutureStrEnum):
         SSU: str = "ssu"
@@ -611,6 +615,7 @@ class Analysis(
         PR2: str = "pr2"
         DADA2_SILVA: str = "dada2_silva"
         DADA2_PR2: str = "dada2_pr2"
+        UNIREF: str = "uniref"
 
     TAXONOMIES_SSU = f"{TAXONOMIES}__{TaxonomySources.SSU.value}"
     TAXONOMIES_LSU = f"{TAXONOMIES}__{TaxonomySources.LSU.value}"
@@ -619,6 +624,7 @@ class Analysis(
     TAXONOMIES_PR2 = f"{TAXONOMIES}__{TaxonomySources.PR2.value}"
     TAXONOMIES_DADA2_SILVA = f"{TAXONOMIES}__{TaxonomySources.DADA2_SILVA.value}"
     TAXONOMIES_DADA2_PR2 = f"{TAXONOMIES}__{TaxonomySources.DADA2_PR2.value}"
+    TAXONOMIES_UNIREF = f"{TAXONOMIES}__{TaxonomySources.UNIREF.value}"
 
     ALLOWED_DOWNLOAD_GROUP_PREFIXES = [
         "all",  # catch-all for legacy
@@ -627,6 +633,7 @@ class Analysis(
         "quality_control",
         "primer_identification",
         "asv",
+        FUNCTIONAL_ANNOTATION,
     ]
 
     @staticmethod

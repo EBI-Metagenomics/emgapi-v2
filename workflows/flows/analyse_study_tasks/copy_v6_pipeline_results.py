@@ -16,11 +16,11 @@ from analyses.models import Analysis, Study
 
 
 @task(
-    name="Copy Amplicon Pipeline Results",
-    task_run_name="Copy Amplicon Pipeline Results for {analysis_accession}",
+    name="Copy V6 Pipeline Results",
+    task_run_name="Copy V6 Pipeline Results for {analysis_accession}",
     log_prints=True,
 )
-def copy_amplicon_pipeline_results(analysis_accession: str):
+def copy_v6_pipeline_results(analysis_accession: str):
     analysis = Analysis.objects.get(accession=analysis_accession)
     study = analysis.study
     run = analysis.run
@@ -66,8 +66,8 @@ def copy_amplicon_pipeline_results(analysis_accession: str):
     analysis.save()
 
 
-@task(name="Copy Amplicon Study Summaries", log_prints=True)
-def copy_amplicon_study_summaries(study_accession: str):
+@task(name="Copy V6 Study Summaries", log_prints=True)
+def copy_v6_study_summaries(study_accession: str):
     study = Study.objects.get(accession=study_accession)
     command = cli_command(
         [
