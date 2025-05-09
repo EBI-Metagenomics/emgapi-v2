@@ -99,7 +99,6 @@ class AssemblyAnalysisPipelineConfig(BaseModel):
     pipeline_nf_profile: str = "codon_slurm"
     pipeline_time_limit_days: int = 5
     samplesheet_chunk_size: int = 10
-    library_strategy: str = "AMPLICON"
     nextflow_master_job_memory_gb: int = 1
     completed_assemblies_csv: str = "qc_passed_assemblies.csv"
     failed_assemblies_csv: str = "qc_failed_assemblies.csv"
