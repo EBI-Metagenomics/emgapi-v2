@@ -4,21 +4,29 @@ from prefect import State
 
 import analyses.models
 import ena.models
+from workflows.ena_utils.ena_accession_matching import (
+    extract_all_accessions,
+    extract_study_accession_from_study_title,
+)
 from workflows.ena_utils.ena_api_requests import (
-    ENAAPIRequest,
-    ENAPortalResultType,
-    ENAQueryClause,
-    ENAQueryOperators,
-    ENAQueryPair,
-    ENAStudyFields,
-    ENAStudyQuery,
     get_study_from_ena,
     get_study_readruns_from_ena,
     is_ena_study_available_privately,
     is_ena_study_public,
     sync_privacy_state_of_ena_study_and_derived_objects,
-    ENAAvailabilityException,
+)
+from workflows.ena_utils.requestors import (
+    ENAAPIRequest,
     ENAAccessException,
+    ENAAvailabilityException,
+)
+from workflows.ena_utils.study import ENAStudyQuery, ENAStudyFields
+from workflows.ena_utils.abstract import (
+    ENAPortalResultType,
+    ENAQueryOperators,
+    ENAQueryClause,
+    ENAQueryPair,
+    ENAPortalDataPortal,
 )
 from workflows.prefect_utils.testing_utils import (
     should_not_mock_httpx_requests_to_prefect_server,
@@ -35,12 +43,12 @@ def test_get_study_from_ena_no_primary_accession(httpx_mock, prefect_harness):
     """
     study_accession = "SRP012064"  # study doesn't have primary accession
     httpx_mock.add_response(
-        url=f"{EMG_CONFIG.ena.portal_search_api}?result=study&query=%22%28study_accession={study_accession}%20OR%20secondary_study_accession={study_accession}%29%22&limit=10&format=json&fields={','.join(EMG_CONFIG.ena.study_metadata_fields)}",
+        url=f"{EMG_CONFIG.ena.portal_search_api}?result=study&query=%22%28study_accession={study_accession}%20OR%20secondary_study_accession={study_accession}%29%22&limit=10&format=json&fields={','.join(EMG_CONFIG.ena.study_metadata_fields)}&dataPortal=metagenome",
         json=[],
         is_optional=True,
     )
     httpx_mock.add_response(
-        url=f"{EMG_CONFIG.ena.portal_search_api}?result=study&query=%22%28study_accession%3D{study_accession}+OR+secondary_study_accession%3D{study_accession}%29%22&fields=study_accession&limit=&format=json",
+        url=f"{EMG_CONFIG.ena.portal_search_api}?result=study&query=%22%28study_accession%3D{study_accession}+OR+secondary_study_accession%3D{study_accession}%29%22&fields=study_accession&limit=&format=json&dataPortal=metagenome",
         json=[],
         is_reusable=True,
     )
@@ -58,7 +66,7 @@ def test_get_study_from_ena_two_secondary_accessions(httpx_mock, prefect_harness
     """
     study_accession = "PRJNA109315"  # has SRP000903;SRP001212 secondary accessions
     httpx_mock.add_response(
-        url=f"{EMG_CONFIG.ena.portal_search_api}?result=study&query=%22%28study_accession={study_accession}%20OR%20secondary_study_accession={study_accession}%29%22&limit=10&format=json&fields={','.join(EMG_CONFIG.ena.study_metadata_fields)}",
+        url=f"{EMG_CONFIG.ena.portal_search_api}?result=study&query=%22%28study_accession={study_accession}%20OR%20secondary_study_accession={study_accession}%29%22&limit=10&format=json&fields={','.join(EMG_CONFIG.ena.study_metadata_fields)}&dataPortal=metagenome",
         json=[
             {
                 "study_title": "Weird study",
@@ -68,7 +76,7 @@ def test_get_study_from_ena_two_secondary_accessions(httpx_mock, prefect_harness
         ],
     )
     httpx_mock.add_response(
-        url=f"{EMG_CONFIG.ena.portal_search_api}?result=study&query=%22%28study_accession%3D{study_accession}+OR+secondary_study_accession%3D{study_accession}%29%22&fields=study_accession&limit=&format=json",
+        url=f"{EMG_CONFIG.ena.portal_search_api}?result=study&query=%22%28study_accession%3D{study_accession}+OR+secondary_study_accession%3D{study_accession}%29%22&fields=study_accession&limit=&format=json&dataPortal=metagenome",
         json=[{"study_accession": study_accession}],
         is_reusable=True,
     )
@@ -87,7 +95,7 @@ def test_get_study_from_ena_use_secondary_as_primary(httpx_mock, prefect_harness
     """
     sec_study_accession = "SRP0009034"
     httpx_mock.add_response(
-        url=f"{EMG_CONFIG.ena.portal_search_api}?result=study&query=%22%28study_accession={sec_study_accession}%20OR%20secondary_study_accession={sec_study_accession}%29%22&limit=10&format=json&fields={','.join(EMG_CONFIG.ena.study_metadata_fields)}",
+        url=f"{EMG_CONFIG.ena.portal_search_api}?result=study&query=%22%28study_accession={sec_study_accession}%20OR%20secondary_study_accession={sec_study_accession}%29%22&limit=10&format=json&fields={','.join(EMG_CONFIG.ena.study_metadata_fields)}&dataPortal=metagenome",
         json=[
             {
                 "study_title": "More weird study",
@@ -97,7 +105,7 @@ def test_get_study_from_ena_use_secondary_as_primary(httpx_mock, prefect_harness
         ],
     )
     httpx_mock.add_response(
-        url=f"{EMG_CONFIG.ena.portal_search_api}?result=study&query=%22%28study_accession%3D{sec_study_accession}+OR+secondary_study_accession%3D{sec_study_accession}%29%22&fields=study_accession&limit=&format=json",
+        url=f"{EMG_CONFIG.ena.portal_search_api}?result=study&query=%22%28study_accession%3D{sec_study_accession}+OR+secondary_study_accession%3D{sec_study_accession}%29%22&fields=study_accession&limit=&format=json&dataPortal=metagenome",
         json=[
             {
                 "study_accession": "",
@@ -120,7 +128,7 @@ def test_get_study_from_ena_no_secondary_accession(httpx_mock, prefect_harness):
     """
     study_accession = "PRJNA109315"
     httpx_mock.add_response(
-        url=f"{EMG_CONFIG.ena.portal_search_api}?result=study&query=%22%28study_accession={study_accession}%20OR%20secondary_study_accession={study_accession}%29%22&limit=10&format=json&fields={','.join(EMG_CONFIG.ena.study_metadata_fields)}",
+        url=f"{EMG_CONFIG.ena.portal_search_api}?result=study&query=%22%28study_accession={study_accession}%20OR%20secondary_study_accession={study_accession}%29%22&limit=10&format=json&fields={','.join(EMG_CONFIG.ena.study_metadata_fields)}&dataPortal=metagenome",
         json=[
             {
                 "study_title": "Weird study without secondary accession",
@@ -130,7 +138,7 @@ def test_get_study_from_ena_no_secondary_accession(httpx_mock, prefect_harness):
         ],
     )
     httpx_mock.add_response(
-        url=f"{EMG_CONFIG.ena.portal_search_api}?result=study&query=%22%28study_accession%3D{study_accession}+OR+secondary_study_accession%3D{study_accession}%29%22&fields=study_accession&limit=&format=json",
+        url=f"{EMG_CONFIG.ena.portal_search_api}?result=study&query=%22%28study_accession%3D{study_accession}+OR+secondary_study_accession%3D{study_accession}%29%22&fields=study_accession&limit=&format=json&dataPortal=metagenome",
         json=[{"study_accession": study_accession}],
         is_reusable=True,
     )
@@ -150,7 +158,7 @@ def test_get_study_from_ena_private(httpx_mock, prefect_harness):
     study_accession = "PRJ1"
 
     httpx_mock.add_response(  # when the API is called with dcc auth to check if the study is available privately
-        url=f"{EMG_CONFIG.ena.portal_search_api}?result=study&query=%22%28study_accession%3D{study_accession}+OR+secondary_study_accession%3D{study_accession}%29%22&limit=&format=json&fields=study_accession",
+        url=f"{EMG_CONFIG.ena.portal_search_api}?result=study&query=%22%28study_accession%3D{study_accession}+OR+secondary_study_accession%3D{study_accession}%29%22&limit=&format=json&fields=study_accession&dataPortal=metagenome",
         json=[
             {
                 "study_accession": "PRJ1",
@@ -163,7 +171,7 @@ def test_get_study_from_ena_private(httpx_mock, prefect_harness):
     )
 
     httpx_mock.add_response(  # when the API is called with dcc auth to fetch the title and accessions
-        url=f"{EMG_CONFIG.ena.portal_search_api}?result=study&query=%22%28study_accession%3D{study_accession}+OR+secondary_study_accession%3D{study_accession}%29%22&limit=10&format=json&fields={'%2C'.join(EMG_CONFIG.ena.study_metadata_fields)}",
+        url=f"{EMG_CONFIG.ena.portal_search_api}?result=study&query=%22%28study_accession%3D{study_accession}+OR+secondary_study_accession%3D{study_accession}%29%22&limit=10&format=json&fields={'%2C'.join(EMG_CONFIG.ena.study_metadata_fields)}&dataPortal=metagenome",
         json=[
             {
                 "study_title": "A private study",
@@ -178,7 +186,7 @@ def test_get_study_from_ena_private(httpx_mock, prefect_harness):
     )
 
     httpx_mock.add_response(  # when the API is initially called without auth to check if the study is available publicly
-        url=f"{EMG_CONFIG.ena.portal_search_api}?result=study&query=%22%28study_accession%3D{study_accession}+OR+secondary_study_accession%3D{study_accession}%29%22&limit=&format=json&fields=study_accession",
+        url=f"{EMG_CONFIG.ena.portal_search_api}?result=study&query=%22%28study_accession%3D{study_accession}+OR+secondary_study_accession%3D{study_accession}%29%22&limit=&format=json&fields=study_accession&dataPortal=metagenome",
         json=[],
         match_headers={},
         is_reusable=True,
@@ -208,7 +216,11 @@ def test_get_study_readruns_from_ena(
     """
     study_accession = "PRJNA398089"
     httpx_mock.add_response(
-        url=f"{EMG_CONFIG.ena.portal_search_api}?result=read_run&query=%22(study_accession={study_accession}%20OR%20secondary_study_accession={study_accession})%22&limit=10&format=json&fields={','.join(EMG_CONFIG.ena.readrun_metadata_fields)}&dataPortal=metagenome",
+        url=f"{EMG_CONFIG.ena.portal_search_api}?result=read_run&query=%22%28study_accession%3D{study_accession}+OR+secondary_study_accession%3D{study_accession}%29%22"
+        f"&fields=run_accession%2Csample_accession%2Csample_title%2Csecondary_sample_accession%2Cfastq_md5%2Cfastq_ftp%2Clibrary_layout%2Clibrary_strategy%2Clibrary_source%2Cscientific_name%2Chost_tax_id%2Chost_scientific_name%2Cinstrument_platform%2Cinstrument_model%2Clocation%2Clat%2Clon"
+        f"&limit=10"
+        f"&format=json"
+        f"&dataPortal=metagenome",
         json=[
             {
                 "run_accession": "RUN1",
@@ -225,6 +237,9 @@ def test_get_study_readruns_from_ena(
                 "host_scientific_name": "Apis mellifera",
                 "instrument_platform": "ILLUMINA",
                 "instrument_model": "Illumina MiSeq",
+                "lat": "52",
+                "lon": "0",
+                "location": "hinxton",
             },
             {
                 "run_accession": "RUN2",
@@ -241,6 +256,9 @@ def test_get_study_readruns_from_ena(
                 "host_scientific_name": "Apis mellifera",
                 "instrument_platform": "ILLUMINA",
                 "instrument_model": "Illumina MiSeq",
+                "lat": "52",
+                "lon": "0",
+                "location": "hinxton",
             },
             {
                 "run_accession": "RUN3",
@@ -257,6 +275,9 @@ def test_get_study_readruns_from_ena(
                 "host_scientific_name": "Apis mellifera",
                 "instrument_platform": "ILLUMINA",
                 "instrument_model": "Illumina MiSeq",
+                "lat": "52",
+                "lon": "0",
+                "location": "hinxton",
             },
             {
                 "run_accession": "RUN4",
@@ -273,6 +294,9 @@ def test_get_study_readruns_from_ena(
                 "host_scientific_name": "Apis mellifera",
                 "instrument_platform": "ILLUMINA",
                 "instrument_model": "Illumina MiSeq",
+                "lat": "52",
+                "lon": "0",
+                "location": "hinxton",
             },
             {
                 "run_accession": "RUN5",
@@ -289,6 +313,9 @@ def test_get_study_readruns_from_ena(
                 "host_scientific_name": "Apis mellifera",
                 "instrument_platform": "ILLUMINA",
                 "instrument_model": "Illumina MiSeq",
+                "lat": "52",
+                "lon": "0",
+                "location": "hinxton",
             },
             {
                 "run_accession": "RUN6",
@@ -305,35 +332,44 @@ def test_get_study_readruns_from_ena(
                 "host_scientific_name": "Apis mellifera",
                 "instrument_platform": "ILLUMINA",
                 "instrument_model": "Illumina MiSeq",
+                "lat": "52",
+                "lon": "0",
+                "location": "hinxton",
             },
         ],
     )
     get_study_readruns_from_ena(study_accession, limit=10)
     # run is not metagenome in scientific_name
     assert (
-        analyses.models.Run.objects.filter(ena_accessions__contains="RUN1").count() == 0
+        analyses.models.Run.objects.filter(ena_accessions__contains=["RUN1"]).count()
+        == 0
     )
     # correct run
     assert (
-        analyses.models.Run.objects.filter(ena_accessions__contains="RUN2").count() == 1
+        analyses.models.Run.objects.filter(ena_accessions__contains=["RUN2"]).count()
+        == 1
     )
     # incorrect library_source and scientific name
     assert (
-        analyses.models.Run.objects.filter(ena_accessions__contains="RUN3").count() == 0
+        analyses.models.Run.objects.filter(ena_accessions__contains=["RUN3"]).count()
+        == 0
     )
     # incorrect library_layout single
     assert (
-        analyses.models.Run.objects.filter(ena_accessions__contains="RUN4").count() == 0
+        analyses.models.Run.objects.filter(ena_accessions__contains=["RUN4"]).count()
+        == 0
     )
     # incorrect library_layout paired
     assert (
-        analyses.models.Run.objects.filter(ena_accessions__contains="RUN5").count() == 0
+        analyses.models.Run.objects.filter(ena_accessions__contains=["RUN5"]).count()
+        == 0
     )
     # should return only 2 fq files in correct order
     assert (
-        analyses.models.Run.objects.filter(ena_accessions__contains="RUN6").count() == 1
+        analyses.models.Run.objects.filter(ena_accessions__contains=["RUN6"]).count()
+        == 1
     )
-    run = analyses.models.Run.objects.get(ena_accessions__contains="RUN6")
+    run = analyses.models.Run.objects.get(ena_accessions__contains=["RUN6"])
     assert (
         len(run.metadata["fastq_ftps"]) == 2
         and "_1" in run.metadata["fastq_ftps"][0]
@@ -417,19 +453,21 @@ def test_ena_api_query_maker(httpx_mock):
             ENAStudyFields.SECONDARY_STUDY_ACCESSION,
         ],
         limit=10,
+        data_portal=ENAPortalDataPortal.METAGENOME,
     )
 
-    assert request.model_dump() == {
+    assert request.model_dump(by_alias=True) == {
         "query": '"((study_accession=ERP1 OR secondary_study_accession=ERP1) AND tax_id=408170)"',
         "fields": "study_name,study_accession,tax_id,secondary_study_accession",
         "limit": 10,
         "format": "json",
         "result": "study",
+        "dataPortal": "metagenome",
     }
 
     # calling API
     httpx_mock.add_response(
-        url=f"{EMG_CONFIG.ena.portal_search_api}?result=study&query=%22%28%28study_accession%3DERP1%20OR%20secondary_study_accession%3DERP1%29%20AND%20tax_id%3D408170%29%22&fields=study_name,study_accession,tax_id,secondary_study_accession&limit=10&format=json",
+        url=f"{EMG_CONFIG.ena.portal_search_api}?result=study&query=%22%28%28study_accession%3DERP1%20OR%20secondary_study_accession%3DERP1%29%20AND%20tax_id%3D408170%29%22&fields=study_name,study_accession,tax_id,secondary_study_accession&limit=10&format=json&dataPortal=metagenome",
         json=[
             {"study_accession": "ERP1"},
         ],
@@ -442,7 +480,7 @@ def test_ena_api_query_maker(httpx_mock):
 @pytest.mark.httpx_mock(should_mock=should_not_mock_httpx_requests_to_prefect_server)
 def test_is_study_public(httpx_mock, prefect_harness):
     httpx_mock.add_response(
-        url=f"{EMG_CONFIG.ena.portal_search_api}?result=study&query=%22%28study_accession%3DERP1+OR+secondary_study_accession%3DERP1%29%22&fields=study_accession&limit=&format=json",
+        url=f"{EMG_CONFIG.ena.portal_search_api}?result=study&query=%22%28study_accession%3DERP1+OR+secondary_study_accession%3DERP1%29%22&fields=study_accession&limit=&format=json&dataPortal=metagenome",
         json=[
             {"study_accession": "ERP1"},
         ],
@@ -450,13 +488,13 @@ def test_is_study_public(httpx_mock, prefect_harness):
     assert is_ena_study_public("ERP1")
 
     httpx_mock.add_response(
-        url=f"{EMG_CONFIG.ena.portal_search_api}?result=study&query=%22%28study_accession%3DERP1+OR+secondary_study_accession%3DERP1%29%22&fields=study_accession&limit=&format=json",
+        url=f"{EMG_CONFIG.ena.portal_search_api}?result=study&query=%22%28study_accession%3DERP1+OR+secondary_study_accession%3DERP1%29%22&fields=study_accession&limit=&format=json&dataPortal=metagenome",
         json=[],
     )
     assert not is_ena_study_public("ERP1")
 
     httpx_mock.add_response(
-        url=f"{EMG_CONFIG.ena.portal_search_api}?result=study&query=%22%28study_accession%3DERP1+OR+secondary_study_accession%3DERP1%29%22&fields=study_accession&limit=&format=json",
+        url=f"{EMG_CONFIG.ena.portal_search_api}?result=study&query=%22%28study_accession%3DERP1+OR+secondary_study_accession%3DERP1%29%22&fields=study_accession&limit=&format=json&dataPortal=metagenome",
         json={"message": "bad call"},
     )
     state: State = is_ena_study_public("ERP1", return_state=True)
@@ -467,7 +505,7 @@ def test_is_study_public(httpx_mock, prefect_harness):
 @pytest.mark.httpx_mock(should_mock=should_not_mock_httpx_requests_to_prefect_server)
 def test_is_study_private(httpx_mock, prefect_harness):
     httpx_mock.add_response(
-        url=f"{EMG_CONFIG.ena.portal_search_api}?result=study&query=%22%28study_accession%3DERP1+OR+secondary_study_accession%3DERP1%29%22&fields=study_accession&limit=&format=json",
+        url=f"{EMG_CONFIG.ena.portal_search_api}?result=study&query=%22%28study_accession%3DERP1+OR+secondary_study_accession%3DERP1%29%22&fields=study_accession&limit=&format=json&dataPortal=metagenome",
         json=[
             {"study_accession": "ERP1"},
         ],
@@ -499,3 +537,34 @@ def test_sync_privacy_state_of_ena_study_and_derived_objects(
 
     assert ena_study.is_private
     assert not ena_study.is_suppressed
+
+
+def test_ena_accession_parsing():
+    assert extract_all_accessions("ERP1;ERP2") == ["ERP1", "ERP2"]
+    assert extract_all_accessions(["ERP1;ERP2"]) == ["ERP1", "ERP2"]
+    assert extract_all_accessions("ERP1") == ["ERP1"]
+    assert extract_all_accessions(["ERP1"]) == ["ERP1"]
+    assert extract_all_accessions(["ERP1", "ERP2"]) == ["ERP1", "ERP2"]
+    assert extract_all_accessions(["ERP1", "ERP2;ERP3"]) == ["ERP1", "ERP2", "ERP3"]
+    assert extract_all_accessions(["ERP1", "ERP1;ERP2;ERP3"]) == [
+        "ERP1",
+        "ERP2",
+        "ERP3",
+    ]
+    assert extract_all_accessions("") == []
+
+
+def test_ena_accession_parsing_from_study_title():
+    assert (
+        extract_study_accession_from_study_title(
+            "Metagenome assembly of PRJNA000001 data set (Mandalorian Metagenome)"
+        )
+        == "PRJNA000001"
+    )
+    assert extract_study_accession_from_study_title("Metagenomics assembly") is None
+    assert (
+        extract_study_accession_from_study_title(
+            "Metagenomics assembly of PRJNA000001 and PRJNA000002"
+        )
+        is None
+    )

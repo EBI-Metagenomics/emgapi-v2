@@ -29,8 +29,8 @@ from workflows.prefect_utils.slurm_status import (
     slurm_status_is_finished_unsuccessfully,
 )
 
-if "PYTEST_CURRENT_TEST" in os.environ:
-    logging.warning("Unit testing, so patching pyslurm.")
+if "PYTEST_VERSION" in os.environ:
+    logging.debug("Unit testing, so patching pyslurm.")
     import workflows.prefect_utils.pyslurm_patch as pyslurm
 else:
     try:

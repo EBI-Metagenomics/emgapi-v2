@@ -7,4 +7,5 @@ pytest-asyncio
 pytest-env
 pytest-sugar
 pytest-responses
-mitmproxy
+pytest-xdist
+mitmproxy~=11.0.0

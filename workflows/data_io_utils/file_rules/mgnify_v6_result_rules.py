@@ -30,6 +30,12 @@ GlobOfTaxonomyFolderHasHtmlAndMseqRule = GlobRule(
     test=lambda files: sum(f.suffix in [".html", ".mseq"] for f in files) == 2,
 )
 
+GlobOfTaxonomyFolderHasHtmlAndKronaTxtRule = GlobRule(
+    rule_name="Folder should contain html and krona txt files",
+    glob_patten="*",
+    test=lambda files: sum(f.suffix in [".html", ".txt"] for f in files) == 2,
+)
+
 GlobOfQcFolderHasFastpAndMultiqc = GlobRule(
     rule_name="Folder should contain fastp and multiqc files",
     glob_patten="*",
@@ -45,4 +51,11 @@ GlobOfAsvFolderHasRegionFolders = GlobRule(
     glob_patten="*/*_asv_read_counts.tsv",
     test=lambda files: len(list(files))
     in [1, 3],  # e.g. ["16S-V3-V4"] or ["18S-V9", "16S-V3-V4", "concat"]
+)
+
+GlobOfFolderHasTsvGzAndIndex = GlobRule(
+    rule_name="Folder should contain a .tsv.gz file and sibling .tsv.gz.gzi",
+    glob_patten="*.tsv.gz*",
+    test=lambda files: sum(f.suffix in [".gz", ".gzi"] for f in files) % 2
+    == 0,  # in case e.g. 2 sets of tsv.gz files
 )

@@ -106,4 +106,6 @@ def run_amplicon_pipeline_via_samplesheet(
         generate_study_summary_for_pipeline_run(
             pipeline_outdir=amplicon_current_outdir,
             mgnify_study_accession=mgnify_study.accession,
+            analysis_type="amplicon",
+            completed_runs_filename=EMG_CONFIG.amplicon_pipeline.completed_runs_csv,
         )

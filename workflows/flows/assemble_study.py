@@ -91,7 +91,6 @@ def assemble_study(
     read_runs = get_study_readruns_from_ena(
         ena_study.accession,
         limit=5000,
-        extra_cache_hash=ena_study.fetched_at.isoformat(),  # if ENA study is deleted/updated, the cache should be invalidated
     )
     logger.info(f"Have {len(read_runs)} from ENA portal API")
 

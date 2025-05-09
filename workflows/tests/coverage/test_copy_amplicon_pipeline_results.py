@@ -4,8 +4,8 @@ import pytest
 
 from workflows.data_io_utils.filenames import trailing_slash_ensured_dir
 from workflows.data_io_utils.mgnify_v6_utils.amplicon import EMG_CONFIG
-from workflows.flows.analyse_study_tasks.copy_amplicon_pipeline_results import (
-    copy_amplicon_pipeline_results,
+from workflows.flows.analyse_study_tasks.copy_v6_pipeline_results import (
+    copy_v6_pipeline_results,
 )
 
 
@@ -20,11 +20,11 @@ def test_copy_amplicon_pipeline_results(raw_read_analyses):
     # Make sure we're patching the correct path
     # You might need to adjust this path based on your actual import structure
     with patch(
-        "workflows.flows.analyse_study_tasks.copy_amplicon_pipeline_results.move_data",
+        "workflows.flows.analyse_study_tasks.copy_v6_pipeline_results.move_data",
         mock_move_data,
     ):
         # Call the function synchronously using .fn()
-        copy_amplicon_pipeline_results.fn(analysis.accession)
+        copy_v6_pipeline_results.fn(analysis.accession)
 
         # Verify move_data was called
         mock_move_data.assert_called_once()
@@ -85,10 +85,10 @@ def test_copy_amplicon_pipeline_results_disallowed_extensions(raw_read_analyses)
     mock_move_data = Mock(return_value="mock_job_id")
 
     with patch(
-        "workflows.flows.analyse_study_tasks.copy_amplicon_pipeline_results.move_data",
+        "workflows.flows.analyse_study_tasks.copy_v6_pipeline_results.move_data",
         mock_move_data,
     ):
-        copy_amplicon_pipeline_results.fn(analysis.accession)
+        copy_v6_pipeline_results.fn(analysis.accession)
 
         # Verify move_data was called
         mock_move_data.assert_called_once()

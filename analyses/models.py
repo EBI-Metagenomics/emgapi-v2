@@ -22,7 +22,6 @@ from analyses.base_models.base_models import (
     PrivacyFilterManagerMixin,
     TimeStampedModel,
     VisibilityControlledModel,
-    GetByENAAccessionManagerMixin,
 )
 from analyses.base_models.mgnify_accessioned_models import MGnifyAccessionField
 from analyses.base_models.with_downloads_models import WithDownloadsModel
@@ -31,6 +30,8 @@ from analyses.base_models.with_watchers_models import WithWatchersModel
 from emgapiv2.async_utils import anysync_property
 from emgapiv2.enum_utils import FutureStrEnum
 from emgapiv2.model_utils import JSONFieldWithSchema
+from workflows.ena_utils.read_run import ENAReadRunFields
+from workflows.ena_utils.sample import ENASampleFields
 
 
 # Some models associated with MGnify Analyses (MGYS, MGYA etc).
@@ -70,7 +71,7 @@ class Biome(TreeModel):
         return re.sub(r"[^a-zA-Z0-9._]", "", underscore_punctuated)
 
 
-class StudyManager(models.Manager):
+class StudyManager(ENADerivedManager):
     def get_or_create_for_ena_study(self, ena_study_accession):
         logging.info(f"Will get/create MGnify study for {ena_study_accession}")
         try:
@@ -162,18 +163,20 @@ class Study(
         )
 
 
-class PublicSampleManager(
-    PrivacyFilterManagerMixin, GetByENAAccessionManagerMixin, models.Manager
-): ...
+class PublicSampleManager(PrivacyFilterManagerMixin, ENADerivedManager): ...
 
 
 class Sample(ENADerivedModel, TimeStampedModel):
-    objects = models.Manager()
+    CommonMetadataKeys = ENASampleFields
+
+    objects = ENADerivedManager()
     public_objects = PublicSampleManager()
 
     id = models.AutoField(primary_key=True)
     ena_sample = models.ForeignKey(ena.models.Sample, on_delete=models.CASCADE)
     studies = models.ManyToManyField(Study)
+
+    metadata = models.JSONField(default=dict, blank=True)
 
     def __str__(self):
         return f"Sample {self.id}: {self.ena_sample}"
@@ -204,17 +207,10 @@ class PublicRunManager(PrivacyFilterManagerMixin, models.Manager): ...
 
 
 class Run(TimeStampedModel, ENADerivedModel, WithExperimentTypeModel):
-    class CommonMetadataKeys:
-        # TODO replace this with ENA result type pydantic model once available
-        INSTRUMENT_PLATFORM = "instrument_platform"
-        INSTRUMENT_MODEL = "instrument_model"
-        FASTQ_FTPS = "fastq_ftps"
-        LIBRARY_STRATEGY = "library_strategy"
-        LIBRARY_LAYOUT = "library_layout"
-        LIBRARY_SOURCE = "library_source"
-        SCIENTIFIC_NAME = "scientific_name"
-        HOST_TAX_ID = "host_tax_id"
-        HOST_SCIENTIFIC_NAME = "host_scientific_name"
+    CommonMetadataKeys = ENAReadRunFields
+    CommonMetadataKeys.FASTQ_FTPS = (
+        "fastq_ftps"  # plural convention mismatch to ENA; TODO
+    )
 
     class InstrumentPlatformKeys:
         BGISEQ = "BGISEQ"
@@ -224,7 +220,7 @@ class Run(TimeStampedModel, ENADerivedModel, WithExperimentTypeModel):
         PACBIO_SMRT = "PACBIO_SMRT"
         ION_TORRENT = "ION_TORRENT"
 
-    objects = models.Manager()
+    objects = ENADerivedManager()
     public_objects = PublicRunManager()
 
     id = models.AutoField(primary_key=True)
@@ -321,7 +317,14 @@ class Assembly(TimeStampedModel, ENADerivedModel):
     dir = models.CharField(max_length=200, null=True, blank=True)
     run = models.ForeignKey(
         Run, on_delete=models.CASCADE, related_name="assemblies", null=True, blank=True
-    )
+    )  # TODO: coassembly
+    sample = models.ForeignKey(
+        Sample,
+        on_delete=models.CASCADE,
+        related_name="assemblies",
+        null=True,
+        blank=True,
+    )  # TODO: coassembly
     # raw reads study that was used as resource for assembly
     reads_study = models.ForeignKey(
         Study,
@@ -597,8 +600,12 @@ class Analysis(
     KEGG_ORTHOLOGS = "kegg_orthologs"
     ANTISMASH_GENE_CLUSTERS = "antismash_gene_clusters"
     PFAMS = "pfams"
+    RHEA_REACTIONS = "rhea_reactions"
 
     TAXONOMIES = "taxonomies"
+    CLOSED_REFERENCE = "closed_reference"
+    ASV = "asv"
+    FUNCTIONAL_ANNOTATION = "functional_annotation"
 
     class TaxonomySources(FutureStrEnum):
         SSU: str = "ssu"
@@ -608,6 +615,7 @@ class Analysis(
         PR2: str = "pr2"
         DADA2_SILVA: str = "dada2_silva"
         DADA2_PR2: str = "dada2_pr2"
+        UNIREF: str = "uniref"
 
     TAXONOMIES_SSU = f"{TAXONOMIES}__{TaxonomySources.SSU.value}"
     TAXONOMIES_LSU = f"{TAXONOMIES}__{TaxonomySources.LSU.value}"
@@ -616,6 +624,7 @@ class Analysis(
     TAXONOMIES_PR2 = f"{TAXONOMIES}__{TaxonomySources.PR2.value}"
     TAXONOMIES_DADA2_SILVA = f"{TAXONOMIES}__{TaxonomySources.DADA2_SILVA.value}"
     TAXONOMIES_DADA2_PR2 = f"{TAXONOMIES}__{TaxonomySources.DADA2_PR2.value}"
+    TAXONOMIES_UNIREF = f"{TAXONOMIES}__{TaxonomySources.UNIREF.value}"
 
     ALLOWED_DOWNLOAD_GROUP_PREFIXES = [
         "all",  # catch-all for legacy
@@ -624,6 +633,7 @@ class Analysis(
         "quality_control",
         "primer_identification",
         "asv",
+        FUNCTIONAL_ANNOTATION,
     ]
 
     @staticmethod

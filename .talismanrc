@@ -2,6 +2,9 @@ fileignoreconfig:
 - filename: .github/workflows/release_k8s.yml
   checksum: 0e93196d244417801fd40ad6bfa01f53a6bf04257371378a1dc3e14cbc7a04d8
 
+- filename: analyses/base_models/base_models.py
+  allowed_patterns: [key]
+
 - filename: analyses/base_models/with_status_models.py
   allowed_patterns: [key]
 
@@ -56,6 +59,9 @@ fileignoreconfig:
 - filename: workflows/data_io_utils/file_rules.py
   checksum: 18b7d98b4778cf50b81961e026ef5ce8936692b2a2db11038656aca7940b6301
 
+- filename: workflows/data_io_utils/mgnify_v6_utils/assembly.py
+  allowed_patterns: [_key]
+
 - filename: workflows/ena_utils/ena_api_requests.py
   allowed_patterns: [password=EMG_CONFIG.webin.emg_webin_password]
 
@@ -65,8 +71,14 @@ fileignoreconfig:
 - filename: workflows/flows/analyse_study_tasks/make_samplesheet_amplicon.py
   allowed_patterns: [key]
 
+- filename: workflows/flows/analyse_study_tasks/make_samplesheet_assembly.py
+  allowed_patterns: [key]
+
 - filename: workflows/flows/analyse_study_tasks/set_post_analysies_states.py
   allowed_patterns: [qc_passed_runs.csv]
+
+- filename: workflows/flows/analyse_study_tasks/set_post_assembly_analysis_states.py
+  allowed_patterns: [qc_passed_assemblies.csv]
 
 - filename: workflows/flows/analyse_study_tasks/sanity_check_amplicon_results.py
   checksum: 6f0d0012faefa871ada95216a04997ce6ae54ff3e508b57399cccc859e1eccfa
@@ -95,11 +107,12 @@ allowed_patterns:
 - CommonMetadataKeys
 - context_agnostic_task_input_hash
 - delay_key
+- ForeignKey
 - idempotency_key
 - keywords
 - KEYWORDS
 - key1=val1
 - key2=val2
+- KnownMetadataKeys
 - pagination_key
 - primary_key
-- KnownMetadataKeys

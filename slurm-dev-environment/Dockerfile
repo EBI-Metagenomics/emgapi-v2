@@ -38,7 +38,12 @@ RUN chmod +x /usr/local/bin/worker-entrypoint.sh
 ENV SLURM_INCLUDE_DIR=/usr/include
 ENV SLURM_LIB_DIR=/usr/lib/x86_64-linux-gnu
 RUN DEBIAN_FRONTEND=noninteractive \
-    apt -y update && apt install -y default-jre
+    apt -y update && \
+    apt install -y software-properties-common && \
+    add-apt-repository -y ppa:openjdk-r/ppa && \
+    apt update && \
+    apt install -y openjdk-17-jre-headless
+
 RUN wget -qO- https://get.nextflow.io | bash
 RUN chmod +x nextflow
 RUN mv nextflow /usr/bin/

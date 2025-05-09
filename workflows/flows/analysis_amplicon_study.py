@@ -8,8 +8,8 @@ from prefect.runtime import flow_run, deployment
 from pydantic import Field
 
 from activate_django_first import EMG_CONFIG
-from workflows.flows.analyse_study_tasks.copy_amplicon_pipeline_results import (
-    copy_amplicon_study_summaries,
+from workflows.flows.analyse_study_tasks.copy_v6_pipeline_results import (
+    copy_v6_study_summaries,
 )
 
 from workflows.flows.analyse_study_tasks.create_analyses import create_analyses
@@ -68,7 +68,6 @@ def analysis_amplicon_study(study_accession: str):
         ena_study.accession,
         limit=10000,
         filter_library_strategy=EMG_CONFIG.amplicon_pipeline.amplicon_library_strategy,
-        extra_cache_hash=ena_study.fetched_at.isoformat(),  # if ENA study is deleted/updated, the cache should be invalidated
     )
     logger.info(f"Returned {len(read_runs)} run from ENA portal API")
 
@@ -132,9 +131,10 @@ def analysis_amplicon_study(study_accession: str):
     merge_study_summaries(
         mgnify_study.accession,
         cleanup_partials=not EMG_CONFIG.amplicon_pipeline.keep_study_summary_partials,
+        analysis_type="amplicon",
     )
     add_study_summaries_to_downloads(mgnify_study.accession)
-    copy_amplicon_study_summaries(mgnify_study.accession)
+    copy_v6_study_summaries(mgnify_study.accession)
 
     mgnify_study.refresh_from_db()
     mgnify_study.features.has_v6_analyses = mgnify_study.analyses.filter(

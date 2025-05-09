@@ -10,7 +10,7 @@ from workflows.flows.analyse_study_tasks.import_completed_amplicon_analyses impo
 
 
 @pytest.fixture
-@patch("workflows.flows.analyse_study_tasks.copy_amplicon_pipeline_results.move_data")
+@patch("workflows.flows.analyse_study_tasks.copy_v6_pipeline_results.move_data")
 def amplicon_analysis_with_downloads(
     mock_copy_flow, raw_reads_mgnify_study, raw_reads_mgnify_sample
 ):

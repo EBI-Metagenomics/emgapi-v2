@@ -39,7 +39,7 @@ def run_flow_and_capture_logs(flow: Callable, *args, **kwargs) -> LoggedFlowRunR
     assert my_logged_flow.result == "RED WIDGET"
     """
     state: State = flow(*args, return_state=True, **kwargs)
-    time.sleep(1)  # wait for log flushing
+    time.sleep(0.5)  # wait for log flushing
     logs = get_logs_for_flow_run(state.state_details.flow_run_id)
     return LoggedFlowRunResult(logs=logs, result=state.result())
 
