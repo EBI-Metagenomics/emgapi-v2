@@ -78,6 +78,7 @@ INSTALLED_APPS = [
     "ena",
     "analyses",
     "workflows",
+    "genomes",
 ]
 
 MIDDLEWARE = [
@@ -389,3 +390,9 @@ NINJA_JWT = {
 # Django Nginx Secure Links settings - pre-signed URLs for private data
 SECURE_LINK_SECRET_KEY = os.getenv("PRIVATE_DATA_SECURE_LINK_SECRET_KEY", SECRET_KEY)
 SECURE_LINK_EXPIRATION_SECONDS = 86400
+
+MAGS_FTP_SITE= "http://ftp.ebi.ac.uk/pub/databases/metagenomics/mgnify_genomes/"
+
+LATEST_MAGS_PIPELINE_TAG = "v1.2.1"
+
+
