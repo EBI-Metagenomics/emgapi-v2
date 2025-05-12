@@ -9,3 +9,11 @@ from .GenomeKeggClassCounts import GenomeKeggClassCounts
 from .GenomeKeggModule import GenomeKeggModule
 from .GenomeKeggModuleCounts import GenomeKeggModuleCounts
 from .GeographicLocation import GeographicLocation
+from .DownloadDescriptionLabel import DownloadDescriptionLabel
+from .FileFormat import FileFormat
+from .DownloadGroupType import DownloadGroupType
+from .GenomeSet import GenomeSet
+from .DownloadSubDir import DownloadSubdir
+from .GenomeDownload import GenomeDownload
+from .ChecksumAlgorithm import ChecksumAlgorithm
+from .GenomeCatalogDownload import GenomeCatalogueDownload
