@@ -739,7 +739,7 @@ def test_prefect_analyse_amplicon_flow(
     assert (
         analysis_which_should_have_taxonomies_imported.metadata[
             analysis_which_should_have_taxonomies_imported.KnownMetadataKeys.MARKER_GENE_SUMMARY
-        ]["marker_genes"]["SSU"]["Bacteria"]["read_count"]
+        ]["closed_reference"]["marker_genes"]["SSU"]["Bacteria"]["read_count"]
         == 1
     )
 
