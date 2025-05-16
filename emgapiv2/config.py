@@ -134,6 +134,17 @@ class AssemblyAnalysisPipelineConfig(BaseModel):
     failed_assemblies_csv: str = "qc_failed_assemblies.csv"
     taxonomy_folder: str = "taxonomy"
     functional_folder: str = "functional-annotation"
+    downstream_samplesheets_folder: str = "downstream_samplesheets"
+    virify_samplesheet: str = "virify_samplesheet.csv"
+
+
+class VirifyPipelineConfig(BaseModel):
+    pipeline_repo: str = "EBI-Metagenomics/emg-viral-pipeline"
+    pipeline_git_revision: str = "v3.0.0"
+    pipeline_nf_profile: str = "slurm,singularity"
+    pipeline_time_limit_days: int = 2
+    nextflow_master_job_memory_gb: int = 1
+    final_gff_folder: str = "08-final/gff"
 
 
 class WebinConfig(BaseModel):
@@ -224,6 +235,7 @@ class EMGConfig(BaseSettings):
         AssemblyAnalysisPipelineConfig()
     )
     assembler: AssemblerConfig = AssemblerConfig()
+    virify_pipeline: VirifyPipelineConfig = VirifyPipelineConfig()
     ena: ENAConfig = ENAConfig()
     environment: str = "development"
     legacy_service: LegacyServiceConfig = LegacyServiceConfig()
