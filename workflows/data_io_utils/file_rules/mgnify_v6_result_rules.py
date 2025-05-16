@@ -91,8 +91,19 @@ GlobOfTaxonomyFolderHasKronaHtmlRule = GlobRule(
 
 GlobOfTaxonomyFolderHasHtmlAndKronaTxtRule = GlobRule(
     rule_name="Folder should contain html and krona txt files",
-    glob_patten="**",
-    test=lambda files: sum(f.suffix in [".html", ".txt"] for f in files) == 2,
+    glob_patten="*",
+    test=lambda files: sum(
+        f.suffixes
+        in [
+            [".html"],
+            [".txt"],
+            [".html", ".gz"],
+            [".txt", ".gz"],
+            [".krona", ".txt", ".gz"],
+        ]
+        for f in files
+    )
+    == 2,
 )
 
 GlobOfQcFolderHasFastpAndMultiqc = GlobRule(

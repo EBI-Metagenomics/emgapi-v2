@@ -353,12 +353,6 @@ class MGnifyAssemblyAnalysisRequest(ModelSchema):
 
 
 class MGnifyFunctionalAnalysisAnnotationType(FutureStrEnum):
-    genome_properties: str = analyses.models.Analysis.GENOME_PROPERTIES
-    go_terms: str = analyses.models.Analysis.GO_TERMS
-    go_slims: str = analyses.models.Analysis.GO_SLIMS
-    interpro_identifiers: str = analyses.models.Analysis.INTERPRO_IDENTIFIERS
-    kegg_modules: str = analyses.models.Analysis.KEGG_MODULES
-    kegg_orthologs: str = analyses.models.Analysis.KEGG_ORTHOLOGS
     taxonomies_ssu: str = analyses.models.Analysis.TAXONOMIES_SSU
     taxonomies_lsu: str = analyses.models.Analysis.TAXONOMIES_LSU
     taxonomies_itsonedb: str = analyses.models.Analysis.TAXONOMIES_ITS_ONE_DB
@@ -366,7 +360,6 @@ class MGnifyFunctionalAnalysisAnnotationType(FutureStrEnum):
     taxonomies_pr2: str = analyses.models.Analysis.TAXONOMIES_PR2
     taxonomies_dada2_pr2: str = analyses.models.Analysis.TAXONOMIES_DADA2_PR2
     taxonomies_dada2_silva: str = analyses.models.Analysis.TAXONOMIES_DADA2_SILVA
-    antismash_gene_clusters: str = analyses.models.Analysis.ANTISMASH_GENE_CLUSTERS
     pfams: str = analyses.models.Analysis.PFAMS
 
 

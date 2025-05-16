@@ -29,6 +29,9 @@ def mgnify_assemblies(raw_read_run, raw_reads_mgnify_study, assemblers):
             dir="slurm-dev-environment/fs/hps/tests/assembly_uploader",
             metadata={"coverage": 20},
             sample=run.sample,
+            ena_accessions=[
+                "ERZ857107",
+            ],
         )
         assembly_objects.append(assembly_obj)
 
@@ -42,6 +45,7 @@ def mgnify_assemblies(raw_read_run, raw_reads_mgnify_study, assemblers):
             dir="/hps/tests/assembly_uploader",
             metadata={"coverage": 10},
             sample=run.sample,
+            ena_accessions=["ERZ857108"],
         )
         assembly_objects.append(assembly)
     return assembly_objects
@@ -68,3 +72,24 @@ def mgnify_assembly_completed_uploader_sanity_check(mgnify_assemblies):
     for item in metaspades_assemblies:
         item.mark_status("assembly_completed")
     return metaspades_assemblies
+
+
+@pytest.fixture
+def assembly_with_analyses(mgnify_assemblies, raw_reads_mgnify_study):
+    """
+    Create assembly analyses for testing batch operations.
+    Returns a list of Analysis objects linked to assemblies.
+    """
+    analyses = []
+    # We only need a subset, that is why 3 (just an arbitrary cut)
+    for assembly in mgnify_assemblies[:3]:
+        analysis, _ = mg_models.Analysis.objects.get_or_create(
+            study=raw_reads_mgnify_study,
+            sample=assembly.sample,
+            assembly=assembly,
+            ena_study=raw_reads_mgnify_study.ena_study,
+            pipeline_version=mg_models.Analysis.PipelineVersions.v6,
+        )
+        analysis.inherit_experiment_type()
+        analyses.append(analysis)
+    return analyses

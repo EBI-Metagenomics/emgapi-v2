@@ -4,13 +4,13 @@ import pytest
 
 from workflows.data_io_utils.filenames import trailing_slash_ensured_dir
 from workflows.data_io_utils.mgnify_v6_utils.amplicon import EMG_CONFIG
-from workflows.flows.analyse_study_tasks.copy_v6_pipeline_results import (
+from workflows.flows.analyse_study_tasks.shared.copy_v6_pipeline_results import (
     copy_v6_pipeline_results,
 )
 
 
 @pytest.mark.django_db(transaction=True)
-def test_copy_amplicon_pipeline_results(raw_read_analyses):
+def test_copy_amplicon_pipeline_results(raw_read_analyses, prefect_harness):
     """Test copying amplicon pipeline results with a real Analysis fixture"""
     analysis = raw_read_analyses[0]  # Get the first analysis that has results
 
@@ -20,19 +20,17 @@ def test_copy_amplicon_pipeline_results(raw_read_analyses):
     # Make sure we're patching the correct path
     # You might need to adjust this path based on your actual import structure
     with patch(
-        "workflows.flows.analyse_study_tasks.copy_v6_pipeline_results.move_data",
+        "workflows.flows.analyse_study_tasks.shared.copy_v6_pipeline_results.move_data",
         mock_move_data,
     ):
         # Call the function synchronously using .fn()
-        copy_v6_pipeline_results.fn(analysis.accession)
+        copy_v6_pipeline_results(analysis.accession)
 
         # Verify move_data was called
         mock_move_data.assert_called_once()
 
         # Get the arguments that move_data was called with
         call_args = mock_move_data.call_args[0]
-        print("calling args")
-        print(call_args)
 
         # Check source path
         expected_source = trailing_slash_ensured_dir(analysis.results_dir)
@@ -79,16 +77,18 @@ def test_copy_amplicon_pipeline_results(raw_read_analyses):
 
 
 @pytest.mark.django_db(transaction=True)
-def test_copy_amplicon_pipeline_results_disallowed_extensions(raw_read_analyses):
+def test_copy_amplicon_pipeline_results_disallowed_extensions(
+    raw_read_analyses, prefect_harness
+):
     """Test that files with disallowed extensions are not included in the copy command"""
     analysis = raw_read_analyses[0]
     mock_move_data = Mock(return_value="mock_job_id")
 
     with patch(
-        "workflows.flows.analyse_study_tasks.copy_v6_pipeline_results.move_data",
+        "workflows.flows.analyse_study_tasks.shared.copy_v6_pipeline_results.move_data",
         mock_move_data,
     ):
-        copy_v6_pipeline_results.fn(analysis.accession)
+        copy_v6_pipeline_results(analysis.accession)
 
         # Verify move_data was called
         mock_move_data.assert_called_once()

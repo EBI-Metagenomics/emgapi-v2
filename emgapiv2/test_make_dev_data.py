@@ -4,16 +4,13 @@ import pytest
 from django.core.management import call_command
 
 from analyses.models import Biome, Run, Analysis
-from workflows.flows.analyse_study_tasks.import_completed_amplicon_analyses import (
+from workflows.flows.analyse_study_tasks.amplicon.import_completed_amplicon_analyses import (
     import_completed_analysis as import_completed_amplicon_analysis,
-)
-from workflows.flows.analyse_study_tasks.import_completed_assembly_analyses import (
-    import_completed_assembly_analysis,
 )
 
 
 @pytest.fixture
-@patch("workflows.flows.analyse_study_tasks.copy_v6_pipeline_results.move_data")
+@patch("workflows.flows.analyse_study_tasks.shared.copy_v6_pipeline_results.move_data")
 def amplicon_analysis_with_downloads(
     mock_copy_flow, raw_reads_mgnify_study, raw_reads_mgnify_sample
 ):
@@ -73,7 +70,7 @@ def amplicon_analysis_with_downloads(
 
 
 @pytest.fixture
-@patch("workflows.flows.analyse_study_tasks.copy_v6_pipeline_results.move_data")
+@patch("workflows.flows.analyse_study_tasks.shared.copy_v6_pipeline_results.move_data")
 def assembly_analysis_with_downloads(mock_copy_flow, mgnify_assemblies_completed):
     assem = mgnify_assemblies_completed[0]
     assem.add_erz_accession(
@@ -91,9 +88,8 @@ def assembly_analysis_with_downloads(mock_copy_flow, mgnify_assemblies_completed
         assembly=assem,
     )
     analysis.mark_status(analysis.AnalysisStates.ANALYSIS_COMPLETED)
-    analysis.results_dir = "/app/data/tests/assembly_v6_output/ERZ857107/ERZ857107"
+    analysis.results_dir = "/app/data/tests/assembly_v6_output/ERP106708/ERZ857107"
     analysis.save()
-    import_completed_assembly_analysis(analysis)
 
 
 # TODO: currently unused as download data fixtures are missing
