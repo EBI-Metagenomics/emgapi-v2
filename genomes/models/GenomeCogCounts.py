@@ -1,7 +1,7 @@
 from django.db import models
-from genomes.models.BaseModel import BaseModel
+from genomes.models.base_model import BaseModel
 from genomes.models.GenomeCogCat import GenomeCogCat
-from genomes.models.Genome import Genome
+from genomes.models.genome import Genome
 
 
 class GenomeCogCounts(BaseModel):

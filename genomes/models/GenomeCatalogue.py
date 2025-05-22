@@ -3,7 +3,7 @@ from django.utils import timezone
 
 from analyses.models import Biome
 from emgapiv2 import settings
-from genomes.models.BaseModel import BaseModel
+from genomes.models.base_model import BaseModel
 
 MARKDOWN_HELP = 'Use <a href="https://commonmark.org/help/" target="_newtab">markdown</a> for links and rich text.'
 
