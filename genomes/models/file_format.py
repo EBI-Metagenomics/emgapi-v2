@@ -1,8 +1,6 @@
 from django.db import models
-from genomes.models.BaseModel import BaseModel
 
-
-class FileFormat(BaseModel):
+class FileFormat(models.Model):
     format_id = models.AutoField(
         db_column='FORMAT_ID', primary_key=True)
     format_name = models.CharField(

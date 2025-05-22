@@ -1,4 +1,4 @@
-from genomes.models.BaseModel import BaseModel
+from genomes.models.base_model import BaseModel
 from django.db import models
 
 class GenomeCogCat(BaseModel):

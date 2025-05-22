@@ -18,7 +18,7 @@ from ..lib.genome_util import (
 )
 from ...models import GenomeCatalogue, GenomeCogCounts, GenomeCogCat, GenomeKeggClass, GenomeKeggClassCounts, \
     GenomeKeggModule, GenomeKeggModuleCounts, GenomeAntiSmashGC, GenomeAntiSmashGCCounts, DownloadDescriptionLabel, \
-    FileFormat, GeographicLocation, DownloadSubdir, GenomeDownload, GenomeCatalogueDownload
+    FileFormat, GeographicLocation, DownloadSubdir, GenomeCatalogueDownload
 from ...models.DownloadGroupType import DownloadGroupType
 from ...models.GenomeSet import GenomeSet
 
@@ -471,6 +471,7 @@ class Command(BaseCommand):
     def prepare_file_upload(self, desc_label, file_format, filename, group_name=None, subdir_name=None):
 
         obj = {}
+        # TDO: this should be replaced with the download json field counterpart
         desc = DownloadDescriptionLabel \
             .objects.using(self.database) \
             .filter(description_label__iexact=desc_label) \
@@ -516,9 +517,11 @@ class Command(BaseCommand):
             else:
                 logger.warning(f"File not found or empty at {path}. This is allowable, but will not be uploaded.")
                 return
-        GenomeDownload.objects.using(self.database).update_or_create(genome=genome,
-                                                                                alias=defaults['alias'],
-                                                                                defaults=defaults)
+        #     TODO: this should be replaced with the download json field being "created/updated" instead
+
+        # GenomeDownload.objects.using(self.database).update_or_create(genome=genome,
+        #                                                                         alias=defaults['alias'],
+        #                                                                         defaults=defaults)
 
     def upload_catalogue_files(self):
         self.upload_catalogue_file(self.catalogue_obj,

@@ -1,7 +1,7 @@
 from django.db import models
 
 from genomes.models import Genome, GenomeAntiSmashGC
-from genomes.models.BaseModel import BaseModel
+from genomes.models.base_model import BaseModel
 
 
 class GenomeAntiSmashGCCounts(BaseModel):
