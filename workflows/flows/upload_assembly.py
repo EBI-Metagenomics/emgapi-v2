@@ -291,7 +291,7 @@ def prepare_assembly(
             else UNSET
         ),
         ENA_WEBIN_PASSWORD=(
-            EMG_CONFIG.webin.emg_webin_password if mgnify_assembly.is_private else UNSET
+            EMG_CONFIG.webin.broker_password if mgnify_assembly.is_private else UNSET
         ),
     ):
         assembly_manifest_writer = assembly_manifest.AssemblyManifestGenerator(
