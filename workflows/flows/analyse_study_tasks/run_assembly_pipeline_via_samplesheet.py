@@ -20,8 +20,8 @@ from workflows.flows.analyse_study_tasks.analysis_states import (
     mark_analysis_as_started,
     mark_analysis_as_failed,
 )
-from workflows.flows.analyse_study_tasks.run_virify_pipeline import (
-    run_virify_pipeline,
+from workflows.flows.analyse_study_tasks.run_virify_pipeline_via_samplesheet import (
+    run_virify_pipeline_via_samplesheet,
 )
 from workflows.flows.analyse_study_tasks.set_post_assembly_analysis_states import (
     set_post_assembly_analysis_states,
@@ -122,7 +122,7 @@ def run_assembly_pipeline_via_samplesheet(
         import_completed_assembly_analyses(assembly_current_outdir, assembly_analyses)
 
         # Run the virify pipeline on the assemblies
-        run_virify_pipeline(
+        run_virify_pipeline_via_samplesheet(
             mgnify_study=mgnify_study,
             assembly_analyses=assembly_analyses,
             assembly_pipeline_outdir=assembly_current_outdir,
