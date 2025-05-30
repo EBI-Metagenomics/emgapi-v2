@@ -1,8 +1,9 @@
 from datetime import date
-from enum import Enum
 from typing import Union, TypeVar
 
 from pydantic import BaseModel, Field, computed_field
+
+from emgapiv2.enum_utils import FutureStrEnum
 
 # Define TypeVars for self-referential types
 T_ENAQueryClause = TypeVar("T_ENAQueryClause", bound="ENAQueryClause")
@@ -10,7 +11,7 @@ T_ENAQueryPair = TypeVar("T_ENAQueryPair", bound="ENAQueryPair")
 T_ENAQueryConditions = TypeVar("T_ENAQueryConditions", bound="_ENAQueryConditions")
 
 
-class ENAPortalResultType(str, Enum):
+class ENAPortalResultType(FutureStrEnum):
     ANALYSIS = "analysis"  # Nucelotide sequence analyses from reads
     ANALYSIS_STUDY = (
         "analysis_study"  # Studies used for nucleotide sequence analyses from reads
@@ -29,14 +30,14 @@ class ENAPortalResultType(str, Enum):
     WGS_SET = "wgs_set"  # Genome assembly contig set (WGS)
 
 
-class ENAPortalDataPortal(str, Enum):
+class ENAPortalDataPortal(FutureStrEnum):
     ENA = "ena"
     METAGENOME = "metagenome"
     FAANG = "faang"
     PATHOGEN = "pathogen"
 
 
-class ENAQueryOperators(str, Enum):
+class ENAQueryOperators(FutureStrEnum):
     OR = "OR"
     AND = "AND"
     NOT = "NOT"
