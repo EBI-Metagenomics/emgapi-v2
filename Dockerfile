@@ -2,20 +2,24 @@ FROM ubuntu:jammy AS base
 LABEL authors="sandyr"
 
 ENV DEBIAN_FRONTEND="noninteractive" TZ="Etc/UTC"
-RUN apt -y update && apt -y upgrade && apt -y install libpq-dev python3-pip python-is-python3 tzdata git
+RUN apt -y update && apt install -y software-properties-common && add-apt-repository ppa:deadsnakes/ppa && apt -y upgrade && apt -y install libpq-dev python3.12-dev python3.12-venv gcc python-is-python3 tzdata git build-essential
+RUN python3.12 -m ensurepip \
+ && ln -sf /usr/bin/python3.12 /usr/bin/python \
+ && ln -sf /usr/local/bin/pip3 /usr/bin/pip
 
 WORKDIR /app
 COPY requirements.txt .
 RUN pip install --upgrade pip setuptools wheel
-RUN pip install --upgrade -r requirements.txt
+RUN pip install --use-pep517 --upgrade -r requirements.txt
 
 FROM base AS django
+COPY requirements* .
+RUN pip install --ignore-installed --use-pep517 -r requirements-dev.txt
+RUN pip install --ignore-installed --use-pep517 -r requirements-tools.txt
 COPY . .
-RUN pip install --upgrade -r requirements-dev.txt
-RUN pip install --upgrade -r requirements-tools.txt
-ENTRYPOINT ["python3", "manage.py"]
+ENTRYPOINT ["python", "manage.py"]
 
-FROM base AS agent
+FROM django AS agent
 RUN apt -y update && apt -y upgrade
 RUN apt -y install munge gosu netcat-traditional slurm-wlm libslurm-dev
 COPY slurm-dev-environment/configs/slurm_single_node.conf /etc/slurm/slurm.conf
@@ -36,11 +40,8 @@ RUN if [ "$(uname -m)" = "x86_64" ]; then \
 
 ENV SLURM_LIB_DIR=/slurm/lib
 ENV SLURM_INCLUDE_DIR=/usr/include
-RUN pip install https://github.com/PySlurm/pyslurm/archive/refs/tags/v21.8.1.tar.gz
+RUN pip install --upgrade pip setuptools wheel
+RUN pip install --ignore-installed --upgrade --use-pep517 --no-build-isolation https://github.com/PySlurm/pyslurm/archive/refs/tags/v21.8.1.tar.gz
 ENV TZ="Etc/UTC"
 
-COPY . .
-RUN pip install --upgrade -r requirements-dev.txt
-RUN pip install --upgrade -r requirements-tools.txt
-
-ENTRYPOINT ["/usr/local/bin/submitter-entrypoint.sh", "python3", "manage.py"]
+ENTRYPOINT ["/usr/local/bin/submitter-entrypoint.sh", "python", "manage.py"]

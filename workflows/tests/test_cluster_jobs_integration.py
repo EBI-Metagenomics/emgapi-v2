@@ -6,7 +6,6 @@ from pathlib import Path
 
 import pytest
 from prefect import flow, task, runtime
-from prefect.logging import disable_run_logger
 from prefect.runtime import flow_run
 
 from workflows.models import OrchestratedClusterJob
@@ -189,7 +188,7 @@ def test_run_cluster_job_state_persistence(
     )
 
 
-def test_input_file_hash(tmp_path, caplog):
+def test_input_file_hash(tmp_path, caplog, prefect_harness):
     caplog.set_level(logging.WARNING)
     f1 = tmp_path / "file1.txt"
     f1.touch()
@@ -198,8 +197,7 @@ def test_input_file_hash(tmp_path, caplog):
     f2.touch()
 
     f3 = tmp_path / "file3.txt"
-    with disable_run_logger():
-        hash = compute_hash_of_input_file.fn([f1, f2, f3])
+    hash = compute_hash_of_input_file([f1, f2, f3])
     assert f"Did not find a file to hash at {f3}." in caplog.text
     assert hash.startswith("786a02f7")
 
