@@ -285,9 +285,13 @@ def prepare_assembly(
     logger.info("Will generate assembly manifests")
 
     with TemporaryEnv(
-        ENA_WEBIN=EMG_CONFIG.webin.dcc_account if mgnify_assembly.is_private else UNSET,
+        ENA_WEBIN=(
+            f"{EMG_CONFIG.webin.broker_prefix}{mgnify_assembly.reads_study.webin_submitter}"
+            if mgnify_assembly.is_private
+            else UNSET
+        ),
         ENA_WEBIN_PASSWORD=(
-            EMG_CONFIG.webin.dcc_password if mgnify_assembly.is_private else UNSET
+            EMG_CONFIG.webin.broker_password if mgnify_assembly.is_private else UNSET
         ),
     ):
         assembly_manifest_writer = assembly_manifest.AssemblyManifestGenerator(
