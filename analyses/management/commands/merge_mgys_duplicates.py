@@ -16,10 +16,10 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         self.dry_run = options["dry_run"]
-        self.print_duplicate_mgys_studies()
+        self.deduplicate_mgys_studies()
 
     #   find ENA studies with two MGYS accessions
-    def print_duplicate_mgys_studies(self):
+    def deduplicate_mgys_studies(self):
         dup_ena_study_ids = (
             Study.objects.values("ena_study")
             .annotate(study_count=Count("accession"))
@@ -47,12 +47,12 @@ class Command(BaseCommand):
         Delete the new_study if it's empty of runs, assemblies, and analyses.
         """
         # for those edge cases where both studies have the same runs, don't do anything
-        new_runs = Run.objects.filter(study=new_study)
-        old_runs = Run.objects.filter(study=old_study)
+        new_runs = new_study.runs.all()
+        old_runs = old_study.runs.all()
         old_run_accessions = set(a for obj in old_runs for a in obj.ena_accessions)
         new_run_accessions = set(a for obj in new_runs for a in obj.ena_accessions)
         if old_run_accessions & new_run_accessions:
-            logging.info(
+            logging.warning(
                 f"DUPLICATE RUNS FOUND IN BOTH STUDIES: old {old_study} and new {new_study}. No further action performed."
             )
             return
@@ -77,9 +77,10 @@ class Command(BaseCommand):
             new_runs.update(study=old_study)
 
         # Check if new_study is void of runs, assemblies, and analyses
-        has_runs = Run.objects.filter(study=new_study).exists()
+        new_study.refresh_from_db()
+        has_runs = new_study.runs.exists()
         has_assemblies = Assembly.objects.filter(assembly_study=new_study).exists()
-        has_analyses = Analysis.objects.filter(study=new_study).exists()
+        has_analyses = new_study.analyses.exists()
 
         if not has_runs and not has_assemblies and not has_analyses:
             if self.dry_run:
@@ -88,4 +89,4 @@ class Command(BaseCommand):
                 new_study.delete()
                 logging.info(f"Deleted study {new_study.accession}")
         else:
-            logging.info(f"Did not delete {new_study.accession} as study is not empty")
+            logging.warning(f"Did not delete {new_study.accession} as study is not empty")

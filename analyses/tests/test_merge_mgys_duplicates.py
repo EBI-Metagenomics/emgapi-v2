@@ -32,16 +32,16 @@ def setup_duplicate_studies():
     )
 
     # Create two MGnify studies linked to the same ENA study
-    mg_dup1_new = MGnifyStudy.objects.create(
+    mg_dup_a_new = MGnifyStudy.objects.create(
         id=10001, ena_study=ena_dup_a, title="Test Study 1 new"
     )
-    mg_dup1_old = MGnifyStudy.objects.create(
+    mg_dup_a_old = MGnifyStudy.objects.create(
         id=6001, ena_study=ena_dup_a, title="Test Study 1 old"
     )
-    mg_dup2_new = MGnifyStudy.objects.create(
+    mg_dup_b_new = MGnifyStudy.objects.create(
         id=10002, ena_study=ena_dup_b, title="Test Study 2 new"
     )
-    mg_dup2_old = MGnifyStudy.objects.create(
+    mg_dup_b_old = MGnifyStudy.objects.create(
         id=6002, ena_study=ena_dup_b, title="Test Study 2 old"
     )
 
@@ -66,18 +66,18 @@ def setup_duplicate_studies():
     )
     run_public = Run.objects.create(
         ena_accessions=["ERR100000"],
-        study=mg_dup1_new,
+        study=mg_dup_a_new,
         ena_study=ena_dup_a,
         sample=sample_a,
     )
 
     # private assembly with run and assembly in same study, usually >10,000 acc
     assembly_private = Assembly.objects.create(
-        assembly_study=mg_dup2_new, ena_study=ena_dup_b
+        assembly_study=mg_dup_b_new, ena_study=ena_dup_b
     )
     run_private = Run.objects.create(
         ena_accessions=["ERR200000"],
-        study=mg_dup2_new,
+        study=mg_dup_b_new,
         ena_study=ena_dup_b,
         sample=sample_b,
     )
@@ -86,10 +86,10 @@ def setup_duplicate_studies():
         "ena_dup_a": ena_dup_a,
         "ena_dup_b": ena_dup_b,
         "ena_single": ena_single,
-        "mg_dup1_new": mg_dup1_new,
-        "mg_dup1_old": mg_dup1_old,
-        "mg_dup2_new": mg_dup2_new,
-        "mg_dup2_old": mg_dup2_old,
+        "mg_dup_a_new": mg_dup_a_new,
+        "mg_dup_a_old": mg_dup_a_old,
+        "mg_dup_b_new": mg_dup_b_new,
+        "mg_dup_b_old": mg_dup_b_old,
         "mg_single": mg_single,
         "assembly_public": assembly_public,
         "run_public": run_public,
@@ -101,7 +101,7 @@ def setup_duplicate_studies():
 
 
 @pytest.mark.django_db(transaction=True)
-def test_print_duplicate_mgys_studies(setup_duplicate_studies, caplog):
+def test_deduplicate_mgys_studies(setup_duplicate_studies, caplog):
     dup_studies = setup_duplicate_studies
 
     duplicates = (
@@ -162,17 +162,17 @@ def test_clashing_runs_gives_warning(setup_duplicate_studies, caplog):
     # Create duplicate clashing runs in old and new MGnify studies
     Run.objects.create(
         ena_accessions=["ERR300000"],
-        study=dup_studies["mg_dup1_new"],
+        study=dup_studies["mg_dup_a_new"],
         ena_study=dup_studies["ena_dup_a"],
         sample=dup_studies["sample_a"],
     )
     Run.objects.create(
         ena_accessions=["ERR300000"],
-        study=dup_studies["mg_dup1_old"],
+        study=dup_studies["mg_dup_a_old"],
         ena_study=dup_studies["ena_dup_a"],
         sample=dup_studies["sample_a"],
     )
-    with caplog.at_level(logging.INFO):
+    with caplog.at_level(logging.WARNING):
         call_command("merge_mgys_duplicates")
 
         assert (
