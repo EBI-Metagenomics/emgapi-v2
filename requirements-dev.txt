@@ -8,4 +8,4 @@ pytest-env
 pytest-sugar
 pytest-responses
 pytest-xdist
-mitmproxy~=11.0.0
+mitmproxy

@@ -1,11 +1,16 @@
+# Welcome to your prefect.yaml file! You can use this file for storing and managing
+# configuration for deploying your flows. We recommend committing this file to source
+# control along with your flow code.
+
+# Generic metadata about this project
 name: emgapi
-prefect-version: 2.18.3
+prefect-version: 3.4.4
 
 # build section allows you to manage and build docker images
-build:
+build: null
 
 # push section allows you to manage if and how this project is uploaded to remote locations
-push:
+push: null
 
 # pull section allows you to provide instructions for cloning this project in remote locations
 pull:
@@ -14,17 +19,15 @@ pull:
 
 # the deployments section allows you to provide configuration for deploying flows
 deployments:
-- name: realistic_example_deployment
-  version:
+- name: null
+  version: null
   tags: []
-  concurrency_limit:
-  description: "Example flow for Prefect, doing some \"realistic\" work.\nDownloads
-    read-runs from ENA using a minimal nextflow pipeline, and integrated with the
-    Django DB.\n\n:param accession: Accession of ENA Study to download\n:return:"
-  entrypoint: workflows/flows/realistic_example.py:realistic_example
+  description: null
+  schedule: {}
+  flow_name: null
+  entrypoint: null
   parameters: {}
   work_pool:
-    name: slurm
-    work_queue_name:
+    name: null
+    work_queue_name: null
     job_variables: {}
-  schedules: []
