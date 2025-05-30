@@ -1,7 +1,7 @@
-django==5.2
+django==5.2.1
 django-cors-headers==4.7.0
-django-ninja~=1.4.1
-prefect==3.2.12
+django-ninja~=1.4.2
+prefect==3.4.4
 prefect-shell==0.3.1
 prefect-slack==0.3.1
 dj-database-url==2.3.0

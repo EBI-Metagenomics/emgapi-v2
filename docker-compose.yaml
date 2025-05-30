@@ -40,7 +40,7 @@ services:
     networks: [emg]
 
   prefect-server:
-    image: prefecthq/prefect:3.2.12-python3.12
+    image: prefecthq/prefect:3.4.4-python3.12
     restart: always
     container_name: prefect-server
     volumes:
@@ -52,7 +52,6 @@ services:
       - PREFECT_SERVER_API_HOST=0.0.0.0
       - PREFECT_API_DATABASE_CONNECTION_URL=postgresql+asyncpg://postgres:postgres@prefect-database:5432/prefect
       - EXTRA_PIP_PACKAGES=httpx[cli]
-      - EXTRA_PIP_PACKAGES=nextflowpy
       - PREFECT_LOCAL_STORAGE_PATH=/root/.prefect/storage
     healthcheck:
       interval: 2s

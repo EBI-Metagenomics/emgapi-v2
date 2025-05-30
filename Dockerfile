@@ -13,12 +13,13 @@ RUN pip install --upgrade pip setuptools wheel
 RUN pip install --use-pep517 --upgrade -r requirements.txt
 
 FROM base AS django
+COPY requirements* .
+RUN pip install --ignore-installed --use-pep517 -r requirements-dev.txt
+RUN pip install --ignore-installed --use-pep517 -r requirements-tools.txt
 COPY . .
-RUN pip install --upgrade --ignore-installed --use-pep517 -r requirements-dev.txt
-RUN pip install --upgrade --ignore-installed --use-pep517 -r requirements-tools.txt
-ENTRYPOINT ["python3", "manage.py"]
+ENTRYPOINT ["python", "manage.py"]
 
-FROM base AS agent
+FROM django AS agent
 RUN apt -y update && apt -y upgrade
 RUN apt -y install munge gosu netcat-traditional slurm-wlm libslurm-dev
 COPY slurm-dev-environment/configs/slurm_single_node.conf /etc/slurm/slurm.conf
@@ -29,21 +30,18 @@ RUN chmod +x /usr/local/bin/submitter-entrypoint.sh
 
 # Handle apple silicon and x86-64
 RUN mkdir -p /slurm
-#RUN if [ "$(uname -m)" = "x86_64" ]; then \
-#        ln -s /usr/lib/x86_64-linux-gnu /slurm/lib; \
-#    elif [ "$(uname -m)" = "aarch64" ]; then \
-#        ln -s /usr/lib/aarch64-linux-gnu /slurm/lib; \
-#    else \
-#        exit 1; \
-#    fi
-#
-#ENV SLURM_LIB_DIR=/usr/lib
-#ENV SLURM_INCLUDE_DIR=/usr/include
-##RUN pip install --ignore-installed https://github.com/PySlurm/pyslurm/archive/refs/tags/v21.8.1.tar.gz
-##ENV TZ="Etc/UTC"
-#
-#COPY . .
-#RUN pip install --upgrade -r requirements-dev.txt
-#RUN pip install --upgrade -r requirements-tools.txt
-#
-#ENTRYPOINT ["/usr/local/bin/submitter-entrypoint.sh", "python3", "manage.py"]
+RUN if [ "$(uname -m)" = "x86_64" ]; then \
+        ln -s /usr/lib/x86_64-linux-gnu /slurm/lib; \
+    elif [ "$(uname -m)" = "aarch64" ]; then \
+        ln -s /usr/lib/aarch64-linux-gnu /slurm/lib; \
+    else \
+        exit 1; \
+    fi
+
+ENV SLURM_LIB_DIR=/slurm/lib
+ENV SLURM_INCLUDE_DIR=/usr/include
+RUN pip install --upgrade pip setuptools wheel
+RUN pip install --ignore-installed --upgrade --use-pep517 --no-build-isolation https://github.com/PySlurm/pyslurm/archive/refs/tags/v21.8.1.tar.gz
+ENV TZ="Etc/UTC"
+
+ENTRYPOINT ["/usr/local/bin/submitter-entrypoint.sh", "python", "manage.py"]
