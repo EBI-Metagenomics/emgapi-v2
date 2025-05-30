@@ -2,7 +2,7 @@ import logging
 from django.core.management.base import BaseCommand
 from django.db.models import Count
 
-from analyses.models import Study, Assembly, Run, Analysis
+from analyses.models import Study, Assembly
 
 
 class Command(BaseCommand):
@@ -89,4 +89,6 @@ class Command(BaseCommand):
                 new_study.delete()
                 logging.info(f"Deleted study {new_study.accession}")
         else:
-            logging.warning(f"Did not delete {new_study.accession} as study is not empty")
+            logging.warning(
+                f"Did not delete {new_study.accession} as study is not empty"
+            )
