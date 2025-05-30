@@ -286,7 +286,7 @@ def prepare_assembly(
 
     with TemporaryEnv(
         ENA_WEBIN=(
-        f"{EMG_CONFIG.webin.broker_prefix}{mgnify_assembly.reads_study.webin_submitter}"
+            f"{EMG_CONFIG.webin.broker_prefix}{mgnify_assembly.reads_study.webin_submitter}"
             if mgnify_assembly.is_private
             else UNSET
         ),
