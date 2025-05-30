@@ -28,7 +28,7 @@ def make_samplesheet_assembly(
     assembly_analyses: QuerySet,
 ) -> (Path, str):
     """
-    Makes a samplesheet CSV file for a set of assembly analyses, suitable for assembly analysis pipeline.
+    Makes a samplesheet CSV file for a set of assembly analyses, suitable for the assembly analysis pipeline.
     :param mgnify_study: MGYS study
     :param assembly_analyses: QuerySet of the assembly analyses to be executed
     :return: Tuple of the Path to the samplesheet file, and a hash of the assembly IDs which is used in the SS filename.
