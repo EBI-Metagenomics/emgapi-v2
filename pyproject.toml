@@ -4,10 +4,10 @@ python_files = ["tests.py", "test_*.py", "*_tests.py"]
 markers = [
     "dev_data_maker: A test that is not really a test but used to generate data for dev purposes"
 ]
-addopts = "--cov=/app --cov-report=term-missing --cov-report=html:coverage/htmlcov --cov-report=xml:coverage/coverage.xml -m 'not dev_data_maker'"
+addopts = "--cov=/app --cov-report=term-missing --cov-report=html:coverage/htmlcov --cov-report=xml:coverage/coverage.xml -m 'not dev_data_maker' -n auto"
 env = [
     "PREFECT_TASKS_REFRESH_CACHE=true",  # so that a prefect test harness can be shared over the test session (much faster), without caching causing side effects between tests
-    "PREFECT_LOGGING_TO_API_BATCH_INTERVAL=0"  # write logs very quickly to api, so they are available immediately in tests
+    "PREFECT_LOGGING_TO_API_BATCH_INTERVAL=0",  # write logs very quickly to api, so they are available immediately in tests
 ]
 filterwarnings = "ignore:.*is deprecated:DeprecationWarning"
 asyncio_mode = "auto"
@@ -19,6 +19,18 @@ omit = ["*/tests/*", "*/migrations/*", "*settings*", "*asgi.py", "*wsgi.py", "*m
 [tool.ruff.lint]
 ignore = ["E402"]  # allow imports after django.setup()
 exclude = ["emgapiv2/settings_test.py"]
+
+[tool.setuptools]
+python_requires = ">=3.10"
+
+[tool.prefect]
+logging.level = "INFO"
+# debug_mode = true
+# allow for 1 hour of prefect-server downtime
+client.max_retries = 60 # 1 hour elapsed from first to last try, since delay increases by 2*try-count seconds.
+client.retry_extra_codes = [404]  # for times when some traffic management between worker and prefect server breaks
+api.request_timeout = 120 # 2 mins
+server.api.keepalive_timeout = 60 # seconds
 
 #TODO, when ruff supports custom section-ordering
 #[tool.ruff.isort]

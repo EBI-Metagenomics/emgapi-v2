@@ -87,7 +87,7 @@ task run
 > This is related to the number of CPUs on your host machine or on the container VM you're using: e.g. what you set in Docker Desktop.
 
 You can then go to http://127.0.0.1:4200 to see the Prefect dashboard (workflows to be run).
-You can also go to http://localhost:8000/api/v2/docs to see the Django app.
+You can also go to http://localhost:8000 to see the Django app.
 The django admin dashboard is at http://localhost:8000/admin (username: `emgdev` if you used `task make-dev-data`).
 
 #### Run a basic Prefect flow
@@ -114,7 +114,7 @@ This agent simulates a worker node on an HPC cluster, e.g. it can submit `nextfl
 Note that this is a very minimal development environment... the entire "slurm cluster" is just two docker containers on your computer.
 
 #### Run a flow
-Either: open the [Prefect dashboard](http://localhost:4200), or use a POST request on the [MGnify API](http://localhost:8000/api/v2/), or use the prefect CLI via docker compose.
+Either: open the [Prefect dashboard](http://localhost:4200), or use a POST request on the [MGnify API](http://localhost:8000/), or use the prefect CLI via docker compose.
 
 E.g., use the Prefect dashboard to do a "quick run" of the [Realistic Example flow you just deployed](http://localhost:4200/deployments?deployments.nameLike=realistic&page=1) with accession `PRJNA521078`.
 This example will:

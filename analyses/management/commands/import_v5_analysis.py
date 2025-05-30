@@ -143,10 +143,12 @@ class Command(BaseCommand):
                 "results_dir": analysed_assembly_dir,
                 "sample": sample,
                 "ena_study": self.ena_study,
+                "pipeline_version": Analysis.PipelineVersions.v5,
             },
         )
         self.process_functional_annotations(analysed_assembly_dir, analysis)
         self.process_contigs(analysed_assembly_dir, analysis)
+        analysis.status[Analysis.AnalysisStates.ANALYSIS_ANNOTATIONS_IMPORTED] = True
 
     def process_functional_annotations(self, analysed_assembly_dir, analysis):
         print(f"Processing functional annotations in {analysed_assembly_dir}")

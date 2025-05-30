@@ -1,8 +1,14 @@
-from typing import List, TypeVar
+import logging
+from enum import Enum
+from typing import List, TypeVar, Type
 
+from django.contrib.auth.models import User
 from prefect import task
 
-from analyses.models import Analysis, Assembly
+from analyses.models import Analysis, Assembly, Study
+
+
+logger = logging.getLogger(__name__)
 
 
 @task(log_prints=True)
@@ -34,7 +40,7 @@ def task_mark_assembly_status(
     print(f"Assembly {assembly} status is {status} now.")
     assembly.mark_status(status, reason=reason)
     for unset_status in unset_statuses or []:
-        if assembly.status[unset_status]:
+        if assembly.status.get(unset_status, None):
             assembly.mark_status(
                 unset_status,
                 set_status_as=False,
@@ -67,11 +73,11 @@ def task_mark_analysis_status(
         raise ValueError(
             f"Invalid status '{status}'. Must be one of the predefined AnalysisStates."
         )
-
+    analysis.refresh_from_db()
     print(f"Analysis {analysis} status is {status} now.")
     analysis.mark_status(status, reason=reason)
     for unset_status in unset_statuses or []:
-        if analysis.status[unset_status]:
+        if analysis.status.get(unset_status, None):
             analysis.mark_status(
                 unset_status,
                 set_status_as=False,
@@ -92,3 +98,22 @@ def chunk_list(items: List[I], chunk_size: int) -> List[List[I]]:
     :return: List of chunks, each chunk is a list of items up to chunk_size
     """
     return [items[j : j + chunk_size] for j in range(0, len(items), chunk_size)]
+
+
+UserChoicesEnum = TypeVar("UserChoicesEnum", bound=Enum)
+
+
+def get_users_as_choices() -> Type[UserChoicesEnum]:
+    users = {
+        user.username: f"{user.username} ({user.email})" for user in User.objects.all()
+    }
+    UserChoices = Enum("UserChoices", users)
+    return UserChoices
+
+
+def add_study_watchers(study: Study, watcher_usernames: List[UserChoicesEnum]):
+    for watcher in watcher_usernames:
+        user = User.objects.get(username=watcher.name)
+        study.watchers.add(user)
+        logger.info(f"{user} now watches {study}")
+    study.save()

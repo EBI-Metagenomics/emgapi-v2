@@ -1,4 +1,4 @@
-FROM ubuntu:jammy as base
+FROM ubuntu:jammy AS base
 LABEL authors="mgnify team"
 
 RUN apt -y update && apt -y upgrade && apt -y install curl nano wget zip bzip2 rsync
@@ -18,27 +18,32 @@ RUN mkdir -p /var/log/slurm && chown -R slurm:slurm /var/log/slurm
 RUN mkdir -p /var/spool/slurmctld && chown -R slurm:slurm /var/spool/slurmctld
 RUN mkdir -p /var/spool/slurmd && chown -R slurm:slurm /var/spool/slurmd
 
-FROM base as dbd
+FROM base AS dbd
 # Just the database daemon
 RUN apt install -y slurmdbd
 COPY entrypoints/dbd-entrypoint.sh /usr/local/bin/dbd-entrypoint.sh
 RUN chmod +x /usr/local/bin/dbd-entrypoint.sh
 ENTRYPOINT ["/usr/local/bin/dbd-entrypoint.sh"]
 
-FROM base as ctl
+FROM base AS ctl
 # Just the controller
 COPY entrypoints/ctl-entrypoint.sh /usr/local/bin/ctl-entrypoint.sh
 RUN chmod +x /usr/local/bin/ctl-entrypoint.sh
 ENTRYPOINT ["/usr/local/bin/ctl-entrypoint.sh"]
 
-FROM base as worker
+FROM base AS worker
 # The slurm worker, and base HPC tools like Nextflow
 COPY entrypoints/worker-entrypoint.sh /usr/local/bin/worker-entrypoint.sh
 RUN chmod +x /usr/local/bin/worker-entrypoint.sh
 ENV SLURM_INCLUDE_DIR=/usr/include
 ENV SLURM_LIB_DIR=/usr/lib/x86_64-linux-gnu
 RUN DEBIAN_FRONTEND=noninteractive \
-    apt -y update && apt install -y default-jre
+    apt -y update && \
+    apt install -y software-properties-common && \
+    add-apt-repository -y ppa:openjdk-r/ppa && \
+    apt update && \
+    apt install -y openjdk-17-jre-headless
+
 RUN wget -qO- https://get.nextflow.io | bash
 RUN chmod +x nextflow
 RUN mv nextflow /usr/bin/
@@ -52,7 +57,7 @@ ENV PATH="/usr/bin/webin-cli:$PATH"
 
 ENTRYPOINT ["/usr/local/bin/worker-entrypoint.sh"]
 
-FROM worker as single_node
+FROM worker AS single_node
 # DBD + Ctl + Worker in a single container
 RUN apt install -y slurmdbd
 COPY entrypoints/single-node-entrypoint.sh /usr/local/bin/worker-entrypoint.sh

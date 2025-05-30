@@ -11,3 +11,4 @@ class ComputeResourceHeuristicAdmin(ModelAdmin):
         "assembler",
         "process",
     ]
+    autocomplete_fields = ["biome"]

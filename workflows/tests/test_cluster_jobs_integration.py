@@ -5,8 +5,7 @@ from datetime import timedelta
 from pathlib import Path
 
 import pytest
-from prefect import flow
-from prefect.logging import disable_run_logger
+from prefect import flow, task, runtime
 from prefect.runtime import flow_run
 
 from workflows.models import OrchestratedClusterJob
@@ -189,7 +188,7 @@ def test_run_cluster_job_state_persistence(
     )
 
 
-def test_input_file_hash(tmp_path, caplog):
+def test_input_file_hash(tmp_path, caplog, prefect_harness):
     caplog.set_level(logging.WARNING)
     f1 = tmp_path / "file1.txt"
     f1.touch()
@@ -198,8 +197,7 @@ def test_input_file_hash(tmp_path, caplog):
     f2.touch()
 
     f3 = tmp_path / "file3.txt"
-    with disable_run_logger():
-        hash = compute_hash_of_input_file.fn([f1, f2, f3])
+    hash = compute_hash_of_input_file([f1, f2, f3])
     assert f"Did not find a file to hash at {f3}." in caplog.text
     assert hash.startswith("786a02f7")
 
@@ -279,3 +277,36 @@ def test_slurm_resubmit_policies():
         policy=ResubmitIfFailedPolicy, job=jsd3
     )
     assert matching_jobs.count() == 0
+
+
+@flow(log_prints=True)
+def retryable_subflow(param: str, **kwargs):
+    print(f"Retryable subflow for {param}")
+    if runtime.flow_run.run_count == 1:
+        print(
+            f"Flow_run is {runtime.flow_run.run_count}, {runtime.flow_run.name}, {runtime.flow_run.parameters}"
+        )
+        print(
+            f"Task_run is {runtime.task_run}, {runtime.task_run.name}, {runtime.task_run.parameters}"
+        )
+        raise Exception("Failing first time")
+    return f"Did {param}"
+
+
+@task(log_prints=True)
+def task_that_includes_a_retriable_subflow(subflow_max_retries: int):
+    print("starting task")
+    subflow_result = retryable_subflow.with_options(retries=subflow_max_retries)(
+        "yellow"
+    )
+    return subflow_result
+
+
+def test_passing_retries_to_task_subflow(prefect_harness):
+    # This logic can be used to let cluster job subflows include their own retries.
+    # Test here is a MWE not using the cluster job flow itself.
+    with pytest.raises(Exception) as excinfo:
+        task_that_includes_a_retriable_subflow(subflow_max_retries=0)
+    assert str(excinfo.value) == "Failing first time"
+
+    assert task_that_includes_a_retriable_subflow(subflow_max_retries=2) == "Did yellow"

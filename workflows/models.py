@@ -113,8 +113,10 @@ class OrchestratedClusterJob(models.Model):
     )  # not pk because slurm recycles job IDs beyond a max int
     # N.B. this DOES NOT support array job IDs. Reasonable assumption for now since we do not have logic to launch these.
     flow_run_id = models.UUIDField(db_index=True)
-    job_submit_description = JSONFieldWithSchema(schema=SlurmJobSubmitDescription)
-    input_files_hashes = JSONFieldWithSchema(
+    job_submit_description: SlurmJobSubmitDescription = JSONFieldWithSchema(
+        schema=SlurmJobSubmitDescription
+    )
+    input_files_hashes: List[JobInputFile] = JSONFieldWithSchema(
         schema=JobInputFile, is_list=True, default=list, blank=True
     )
 

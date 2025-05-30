@@ -10,7 +10,7 @@ from activate_django_first import EMG_CONFIG
 
 import analyses.models
 from workflows.flows.analyse_study_tasks.import_completed_amplicon_analyses import (
-    import_completed_analysis,
+    import_completed_analyses,
 )
 from workflows.flows.analyse_study_tasks.make_samplesheet_amplicon import (
     make_samplesheet_amplicon,
@@ -22,6 +22,13 @@ from workflows.flows.analyse_study_tasks.analysis_states import (
 from workflows.flows.analyse_study_tasks.set_post_analysies_states import (
     set_post_analysis_states,
 )
+from workflows.flows.analyse_study_tasks.shared.markergene_study_summary import (
+    generate_markergene_summary_for_pipeline_run,
+)
+from workflows.flows.analyse_study_tasks.shared.study_summary import (
+    generate_study_summary_for_pipeline_run,
+)
+from workflows.prefect_utils.build_cli_command import cli_command
 from workflows.prefect_utils.slurm_flow import (
     run_cluster_job,
     ClusterJobFailedException,
@@ -29,8 +36,8 @@ from workflows.prefect_utils.slurm_flow import (
 from workflows.prefect_utils.slurm_policies import ResubmitIfFailedPolicy
 
 
-@flow(name="Run analysis pipeline-v6 in parallel", log_prints=True)
-def run_amplicon_pipeline_in_chunks(
+@flow(name="Run analysis pipeline-v6 via samplesheet", log_prints=True)
+def run_amplicon_pipeline_via_samplesheet(
     mgnify_study: analyses.models.Study,
     amplicon_analysis_ids: List[Union[str, int]],
 ):
@@ -53,16 +60,19 @@ def run_amplicon_pipeline_in_chunks(
     )
     print(f"Using output dir {amplicon_current_outdir} for this execution")
 
-    command = (
-        f"nextflow run {EMG_CONFIG.amplicon_pipeline.amplicon_pipeline_repo} "
-        f"-r {EMG_CONFIG.amplicon_pipeline.amplicon_pipeline_git_revision} "
-        f"-latest "  # Pull changes from GitHub
-        f"-profile {EMG_CONFIG.amplicon_pipeline.amplicon_pipeline_nf_profile} "
-        f"-resume "
-        f"--input {samplesheet} "
-        f"--outdir {amplicon_current_outdir} "
-        f"{'-with-tower' if settings.EMG_CONFIG.slurm.use_nextflow_tower else ''} "
-        f"-name amplicon-v6-for-samplesheet-{slugify(samplesheet)[-30:]} "
+    command = cli_command(
+        [
+            ("nextflow", "run", EMG_CONFIG.amplicon_pipeline.amplicon_pipeline_repo),
+            ("-r", EMG_CONFIG.amplicon_pipeline.amplicon_pipeline_git_revision),
+            "-latest",  # Pull changes from GitHub
+            ("-profile", EMG_CONFIG.amplicon_pipeline.amplicon_pipeline_nf_profile),
+            "-resume",
+            ("--input", samplesheet),
+            ("--outdir", amplicon_current_outdir),
+            EMG_CONFIG.slurm.use_nextflow_tower and "-with-tower",
+            ("-name", f"ampl-v6-sheet-{slugify(samplesheet)[-10:]}"),
+            ("-ansi-log", "false"),
+        ]
     )
 
     try:
@@ -88,4 +98,14 @@ def run_amplicon_pipeline_in_chunks(
     else:
         # assume that if job finished, all finished... set statuses
         set_post_analysis_states(amplicon_current_outdir, amplicon_analyses)
-        import_completed_analysis(amplicon_current_outdir, amplicon_analyses)
+        import_completed_analyses(amplicon_current_outdir, amplicon_analyses)
+        generate_markergene_summary_for_pipeline_run(
+            mgnify_study_accession=mgnify_study.accession,
+            pipeline_outdir=amplicon_current_outdir,
+        )
+        generate_study_summary_for_pipeline_run(
+            pipeline_outdir=amplicon_current_outdir,
+            mgnify_study_accession=mgnify_study.accession,
+            analysis_type="amplicon",
+            completed_runs_filename=EMG_CONFIG.amplicon_pipeline.completed_runs_csv,
+        )

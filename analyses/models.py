@@ -6,18 +6,19 @@ import re
 from pathlib import Path
 from typing import ClassVar, Union
 
+from django.contrib.postgres.indexes import GinIndex
 from django.core.exceptions import MultipleObjectsReturned, ObjectDoesNotExist
 from django.db import models
-from django.db.models import JSONField, Q
+from django.db.models import JSONField, Q, Func, Value
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 from django_ltree.models import TreeModel
+from pydantic import BaseModel, ConfigDict, Field
 
 import ena.models
 from analyses.base_models.base_models import (
     ENADerivedManager,
     ENADerivedModel,
-    MGnifyAutomatedModel,
     PrivacyFilterManagerMixin,
     TimeStampedModel,
     VisibilityControlledModel,
@@ -25,8 +26,13 @@ from analyses.base_models.base_models import (
 from analyses.base_models.mgnify_accessioned_models import MGnifyAccessionField
 from analyses.base_models.with_downloads_models import WithDownloadsModel
 from analyses.base_models.with_status_models import SelectByStatusManagerMixin
+from analyses.base_models.with_watchers_models import WithWatchersModel
 from emgapiv2.async_utils import anysync_property
 from emgapiv2.enum_utils import FutureStrEnum
+from emgapiv2.model_utils import JSONFieldWithSchema
+from workflows.ena_utils.read_run import ENAReadRunFields
+from workflows.ena_utils.sample import ENASampleFields
+
 
 # Some models associated with MGnify Analyses (MGYS, MGYA etc).
 
@@ -65,7 +71,7 @@ class Biome(TreeModel):
         return re.sub(r"[^a-zA-Z0-9._]", "", underscore_punctuated)
 
 
-class StudyManager(models.Manager):
+class StudyManager(ENADerivedManager):
     def get_or_create_for_ena_study(self, ena_study_accession):
         logging.info(f"Will get/create MGnify study for {ena_study_accession}")
         try:
@@ -95,10 +101,19 @@ class PublicStudyManager(PrivacyFilterManagerMixin, StudyManager):
     pass
 
 
-class Study(MGnifyAutomatedModel, ENADerivedModel, TimeStampedModel):
+class Study(
+    ENADerivedModel,
+    WithDownloadsModel,
+    TimeStampedModel,
+    WithWatchersModel,
+):
     objects = StudyManager()
     public_objects = PublicStudyManager()
 
+    DOWNLOAD_PARENT_IDENTIFIER_ATTR = "accession"
+    ALLOWED_DOWNLOAD_GROUP_PREFIXES = ["study_summary"]
+
+    id = models.AutoField(primary_key=True)
     accession = MGnifyAccessionField(
         accession_prefix="MGYS", accession_length=8, db_index=True
     )
@@ -106,11 +121,24 @@ class Study(MGnifyAutomatedModel, ENADerivedModel, TimeStampedModel):
         ena.models.Study, on_delete=models.CASCADE, null=True, blank=True
     )
     biome = models.ForeignKey(Biome, on_delete=models.CASCADE, null=True, blank=True)
-    has_legacy_data = models.BooleanField(
-        default=False, help_text="If the study has legacy data (pre V6)"
+
+    class StudyFeatures(BaseModel):
+        """
+        Pydantic schema for storing a feature set of a study in JSON.
+        """
+
+        model_config = ConfigDict(extra="allow")
+
+        has_prev6_analyses: bool = Field(False)
+        has_v6_analyses: bool = Field(False)
+
+    features: StudyFeatures = JSONFieldWithSchema(
+        schema=StudyFeatures, default=StudyFeatures
     )
 
     title = models.CharField(max_length=4000)  # same max as ENA DB
+    results_dir = models.CharField(max_length=256, null=True, blank=True)
+    external_results_dir = models.CharField(max_length=256, null=True, blank=True)
 
     def __str__(self):
         return self.accession
@@ -118,15 +146,37 @@ class Study(MGnifyAutomatedModel, ENADerivedModel, TimeStampedModel):
     class Meta:
         verbose_name_plural = "studies"
 
+        indexes = [
+            GinIndex(fields=["features"]),
+        ]
 
-class PublicSampleManager(PrivacyFilterManagerMixin, models.Manager): ...
+    @property
+    def first_accession(self):
+        # Prefer ERP--,SRP--,DRP-- etc style accessions over PRJ--, if available
+        return next(
+            (
+                accession
+                for accession in self.ena_accessions
+                if not accession.upper().startswith("PRJ")
+            ),
+            super().first_accession,
+        )
 
 
-class Sample(MGnifyAutomatedModel, ENADerivedModel, TimeStampedModel):
-    objects = models.Manager()
+class PublicSampleManager(PrivacyFilterManagerMixin, ENADerivedManager): ...
+
+
+class Sample(ENADerivedModel, TimeStampedModel):
+    CommonMetadataKeys = ENASampleFields
+
+    objects = ENADerivedManager()
     public_objects = PublicSampleManager()
 
+    id = models.AutoField(primary_key=True)
     ena_sample = models.ForeignKey(ena.models.Sample, on_delete=models.CASCADE)
+    studies = models.ManyToManyField(Study)
+
+    metadata = models.JSONField(default=dict, blank=True)
 
     def __str__(self):
         return f"Sample {self.id}: {self.ena_sample}"
@@ -156,20 +206,11 @@ class WithExperimentTypeModel(models.Model):
 class PublicRunManager(PrivacyFilterManagerMixin, models.Manager): ...
 
 
-class Run(
-    TimeStampedModel, ENADerivedModel, MGnifyAutomatedModel, WithExperimentTypeModel
-):
-    class CommonMetadataKeys:
-        # TODO replace this with ENA result type pydantic model once available
-        INSTRUMENT_PLATFORM = "instrument_platform"
-        INSTRUMENT_MODEL = "instrument_model"
-        FASTQ_FTPS = "fastq_ftps"
-        LIBRARY_STRATEGY = "library_strategy"
-        LIBRARY_LAYOUT = "library_layout"
-        LIBRARY_SOURCE = "library_source"
-        SCIENTIFIC_NAME = "scientific_name"
-        HOST_TAX_ID = "host_tax_id"
-        HOST_SCIENTIFIC_NAME = "host_scientific_name"
+class Run(TimeStampedModel, ENADerivedModel, WithExperimentTypeModel):
+    CommonMetadataKeys = ENAReadRunFields
+    CommonMetadataKeys.FASTQ_FTPS = (
+        "fastq_ftps"  # plural convention mismatch to ENA; TODO
+    )
 
     class InstrumentPlatformKeys:
         BGISEQ = "BGISEQ"
@@ -179,9 +220,10 @@ class Run(
         PACBIO_SMRT = "PACBIO_SMRT"
         ION_TORRENT = "ION_TORRENT"
 
-    objects = models.Manager()
+    objects = ENADerivedManager()
     public_objects = PublicRunManager()
 
+    id = models.AutoField(primary_key=True)
     instrument_platform = models.CharField(
         db_column="instrument_platform", max_length=100, blank=True, null=True
     )
@@ -275,7 +317,14 @@ class Assembly(TimeStampedModel, ENADerivedModel):
     dir = models.CharField(max_length=200, null=True, blank=True)
     run = models.ForeignKey(
         Run, on_delete=models.CASCADE, related_name="assemblies", null=True, blank=True
-    )
+    )  # TODO: coassembly
+    sample = models.ForeignKey(
+        Sample,
+        on_delete=models.CASCADE,
+        related_name="assemblies",
+        null=True,
+        blank=True,
+    )  # TODO: coassembly
     # raw reads study that was used as resource for assembly
     reads_study = models.ForeignKey(
         Study,
@@ -481,7 +530,8 @@ class PublicAnalysisManager(
     A custom manager that filters out private analyses by default.
     """
 
-    pass
+    def get_queryset(self, *args, **kwargs):
+        return super().get_queryset(*args, **kwargs).filter(is_ready=True)
 
 
 class PublicAnalysisManagerIncludingAnnotations(
@@ -495,7 +545,6 @@ class PublicAnalysisManagerIncludingAnnotations(
 
 
 class Analysis(
-    MGnifyAutomatedModel,
     TimeStampedModel,
     VisibilityControlledModel,
     WithDownloadsModel,
@@ -509,13 +558,25 @@ class Analysis(
 
     DOWNLOAD_PARENT_IDENTIFIER_ATTR = "accession"
 
+    id = models.AutoField(primary_key=True)
+    is_ready = models.GeneratedField(
+        expression=Func(
+            Value("analysis_annotations_imported"),
+            function="jsonb_extract_path_text",
+            template="(jsonb_extract_path_text(status, %(expressions)s)::boolean)",
+        ),
+        output_field=models.BooleanField(),
+        db_persist=True,
+    )
+
     accession = MGnifyAccessionField(accession_prefix="MGYA", accession_length=8)
 
-    suppression_following_fields = ["sample"]
+    suppression_following_fields = ["sample"]  # TODO
     study = models.ForeignKey(
         Study, on_delete=models.CASCADE, to_field="accession", related_name="analyses"
     )
-    results_dir = models.CharField(max_length=100)
+    results_dir = models.CharField(max_length=256, null=True, blank=True)
+    external_results_dir = models.CharField(max_length=256, null=True, blank=True)
     sample = models.ForeignKey(
         Sample, on_delete=models.CASCADE, related_name="analyses"
     )
@@ -539,8 +600,12 @@ class Analysis(
     KEGG_ORTHOLOGS = "kegg_orthologs"
     ANTISMASH_GENE_CLUSTERS = "antismash_gene_clusters"
     PFAMS = "pfams"
+    RHEA_REACTIONS = "rhea_reactions"
 
     TAXONOMIES = "taxonomies"
+    CLOSED_REFERENCE = "closed_reference"
+    ASV = "asv"
+    FUNCTIONAL_ANNOTATION = "functional_annotation"
 
     class TaxonomySources(FutureStrEnum):
         SSU: str = "ssu"
@@ -550,6 +615,7 @@ class Analysis(
         PR2: str = "pr2"
         DADA2_SILVA: str = "dada2_silva"
         DADA2_PR2: str = "dada2_pr2"
+        UNIREF: str = "uniref"
 
     TAXONOMIES_SSU = f"{TAXONOMIES}__{TaxonomySources.SSU.value}"
     TAXONOMIES_LSU = f"{TAXONOMIES}__{TaxonomySources.LSU.value}"
@@ -558,6 +624,7 @@ class Analysis(
     TAXONOMIES_PR2 = f"{TAXONOMIES}__{TaxonomySources.PR2.value}"
     TAXONOMIES_DADA2_SILVA = f"{TAXONOMIES}__{TaxonomySources.DADA2_SILVA.value}"
     TAXONOMIES_DADA2_PR2 = f"{TAXONOMIES}__{TaxonomySources.DADA2_PR2.value}"
+    TAXONOMIES_UNIREF = f"{TAXONOMIES}__{TaxonomySources.UNIREF.value}"
 
     ALLOWED_DOWNLOAD_GROUP_PREFIXES = [
         "all",  # catch-all for legacy
@@ -566,6 +633,7 @@ class Analysis(
         "quality_control",
         "primer_identification",
         "asv",
+        FUNCTIONAL_ANNOTATION,
     ]
 
     @staticmethod
@@ -605,6 +673,7 @@ class Analysis(
         ANALYSIS_FAILED = "analysis_failed"
         ANALYSIS_QC_FAILED = "analysis_qc_failed"
         ANALYSIS_POST_SANITY_CHECK_FAILED = "analysis_post_sanity_check_failed"
+        ANALYSIS_ANNOTATIONS_IMPORTED = "analysis_annotations_imported"
 
         @classmethod
         def default_status(cls):
@@ -614,6 +683,7 @@ class Analysis(
                 cls.ANALYSIS_COMPLETED: False,
                 cls.ANALYSIS_BLOCKED: False,
                 cls.ANALYSIS_FAILED: False,
+                cls.ANALYSIS_ANNOTATIONS_IMPORTED: False,
             }
 
     status = models.JSONField(
@@ -648,6 +718,14 @@ class Analysis(
 
     class Meta:
         verbose_name_plural = "Analyses"
+
+        indexes = [
+            models.Index(
+                name="idx_ready_and_not_suppressed",  # API queries might want this index for default queries
+                fields=["is_ready", "is_suppressed"],
+                condition=models.Q(is_ready=True, is_suppressed=False),
+            )
+        ]
 
     def __str__(self):
         return f"{self.accession} ({self.pipeline_version} {self.experiment_type})"

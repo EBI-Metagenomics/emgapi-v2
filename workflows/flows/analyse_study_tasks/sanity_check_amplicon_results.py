@@ -2,17 +2,17 @@ import re
 from pathlib import Path
 
 from prefect import task, get_run_logger
+from prefect.tasks import task_input_hash
 
 from activate_django_first import EMG_CONFIG
 
 import analyses.models
 from workflows.flows.analyse_study_tasks.analysis_states import AnalysisStates
 from workflows.prefect_utils.analyses_models_helpers import task_mark_analysis_status
-from workflows.prefect_utils.cache_control import context_agnostic_task_input_hash
 
 
 @task(
-    cache_key_fn=context_agnostic_task_input_hash,
+    cache_key_fn=task_input_hash,
 )
 def sanity_check_amplicon_results(
     amplicon_current_outdir: Path, analysis: analyses.models.Analysis
@@ -30,6 +30,7 @@ def sanity_check_amplicon_results(
         required:
          - ${run_id}_${gene}.fasta (depending on if the gene was SSU/LSU/ITS)
          - ${run_id}.tblout.deoverlapped
+         optional:
          - ${run_id}_${gene}_rRNA_${domain}.${domain_id}.fa (domain can be bacteria/archaea/eukarya)
     AMPLIFIED REGION INFERENCE folder:
         required:
@@ -109,19 +110,11 @@ def sanity_check_amplicon_results(
             True if f.is_file() and pattern_gene_fasta.match(f.name) else False
             for f in sequence_categorisation_folder.iterdir()
         ]
-        pattern_domain_fasta = re.compile(
-            r"\w+_(SSU|LSU|ITS)_rRNA_(bacteria|archaea|eukarya)\.[A-Z0-9]+\.fa$"
-        )
-        matching_domain_files = [
-            True if f.is_file() and pattern_domain_fasta.match(f.name) else False
-            for f in sequence_categorisation_folder.iterdir()
-        ]
         if not (
             Path(
                 f"{sequence_categorisation_folder}/{run_id}.tblout.deoverlapped"
             ).exists()
             and sum(matching_gene_files)
-            and sum(matching_domain_files)
         ):
             reason = f"missing required files in {EMG_CONFIG.amplicon_pipeline.sequence_categorisation_folder}"
             logger.info(f"Post sanity check for {run_id}: {reason}")

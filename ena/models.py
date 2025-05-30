@@ -1,5 +1,6 @@
 import logging
 
+from django.conf import settings
 from django.core.exceptions import MultipleObjectsReturned, ObjectDoesNotExist
 from django.db import models
 from django.db.models import Model, QuerySet
@@ -7,6 +8,9 @@ from django.db.models.signals import post_save
 from django.dispatch import receiver
 
 # Some models that mirror ENA objects, like Study, Sample, Run etc
+
+
+logger = logging.getLogger(__name__)
 
 
 class ENAModel(models.Model):
@@ -18,10 +22,14 @@ class ENAModel(models.Model):
     class Meta:
         abstract = True
 
+    @property
+    def ena_browser_url(self):
+        return f"{settings.EMG_CONFIG.ena.browser_view_url_prefix}/{self.accession}"
+
 
 class StudyManager(models.Manager):
     def get_ena_study(self, ena_study_accession):
-        logging.info(f"Will get ENA study for {ena_study_accession} from DB")
+        logger.info(f"Will get ENA study for {ena_study_accession} from DB")
         ena_study = False
         try:
             ena_study = (
@@ -32,9 +40,9 @@ class StudyManager(models.Manager):
                 )
                 .first()
             )
-            logging.debug(f"Got {ena_study}")
+            logger.debug(f"Got {ena_study}")
         except (MultipleObjectsReturned, ObjectDoesNotExist):
-            logging.warning(
+            logger.warning(
                 f"Problem getting ENA study {ena_study_accession} from ENA models DB"
             )
         return ena_study
@@ -85,7 +93,7 @@ def on_ena_study_saved_update_derived_suppression_and_privacy_states(
                     "webin_submitter",
                 ]:
                     if field_to_propagate not in fields_of_related:
-                        logging.warning(
+                        logger.warning(
                             f"Model {related_model._meta.model_name} looks like it is derived from ENA Study, but doesn't have an {field_to_propagate} field to update."
                         )
                         continue
@@ -107,7 +115,7 @@ def on_ena_study_saved_update_derived_suppression_and_privacy_states(
                             }  # optimisation so only select derived objects that are not already up to date
                         )
                         if related_objects_to_update_status_of.exists():
-                            logging.info(
+                            logger.info(
                                 f"Will update {field_to_propagate} state of "
                                 f"{related_objects_to_update_status_of.count()} "
                                 f"{related_model._meta.app_label}.{related_model._meta.verbose_name_plural} "

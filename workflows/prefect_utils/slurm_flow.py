@@ -10,9 +10,8 @@ from typing import List, Optional, Union
 from django.conf import settings
 from django.urls import reverse
 from django.utils.timezone import now
-from prefect import Flow, State, flow, get_run_logger, task
+from prefect import flow, get_run_logger, task
 from prefect.artifacts import create_markdown_artifact
-from prefect.client.schemas import FlowRun
 from prefect.runtime import flow_run
 
 from emgapiv2.log_utils import mask_sensitive_data as safe
@@ -30,8 +29,8 @@ from workflows.prefect_utils.slurm_status import (
     slurm_status_is_finished_unsuccessfully,
 )
 
-if "PYTEST_CURRENT_TEST" in os.environ:
-    logging.warning("Unit testing, so patching pyslurm.")
+if "PYTEST_VERSION" in os.environ:
+    logging.debug("Unit testing, so patching pyslurm.")
     import workflows.prefect_utils.pyslurm_patch as pyslurm
 else:
     try:
@@ -89,7 +88,7 @@ def check_cluster_job(
 
     job_log_path = Path(job.working_directory) / Path(f"slurm-{job_id}.out")
     if job_log_path.exists():
-        with open(job_log_path, "r") as job_log:
+        with open(job_log_path, "r", encoding="utf-8", errors="ignore") as job_log:
             full_log = job_log.readlines()
             log = "\n".join(full_log[-EMG_CONFIG.slurm.job_log_tail_lines :])
             logger.info(
@@ -190,7 +189,6 @@ def start_or_attach_cluster_job(
     :return: OrchestratedClusterJob submitted or attached.
     """
     logger = get_run_logger()
-    logger.debug(f"Hash is {hash}")
 
     ### Prepare working directory for job
     job_workdir = workdir
@@ -350,24 +348,6 @@ class ClusterJobFailedException(Exception):
         return msg
 
 
-def cancel_cluster_jobs_if_flow_cancelled(
-    the_flow: Flow, the_flow_run: FlowRun, state: State
-):
-    logger = get_run_logger()
-    if "name" in the_flow_run.parameters:
-        job_names = [the_flow_run.parameters.get("name")]
-    elif "names" in the_flow_run.parameters:
-        job_names = [the_flow_run.parameters.get("names")]
-    else:
-        raise UserWarning(
-            f"Flow run {the_flow_run.id} had no params called 'name' or 'names' so don't know what jobs to cancel"
-        )
-
-    logger.warning(f"Will try to cancel jobs matching the job names {job_names}")
-    for job_name in job_names:
-        cancel_cluster_job(job_name)
-
-
 @task
 def compute_hash_of_input_file(
     input_files_to_hash: Optional[List[Union[Path, str]]] = None,
@@ -403,7 +383,6 @@ def store_nextflow_trace(orchestrated_cluster_job: OrchestratedClusterJob):
 @flow(
     flow_run_name="Cluster job: {name}",
     persist_result=True,
-    on_cancellation=[cancel_cluster_jobs_if_flow_cancelled],
     timeout_seconds=EMG_CONFIG.slurm.cluster_job_flow_timeout_seconds,
 )
 def run_cluster_job(
@@ -493,7 +472,7 @@ def run_cluster_job(
         else:
             logger.debug(
                 f"Job {orchestrated_cluster_job} is still running. "
-                f"Sleeping for {EMG_CONFIG.slurm.default_seconds_between_submission_attempts} seconds."
+                f"Sleeping for {EMG_CONFIG.slurm.default_seconds_between_job_checks} seconds."
             )
             time.sleep(EMG_CONFIG.slurm.default_seconds_between_job_checks)
 

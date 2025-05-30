@@ -89,6 +89,23 @@ class AmpliconPipelineConfig(BaseModel):
     amplicon_nextflow_master_job_memory_gb: int = 1
     amplicon_pipeline_time_limit_days: int = 5
 
+    allow_non_insdc_run_names: bool = False
+    keep_study_summary_partials: bool = False
+
+
+class AssemblyAnalysisPipelineConfig(BaseModel):
+    pipeline_repo: str = "ebi-metagenomics/assembly-analysis-pipeline"
+    pipeline_git_revision: str = "dev"
+    pipeline_nf_config: str = "test.config"
+    pipeline_nf_profile: str = "debug"
+    pipeline_time_limit_days: int = 5
+    samplesheet_chunk_size: int = 10
+    nextflow_master_job_memory_gb: int = 1
+    completed_assemblies_csv: str = "qc_passed_assemblies.csv"
+    failed_assemblies_csv: str = "qc_failed_assemblies.csv"
+    taxonomy_folder: str = "taxonomy"
+    functional_folder: str = "functional-annotation"
+
 
 class WebinConfig(BaseModel):
     emg_webin_account: str = None
@@ -99,33 +116,17 @@ class WebinConfig(BaseModel):
     webin_cli_executor: str = "/usr/bin/webin-cli/webin-cli.jar"
     broker_prefix: str = "mg-"
     broker_password: str = None
+    webin_cli_retries: int = 6
+    webin_cli_retry_delay_seconds: int = 60
 
 
 class ENAConfig(BaseModel):
-    primary_study_accession_re: str = "(PRJ[EDN][A-Z][0-9]+)"
-    assembly_accession_re: str = "([EDS]RZ[0-9]{6,})"
     portal_search_api: AnyHttpUrl = "https://www.ebi.ac.uk/ena/portal/api/search"
     portal_search_api_max_retries: int = 4
     portal_search_api_retry_delay_seconds: int = 15
     browser_view_url_prefix: AnyHttpUrl = "https://www.ebi.ac.uk/ena/browser/view"
     # TODO: migrate to the ENA Handler
     study_metadata_fields: list[str] = ["study_title", "secondary_study_accession"]
-    # TODO: migrate to the ENA Handler
-    readrun_metadata_fields: list = [
-        "sample_accession",
-        "sample_title",
-        "secondary_sample_accession",
-        "fastq_md5",
-        "fastq_ftp",
-        "library_layout",
-        "library_strategy",
-        "library_source",
-        "scientific_name",
-        "host_tax_id",
-        "host_scientific_name",
-        "instrument_platform",
-        "instrument_model",
-    ]
 
     ftp_prefix: str = "ftp.sra.ebi.ac.uk/vol1/"
     fire_prefix: str = "s3://era-public/"
@@ -144,8 +145,9 @@ class LegacyServiceConfig(BaseModel):
 
 class ServiceURLsConfig(BaseModel):
     app_root: str = "http://localhost:8000"
+    base_url: str = ""
     transfer_services_url_root: str = (
-        "http://localhost:8080/pub/databases/metagenomics/mgnify_results"
+        "http://localhost:8080/pub/databases/metagenomics/mgnify_results/"
     )
 
 
@@ -173,6 +175,9 @@ class LogMaskingConfig(BaseModel):
 
 class EMGConfig(BaseSettings):
     amplicon_pipeline: AmpliconPipelineConfig = AmpliconPipelineConfig()
+    assembly_analysis_pipeline: AssemblyAnalysisPipelineConfig = (
+        AssemblyAnalysisPipelineConfig()
+    )
     assembler: AssemblerConfig = AssemblerConfig()
     ena: ENAConfig = ENAConfig()
     environment: str = "development"

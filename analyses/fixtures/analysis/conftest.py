@@ -25,12 +25,15 @@ def raw_read_analyses(raw_read_run):
         mgya.annotations[mg_models.Analysis.PFAMS] = [
             {"count": 1, "description": "PFAM1"}
         ]
-        mgya.results_dir = f"analyses/{mgya.accession}"
+        mgya.external_results_dir = f"analyses/{mgya.accession}"
         mgya.save()
         mgyas.append(mgya)
 
     mgyas[0].status[mg_models.Analysis.AnalysisStates.ANALYSIS_STARTED] = True
     mgyas[0].status[mg_models.Analysis.AnalysisStates.ANALYSIS_COMPLETED] = True
+    mgyas[0].status[
+        mg_models.Analysis.AnalysisStates.ANALYSIS_ANNOTATIONS_IMPORTED
+    ] = True
     mgyas[1].status[mg_models.Analysis.AnalysisStates.ANALYSIS_STARTED] = True
     mgyas[0].save()
     mgyas[1].save()
@@ -50,5 +53,9 @@ def raw_read_analyses(raw_read_run):
         source=mg_models.Analysis.TaxonomySources.SSU,
         allow_non_exist=False,
     )
+
+    s = mgyas[0].study
+    s.features.has_v6_analyses = True
+    s.save()
 
     return mgyas

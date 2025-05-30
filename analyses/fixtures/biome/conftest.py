@@ -20,6 +20,6 @@ def top_level_biomes():
         biomes_objects.append(
             mg_models.Biome.objects.get_or_create(
                 path=biome["path"], biome_name=biome["biome_name"]
-            )
+            )[0]
         )
     return biomes_objects

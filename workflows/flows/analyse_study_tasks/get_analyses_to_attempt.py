@@ -23,8 +23,8 @@ def get_analyses_to_attempt(
         study.analyses.exclude_by_statuses(
             [
                 analyses.models.Analysis.AnalysisStates.ANALYSIS_QC_FAILED,
-                analyses.models.Analysis.AnalysisStates.ANALYSIS_COMPLETED,
                 analyses.models.Analysis.AnalysisStates.ANALYSIS_BLOCKED,
+                analyses.models.Analysis.AnalysisStates.ANALYSIS_ANNOTATIONS_IMPORTED,
             ]
         )
         .filter(experiment_type=for_experiment_type.value)

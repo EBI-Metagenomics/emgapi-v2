@@ -13,10 +13,6 @@ set mmonit http://monit:monit@hmmer-dev-01.ebi.ac.uk:8080/collector
 set httpd port 8001
   allow admin:remmhWeb
 
-check process dev-mi-slurm-worker-mitmproxy with pidfile /nfs/production/rdf/metagenomics/jenkins-slurm/processes/dev-mi-slurm-worker-mitmproxy.pid
-  start program = "/nfs/production/rdf/metagenomics/jenkins-slurm/dev-prefect-agent/deployment/ebi-wp-k8s-hl/start_mitm_with_monit.sh"
-  stop program  = "/bin/sh -c 'kill -s KILL $(cat /nfs/production/rdf/metagenomics/jenkins-slurm/processes/dev-mi-slurm-worker-mitmproxy.pid)'"
-
 check process dev-mi-slurm-worker-prefect-worker with pidfile /nfs/production/rdf/metagenomics/jenkins-slurm/processes/dev-mi-slurm-worker-prefect-worker.pid
   start program = "/nfs/production/rdf/metagenomics/jenkins-slurm/dev-prefect-agent/deployment/ebi-wp-k8s-hl/start_worker_with_monit.sh"
   stop program  = "/bin/sh -c 'kill -s KILL $(cat /nfs/production/rdf/metagenomics/jenkins-slurm/processes/dev-mi-slurm-worker-prefect-worker.pid)'"

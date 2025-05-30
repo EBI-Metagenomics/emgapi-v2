@@ -7,3 +7,5 @@ pytest-asyncio
 pytest-env
 pytest-sugar
 pytest-responses
+pytest-xdist
+mitmproxy

@@ -29,7 +29,7 @@ def get_or_create_assemblies_for_runs(
             run=run,
             ena_study=study.ena_study,
             reads_study=study,
-            defaults={"is_private": run.is_private},
+            defaults={"is_private": run.is_private, "sample": run.sample},
         )
         if created:
             print(f"Created assembly {assembly}")

@@ -1,4 +1,5 @@
 from datetime import timedelta
+from pathlib import PurePath
 
 from prefect import flow
 from prefect.runtime import flow_run
@@ -42,7 +43,11 @@ def move_data(
     if "environment" not in kwargs:
         kwargs["environment"] = {}
 
-    if make_target:
+    if make_target and (target_path := PurePath(target)).suffix:
+        # probably moving a file, so make its parent
+        move_command = f'mkdir -p "{target_path.parent}" && ' + move_command
+    elif make_target:
+        # probably moving a directory, so make that target
         move_command = f'mkdir -p "{target}" && ' + move_command
 
     return run_cluster_job(

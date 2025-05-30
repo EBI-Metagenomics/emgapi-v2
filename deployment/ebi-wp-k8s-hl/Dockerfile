@@ -1,4 +1,4 @@
-FROM python:3.11
+FROM python:3.12
 LABEL authors="sandyr"
 
 ENV USER=docker
@@ -17,6 +17,7 @@ RUN addgroup --gid "$GID" "$USER" \
 WORKDIR /app
 
 ADD requirements.txt ./requirements.txt
+RUN pip install --upgrade pip
 RUN pip install -r requirements.txt
 
 ADD analyses ./analyses

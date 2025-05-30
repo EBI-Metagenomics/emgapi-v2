@@ -35,13 +35,13 @@ def test_prefect_assembly_upload_flow_assembly_metaspades(
 
     ena_api_study = responses.add(
         responses.POST,
-        "https://www.ebi.ac.uk/ena/portal/api/v2.0/search",
+        "https://www.ebi.ac.uk/ena/portal/api/search",
         match=[
             matchers.urlencoded_params_matcher(
                 {
                     "result": "study",
                     "format": "json",
-                    "fields": "study_accession,study_title,study_description,first_public",
+                    "fields": "study_accession,study_title,first_public",
                     "query": f'study_accession="{raw_reads_mgnify_study.first_accession}"',
                 },
                 allow_blank=True,
@@ -69,13 +69,13 @@ def test_prefect_assembly_upload_flow_assembly_metaspades(
 
     ena_api_read_run = responses.add(
         responses.POST,
-        "https://www.ebi.ac.uk/ena/portal/api/v2.0/search",
+        "https://www.ebi.ac.uk/ena/portal/api/search",
         match=[
             matchers.urlencoded_params_matcher(
                 {
                     "result": "read_run",
                     "format": "json",
-                    "fields": "run_accession,sample_accession,instrument_model,instrument_platform",
+                    "fields": "run_accession,sample_accession,instrument_model",
                     "query": f'run_accession="{run_accession}"',
                 },
                 allow_blank=True,

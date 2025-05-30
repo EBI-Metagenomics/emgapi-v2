@@ -3,7 +3,8 @@ import os
 import shutil
 from enum import Enum
 from pathlib import Path
-from typing import Optional
+from typing import Optional, List
+from unittest.mock import patch
 
 import pandas as pd
 import pytest
@@ -21,7 +22,10 @@ from workflows.flows.assemble_study_tasks.assemble_samplesheets import (
 from workflows.flows.assemble_study_tasks.make_samplesheets import (
     make_samplesheets_for_runs_to_assemble,
 )
-from workflows.prefect_utils.analyses_models_helpers import task_mark_assembly_status
+from workflows.prefect_utils.analyses_models_helpers import (
+    task_mark_assembly_status,
+    get_users_as_choices,
+)
 from workflows.prefect_utils.testing_utils import (
     should_not_mock_httpx_requests_to_prefect_server,
 )
@@ -34,7 +38,9 @@ EMG_CONFIG = settings.EMG_CONFIG
 @pytest.mark.parametrize(
     "mock_suspend_flow_run", ["workflows.flows.assemble_study"], indirect=True
 )
+@patch("workflows.flows.assemble_study_tasks.make_samplesheets.queryset_hash")
 def test_prefect_assemble_study_flow(
+    mock_queryset_hash_for_assemblies,
     prefect_harness,
     httpx_mock,
     mock_suspend_flow_run,
@@ -43,6 +49,7 @@ def test_prefect_assemble_study_flow(
     mock_check_cluster_job_all_completed,
     top_level_biomes,
     assemblers,
+    admin_user,
 ):
     ### ENA MOCKING ###
     accession = "SRP1"
@@ -55,7 +62,8 @@ def test_prefect_assemble_study_flow(
         f"query=%22%28study_accession%3D{accession}+OR+secondary_study_accession%3D{accession}%29%22&"
         f"fields=study_accession&"
         f"limit=&"
-        f"format=json",
+        f"format=json&"
+        f"dataPortal=metagenome",
         json=[{"study_accession": accession}],
     )
 
@@ -65,7 +73,8 @@ def test_prefect_assemble_study_flow(
         f"query=%22%28study_accession={accession}%20OR%20secondary_study_accession={accession}%29%22&"
         f"limit=10&"
         f"format=json&"
-        f"fields={','.join(EMG_CONFIG.ena.study_metadata_fields)}",
+        f"fields={','.join(EMG_CONFIG.ena.study_metadata_fields)}&"
+        f"dataPortal=metagenome",
         json=[
             {
                 "study_title": "Metagenome of a wookie",
@@ -81,7 +90,7 @@ def test_prefect_assemble_study_flow(
         f"&query=%22%28study_accession=PRJNA1%20OR%20secondary_study_accession=PRJNA1%29%22"
         f"&limit=5000"
         f"&format=json"
-        f"&fields={','.join(EMG_CONFIG.ena.readrun_metadata_fields)}"
+        f"&fields=run_accession%2Csample_accession%2Csample_title%2Csecondary_sample_accession%2Cfastq_md5%2Cfastq_ftp%2Clibrary_layout%2Clibrary_strategy%2Clibrary_source%2Cscientific_name%2Chost_tax_id%2Chost_scientific_name%2Cinstrument_platform%2Cinstrument_model%2Clocation%2Clat%2Clon"
         f"&dataPortal=metagenome",
         json=[
             {
@@ -99,6 +108,9 @@ def test_prefect_assemble_study_flow(
                 "host_scientific_name": "Apis mellifera",
                 "instrument_platform": "ILLUMINA",
                 "instrument_model": "Illumina MiSeq",
+                "lat": "52",
+                "lon": "0",
+                "location": "hinxton",
             },
             {
                 "sample_accession": "SAMN02",
@@ -115,6 +127,9 @@ def test_prefect_assemble_study_flow(
                 "host_scientific_name": "Apis mellifera",
                 "instrument_platform": "ILLUMINA",
                 "instrument_model": "Illumina MiSeq",
+                "lat": "52",
+                "lon": "0",
+                "location": "hinxton",
             },
             {
                 "sample_accession": "SAMN03",
@@ -131,6 +146,9 @@ def test_prefect_assemble_study_flow(
                 "host_scientific_name": "Apis mellifera",
                 "instrument_platform": "ILLUMINA",
                 "instrument_model": "Illumina MiSeq",
+                "lat": "52",
+                "lon": "0",
+                "location": "hinxton",
             },
             {
                 "sample_accession": "SAMN04",
@@ -147,6 +165,9 @@ def test_prefect_assemble_study_flow(
                 "host_scientific_name": "Apis mellifera",
                 "instrument_platform": "OXFORD_NANOPORE",
                 "instrument_model": "MinION",
+                "lat": "52",
+                "lon": "0",
+                "location": "hinxton",
             },
             {
                 "sample_accession": "SAMN05",
@@ -163,17 +184,22 @@ def test_prefect_assemble_study_flow(
                 "host_scientific_name": "Apis mellifera",
                 "instrument_platform": "ION_TORRENT",
                 "instrument_model": "Ion Torrent Proton",
+                "lat": "52",
+                "lon": "0",
+                "location": "hinxton",
             },
         ],
     )
 
     ## Pretend that a human resumed the flow with the biome picker, and then with the assembler selector.
     BiomeChoices = Enum("BiomeChoices", {"root.engineered": "Root:Engineered"})
+    UserChoices = get_users_as_choices()
 
     class AssembleStudyInput(BaseModel):
         biome: BiomeChoices
         assembler: AssemblerChoices
         webin_owner: Optional[str]
+        watchers: List[UserChoices]
 
     def suspend_side_effect(wait_for_input=None):
         if wait_for_input.__name__ == "AssembleStudyInput":
@@ -181,12 +207,17 @@ def test_prefect_assemble_study_flow(
                 biome=BiomeChoices["root.engineered"],
                 assembler=AssemblerChoices.pipeline_default,
                 webin_owner=None,
+                watchers=[UserChoices[admin_user.username]],
             )
 
     mock_suspend_flow_run.side_effect = suspend_side_effect
 
-    assembly_folder = f"{EMG_CONFIG.slurm.default_workdir}/PRJNA1_miassembler"
-    os.mkdir(assembly_folder)
+    mock_queryset_hash_for_assemblies.return_value = "abc123"
+
+    assembly_folder = Path(
+        f"{EMG_CONFIG.slurm.default_workdir}/PRJNA1_miassembler/abc123"
+    )
+    assembly_folder.mkdir(exist_ok=True, parents=True)
 
     with open(f"{assembly_folder}/assembled_runs.csv", "w") as file:
         file.write("SRR1,metaspades,3.15.5\n")
@@ -259,6 +290,7 @@ def test_prefect_assemble_study_flow(
     assert analyses.models.Study.objects.count() == 1
     mgys = analyses.models.Study.objects.select_related("ena_study").first()
     assert mgys.ena_study == ena.models.Study.objects.first()
+    assert mgys.watchers.filter(id=admin_user.id).exists()
 
     assert ena.models.Sample.objects.count() == number_of_runs
     assert analyses.models.Sample.objects.count() == number_of_runs
@@ -266,7 +298,7 @@ def test_prefect_assemble_study_flow(
     assert analyses.models.Assembly.objects.count() == number_of_runs
 
     assembly = analyses.models.Assembly.objects.filter(
-        run__ena_accessions__contains="SRR1"
+        run__ena_accessions__contains=["SRR1"]
     ).first()
     assert 0.0475 < assembly.metadata.get("coverage") < 0.0477
 
@@ -320,7 +352,9 @@ def test_prefect_assemble_study_flow(
 @pytest.mark.parametrize(
     "mock_suspend_flow_run", ["workflows.flows.assemble_study"], indirect=True
 )
+@patch("workflows.flows.assemble_study_tasks.make_samplesheets.queryset_hash")
 def test_prefect_assemble_private_study_flow(
+    mock_queryset_hash_for_assemblies,
     prefect_harness,
     httpx_mock,
     mock_suspend_flow_run,
@@ -329,6 +363,7 @@ def test_prefect_assemble_private_study_flow(
     mock_check_cluster_job_all_completed,
     top_level_biomes,
     assemblers,
+    admin_user,
 ):
     ### ENA MOCKING ###
     accession = "SRP1"
@@ -339,7 +374,8 @@ def test_prefect_assemble_private_study_flow(
         f"query=%22%28study_accession%3D{accession}+OR+secondary_study_accession%3D{accession}%29%22&"
         f"fields=study_accession&"
         f"limit=&"
-        f"format=json",
+        f"format=json&"
+        f"dataPortal=metagenome",
         match_headers={
             "Authorization": "Basic ZGNjX2Zha2U6bm90LWEtZGNjLXB3"
         },  # dcc_fake:not-a-dcc-pw
@@ -352,7 +388,8 @@ def test_prefect_assemble_private_study_flow(
         f"query=%22%28study_accession%3D{accession}+OR+secondary_study_accession%3D{accession}%29%22&"
         f"fields=study_accession&"
         f"limit=&"
-        f"format=json",
+        f"format=json&"
+        f"dataPortal=metagenome",
         match_headers={},  # public call should not find private study
         json=[],
     )
@@ -363,7 +400,8 @@ def test_prefect_assemble_private_study_flow(
         f"query=%22%28study_accession={accession}%20OR%20secondary_study_accession={accession}%29%22&"
         f"limit=10&"
         f"format=json&"
-        f"fields={','.join(EMG_CONFIG.ena.study_metadata_fields)}",
+        f"fields={','.join(EMG_CONFIG.ena.study_metadata_fields)}&"
+        f"dataPortal=metagenome",
         match_headers={
             "Authorization": "Basic ZGNjX2Zha2U6bm90LWEtZGNjLXB3"
         },  # dcc_fake:not-a-dcc-pw
@@ -382,7 +420,7 @@ def test_prefect_assemble_private_study_flow(
         f"&query=%22%28study_accession=PRJNA1%20OR%20secondary_study_accession=PRJNA1%29%22"
         f"&limit=5000"
         f"&format=json"
-        f"&fields={','.join(EMG_CONFIG.ena.readrun_metadata_fields)}"
+        f"&fields=run_accession%2Csample_accession%2Csample_title%2Csecondary_sample_accession%2Cfastq_md5%2Cfastq_ftp%2Clibrary_layout%2Clibrary_strategy%2Clibrary_source%2Cscientific_name%2Chost_tax_id%2Chost_scientific_name%2Cinstrument_platform%2Cinstrument_model%2Clocation%2Clat%2Clon"
         f"&dataPortal=metagenome",
         match_headers={
             "Authorization": "Basic ZGNjX2Zha2U6bm90LWEtZGNjLXB3"
@@ -403,6 +441,9 @@ def test_prefect_assemble_private_study_flow(
                 "host_scientific_name": "Apis mellifera",
                 "instrument_platform": "ILLUMINA",
                 "instrument_model": "Illumina MiSeq",
+                "lat": "52",
+                "lon": "0",
+                "location": "hinxton",
             },
             {
                 "sample_accession": "SAMN02",
@@ -419,17 +460,22 @@ def test_prefect_assemble_private_study_flow(
                 "host_scientific_name": "Apis mellifera",
                 "instrument_platform": "ILLUMINA",
                 "instrument_model": "Illumina MiSeq",
+                "lat": "52",
+                "lon": "0",
+                "location": "hinxton",
             },
         ],
     )
 
     ## Pretend that a human resumed the flow with the biome picker, and then with the assembler selector.
     BiomeChoices = Enum("BiomeChoices", {"root.engineered": "Root:Engineered"})
+    UserChoices = get_users_as_choices()
 
     class AssembleStudyInput(BaseModel):
         biome: BiomeChoices
         assembler: AssemblerChoices
         webin_owner: Optional[str]
+        watchers: List[UserChoices]
 
     def suspend_side_effect(wait_for_input=None):
         if wait_for_input.__name__ == "AssembleStudyInput":
@@ -437,12 +483,17 @@ def test_prefect_assemble_private_study_flow(
                 biome=BiomeChoices["root.engineered"],
                 assembler=AssemblerChoices.pipeline_default,
                 webin_owner="Webin-1",
+                watchers=[UserChoices[admin_user.username]],
             )
 
     mock_suspend_flow_run.side_effect = suspend_side_effect
 
-    assembly_folder = Path(f"{EMG_CONFIG.slurm.default_workdir}/PRJNA1_miassembler")
-    assembly_folder.mkdir(exist_ok=True)
+    mock_queryset_hash_for_assemblies.return_value = "abc123"
+
+    assembly_folder = Path(
+        f"{EMG_CONFIG.slurm.default_workdir}/PRJNA1_miassembler/abc123"
+    )
+    assembly_folder.mkdir(exist_ok=True, parents=True)
 
     with (assembly_folder / "assembled_runs.csv").open("w") as file:
         file.write("SRR1,metaspades,3.15.5")
@@ -545,7 +596,9 @@ def test_assembler_changed_in_samplesheet(
     samplesheets = make_samplesheets_for_runs_to_assemble(
         mgnify_study=study, assembler=mgnify_assemblies[0].assembler
     )
-    samplesheet: Path = samplesheets[0]
+    samplesheet: Path = samplesheets[0][
+        0
+    ]  # first samplesheet, path component of path,hash tuple
     assert samplesheet.exists()
 
     # edit samplesheet, change assembler

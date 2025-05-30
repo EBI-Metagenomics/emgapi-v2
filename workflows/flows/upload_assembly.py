@@ -7,8 +7,10 @@ from typing import Optional
 
 from assembly_uploader import assembly_manifest, study_xmls, submit_study
 from Bio import SeqIO
+from prefect.tasks import task_input_hash
 
 from activate_django_first import EMG_CONFIG
+from workflows.ena_utils.ena_accession_matching import ENA_ASSEMBLY_ACCESSION_REGEX
 
 from workflows.prefect_utils.env_context import TemporaryEnv, UNSET
 from workflows.prefect_utils.slurm_policies import ResubmitIfFailedPolicy
@@ -19,7 +21,6 @@ from prefect import flow, get_run_logger, task
 import analyses.models
 import ena.models
 from workflows.prefect_utils.analyses_models_helpers import task_mark_assembly_status
-from workflows.prefect_utils.cache_control import context_agnostic_task_input_hash
 from workflows.prefect_utils.slurm_flow import (
     ClusterJobFailedException,
     run_cluster_job,
@@ -99,7 +100,8 @@ def create_study_xml(
     study_accession: str,
     library: str,
     output_dir: Path,
-    is_third_patty_assembly: bool = False,
+    is_third_party_assembly: bool = False,
+    is_private: bool = False,
 ) -> (Path, str):
     logger = get_run_logger()
 
@@ -107,7 +109,8 @@ def create_study_xml(
         study=study_accession,
         center_name=EMG_CONFIG.webin.submitting_center_name,
         library=library,
-        tpa=is_third_patty_assembly,  # todo: private
+        tpa=is_third_party_assembly,
+        private=is_private,
         output_dir=output_dir,
     )
     assembly_study_writer.write()
@@ -153,7 +156,7 @@ def submit_study_xml(
 
 @task(
     retries=2,
-    cache_key_fn=context_agnostic_task_input_hash,
+    cache_key_fn=task_input_hash,
     task_run_name="Check study registration, create study XML and submit to ENA",
 )
 def handle_tpa_study(
@@ -194,7 +197,8 @@ def handle_tpa_study(
             study_accession=assembly.reads_study.first_accession,
             library=define_library(assembly.run.experiment_type),
             output_dir=upload_folder,
-            is_third_patty_assembly=True,  # TODO: support for non-TPAs
+            is_third_party_assembly=True,
+            is_private=False,
         )
 
         registered_study = submit_study_xml(
@@ -291,6 +295,8 @@ def prepare_assembly(
             assembly_study=mgnify_assembly.assembly_study.first_accession,
             assemblies_csv=data_csv_path,
             output_dir=upload_folder,
+            private=mgnify_assembly.is_private,
+            tpa=mgnify_assembly.assembly_study.id != mgnify_assembly.reads_study.id,
         )
         assembly_manifest_writer.write()
 
@@ -313,7 +319,7 @@ def get_assigned_assembly_accession(assembly: analyses.models.Assembly, manifest
         with open(webin_cli_log, "r") as report:
             report_lines = report.readlines()
         assembly_accession_match_list = re.findall(
-            EMG_CONFIG.ena.assembly_accession_re, ",".join(report_lines)
+            ENA_ASSEMBLY_ACCESSION_REGEX, ",".join(report_lines)
         )
         if assembly_accession_match_list:
             logger.info(f"Got {assembly_accession_match_list[0]}")
@@ -333,7 +339,7 @@ def add_erz_accession(assembly: analyses.models.Assembly, erz_accession):
 
 @task(
     retries=2,
-    cache_key_fn=context_agnostic_task_input_hash,
+    cache_key_fn=task_input_hash,
     task_run_name="Run Webin-cli to upload {mgnify_assembly}",
 )
 def submit_assembly_slurm(
@@ -365,7 +371,10 @@ def submit_assembly_slurm(
         command += "-submit "
 
     try:
-        run_cluster_job(
+        run_cluster_job.with_options(
+            retries=EMG_CONFIG.webin.webin_cli_retries,
+            retry_delay_seconds=EMG_CONFIG.webin.webin_cli_retry_delay_seconds,
+        )(
             name=f"Upload assembly for {mgnify_assembly} to ENA",
             command=command,
             expected_time=timedelta(
@@ -450,7 +459,7 @@ def upload_assembly(
         raise e
 
     assembly_path = Path(mgnify_assembly.dir_with_miassembler_suffix) / Path(
-        f"{mgnify_assembly.run.first_accession}.contigs.fa.gz"
+        f"{mgnify_assembly.run.first_accession}_cleaned.contigs.fa.gz"
     )
 
     upload_folder = custom_upload_folder or assembly_path.parent / Path("upload")

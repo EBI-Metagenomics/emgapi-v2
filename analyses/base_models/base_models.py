@@ -1,29 +1,19 @@
 from __future__ import annotations
 
+import logging
+from typing import Any
+
 from django.conf import settings
+from django.contrib.postgres.fields import ArrayField
+from django.core.exceptions import ObjectDoesNotExist
 from django.db import models
 
 import ena.models
 
 
-class MGnifyAutomatedModel(models.Model):
-    """
-    Base class for models that have an autoincrementing ID (perhaps for use as an accession)
-    and an `is_ready` bool for when they should appear on website vs. in automation only.
-    """
-
-    id = models.AutoField(primary_key=True)
-    is_ready = models.BooleanField(default=False)
-
-    class Meta:
-        abstract = True
-
-    # TODO: suppression propagation
-
-
 class SelectRelatedEnaStudyManagerMixin:
     def get_queryset(self):
-        return self().get_queryset().select_related("ena_study")
+        return super().get_queryset().select_related("ena_study")
 
 
 class VisibilityControlledManager(SelectRelatedEnaStudyManagerMixin, models.Manager):
@@ -49,24 +39,93 @@ class VisibilityControlledModel(models.Model):
 
 class GetByENAAccessionManagerMixin:
     def get_by_accession(self, ena_accession):
-        qs = self.get_queryset().filter(ena_accessions__contains=ena_accession)
+        qs = self.get_queryset().filter(ena_accessions__contains=[ena_accession])
         if qs.count() > 1:
-            raise self.MultipleObjectsReturned()
+            raise self.model.MultipleObjectsReturned()
         elif not qs.exists():
-            raise self.ObjectDoesNotExist()
+            raise self.model.DoesNotExist()
         return qs.first()
 
 
+class UpdateOrCreateByAccessionManagerMixin:
+    def update_or_create_by_accession(
+        self,
+        known_accessions: list[str],
+        defaults: dict[str, Any] | None = None,
+        create_defaults: dict[str, Any] | None = None,
+        include_update_defaults_in_create_defaults: bool = True,
+        **kwargs,
+    ) -> tuple[ENADerivedModel, bool]:
+        """
+        Like django update_or_create, but with handling for multiple accessions.
+        I.e., will select the model based on ena_accessions field containing any of the given accessions,
+        and will set the ena_accessions to the union of provided known_accessions and any existing accessions.
+        :param known_accessions: List of accessions to match on and set as ena_accessions.
+        :param defaults: Fields to update.
+        :param create_defaults: Fields to set if the object is created.
+        :param include_update_defaults_in_create_defaults: If true, the defaults dict will be merged with create_defaults for creation.
+        :param kwargs: other matchers
+        :return: Tuple of object, created.
+        """
+        defaults = defaults or {}
+        if not create_defaults:
+            create_defaults = defaults.copy()
+            create_defaults["ena_accessions"] = known_accessions
+
+        if include_update_defaults_in_create_defaults:
+            create_defaults.update(defaults)
+
+        # Two-step process needed (first get, then update/create).
+        # This is because __overlap cannot be used with default django update_or_create.
+        try:
+            obj = self.get_queryset().get(
+                ena_accessions__overlap=known_accessions, **kwargs
+            )
+        except ObjectDoesNotExist:
+            obj = None
+
+        if obj:
+            # Update
+            logging.debug(f"Updating {obj} with {defaults}")
+            for key, value in defaults.items():
+                setattr(obj, key, value)
+            obj.save()
+            created = False
+        else:
+            # Create
+            logging.debug(f"Creating with {create_defaults}")
+            obj = self.model(**create_defaults, **kwargs)
+            obj.save()
+            created = True
+
+        # Ensure all known_accessions are in the object's ena_accessions
+        if not set(obj.ena_accessions).issuperset(known_accessions):
+            logging.debug(
+                f"Setting accessions to union of known and existing accessions: {obj.ena_accessions}, {known_accessions}"
+            )
+            obj.ena_accessions = list(set(obj.ena_accessions + known_accessions))
+            obj.save()
+
+        return obj, created
+
+
 class ENADerivedManager(
-    SelectRelatedEnaStudyManagerMixin, GetByENAAccessionManagerMixin, models.Manager
-):
-    pass
+    SelectRelatedEnaStudyManagerMixin,
+    GetByENAAccessionManagerMixin,
+    UpdateOrCreateByAccessionManagerMixin,
+    models.Manager,
+): ...
 
 
 class ENADerivedModel(VisibilityControlledModel):
     objects = ENADerivedManager()
 
-    ena_accessions = models.JSONField(default=list, db_index=True, blank=True)
+    ena_accessions = ArrayField(
+        models.CharField(max_length=20, blank=True),
+        db_index=True,
+        blank=True,
+        default=list,
+    )
     is_suppressed = models.BooleanField(default=False)
 
     # TODO – postgres GIN index on accessions?

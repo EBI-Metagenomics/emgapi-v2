@@ -1,6 +1,7 @@
 from typing import Iterable, Optional
 
 from django.contrib import admin
+from django.contrib.postgres.fields import ArrayField
 from django.core.validators import EMPTY_VALUES
 from django.db.models import JSONField, Q
 from django.forms import Field
@@ -9,6 +10,7 @@ from django.shortcuts import redirect
 from django_admin_inline_paginator_plus.admin import InlinePaginated
 from unfold.admin import ModelAdmin, TabularInline
 from unfold.contrib.filters.admin import TextFilter
+from unfold.contrib.forms.widgets import ArrayWidget
 from unfold.decorators import action
 
 from analyses.admin.widgets import ENAAccessionsListWidget, JSONTreeWidget
@@ -79,8 +81,13 @@ class JSONFieldWidgetOverridesMixin(ModelAdmin):
     def formfield_for_dbfield(
         self, db_field: Field, request: HttpRequest, **kwargs
     ) -> Optional[Field]:
-        if isinstance(db_field, JSONField) and db_field.name == "ena_accessions":
+        if isinstance(db_field, JSONField) and db_field.name in [
+            "ena_accessions",
+            "additional_accessions",
+        ]:
             kwargs["widget"] = ENAAccessionsListWidget
         elif isinstance(db_field, JSONField):
             kwargs["widget"] = JSONTreeWidget
+        if isinstance(db_field, ArrayField):
+            kwargs["widget"] = ArrayWidget
         return super().formfield_for_dbfield(db_field, request, **kwargs)

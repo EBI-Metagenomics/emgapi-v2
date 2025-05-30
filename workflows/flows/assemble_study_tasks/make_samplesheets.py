@@ -6,6 +6,7 @@ from typing import List, Union
 
 from prefect import task
 from prefect.artifacts import create_table_artifact
+from prefect.tasks import task_input_hash
 
 from activate_django_first import EMG_CONFIG
 
@@ -22,18 +23,17 @@ from workflows.nextflow_utils.samplesheets import (
     queryset_to_samplesheet,
 )
 from workflows.prefect_utils.analyses_models_helpers import chunk_list
-from workflows.prefect_utils.cache_control import context_agnostic_task_input_hash
 from workflows.views import encode_samplesheet_path
 
 
 @task(
-    cache_key_fn=context_agnostic_task_input_hash,
+    cache_key_fn=task_input_hash,
 )
 def make_samplesheet(
     mgnify_study: analyses.models.Study,
     assembly_ids: List[Union[str, int]],
     assembler: analyses.models.Assembler,
-) -> Path:
+) -> (Path, str):
     assemblies = analyses.models.Assembly.objects.select_related("run").filter(
         id__in=assembly_ids
     )
@@ -134,17 +134,17 @@ def make_samplesheet(
             """
         ),
     )
-    return sample_sheet_tsv
+    return sample_sheet_tsv, ss_hash
 
 
 @task(
-    cache_key_fn=context_agnostic_task_input_hash,
+    cache_key_fn=task_input_hash,
 )
 def make_samplesheets_for_runs_to_assemble(
     mgnify_study: analyses.models.Study,
     assembler: analyses.models.Assembler,
     chunk_size: int = 10,
-) -> [Path]:
+) -> [(Path, str)]:
 
     if mgnify_study.assemblies_reads.exclude(
         is_private=mgnify_study.is_private

@@ -115,7 +115,7 @@ class StudyReadsInline(TabularInlinePaginatedWithTabSupport):
 class StudyAdmin(ENABrowserLinkMixin, JSONFieldWidgetOverridesMixin, ModelAdmin):
     inlines = [StudyRunsInline, StudyAssembliesInline, StudyReadsInline]
     list_display = ["accession", "updated_at", "title", "display_accessions"]
-    list_filter = ["updated_at", "created_at", "is_private"]
+    list_filter = ["updated_at", "created_at", "is_private", "watchers"]
     search_fields = [
         "accession",
         "title",
@@ -125,10 +125,18 @@ class StudyAdmin(ENABrowserLinkMixin, JSONFieldWidgetOverridesMixin, ModelAdmin)
         "biome__biome_name",
     ]
     actions_detail = [
-        "show_assembly_status_summary",
-        "show_run_type_summary",
-        "show_analysis_status_summary",
+        {
+            "title": "Study reports",
+            "icon": "table_chart",
+            "items": [
+                "show_assembly_status_summary",
+                "show_run_type_summary",
+                "show_analysis_status_summary",
+            ],
+        },
     ] + ENABrowserLinkMixin.actions_detail
+
+    autocomplete_fields = ["ena_study", "biome"]
 
     fieldsets = (
         (None, {"fields": ["title", "ena_study", "biome", "ena_accessions"]}),
@@ -137,12 +145,25 @@ class StudyAdmin(ENABrowserLinkMixin, JSONFieldWidgetOverridesMixin, ModelAdmin)
             {
                 "classes": ["tab"],
                 "fields": [
-                    "is_ready",
                     "is_private",
                     "is_suppressed",
                     "webin_submitter",
-                    "has_legacy_data",
+                    "features",
                 ],
+            },
+        ),
+        (
+            "Files",
+            {
+                "fields": ["results_dir", "external_results_dir", "downloads"],
+                "classes": ["tab"],
+            },
+        ),
+        (
+            "Notifications",
+            {
+                "fields": ["watchers"],
+                "classes": ["tab"],
             },
         ),
     )
@@ -152,7 +173,7 @@ class StudyAdmin(ENABrowserLinkMixin, JSONFieldWidgetOverridesMixin, ModelAdmin)
         return instance.ena_accessions
 
     @action(
-        description="Report: assembly statuses",
+        description="Assembly statuses",
         url_path="study-assembly-status-summary",
     )
     def show_assembly_status_summary(self, request, object_id):
@@ -166,8 +187,10 @@ class StudyAdmin(ENABrowserLinkMixin, JSONFieldWidgetOverridesMixin, ModelAdmin)
         assemblies_total = study.assemblies_reads.count()
 
         def make_state_link(state: Assembly.AssemblyStates) -> str:
-            url = reverse_lazy("admin:analyses_assembly_changelist")
-            url += f"?status={state}&study_accession={study.accession}"
+            url = reverse_lazy(
+                "admin:analyses_assembly_changelist",
+                query={"status": state, "study_accession": study.accession},
+            )
             return format_html(
                 "<a class='flex items-center' href='{}'>"
                 "<span>{}</span>"
@@ -207,7 +230,7 @@ class StudyAdmin(ENABrowserLinkMixin, JSONFieldWidgetOverridesMixin, ModelAdmin)
         )
 
     @action(
-        description="Report: run types",
+        description="Run types",
         url_path="study-run-type-summary",
     )
     def show_run_type_summary(self, request, object_id):
@@ -220,8 +243,13 @@ class StudyAdmin(ENABrowserLinkMixin, JSONFieldWidgetOverridesMixin, ModelAdmin)
         runs_total = study.runs.count()
 
         def make_experiment_type_link(experiment_type_code: str) -> str:
-            url = reverse_lazy("admin:analyses_run_changelist")
-            url += f"?experiment_type__exact={experiment_type_code}&study_accession={study.accession}"
+            url = reverse_lazy(
+                "admin:analyses_run_changelist",
+                query={
+                    "experiment_type__exact": experiment_type_code,
+                    "study_accession": study.accession,
+                },
+            )
             return format_html(
                 "<a class='flex items-center' href='{}'>"
                 "<span>{}</span>"
@@ -255,7 +283,7 @@ class StudyAdmin(ENABrowserLinkMixin, JSONFieldWidgetOverridesMixin, ModelAdmin)
         )
 
     @action(
-        description="Report: analysis statuses",
+        description="Analysis statuses",
         url_path="study-analysis-status-summary",
     )
     def show_analysis_status_summary(self, request, object_id):
@@ -267,8 +295,13 @@ class StudyAdmin(ENABrowserLinkMixin, JSONFieldWidgetOverridesMixin, ModelAdmin)
         analyses_total = study.analyses.count()
 
         def make_state_link(state: Analysis.AnalysisStates) -> str:
-            url = reverse_lazy("admin:analyses_analysis_changelist")
-            url += f"?{AnalysisStatusListFilter.parameter_name}={state.value}&{StudyFilter.parameter_name}={study.accession}"
+            url = reverse_lazy(
+                "admin:analyses_analysis_changelist",
+                query={
+                    AnalysisStatusListFilter.parameter_name: state.value,
+                    StudyFilter.parameter_name: study.accession,
+                },
+            )
             return format_html(
                 "<a class='flex items-center' href='{}'>"
                 "<span>{}</span>"
@@ -314,5 +347,15 @@ def jump_to_latest_study_admin(request):
     return redirect(
         reverse_lazy(
             "admin:analyses_study_change", kwargs={"object_id": latest_study.pk}
+        )
+    )
+
+
+@staff_member_required
+def jump_to_watched_studies_admin(request):
+    return redirect(
+        reverse_lazy(
+            "admin:analyses_study_changelist",
+            query={"watchers__id__exact": request.user.id},
         )
     )

@@ -55,7 +55,10 @@ class AssemblyAdmin(ENABrowserLinkMixin, JSONFieldWidgetOverridesMixin, ModelAdm
         "reads_study__title",
         "reads_study__ena_study__accession",
         "reads_study__ena_study__additional_accessions",
+        "ena_accessions",
     ]
+    autocomplete_fields = ["ena_study", "reads_study", "assembly_study", "run"]
+    readonly_fields = ["created_at", "updated_at"]
 
     def status_summary(self, obj):
         if (not obj.status) or (type(obj.status) is not dict):
@@ -67,6 +70,31 @@ class AssemblyAdmin(ENABrowserLinkMixin, JSONFieldWidgetOverridesMixin, ModelAdm
                 if is_set and not status.endswith("reason")
             ]
         )
+
+    fieldsets = (
+        (None, {"fields": ["ena_accessions", "created_at", "updated_at"]}),
+        (
+            "Reads",
+            {
+                "classes": ["tab"],
+                "fields": ["reads_study", "run"],
+            },
+        ),
+        (
+            "Assembly",
+            {
+                "classes": ["tab"],
+                "fields": ["assembly_study", "assembler", "dir", "metadata"],
+            },
+        ),
+        (
+            "Status and ownership",
+            {
+                "classes": ["tab"],
+                "fields": ["is_private", "is_suppressed", "webin_submitter", "status"],
+            },
+        ),
+    )
 
 
 @admin.register(Assembler)

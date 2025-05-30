@@ -44,7 +44,7 @@ DEBUG_TOOLBAR_CONFIG = {
 }
 
 
-ALLOWED_HOSTS = ["apiv2-dev.mgnify.org", "localhost"]
+ALLOWED_HOSTS = ["apiv2-dev.mgnify.org", "localhost", "www.ebi.ac.uk"]
 
 
 emg_config_env = os.getenv("EMG_ENV_FILE")
@@ -52,6 +52,9 @@ if emg_config_env:
     logging.warning(f"Using environment from {emg_config_env}")
 EMG_CONFIG: EMGConfig = EMGConfig(_env_file=emg_config_env)
 
+BASE_URL = EMG_CONFIG.service_urls.base_url.lstrip("/").rstrip("/")
+if BASE_URL:
+    BASE_URL += "/"
 
 # Application definition
 
@@ -103,6 +106,18 @@ CORS_ALLOWED_ORIGINS = [
     "http://wwwint.ebi.ac.uk",
     "http://apiv2-dev.mgnify.org",
 ]
+
+CORS_ALLOW_CREDENTIALS = True
+
+CORS_ALLOW_HEADERS = [
+    "content-type",
+    "accept",
+    "authorization",
+    "x-csrftoken",
+    "sentry-trace",
+]
+
+CSRF_TRUSTED_ORIGINS = ["https://*.ebi.ac.uk"]
 
 ROOT_URLCONF = "emgapiv2.urls"
 
@@ -172,7 +187,7 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/4.1/howto/static-files/
 
-STATIC_URL = "static/"
+STATIC_URL = BASE_URL + "static/"
 STATICFILES_DIRS = (os.path.join(BASE_DIR, "static"),)
 
 STATICFILES_FINDERS = [
@@ -251,6 +266,12 @@ UNFOLD = {
                         "link": reverse_lazy("admin_jump_latest_study"),
                         "permission": lambda request: request.user.is_superuser,
                     },
+                    {
+                        "title": _("⤷ Watching"),
+                        "icon": "remove_red_eye",
+                        "link": reverse_lazy("admin_jump_watched_studies"),
+                        "permission": lambda request: request.user.is_superuser,
+                    },
                 ],
             },
             {
@@ -260,9 +281,7 @@ UNFOLD = {
                     {
                         "title": _("Prefect Flows dashboard"),
                         "icon": "rebase",
-                        "link": os.getenv("PREFECT_API_URL", "").replace(
-                            "api", "dashboard"
-                        ),
+                        "link": os.getenv("PREFECT_UI_URL", ""),
                     },
                     {
                         "title": _("HPC Cluster jobs"),
@@ -302,7 +321,21 @@ LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,
     "handlers": {
-        "console": {"class": "logging.StreamHandler", "level": "DEBUG"},
+        "console": {
+            "class": "logging.StreamHandler",
+            "level": "DEBUG",
+            "formatter": "verbose",
+        },
+    },
+    "formatters": {
+        "verbose": {
+            "format": "{asctime} | {levelname} | {name} | {module} | {message}",
+            "style": "{",
+        },
+        "simple": {
+            "format": "{levelname} {message}",
+            "style": "{",
+        },
     },
     "root": {
         "handlers": ["console"],

@@ -6,8 +6,12 @@ from django.db import connection
 import ena.models
 from analyses.models import Biome, Study
 from workflows.data_io_utils.legacy_emg_dbs import LegacyStudy
+from workflows.prefect_utils.testing_utils import (
+    should_not_mock_httpx_requests_to_prefect_server,
+)
 
 
+@pytest.mark.httpx_mock(should_mock=should_not_mock_httpx_requests_to_prefect_server)
 @pytest.mark.django_db(transaction=True)
 def test_biome_importer(httpx_mock):
     httpx_mock.add_response(
@@ -111,7 +115,7 @@ def test_import_legacy_studies(
     assert Study.objects.order_by("-created_at").first().accession == "MGYS00005002"
 
     # should both be flagged as legacy
-    assert Study.objects.filter(has_legacy_data=True).count() == 2
+    assert Study.objects.filter(features__has_prev6_analyses=True).count() == 2
 
     # get_or_create on a new MGnify study, for the ENA study imported as legacy, should return legacy MGYS not new one
     ena_study = ena.models.Study.objects.get_ena_study("ERP3")  # should be MGYS00005002

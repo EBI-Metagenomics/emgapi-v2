@@ -138,6 +138,17 @@ OTU ID	SSU	taxon	taxid
         File(path=tsv_file, rules=[FileConformsToTaxonomyTSVSchemaRule])
         assert "taxonomy" in exc_info.value
 
+    # should allow empty taxid because "" parses to None and taxid is Optional[int]
+    content = """\
+OTU ID	SSU	taxonomy	taxid
+36901	1.0	sk__Bacteria;k__;p__Bacillota;c__Bacilli
+60237	2.0	sk__Bacteria;k__;p__Bacillota;c__Bacilli;o__Lactobacillales;f__Carnobacteriaceae;g__Trichococcus	\
+"""
+    with tsv_file.open("w", newline="") as fh:
+        fh.write(content)
+
+    File(path=tsv_file, rules=[FileConformsToTaxonomyTSVSchemaRule])
+
 
 def test_glob_file_count_rules(tmp_path):
     empty = tmp_path / "empty"

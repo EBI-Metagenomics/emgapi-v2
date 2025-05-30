@@ -67,6 +67,9 @@ def accession_prefix_separated_dir_path(accession: str, *chars_per_dir_level: in
     E.g. accession_prefix_separated_dir_path(PRJ123456, 5, 6) -> PRJ12/PRJ123/PRJ123456
     But also accession_prefix_separated_dir_path(PRJ123456, 5, 6, 999) -> PRJ12/PRJ123/PRJ123456/PRJ123456
 
+    If any chars_per_dir_level is a negative int, it truncates from the end instead:
+    e.g. accession_prefix_separated_dir_path(PRJ123456, -6, -3) -> PRJ/PRJ123/PRJ123456
+
     Returns
     -------
     A non-pure path for the dir hierarchy.
@@ -74,7 +77,7 @@ def accession_prefix_separated_dir_path(accession: str, *chars_per_dir_level: in
     """
     path = Path()
     for chars_at_level in chars_per_dir_level:
-        assert chars_at_level > 0
+        assert not chars_at_level == 0
         path = path / Path(accession[:chars_at_level])
     return path / Path(accession)
 
@@ -122,3 +125,10 @@ def next_enumerated_subdir(
     if mkdirs:
         next_int_dir.mkdir(parents=True, exist_ok=True)
     return next_int_dir
+
+
+def trailing_slash_ensured_dir(dir_path: Path | str) -> str:
+    d = dir_path
+    if isinstance(d, Path):
+        d = str(d.as_posix())
+    return str(d).rstrip("/") + "/"

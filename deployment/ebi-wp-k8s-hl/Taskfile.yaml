@@ -85,5 +85,5 @@ tasks:
     cmds:
       - kubectl --context=emgapiv2-hl-exp delete job ebi-wp-k8s-hl-emgapi-migrate || echo 'no previous migration job'
       - kubectl --context=emgapiv2-hl-exp apply -f ebi-wp-k8s-hl-migrate-job.yaml
-      - kubectl --context=emgapiv2-hl-exp wait --for=condition=complete job/ebi-wp-k8s-hl-emgapi-migrate
+      - kubectl --context=emgapiv2-hl-exp wait --for=condition=complete job/ebi-wp-k8s-hl-emgapi-migrate --timeout=600s
       - kubectl logs $(kubectl get pods --selector=job-name=ebi-wp-k8s-hl-emgapi-migrate -o jsonpath='{.items[0].metadata.name}')

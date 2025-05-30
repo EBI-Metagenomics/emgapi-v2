@@ -54,7 +54,7 @@ class Command(BaseCommand):
             biome=biome,
             is_private=legacy_study.is_private,
             is_suppressed=legacy_study.is_suppressed,
-            has_legacy_data=True,
+            features=Study.StudyFeatures(has_prev6_analyses=True),
         )
         if created:
             logger.info(f"Created new study object {mg_study}")

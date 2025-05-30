@@ -86,6 +86,7 @@ items:
       namespace: emgapiv2-hl-exp
     data:
       DJANGO_SETTINGS_MODULE: "emgapiv2.settings"
+      PREFECT_UI_URL: "http://prefect-dev.mgnify.org"
       PREFECT_API_URL: "http://prefect-server.emgapiv2-hl-exp.svc.cluster.local:4200/api"
       PREFECT_HOME: "/app/data/prefect"
       EMG_SLURM__SHARED_FILESYSTEM_ROOT_ON_SLURM: "/nfs/public/rw/metagenomics/mgnify/deployments/apiv2/DEV"
@@ -93,6 +94,8 @@ items:
       EMG_SLURM__SAMPLESHEET_EDITING_ALLOWED_INSIDE: "/nfs/production/rdf/metagenomics/projects/automation/slurm_workdir"
       EMG_SLURM__SAMPLE_EDITING_PATH_FROM_SHARED_FILESYSTEM: "temporary_samplesheet_edits"
       EMG_SLURM__DEFAULT_WORKDIR: "/nfs/production/rdf/metagenomics/projects/automation/slurm_workdir"
+      EMG_SERVICE_URLS__TRANSFER_SERVICES_URL_ROOT: "https://ftp.ebi.ac.uk/pub/databases/metagenomics/mgnify_results/"
+      EMG_SERVICE_URLS__BASE_URL: "metagenomics/api/v2"
   - apiVersion: apps/v1
     kind: Deployment
     metadata:
@@ -131,6 +134,12 @@ items:
                     name: emgapi-config
                 - configMapRef:
                     name: proxy-config
+              env:
+                - name: PREFECT_API_AUTH_STRING
+                  valueFrom:
+                    secretKeyRef:
+                      key: PREFECT_SERVER_API_AUTH_STRING
+                      name: emgapi-secret
               ports:
                 - containerPort: 8000
                   name: gunicorn
@@ -141,6 +150,8 @@ items:
                   name: emgapi-results-storage
           imagePullSecrets:
             - name: quay-pull-secret
+          nodeSelector:
+            mgnify.org/ebi-db-pgsql-hlvm-090-open: "true"
   - apiVersion: v1
     kind: Service
     metadata:
@@ -159,16 +170,37 @@ items:
   - apiVersion: networking.k8s.io/v1
     kind: Ingress
     metadata:
+      name: emgapi-redirect-ingress
+      namespace: emgapiv2-hl-exp
+      annotations:
+        nginx.ingress.kubernetes.io/rewrite-target: /$1
+        nginx.ingress.kubernetes.io/permanent-redirect: "https://www.ebi.ac.uk/metagenomics/api/v2/$1"
+        nginx.ingress.kubernetes.io/permanent-redirect-code: "301"
+    spec:
+      rules:
+        - host: apiv2-dev.mgnify.org
+          http:
+            paths:
+              - path: /(.*)
+                pathType: ImplementationSpecific
+                backend:
+                  service:
+                    name: dummy-service
+                    port:
+                      number: 80
+  - apiVersion: networking.k8s.io/v1
+    kind: Ingress
+    metadata:
       name: emgapi-ingress
       namespace: emgapiv2-hl-exp
       annotations:
         kubernetes.io/ingress.class: "nginx"
     spec:
       rules:
-        - host: apiv2-dev.mgnify.org
+        - host: www.ebi.ac.uk
           http:
             paths:
-              - path: /
+              - path: /metagenomics/api/v2
                 pathType: Prefix
                 backend:
                   service:
@@ -196,12 +228,12 @@ items:
         spec:
           containers:
             - name: prefect-server
-              image: prefecthq/prefect:3.2.2-python3.12
+              image: prefecthq/prefect:3.4.4-python3.12
               resources:
                 requests:
-                  memory: "1024Mi"
-                  cpu: "500m"
-              imagePullPolicy: Always
+                  memory: "4Gi"
+                  cpu: "2000m"
+              imagePullPolicy: IfNotPresent
               command: ["/opt/prefect/entrypoint.sh"]
               args: ["prefect", "server", "start"]
               envFrom:
@@ -221,6 +253,11 @@ items:
                     secretKeyRef:
                       key: PREFECT_API_DATABASE_CONNECTION_URL
                       name: emgapi-secret
+                - name: PREFECT_SERVER_API_AUTH_STRING
+                  valueFrom:
+                    secretKeyRef:
+                      key: PREFECT_SERVER_API_AUTH_STRING
+                      name: emgapi-secret
                 - name: EXTRA_PIP_PACKAGES
                   value: httpx[cli] nextflowpy
                 - name: PREFECT_LOCAL_STORAGE_PATH
@@ -233,7 +270,8 @@ items:
                   value: "false"
               ports:
                 - containerPort: 4200
-
+          nodeSelector:
+            mgnify.org/ebi-db-pgsql-hlvm-090-open: "true"
   - apiVersion: v1
     kind: Service
     metadata:
@@ -247,109 +285,12 @@ items:
       selector:
         app: prefect-server
 
-  #### OAUTH2 PROXY (USER LOGIN VIA GITHUB)  ####
-  - apiVersion: apps/v1
-    kind: Deployment
-    metadata:
-      name: oauth2-proxy
-      namespace: emgapiv2-hl-exp
-    spec:
-      replicas: 1
-      selector:
-        matchLabels:
-          app: oauth2-proxy
-      template:
-        metadata:
-          labels:
-            app: oauth2-proxy
-        spec:
-          containers:
-            - name: oauth2-proxy
-              image: quay.io/oauth2-proxy/oauth2-proxy:v7.6.0
-              envFrom:
-                - configMapRef:
-                    name: proxy-config
-                - secretRef:
-                    name: github-oauth-secret
-              env:
-                - name: OAUTH2_PROXY_COOKIE_SECRET
-                  valueFrom:
-                    secretKeyRef:
-                      name: oauth2-proxy-cookie-secret
-                      key: oauth2-proxy-cookie-secret
-                - name: OAUTH2_PROXY_TRUSTED_IPS
-                  valueFrom:
-                    secretKeyRef:
-                      name: oauth2-proxy-trusted-ip
-                      key: oauth2-proxy-trusted-ip
-              ports:
-                - containerPort: 4180
-              args:
-                - --provider=github
-                - --github-org=EBI-Metagenomics
-                - --email-domain=*
-                - --upstream=file:///dev/null
-                - --http-address=0.0.0.0:4180
-                - --redirect-url=http://prefect-dev.mgnify.org/oauth2/callback
-                - --custom-sign-in-logo=https://raw.githubusercontent.com/EBI-Metagenomics/ebi-metagenomics-client/main/public/images/mgnify_logo_reverse.svg
-                - --cookie-secure=false
-                - --cookie-domain=.mgnify.org
-                - --reverse-proxy=true
-                - --standard-logging=true
-                - --auth-logging=true
-                - --request-logging=true
-                - --real-client-ip-header=X-Forwarded-For
-
-  - apiVersion: v1
-    kind: Service
-    metadata:
-      name: prefect-via-oauth
-      namespace: emgapiv2-hl-exp
-      labels:
-        app: oauth2-proxy
-    spec:
-      ports:
-        - port: 4180
-          targetPort: 4180
-          protocol: TCP
-      selector:
-        app: oauth2-proxy
-
-  #### INGRESSES ####
-  #### Handle oauth flow ####
-  - apiVersion: networking.k8s.io/v1
-    kind: Ingress
-    metadata:
-      name: prefect-oauth2-proxy-ingress
-      namespace: emgapiv2-hl-exp
-    spec:
-      ingressClassName: nginx
-      rules:
-        - host: prefect-dev.mgnify.org
-          http:
-            paths:
-              - path: /oauth2
-                pathType: Prefix
-                backend:
-                  service:
-                    name: prefect-via-oauth
-                    port:
-                      number: 4180
-
-  #### Serve prefect to auth'd users, redirect unauth'd users to oauth2-proxy ####
+  #### Serve prefect to auth'd users (prefect handles the auth via http basic) ####
   - apiVersion: networking.k8s.io/v1
     kind: Ingress
     metadata:
       name: prefect-ingress
       namespace: emgapiv2-hl-exp
-      annotations:
-        nginx.ingress.kubernetes.io/auth-signin: http://$host/oauth2/sign_in?rd=$escaped_request_uri
-        nginx.ingress.kubernetes.io/auth-url: http://$host/oauth2/auth
-        nginx.ingress.kubernetes.io/configuration-snippet: |
-          # Forward the real client IP header
-          proxy_set_header X-Real-IP $remote_addr;
-          proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-
     spec:
       ingressClassName: nginx
       rules:
@@ -364,29 +305,194 @@ items:
                     port:
                       number: 4200
 
+  #### Website
+  - apiVersion: v1
+    kind: ConfigMap
+    metadata:
+      name: webclient-nginx-config
+      namespace: emgapiv2-hl-exp
+    data:
+      nginx.conf: >-
+        events {
+          worker_connections 1024;
+        }
+        http {
+          include       /etc/nginx/mime.types;
+          default_type  application/octet-stream;
+          server {
+            listen 80;
+            server_name _;
+            root /usr/share/nginx/html;
+            index index.html;
 
+            # Gzip compression
+            gzip on;
+            gzip_types text/plain text/css application/json application/javascript text/xml application/xml application/xml+rss text/javascript;
+
+            # Security headers
+            add_header X-Frame-Options "SAMEORIGIN";
+            add_header X-XSS-Protection "1; mode=block";
+            add_header X-Content-Type-Options "nosniff";
+
+            # Health check endpoint
+            location /health {
+              access_log off;
+              return 200 "healthy\n";
+            }
+
+            # Handle React routing
+            location /metagenomics/v6-early-data-release {
+              alias /usr/share/nginx/html;
+              try_files $uri $uri/ /index.html;
+            }
+            location ~ ^/metagenomics/v6-early-data-release/.*/((?:css|js|static)/(.+))$ {
+              alias /usr/share/nginx/html/$1;
+            }
+          }
+        }
+  - apiVersion: v1
+    kind: ConfigMap
+    metadata:
+      name: webclient-config
+      namespace: emgapiv2-hl-exp
+    data:
+      config.private.json: >-
+        {
+          "api": "https://www.ebi.ac.uk/metagenomics/api/v1/",
+          "api_v2": "https://www.ebi.ac.uk/metagenomics/api/v2/",
+          "website": "https://www.ebi.ac.uk/metagenomics/v6-early-data-release/",
+          "basename": "/metagenomics/v6-early-data-release"
+        }
+  - apiVersion: v1
+    kind: PersistentVolumeClaim
+    metadata:
+      name: npm-cache-pvc
+      namespace: emgapiv2-hl-exp
+    spec:
+      accessModes:
+        - ReadWriteOnce
+      resources:
+        requests:
+          storage: "8Gi"
+  - apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      name: webclient-deployment
+      namespace: emgapiv2-hl-exp
+    spec:
+      replicas: 1
+      selector:
+        matchLabels:
+          app: webclient-app
+      template:
+        metadata:
+          labels:
+            app: webclient-app
+        spec:
+          volumes:
+            - name: webclient-storage
+              emptyDir: {}
+            - name: nginx-config-volume
+              configMap:
+                name: webclient-nginx-config
+            - name: webclient-config-volume
+              configMap:
+                name: webclient-config
+            - name: npm-cache
+              persistentVolumeClaim:
+                claimName: npm-cache-pvc
+          containers:
+            - name: webclient-app
+              image: quay.io/microbiome-informatics/nginx:1.26
+              imagePullPolicy: IfNotPresent
+              ports:
+                - containerPort: 80
+              resources:
+                requests:
+                  cpu: "500m"
+                  memory: "256Mi"
+                limits:
+                  cpu: "1"
+                  memory: "1Gi"
+              volumeMounts:
+                - name: webclient-storage
+                  mountPath: /usr/share/nginx/html
+                  subPath: html
+                - name: nginx-config-volume
+                  mountPath: /etc/nginx/nginx.conf
+                  subPath: nginx.conf
+                - name: webclient-config-volume
+                  mountPath: /var/config.private.json
+                  subPath: config.private.json
+              livenessProbe:
+                httpGet:
+                  path: /
+                  port: http
+                initialDelaySeconds: 60
+                periodSeconds: 600
+          initContainers:
+            - name: webclient-build
+              image: quay.io/microbiome-informatics/node:22
+              imagePullPolicy: IfNotPresent
+              resources:
+                requests:
+                  cpu: "2"
+                  memory: "2Gi"
+              volumeMounts:
+                - name: webclient-storage
+                  mountPath: /usr/share/nginx/html
+                  subPath: html
+                - name: webclient-config-volume
+                  mountPath: /var/config.private.json
+                  subPath: config.private.json
+                - name: npm-cache
+                  mountPath: /root/.npm
+              envFrom:
+                - configMapRef:
+                    name: proxy-config
+                    optional: true
+                - configMapRef:
+                    name: webclient-nginx-config
+              command: ["/bin/sh"]
+              args:
+                - -c
+                - >-
+                  rm -rf v6-early-access &&
+                  git clone -b v6-early-access --single-branch https://github.com/EBI-Metagenomics/ebi-metagenomics-client.git && cd ebi-metagenomics-client &&
+                  cp /var/config.private.json . &&
+                  npm ci && npm run build &&
+                  cp -r dist/* /usr/share/nginx/html
+  - apiVersion: v1
+    kind: Service
+    metadata:
+      name: webclient
+      namespace: emgapiv2-hl-exp
+      labels:
+        app: webclient-app
+    spec:
+      type: NodePort
+      selector:
+        app: webclient-app
+      ports:
+        - port: 80
+          targetPort: 80
+          protocol: TCP
   - apiVersion: networking.k8s.io/v1
     kind: Ingress
     metadata:
-      name: prefect-work-node-ingress
+      name: emg-edr-webclient-ingress
       namespace: emgapiv2-hl-exp
       annotations:
-        nginx.ingress.kubernetes.io/auth-type: basic
-        nginx.ingress.kubernetes.io/auth-secret: prefect-workers-basic-auth
-        nginx.ingress.kubernetes.io/auth-realm: 'Authentication Required'
-        nginx.ingress.kubernetes.io/configuration-snippet: |
-          if ($request_uri ~* "^/workers/api") {
-            rewrite ^/workers/api(.*)$ /api$1 break;
-          }
+        kubernetes.io/ingress.class: "nginx"
     spec:
       rules:
-        - host: prefect-dev.mgnify.org
+        - host: "www.ebi.ac.uk"
           http:
             paths:
-              - path: /workers/api
+              - path: /metagenomics/v6-early-data-release
                 pathType: Prefix
                 backend:
                   service:
-                    name: prefect-server
+                    name: webclient
                     port:
-                      number: 4200
+                      number: 80

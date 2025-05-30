@@ -1,4 +1,5 @@
 import csv
+from typing import Iterable, Hashable
 
 from emgapiv2.enum_utils import FutureStrEnum
 
@@ -7,7 +8,7 @@ def move_file_pointer_past_comment_lines(
     f, comment_char: str = "#", delimiter: str = ","
 ):
     """
-    Take a file point, and move the current read pointer to the start of meaninful content.
+    Take a file point, and move the current read pointer to the start of meaningful content.
     This skips over any pure comment lines (like "# Created by MGnify")
     and past any leading comment chars on a col header line like the "# " in "# id   name    count"
     :param f: File-like object.
@@ -62,13 +63,15 @@ class CSVDelimiter(FutureStrEnum):
 class CommentAwareDictReader(csv.DictReader):
     """
     Like csv.DictReader, but handles CSV/TSV files where the leading line(s) may be comments rather than headers.
+    Also has optional handling for extra values that should parse to None, similar to pandas' read_csv na_values.
     """
 
     def __init__(
         self,
         f,
         delimiter: CSVDelimiter = CSVDelimiter.COMMA,
-        comment_char="#",
+        comment_char: str = "#",
+        none_values: Iterable[Hashable] = None,
         **kwargs
     ):
         """
@@ -76,11 +79,23 @@ class CommentAwareDictReader(csv.DictReader):
         :param f: File-like object.
         :param delimiter: Delimiter used in the file.
         :param comment_char: Character indicating comment lines (col header line may be a comment line or not)
+        :param none_values: Optional list of values that should be parsed to None, e.g. ["", "NA"]
         :param kwargs: Additional arguments passed to DictReader.
         """
         self.delimiter = delimiter
         self.comment_char = comment_char
+        self.none_values = none_values
 
         # Adjust the file pointer to the lines after any meaningless comments (i.e. those that aren't a header row)
         move_file_pointer_past_comment_lines(f, self.comment_char, self.delimiter)
         super().__init__(f, delimiter=delimiter, **kwargs)
+
+    def __next__(self):
+        d = super().__next__()
+        if self.none_values:
+            d = dict(
+                zip(
+                    d.keys(), [None if v in self.none_values else v for v in d.values()]
+                )
+            )
+        return d

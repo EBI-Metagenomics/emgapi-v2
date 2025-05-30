@@ -1,6 +1,9 @@
+import logging
 from typing import Iterable
 
 from django.contrib import admin
+from django.contrib import messages
+from django.db.models import QuerySet
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404
 from unfold.admin import ModelAdmin
@@ -43,8 +46,9 @@ class AnalysisAdmin(JSONFieldWidgetOverridesMixin, ModelAdmin):
         "study__ena_accessions",
         "pipeline_version",
     ]
+    autocomplete_fields = ["run", "sample", "study", "ena_study", "assembly"]
 
-    readonly_fields = ["created_at", "accession"]
+    readonly_fields = ["created_at", "accession", "is_ready"]
 
     fieldsets = (
         (None, {"fields": ["accession"]}),
@@ -75,7 +79,13 @@ class AnalysisAdmin(JSONFieldWidgetOverridesMixin, ModelAdmin):
                 ],
             },
         ),
-        ("Files", {"classes": ["tab"], "fields": ["downloads", "results_dir"]}),
+        (
+            "Files",
+            {
+                "classes": ["tab"],
+                "fields": ["downloads", "results_dir", "external_results_dir"],
+            },
+        ),
         ("QC", {"classes": ["tab"], "fields": ["quality_control"]}),
     )
 
@@ -120,3 +130,23 @@ class AnalysisAdmin(JSONFieldWidgetOverridesMixin, ModelAdmin):
             f'attachment; filename="{analysis.accession}_annotations.json"'
         )
         return response
+
+    @admin.action(description="Reset analyses by removing statuses and downloads")
+    def reset_analyses(self, request, queryset: QuerySet):
+        logging.warning(
+            f"{request.user} resetting analyses {queryset.first()} and {queryset.count() - 1} others"
+        )
+        queryset.update(
+            annotations=Analysis.default_annotations(),
+            downloads=[],
+            status=Analysis.AnalysisStates.default_status(),
+            results_dir="",
+            external_results_dir="",
+        )
+        self.message_user(
+            request,
+            f"{queryset.count()} analyses reset successfully",
+            messages.SUCCESS,
+        )
+
+    actions = ["reset_analyses"]

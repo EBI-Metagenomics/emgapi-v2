@@ -182,8 +182,7 @@ def update_assemblies_assemblers_from_samplesheet(
 
 @flow(flow_run_name="Assemble {samplesheet_csv}", persist_result=True)
 def run_assembler_for_samplesheet(
-    mgnify_study: analyses.models.Study,
-    samplesheet_csv: Path,
+    mgnify_study: analyses.models.Study, samplesheet_csv: Path, samplesheet_hash: str
 ):
     samplesheet_df = pd.read_csv(samplesheet_csv, sep=",")
     assemblies: Iterable[analyses.models.Assembly] = (
@@ -206,8 +205,10 @@ def run_assembler_for_samplesheet(
             ],
         )
 
-    miassembler_outdir = Path(
-        f"{EMG_CONFIG.slurm.default_workdir}/{mgnify_study.ena_study.accession}_miassembler"
+    miassembler_outdir = (
+        Path(EMG_CONFIG.slurm.default_workdir)
+        / f"{mgnify_study.ena_study.accession}_miassembler"
+        / samplesheet_hash
     )
 
     command = cli_command(

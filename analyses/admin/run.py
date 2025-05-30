@@ -37,7 +37,41 @@ class RunAdmin(ENABrowserLinkMixin, JSONFieldWidgetOverridesMixin, ModelAdmin):
         "sample__ena_accessions",
         "study__accession",
     ]
+    autocomplete_fields = ["ena_study", "study", "sample"]
 
     @display(description="Accessions", label=True)
     def display_accessions(self, instance: Run):
         return instance.ena_accessions
+
+    fieldsets = (
+        (None, {"fields": ["ena_accessions", "experiment_type"]}),
+        (
+            "Related",
+            {
+                "classes": ["tab"],
+                "fields": [
+                    "ena_study",
+                    "study",
+                    "sample",
+                ],
+            },
+        ),
+        (
+            "Status and ownership",
+            {
+                "classes": ["tab"],
+                "fields": [
+                    "is_private",
+                    "webin_submitter",
+                    "is_suppressed",
+                ],
+            },
+        ),
+        (
+            "Metadata",
+            {
+                "classes": ["tab"],
+                "fields": ["metadata", "instrument_model", "instrument_platform"],
+            },
+        ),
+    )

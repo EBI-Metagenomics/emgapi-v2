@@ -3,6 +3,7 @@ from pathlib import Path
 from typing import List
 
 from prefect import task
+from prefect.tasks import task_input_hash
 
 from activate_django_first import EMG_CONFIG
 from workflows.flows.analyse_study_tasks.analysis_states import AnalysisStates
@@ -11,11 +12,10 @@ from workflows.flows.analyse_study_tasks.sanity_check_amplicon_results import (
     sanity_check_amplicon_results,
 )
 from workflows.prefect_utils.analyses_models_helpers import task_mark_analysis_status
-from workflows.prefect_utils.cache_control import context_agnostic_task_input_hash
 
 
 @task(
-    cache_key_fn=context_agnostic_task_input_hash,
+    cache_key_fn=task_input_hash,
 )
 def set_post_analysis_states(amplicon_current_outdir: Path, amplicon_analyses: List):
     # The pipeline produces top level end of execution reports, which contain

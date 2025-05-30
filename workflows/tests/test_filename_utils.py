@@ -40,6 +40,9 @@ def test_accession_prefix_separated_dir_path():
     assert accession_prefix_separated_dir_path("PRJ123456", 3, 6, 7) == Path(
         "PRJ/PRJ123/PRJ1234/PRJ123456"
     )
+    assert accession_prefix_separated_dir_path("PRJ123456", -6, -3) == Path(
+        "PRJ/PRJ123/PRJ123456"
+    )
 
 
 def test_next_enumerated_subdir(tmp_path):
