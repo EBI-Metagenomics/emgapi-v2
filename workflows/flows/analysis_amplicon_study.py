@@ -25,6 +25,8 @@ import ena.models
 from workflows.ena_utils.ena_api_requests import (
     get_study_from_ena,
     get_study_readruns_from_ena,
+    library_strategy_policy_to_filter,
+    ENALibraryStrategyPolicy,
 )
 from workflows.flows.analyse_study_tasks.shared.study_summary import (
     merge_study_summaries,
@@ -67,7 +69,10 @@ def analysis_amplicon_study(study_accession: str):
     read_runs = get_study_readruns_from_ena(
         ena_study.accession,
         limit=10000,
-        filter_library_strategy=EMG_CONFIG.amplicon_pipeline.amplicon_library_strategy,
+        raise_on_empty=False,
+        filter_library_strategy=library_strategy_policy_to_filter(
+            "AMPLICON", policy=ENALibraryStrategyPolicy.ONLY_IF_CORRECT_IN_ENA
+        ),
     )
     logger.info(f"Returned {len(read_runs)} run from ENA portal API")
 
@@ -80,6 +85,10 @@ def analysis_amplicon_study(study_accession: str):
             None,
             description="Admin users watching this study will get status notifications.",
         )
+        library_strategy_policy: Optional[ENALibraryStrategyPolicy] = Field(
+            None,
+            description="Optionally treat read-runs with incorrect library strategy metadata as amplicon.",
+        )
 
     analyse_study_input: AnalyseStudyInput = suspend_flow_run(
         wait_for_input=AnalyseStudyInput.with_initial_data(
@@ -89,6 +98,10 @@ def analysis_amplicon_study(study_accession: str):
                 This will analyse all {len(read_runs)} amplicon read-runs of study {ena_study.accession} \
                 using [Amplicon Pipeline V6](https://github.com/ebi-metagenomics/amplicon-pipeline).
 
+                **Read-run filtering**
+                If you expected more than {len(read_runs)} amplicon read-runs, you can add other (incorrect) \
+                library strategies to the read-runs filter by changing the Library Strategy Policy.
+
                 **Biome tagger**
                 Please select a Biome for the entire study \
                 [{ena_study.accession}: {ena_study.title}](https://www.ebi.ac.uk/ena/browser/view/{ena_study.accession}).
@@ -96,6 +109,24 @@ def analysis_amplicon_study(study_accession: str):
             ),
         )
     )
+
+    if (
+        analyse_study_input.library_strategy_policy
+        and not analyse_study_input.library_strategy_policy
+        == ENALibraryStrategyPolicy.ONLY_IF_CORRECT_IN_ENA
+    ):
+        read_runs = get_study_readruns_from_ena(
+            ena_study.accession,
+            limit=10000,
+            raise_on_empty=True,
+            filter_library_strategy=library_strategy_policy_to_filter(
+                "AMPLICON", policy=analyse_study_input.library_strategy_policy
+            ),
+        )
+        logger.info(
+            f"Using policy {analyse_study_input.library_strategy_policy}, "
+            f"now returned {len(read_runs)} run from ENA portal API."
+        )
 
     biome = analyses.models.Biome.objects.get(path=analyse_study_input.biome.name)
     mgnify_study.biome = biome

@@ -4,7 +4,7 @@ import shutil
 from enum import Enum
 from pathlib import Path
 from textwrap import dedent
-from typing import List
+from typing import List, Optional
 from unittest.mock import patch
 
 import pytest
@@ -17,6 +17,7 @@ import analyses.models
 from workflows.data_io_utils.file_rules.base_rules import FileRule, GlobRule
 from workflows.data_io_utils.file_rules.common_rules import GlobHasFilesCountRule
 from workflows.data_io_utils.file_rules.nodes import Directory
+from workflows.ena_utils.ena_api_requests import ENALibraryStrategyPolicy
 from workflows.flows.analyse_study_tasks.shared.study_summary import (
     merge_study_summaries,
     STUDY_SUMMARY_TSV,
@@ -646,12 +647,14 @@ def test_prefect_analyse_amplicon_flow(
         class AnalyseStudyInput(BaseModel):
             biome: BiomeChoices
             watchers: List[UserChoices]
+            library_strategy_policy: Optional[ENALibraryStrategyPolicy]
 
         def suspend_side_effect(wait_for_input=None):
             if wait_for_input.__name__ == "AnalyseStudyInput":
                 return AnalyseStudyInput(
                     biome=BiomeChoices["root.engineered"],
                     watchers=[UserChoices[admin_user.username]],
+                    library_strategy_policy=ENALibraryStrategyPolicy.ONLY_IF_CORRECT_IN_ENA,
                 )
 
         mock_suspend_flow_run.side_effect = suspend_side_effect

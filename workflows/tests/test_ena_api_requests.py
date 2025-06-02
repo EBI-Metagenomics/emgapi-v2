@@ -14,6 +14,8 @@ from workflows.ena_utils.ena_api_requests import (
     is_ena_study_available_privately,
     is_ena_study_public,
     sync_privacy_state_of_ena_study_and_derived_objects,
+    library_strategy_policy_to_filter,
+    ENALibraryStrategyPolicy,
 )
 from workflows.ena_utils.requestors import (
     ENAAPIRequest,
@@ -376,6 +378,197 @@ def test_get_study_readruns_from_ena(
         and "_2" in run.metadata["fastq_ftps"][1]
     )
     assert run.metadata["host_tax_id"] == "7460"
+
+    httpx_mock.add_response(
+        url=f"{EMG_CONFIG.ena.portal_search_api}?result=read_run&query=%22%28study_accession%3D{study_accession}+OR+secondary_study_accession%3D{study_accession}%29%22"
+        f"&fields=run_accession%2Csample_accession%2Csample_title%2Csecondary_sample_accession%2Cfastq_md5%2Cfastq_ftp%2Clibrary_layout%2Clibrary_strategy%2Clibrary_source%2Cscientific_name%2Chost_tax_id%2Chost_scientific_name%2Cinstrument_platform%2Cinstrument_model%2Clocation%2Clat%2Clon"
+        f"&limit=10"
+        f"&format=json"
+        f"&dataPortal=metagenome",
+        json=[
+            {
+                "run_accession": "RUN101",
+                "sample_accession": "SAMPLE101",
+                "sample_title": "sample title",
+                "secondary_sample_accession": "SAMP101",
+                "fastq_md5": "md5kjdndk",
+                "fastq_ftp": "fq_1.fastq.gz;fq_2.fastq.gz",
+                "library_layout": "PAIRED",
+                "library_strategy": "AMPLICON",
+                "library_source": "METAGENOMIC",
+                "scientific_name": "metagenome",
+                "host_tax_id": "7460",
+                "host_scientific_name": "Apis mellifera",
+                "instrument_platform": "ILLUMINA",
+                "instrument_model": "Illumina MiSeq",
+                "lat": "52",
+                "lon": "0",
+                "location": "hinxton",
+            },
+            {
+                "run_accession": "RUN102",
+                "sample_accession": "SAMPLE102",
+                "sample_title": "sample title",
+                "secondary_sample_accession": "SAMP102",
+                "fastq_md5": "md5kjdndk",
+                "fastq_ftp": "fq_1.fastq.gz;fq_2.fastq.gz",
+                "library_layout": "PAIRED",
+                "library_strategy": "OTHER",
+                "library_source": "METAGENOMIC",
+                "scientific_name": "metagenome",
+                "host_tax_id": "7460",
+                "host_scientific_name": "Apis mellifera",
+                "instrument_platform": "ILLUMINA",
+                "instrument_model": "Illumina MiSeq",
+                "lat": "52",
+                "lon": "0",
+                "location": "hinxton",
+            },
+            {
+                "run_accession": "RUN103",
+                "sample_accession": "SAMPLE103",
+                "sample_title": "sample title",
+                "secondary_sample_accession": "SAMP103",
+                "fastq_md5": "md5kjdndk",
+                "fastq_ftp": "fq_1.fastq.gz;fq_2.fastq.gz",
+                "library_layout": "PAIRED",
+                "library_strategy": "NOTAMPLICON",
+                "library_source": "METAGENOMIC",
+                "scientific_name": "metagenome",
+                "host_tax_id": "7460",
+                "host_scientific_name": "Apis mellifera",
+                "instrument_platform": "ILLUMINA",
+                "instrument_model": "Illumina MiSeq",
+                "lat": "52",
+                "lon": "0",
+                "location": "hinxton",
+            },
+        ],
+        is_reusable=True,
+    )
+
+    run_accessions_unfiltered = get_study_readruns_from_ena(study_accession, limit=10)
+    assert len(run_accessions_unfiltered) == 3
+
+    httpx_mock.add_response(
+        url=f"{EMG_CONFIG.ena.portal_search_api}?result=read_run&query=%22%28%28study_accession%3D{study_accession}+OR+secondary_study_accession%3D{study_accession}%29+AND+library_strategy%3DAMPLICON%29%22"
+        f"&fields=run_accession%2Csample_accession%2Csample_title%2Csecondary_sample_accession%2Cfastq_md5%2Cfastq_ftp%2Clibrary_layout%2Clibrary_strategy%2Clibrary_source%2Cscientific_name%2Chost_tax_id%2Chost_scientific_name%2Cinstrument_platform%2Cinstrument_model%2Clocation%2Clat%2Clon"
+        f"&limit=10"
+        f"&format=json"
+        f"&dataPortal=metagenome",
+        json=[
+            {
+                "run_accession": "RUN101",
+                "sample_accession": "SAMPLE101",
+                "sample_title": "sample title",
+                "secondary_sample_accession": "SAMP101",
+                "fastq_md5": "md5kjdndk",
+                "fastq_ftp": "fq_1.fastq.gz;fq_2.fastq.gz",
+                "library_layout": "PAIRED",
+                "library_strategy": "AMPLICON",
+                "library_source": "METAGENOMIC",
+                "scientific_name": "metagenome",
+                "host_tax_id": "7460",
+                "host_scientific_name": "Apis mellifera",
+                "instrument_platform": "ILLUMINA",
+                "instrument_model": "Illumina MiSeq",
+                "lat": "52",
+                "lon": "0",
+                "location": "hinxton",
+            },
+        ],
+        is_reusable=True,
+    )
+
+    run_accessions_amplicon = get_study_readruns_from_ena(
+        study_accession, limit=10, filter_library_strategy=["AMPLICON"]
+    )
+    assert len(run_accessions_amplicon) == 1
+
+    httpx_mock.add_response(
+        url=f"{EMG_CONFIG.ena.portal_search_api}?result=read_run&query=%22%28%28study_accession%3D{study_accession}+OR+secondary_study_accession%3D{study_accession}%29+AND+%28library_strategy%3DAMPLICON+OR+library_strategy%3DOTHER%29%29%22"
+        f"&fields=run_accession%2Csample_accession%2Csample_title%2Csecondary_sample_accession%2Cfastq_md5%2Cfastq_ftp%2Clibrary_layout%2Clibrary_strategy%2Clibrary_source%2Cscientific_name%2Chost_tax_id%2Chost_scientific_name%2Cinstrument_platform%2Cinstrument_model%2Clocation%2Clat%2Clon"
+        f"&limit=10"
+        f"&format=json"
+        f"&dataPortal=metagenome",
+        json=[
+            {
+                "run_accession": "RUN101",
+                "sample_accession": "SAMPLE101",
+                "sample_title": "sample title",
+                "secondary_sample_accession": "SAMP101",
+                "fastq_md5": "md5kjdndk",
+                "fastq_ftp": "fq_1.fastq.gz;fq_2.fastq.gz",
+                "library_layout": "PAIRED",
+                "library_strategy": "AMPLICON",
+                "library_source": "METAGENOMIC",
+                "scientific_name": "metagenome",
+                "host_tax_id": "7460",
+                "host_scientific_name": "Apis mellifera",
+                "instrument_platform": "ILLUMINA",
+                "instrument_model": "Illumina MiSeq",
+                "lat": "52",
+                "lon": "0",
+                "location": "hinxton",
+            },
+            {
+                "run_accession": "RUN102",
+                "sample_accession": "SAMPLE102",
+                "sample_title": "sample title",
+                "secondary_sample_accession": "SAMP102",
+                "fastq_md5": "md5kjdndk",
+                "fastq_ftp": "fq_1.fastq.gz;fq_2.fastq.gz",
+                "library_layout": "PAIRED",
+                "library_strategy": "OTHER",
+                "library_source": "METAGENOMIC",
+                "scientific_name": "metagenome",
+                "host_tax_id": "7460",
+                "host_scientific_name": "Apis mellifera",
+                "instrument_platform": "ILLUMINA",
+                "instrument_model": "Illumina MiSeq",
+                "lat": "52",
+                "lon": "0",
+                "location": "hinxton",
+            },
+        ],
+        is_reusable=True,
+    )
+
+    run_accessions_amplicon_and_other_explicit = get_study_readruns_from_ena(
+        study_accession,
+        limit=10,
+        filter_library_strategy=library_strategy_policy_to_filter(
+            "AMPLICON", ["OTHER"]
+        ),
+    )
+    assert len(run_accessions_amplicon_and_other_explicit) == 2
+
+    run_accessions_amplicon_only_policy = get_study_readruns_from_ena(
+        study_accession,
+        limit=10,
+        filter_library_strategy=library_strategy_policy_to_filter(
+            "AMPLICON", policy=ENALibraryStrategyPolicy.ONLY_IF_CORRECT_IN_ENA
+        ),
+    )
+    assert len(run_accessions_amplicon_only_policy) == 1
+
+    run_accessions_amplicon_and_other_policy = get_study_readruns_from_ena(
+        study_accession,
+        limit=10,
+        filter_library_strategy=library_strategy_policy_to_filter(
+            "AMPLICON", policy=ENALibraryStrategyPolicy.ASSUME_OTHER_ALSO_MATCHES
+        ),
+    )
+    assert len(run_accessions_amplicon_and_other_policy) == 2
+
+    run_accessions_amplicon_all_policy = get_study_readruns_from_ena(
+        study_accession,
+        limit=10,
+        filter_library_strategy=library_strategy_policy_to_filter(
+            "AMPLICON", policy=ENALibraryStrategyPolicy.OVERRIDE_ALL
+        ),
+    )
+    assert len(run_accessions_amplicon_all_policy) == 3
 
 
 @pytest.mark.httpx_mock(should_mock=should_not_mock_httpx_requests_to_prefect_server)

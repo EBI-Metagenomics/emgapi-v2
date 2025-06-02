@@ -140,6 +140,9 @@ def merge_study_summaries(
     study = Study.objects.get(accession=mgnify_study_accession)
 
     logger.info(f"Merging study summaries for {study}, in {study.results_dir}")
+    if not study.results_dir:
+        logger.warning(f"Study {study} has no results_dir, so cannot merge summaries")
+        return []
     logger.debug(f"Glob of dir is {list(Path(study.results_dir).glob('*'))}")
     existing_merged_files = list(
         Path(study.results_dir).glob(
@@ -210,6 +213,11 @@ def merge_study_summaries(
 def add_study_summaries_to_downloads(mgnify_study_accession: str):
     logger = get_run_logger()
     study = Study.objects.get(accession=mgnify_study_accession)
+    if not study.results_dir:
+        logger.warning(
+            f"Study {study} has no results_dir, so cannot add study summaries to downloads"
+        )
+        return
 
     for summary_file in Path(study.results_dir).glob(
         f"{study.first_accession}*{STUDY_SUMMARY_TSV}"

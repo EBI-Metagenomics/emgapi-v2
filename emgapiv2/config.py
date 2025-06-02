@@ -74,7 +74,6 @@ class AmpliconPipelineConfig(BaseModel):
     )
     amplicon_pipeline_nf_profile: str = "codon_slurm"
     samplesheet_chunk_size: int = 20
-    amplicon_library_strategy: str = "AMPLICON"
     # results stats
     completed_runs_csv: str = "qc_passed_runs.csv"
     failed_runs_csv: str = "qc_failed_runs.csv"
