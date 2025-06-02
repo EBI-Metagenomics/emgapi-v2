@@ -143,6 +143,7 @@ def analysis_amplicon_study(study_accession: str):
         mgnify_study,
         for_experiment_type=analyses.models.WithExperimentTypeModel.ExperimentTypes.AMPLICON,
         pipeline=analyses.models.Analysis.PipelineVersions.v6,
+        ena_library_strategy_policy=analyse_study_input.library_strategy_policy,
     )
     analyses_to_attempt = get_analyses_to_attempt(
         mgnify_study,
