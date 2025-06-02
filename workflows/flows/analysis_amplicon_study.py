@@ -87,8 +87,8 @@ def analysis_amplicon_study(study_accession: str):
             None,
             description="Admin users watching this study will get status notifications.",
         )
-        library_strategy_policy: Optional[ENALibraryStrategyPolicy] = Field(
-            None,
+        library_strategy_policy: ENALibraryStrategyPolicy = Field(
+            ENALibraryStrategyPolicy.ONLY_IF_CORRECT_IN_ENA,
             description="Optionally treat read-runs with incorrect library strategy metadata as amplicon.",
         )
 
@@ -147,6 +147,7 @@ def analysis_amplicon_study(study_accession: str):
     analyses_to_attempt = get_analyses_to_attempt(
         mgnify_study,
         for_experiment_type=analyses.models.WithExperimentTypeModel.ExperimentTypes.AMPLICON,
+        ena_library_strategy_policy=analyse_study_input.library_strategy_policy,
     )
 
     # Work on chunks of 20 readruns at a time
