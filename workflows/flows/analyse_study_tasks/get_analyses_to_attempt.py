@@ -42,7 +42,7 @@ def get_analyses_to_attempt(
         analyses_worth_trying = analyses_worth_trying.filter(
             Q(experiment_type=for_experiment_type.value)
             | Q(
-                experiment_type=analyses.models.WithExperimentTypeModel.ExperimentTypes.UNKNOWN
+                experiment_type=analyses.models.WithExperimentTypeModel.ExperimentTypes.UNKNOWN.value
             )
         )
 
