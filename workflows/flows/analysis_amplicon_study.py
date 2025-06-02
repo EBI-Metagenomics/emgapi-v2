@@ -39,6 +39,8 @@ from workflows.prefect_utils.analyses_models_helpers import (
     add_study_watchers,
 )
 
+_AMPLICON = "AMPLICON"
+
 
 @flow(
     name="Run analysis pipeline-v6 on amplicon study",
@@ -71,7 +73,7 @@ def analysis_amplicon_study(study_accession: str):
         limit=10000,
         raise_on_empty=False,
         filter_library_strategy=library_strategy_policy_to_filter(
-            "AMPLICON", policy=ENALibraryStrategyPolicy.ONLY_IF_CORRECT_IN_ENA
+            _AMPLICON, policy=ENALibraryStrategyPolicy.ONLY_IF_CORRECT_IN_ENA
         ),
     )
     logger.info(f"Returned {len(read_runs)} run from ENA portal API")
@@ -120,7 +122,7 @@ def analysis_amplicon_study(study_accession: str):
             limit=10000,
             raise_on_empty=True,
             filter_library_strategy=library_strategy_policy_to_filter(
-                "AMPLICON", policy=analyse_study_input.library_strategy_policy
+                _AMPLICON, policy=analyse_study_input.library_strategy_policy
             ),
         )
         logger.info(
