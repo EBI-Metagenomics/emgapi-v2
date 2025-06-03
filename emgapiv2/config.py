@@ -73,7 +73,7 @@ class AmpliconPipelineConfig(BaseModel):
         "main"  # branch or commit of ebi-metagenomics/amplicon-pipeline
     )
     amplicon_pipeline_nf_profile: str = "codon_slurm"
-    samplesheet_chunk_size: int = 20
+    samplesheet_chunk_size: int = 50
     # results stats
     completed_runs_csv: str = "qc_passed_runs.csv"
     failed_runs_csv: str = "qc_failed_runs.csv"
