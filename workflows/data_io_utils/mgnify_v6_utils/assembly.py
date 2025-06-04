@@ -188,7 +188,7 @@ def import_taxonomy(
     )
 
 
-class AssemblyV6FunctionalTableSchema(BaseModel):
+class AssemblyV6AnnotationTableSchema(BaseModel):
     folder_name: str
     tsv_suffix: str
     expect_index: bool = Field(True)
@@ -200,7 +200,7 @@ class AssemblyV6FunctionalTableSchema(BaseModel):
 
 
 FUNCTIONAL_TABLE_SCHEMAS = [
-    AssemblyV6FunctionalTableSchema(
+    AssemblyV6AnnotationTableSchema(
         folder_name="go",
         tsv_suffix="_go_summary.tsv.gz",
         expect_index=True,
@@ -209,7 +209,7 @@ FUNCTIONAL_TABLE_SCHEMAS = [
         short_description="GO Term counts",
         long_description="Table with counts for each Gene Ontology (GO) Term found",
     ),
-    AssemblyV6FunctionalTableSchema(
+    AssemblyV6AnnotationTableSchema(
         folder_name="go",
         tsv_suffix="_goslim_summary.tsv.gz",
         expect_index=True,
@@ -219,7 +219,7 @@ FUNCTIONAL_TABLE_SCHEMAS = [
         short_description="GO-Slim Term counts",
         long_description="Table with counts for each Gene Ontology (GO)-Slim Term found",
     ),
-    AssemblyV6FunctionalTableSchema(
+    AssemblyV6AnnotationTableSchema(
         folder_name="interpro",
         tsv_suffix="_interpro_summary.tsv.gz",
         expect_index=True,
@@ -229,7 +229,7 @@ FUNCTIONAL_TABLE_SCHEMAS = [
         short_description="InterPro Identifier counts",
         long_description="Table with counts for each InterPro identifier found",
     ),
-    AssemblyV6FunctionalTableSchema(
+    AssemblyV6AnnotationTableSchema(
         folder_name="pfam",
         tsv_suffix="_pfam_summary.tsv.gz",
         expect_index=True,
@@ -238,7 +238,7 @@ FUNCTIONAL_TABLE_SCHEMAS = [
         short_description="Pfam accession counts",
         long_description="Table with counts for each Pfam accession found",
     ),
-    AssemblyV6FunctionalTableSchema(
+    AssemblyV6AnnotationTableSchema(
         folder_name="rhea-reactions",
         tsv_suffix="_proteins2rhea.tsv.gz",
         expect_index=True,
@@ -323,3 +323,63 @@ def import_functions(
                     schema.import_from_column
                 ].to_list()
                 analysis.save()
+
+
+PATHWAYS_AND_SYSTEMS_TABLE_SCHEMAS = [
+    AssemblyV6AnnotationTableSchema(
+        folder_name="antismash",
+        tsv_suffix="_antismash_summary.tsv.gz",
+        expect_index=True,
+        download_subgroup=analyses.models.Analysis.ANTISMASH_GENE_CLUSTERS,
+        import_to_annotations_key=None,
+        short_description="antiSMASH BGC counts",
+        long_description="Table with counts for each BGC found",
+    ),
+    AssemblyV6AnnotationTableSchema(
+        folder_name="sanntis",
+        tsv_suffix="_sanntis_summary.tsv.gz",
+        expect_index=True,
+        download_subgroup=analyses.models.Analysis.SANNTIS_GENE_CLUSTERS,
+        import_to_annotations_key=None,
+        short_description="antiSMASH BGC counts",
+        long_description="Table with counts for each BGC found",
+    ),
+    AssemblyV6AnnotationTableSchema(
+        folder_name="go",
+        tsv_suffix="_goslim_summary.tsv.gz",
+        expect_index=True,
+        download_subgroup=analyses.models.Analysis.GO_SLIMS,
+        import_to_annotations_key=analyses.models.Analysis.GO_SLIMS,
+        import_from_column="go",
+        short_description="GO-Slim Term counts",
+        long_description="Table with counts for each Gene Ontology (GO)-Slim Term found",
+    ),
+    AssemblyV6AnnotationTableSchema(
+        folder_name="interpro",
+        tsv_suffix="_interpro_summary.tsv.gz",
+        expect_index=True,
+        download_subgroup=analyses.models.Analysis.INTERPRO_IDENTIFIERS,
+        import_to_annotations_key=analyses.models.Analysis.INTERPRO_IDENTIFIERS,
+        import_from_column="interpro_identifier",
+        short_description="InterPro Identifier counts",
+        long_description="Table with counts for each InterPro identifier found",
+    ),
+    AssemblyV6AnnotationTableSchema(
+        folder_name="pfam",
+        tsv_suffix="_pfam_summary.tsv.gz",
+        expect_index=True,
+        download_subgroup=analyses.models.Analysis.PFAMS,
+        import_to_annotations_key=None,
+        short_description="Pfam accession counts",
+        long_description="Table with counts for each Pfam accession found",
+    ),
+    AssemblyV6AnnotationTableSchema(
+        folder_name="rhea-reactions",
+        tsv_suffix="_proteins2rhea.tsv.gz",
+        expect_index=True,
+        download_subgroup=analyses.models.Analysis.RHEA_REACTIONS,
+        import_to_annotations_key=None,
+        short_description="Rhea reaction counts",
+        long_description="Table with counts of each Rhea reaction found",
+    ),
+]
