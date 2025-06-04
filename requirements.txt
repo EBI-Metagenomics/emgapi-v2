@@ -1,6 +1,6 @@
 django==5.2.1
 django-cors-headers==4.7.0
-django-ninja~=1.4.2
+django-ninja~=1.4.0
 prefect==3.4.4
 prefect-shell==0.3.1
 prefect-slack==0.3.1
@@ -15,6 +15,7 @@ django-json-widget==2.0.1
 tzdata
 pandas==2.2.3
 django-ltree-2==0.1.12
+django-ninja-jwt~=5.3.7
 
 whitenoise==6.9.0
 gunicorn==23.0.0

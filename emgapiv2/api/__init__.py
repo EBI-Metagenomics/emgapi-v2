@@ -1,15 +1,16 @@
 from textwrap import dedent
 
-from ninja import NinjaAPI
 from ninja.pagination import RouterPaginated
+from ninja_extra import NinjaExtraAPI
 
 from emgapiv2.api.schema_utils import OpenApiKeywords, ApiSections
 from .analyses import router as analyses_router
 from .private import router as my_data_router
 from .samples import router as samples_router
 from .studies import router as studies_router
+from .token_controller import WebinJwtController
 
-api = NinjaAPI(
+api = NinjaExtraAPI(
     title="MGnify API",
     description="The API for [MGnify](https://www.ebi.ac.uk/metagenomics), "
     "EBI’s platform for the submission, analysis, discovery and comparison of metagenomic-derived datasets.",
@@ -46,6 +47,24 @@ api = NinjaAPI(
                     """
                 ),
             },
+            {
+                OpenApiKeywords.NAME: ApiSections.PRIVATE_DATA,
+                OpenApiKeywords.DESCRIPTION: dedent(
+                    """
+                    MGnify supports private data, inheriting ENA's data privacy model and public release times.
+                    Authentication is required to view private data owned by a Webin account.
+                    """
+                ),
+            },
+            {
+                OpenApiKeywords.NAME: ApiSections.AUTH,
+                OpenApiKeywords.DESCRIPTION: dedent(
+                    """
+                    A Token can be obtained using an ENA Webin username and password,
+                    to access the Private Data endpoints.
+                    """
+                ),
+            },
             # {
             #     OpenApiKeywords.NAME: ApiSections.REQUESTS,
             #     OpenApiKeywords.DESCRIPTION: dedent(
@@ -62,3 +81,6 @@ api.add_router("/analyses", analyses_router, tags=[ApiSections.ANALYSES])
 api.add_router("/samples", samples_router, tags=[ApiSections.SAMPLES])
 api.add_router("/studies", studies_router, tags=[ApiSections.STUDIES])
 api.add_router("/my-data", my_data_router, tags=[ApiSections.PRIVATE_DATA])
+
+# Private data auth token provider (Webin JWTs)
+api.register_controllers(WebinJwtController)

@@ -91,7 +91,7 @@ tasks:
       - cp -r slurm-dev-environment/fs/nfs/public/tests/amplicon_v6_output/SRR1111111 slurm-dev-environment/fs/nfs/ftp/public/databases/metagenomics/mgnify_results/PRJNA398/PRJNA398089/SRR1111/SRR1111111/V6/amplicon
       - mkdir -p slurm-dev-environment/fs/nfs/ftp/public/databases/metagenomics/mgnify_results/PRJNA398/PRJNA398089/study-summaries
       - cp slurm-dev-environment/fs/nfs/public/tests/amplicon_v6_output/*study_summary.tsv slurm-dev-environment/fs/nfs/ftp/public/databases/metagenomics/mgnify_results/PRJNA398/PRJNA398089/study-summaries/
-      - docker compose run app shell -c "from analyses.models import Analysis; a=Analysis.objects.get(accession='MGYA00000004'); a.external_results_dir='PRJNA398/PRJNA398089/SRR1111/SRR1111111/V6/amplicon'; a.save()"
+      - docker compose run app shell -c "a=Analysis.objects.get(accession='MGYA00000004'); a.external_results_dir='PRJNA398/PRJNA398089/SRR1111/SRR1111111/V6/amplicon'; a.save()"
 
   debug-break-prefect-connection:
     desc: "Temporarily return 404s from the prefect server, when prefect worker tries to access it"

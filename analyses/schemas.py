@@ -20,6 +20,9 @@ from analyses.base_models.with_downloads_models import (
 from emgapiv2.enum_utils import FutureStrEnum
 from workflows.data_io_utils.filenames import trailing_slash_ensured_dir
 
+
+logger = logging.getLogger(__name__)
+
 EMG_CONFIG = settings.EMG_CONFIG
 
 
@@ -153,7 +156,7 @@ class MGnifyAnalysisDownloadFile(Schema, DownloadFile):
     def resolve_url(obj: MGnifyAnalysisDownloadFile):
         analysis = analyses.models.Analysis.objects.get(accession=obj.parent_identifier)
         if not analysis:
-            logging.warning(
+            logger.warning(
                 f"No parent Analysis object found with identified {obj.parent_identifier}"
             )
             return None
@@ -176,7 +179,7 @@ class MGnifyStudyDownloadFile(MGnifyAnalysisDownloadFile):
     def resolve_url(obj: MGnifyStudyDownloadFile):
         study = analyses.models.Study.objects.get(accession=obj.parent_identifier)
         if not study:
-            logging.warning(
+            logger.warning(
                 f"No parent Study object found with identified {obj.parent_identifier}"
             )
             return None
