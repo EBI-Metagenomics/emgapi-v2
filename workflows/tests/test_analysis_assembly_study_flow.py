@@ -550,6 +550,7 @@ def generate_fake_assembly_pipeline_results(
         )
 
     with gzip.open(f"{tax_dir}/{assembly_accession}.krona.txt.gz", "wt") as tax_file:
+        # with open(f"{tax_dir}/{assembly_accession}.krona.txt", "wt") as tax_file:
         tax_file.write(
             dedent(
                 """\
@@ -698,7 +699,7 @@ def test_prefect_analyse_assembly_flow(
     assembly_failed = "ERZ1049445"
     assemblies = [
         assembly_all_results,
-        # assembly_failed,
+        assembly_failed,
     ]
 
     # mock ENA response for assemblies
@@ -875,6 +876,9 @@ def test_prefect_analyse_assembly_flow(
 
     assert (
         study.analyses.filter(status__analysis_completed_reason="success").count() == 1
+    )
+    assert (
+        study.analyses.filter(status__analysis_qc_failed_reason="failed").count() == 1
     )
 
     # Check that the study has v6 analyses

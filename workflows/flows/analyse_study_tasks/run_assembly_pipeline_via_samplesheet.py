@@ -7,6 +7,8 @@ from django.utils.text import slugify
 from prefect import flow
 from prefect.runtime import flow_run
 
+from activate_django_first import EMG_CONFIG
+
 import analyses.models
 from activate_django_first import EMG_CONFIG
 from workflows.flows.analyse_study_tasks.import_completed_assembly_analyses import (
@@ -119,7 +121,6 @@ def run_assembly_pipeline_via_samplesheet(
     else:
         # assume that if job finished, all finished... set statuses
         set_post_assembly_analysis_states(assembly_current_outdir, assembly_analyses)
-
         import_completed_assembly_analyses(assembly_current_outdir, assembly_analyses)
 
         # TODO: We should mark these as intermediary statuses

@@ -1,11 +1,14 @@
 from pathlib import Path
 from typing import List
 
-from prefect import flow, task, get_run_logger
+from prefect import flow, task
 
 import analyses.models
 from workflows.data_io_utils.mgnify_v6_utils.assembly import (
-    create_assembly_v6_schema,
+    import_taxonomy,
+    import_qc,
+    import_functions,
+    import_pathways,
 )
 from workflows.flows.analyse_study_tasks.analysis_states import AnalysisStates
 from workflows.flows.analyse_study_tasks.copy_v6_pipeline_results import (
@@ -17,27 +20,22 @@ from workflows.prefect_utils.analyses_models_helpers import mark_analysis_status
 @task
 def import_completed_assembly_analysis(analysis: analyses.models.Analysis):
     """
-    Import results for a completed assembly analysis using the unified schema.
-
+    Import results for a completed assembly analysis.
     :param analysis: The analysis to import results for
     """
     analysis.refresh_from_db()
     dir_for_analysis = Path(analysis.results_dir)
 
-    # Use the unified schema for both validation and import
-    schema = create_assembly_v6_schema()
+    import_qc(analysis, dir_for_analysis, allow_non_exist=False)
 
-    # First validate the directory structure (optional but recommended)
-    try:
-        schema.validate_directory_structure(
-            dir_for_analysis.parent,  # Parent because results_dir includes assembly_id
-            analysis.assembly.first_accession,
-        )
-    except Exception as e:
-        print(f"Validation warning for {analysis}: {e}. Proceeding with import anyway.")
+    # Import taxonomy
+    import_taxonomy(analysis, dir_for_analysis)
 
-    # Import all results using the unified schema
-    schema.import_analysis_results(analysis, dir_for_analysis.parent)
+    # Import functional annotations
+    import_functions(analysis, dir_for_analysis)
+
+    # Import pathways and systems
+    import_pathways(analysis, dir_for_analysis)
 
     # Mark the analysis as having its annotations imported
     copy_v6_pipeline_results(analysis.accession)
@@ -63,15 +61,16 @@ def import_completed_assembly_analyses(
     :param assembly_current_outdir: Path to the directory containing the pipeline output
     :param assembly_analyses: List of assembly analyses
     """
-    logger = get_run_logger()
-
     for analysis in assembly_analyses:
         analysis.refresh_from_db()
         if not analysis.status.get(AnalysisStates.ANALYSIS_COMPLETED):
-            logger.info(f"{analysis} is not completed successfully. Skipping.")
+            print(f"{analysis} is not completed successfully. Skipping.")
             continue
         if analysis.status.get(AnalysisStates.ANALYSIS_POST_SANITY_CHECK_FAILED):
-            logger.info(f"{analysis} failed post-analysis sanity check. Skipping.")
+            print(f"{analysis} failed post-analysis sanity check. Skipping.")
+            continue
+        if analysis.annotations.get(analysis.TAXONOMIES):
+            print(f"{analysis} already has taxonomic annotations. Skipping.")
             continue
 
         dir_for_analysis = assembly_current_outdir / analysis.assembly.first_accession
@@ -80,10 +79,9 @@ def import_completed_assembly_analyses(
         analysis.save()
 
         try:
-            logger.info(f"Importing the results for {analysis}")
             import_completed_assembly_analysis(analysis)
         except Exception as e:
-            logger.info(f"{analysis} failed import! {e}")
+            print(f"{analysis} failed import! {e}")
             analysis.mark_status(
                 analysis.AnalysisStates.ANALYSIS_POST_SANITY_CHECK_FAILED,
                 reason=f"Failed during import: {e}",

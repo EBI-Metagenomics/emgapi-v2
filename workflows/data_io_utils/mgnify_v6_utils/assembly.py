@@ -1,19 +1,12 @@
-"""
-Unified schema-based validation and import system for assembly analysis results.
-
-This module provides a unified approach to both validate pipeline output directories
-and import their contents into the database. It extends the existing Pydantic-based
-validation patterns with import capabilities.
-"""
-
 import gzip
 import logging
-import pandas as pd
 from pathlib import Path
-from typing import List, Optional, Union
 
-from prefect import get_run_logger
-from pydantic import BaseModel, Field
+import pandas as pd
+from mgnify_pipelines_toolkit.analysis.assembly.study_summary_generator import (
+    TAXONOMY_COLUMN_NAMES,
+)
+from pydantic import BaseModel, Field, ValidationError
 
 from activate_django_first import EMG_CONFIG
 import analyses.models
@@ -27,1075 +20,421 @@ from workflows.data_io_utils.csv.csv_comment_handler import (
     move_file_pointer_past_comment_lines,
     CSVDelimiter,
 )
-from workflows.data_io_utils.file_rules.base_rules import (
-    FileRule,
-    DirectoryRule,
-    GlobRule,
-)
+
 from workflows.data_io_utils.file_rules.common_rules import (
     DirectoryExistsRule,
     FileExistsRule,
     FileIsNotEmptyRule,
-    FileIfExistsIsNotEmptyRule,
+    GlobHasFilesRule,
 )
 from workflows.data_io_utils.file_rules.mgnify_v6_result_rules import (
     GlobOfTaxonomyFolderHasHtmlAndKronaTxtRule,
+    GlobOfFolderHasTsvGzAndIndex,
 )
-from workflows.data_io_utils.file_rules.nodes import Directory, create_directory
-from mgnify_pipelines_toolkit.analysis.assembly.study_summary_generator import (
-    TAXONOMY_COLUMN_NAMES,
-)
+from workflows.data_io_utils.file_rules.nodes import Directory, File
 
 
-class AssemblyFileSchema(BaseModel):
-    """Schema for individual files within an assembly analysis directory."""
-
-    filename_template: str = Field(
-        ..., description="Template for filename with {assembly_id} placeholder"
-    )
-    file_type: DownloadFileType = Field(
-        ..., description="Type of file for download system"
-    )
-    download_type: DownloadType = Field(..., description="Category of download")
-    download_group: str = Field(..., description="Group identifier for downloads")
-    short_description: str = Field(..., description="Short description of file")
-    long_description: str = Field(..., description="Long description of file")
-    validation_rules: List[Union[FileRule, DirectoryRule]] = Field(
-        default_factory=list, description="List of validation rule names"
-    )
-    required: bool = Field(True, description="Whether file is required to exist")
-    import_to_annotations_key: Optional[str] = Field(
-        None, description="Key for importing to annotations"
-    )
-    import_from_column: Optional[str] = Field(None, description="Column to import from")
-
-    def get_filename(self, assembly_id: str) -> str:
-        """Get the actual filename for a given assembly ID."""
-        return self.filename_template.format(assembly_id=assembly_id)
-
-    def import_annotations(
-        self, analysis: "analyses.models.Analysis", file_path: Path
-    ) -> None:
-        """Import annotations from this file into the analysis."""
-        if not self.import_to_annotations_key:
-            return
-
-        try:
-            df = pd.read_csv(file_path, sep=CSVDelimiter.TAB)
-            # Store the entire dataframe as a list of dictionaries
-            analysis.annotations[self.import_to_annotations_key] = df.to_dict(
-                orient="records"
-            )
-            analysis.save()
-        except pd.errors.EmptyDataError:
-            logging.error(f"Found empty annotation TSV at {file_path}")
-        except Exception as e:
-            logging.error(f"Failed to import annotations from {file_path}: {e}")
-
-
-class AssemblyDirectorySchema(BaseModel):
-    """Schema for a directory within an assembly analysis output."""
-
-    folder_name: str = Field(..., description="Name of the folder")
-    files: List[AssemblyFileSchema] = Field(
-        default_factory=list, description="Files in this directory"
-    )
-    subdirectories: List["AssemblyDirectorySchema"] = Field(
-        default_factory=list, description="Subdirectories"
-    )
-    validation_rules: List[Union[FileRule, DirectoryRule]] = Field(
-        default_factory=list, description="Directory validation rules"
-    )
-    glob_rules: List[GlobRule] = Field(
-        default_factory=list, description="Glob validation rules"
-    )
-    required: bool = Field(True, description="Whether directory is required to exist")
-
-
-class AssemblyAnnotationTableSchema(BaseModel):
-    """Enhanced schema for annotation tables with validation and import capabilities."""
-
-    folder_name: str = Field(..., description="Name of the folder containing the table")
-    tsv_suffix: str = Field(..., description="Suffix for the TSV file")
-    expect_index: bool = Field(True, description="Whether to expect a .gzi index file")
-    download_subgroup: str = Field(..., description="Subgroup for downloads")
-    import_to_annotations_key: Optional[str] = Field(
-        None, description="Key for importing to annotations"
-    )
-    import_from_column: Optional[str] = Field(None, description="Column to import from")
-    short_description: str = Field(..., description="Short description")
-    long_description: str = Field(..., description="Long description")
-    validation_rules: List[Union[FileRule, DirectoryRule]] = Field(
-        default_factory=list, description="File validation rules"
-    )
-    required: bool = Field(True, description="Whether table is required")
-
-    def get_filename(self, assembly_id: str) -> str:
-        """Get the TSV filename for a given assembly ID."""
-        return f"{assembly_id}{self.tsv_suffix}"
-
-    def create_download_file(
-        self, analysis: "analyses.models.Analysis", base_path: Path
-    ) -> DownloadFile:
-        """Create a DownloadFile object for this annotation table."""
-        tsv_path = (
-            base_path
-            / self.folder_name
-            / self.get_filename(analysis.assembly.first_accession)
+def import_qc(
+    analysis: analyses.models.Analysis,
+    dir_for_analysis: Path,
+    allow_non_exist: bool = True,
+):
+    if not allow_non_exist:
+        qc_dir = Directory(
+            path=dir_for_analysis  # /hps/prod/...../abc123/ERZ999/
+            / EMG_CONFIG.amplicon_pipeline.qc_folder,  # qc/
+            rules=[DirectoryExistsRule],
+        )
+    else:
+        qc_dir = Directory(
+            path=dir_for_analysis  # /hps/prod/...../abc123/ERZ999/
+            / EMG_CONFIG.amplicon_pipeline.qc_folder  # qc/
         )
 
-        index_file = None
-        if self.expect_index:
-            index_file = DownloadFileIndexFile(
-                path=tsv_path.with_suffix(".gz.gzi").relative_to(analysis.results_dir),
+    if not qc_dir.path.is_dir():
+        print(f"No qc dir at {qc_dir.path}. Nothing to import.")
+        return
+
+    multiqc = File(
+        path=qc_dir.path / "multiqc_report.html",
+        rules=[
+            FileExistsRule,
+        ],
+    )
+    qc_dir.files.append(multiqc)
+    analysis.add_download(
+        DownloadFile(
+            path=multiqc.path.relative_to(analysis.results_dir),
+            file_type=DownloadFileType.HTML,
+            alias=multiqc.path.name,
+            download_type=DownloadType.QUALITY_CONTROL,
+            download_group="quality_control",
+            parent_identifier=analysis.accession,
+            short_description="MultiQC quality control report",
+            long_description="MultiQC webpage showing quality control steps and metrics",
+        )
+    )
+    analysis.save()
+
+
+def get_annotations_from_tax_table(tax_table: File) -> (list[dict], int | None):
+    """
+    Reads the taxonomy TSV table from tax_table.path
+
+    TSV format like:
+    ```
+    7	sk__Archaea	k__Thermoproteati	p__Nitrososphaerota	c__Nitrososphaeria	o__Nitrosopumilales	f__Nitrosopumilaceae	g__Nitrosopumilus	s__Candidatus Nitrosopumilus koreensis
+    3	sk__Archaea	k__Thermoproteati	p__Nitrososphaerota	c__Nitrososphaeria	o__Nitrosotaleales	f__Nitrosotaleaceae	g__Nitrosotalea	s__Nitrosotalea devaniterrae
+    98	sk__Bacteria
+    ```
+
+    :param tax_table: File whose property .path points at a TSV file (of a contig count and then multi-column nullable lineage parts)
+    :return:  A records-oriented list of taxonomies and the total contig-annotation count.
+    """
+    # with tax_table.path.open("r") as tax_tsv:
+    with gzip.open(tax_table.path, "rt") as tax_tsv:
+        move_file_pointer_past_comment_lines(
+            tax_tsv, delimiter=CSVDelimiter.TAB, comment_char="#"
+        )  # comments not expected - defensive measure
+        try:
+            tax_df = pd.read_csv(
+                tax_tsv, sep=CSVDelimiter.TAB, names=TAXONOMY_COLUMN_NAMES
+            ).fillna("")
+        except pd.errors.EmptyDataError:
+            logging.error(
+                f"Found empty taxonomy TSV at {tax_table.path}. Probably unit testing, otherwise we should never be here"
+            )
+            return [], 0
+
+    # TODO: could also validate here with toolkit:schemas.shemas.TaxonRecord
+    tax_df["organism"] = (
+        tax_df[TAXONOMY_COLUMN_NAMES[1:]].agg(";".join, axis=1).str.strip(";")
+    )
+    tax_df.rename(columns={"Count": "count"}, inplace=True)
+
+    tax_df["count"] = (
+        pd.to_numeric(tax_df["count"], errors="coerce").fillna(1).astype(int)
+    )
+
+    tax_df: pd.DataFrame = tax_df[["organism", "count"]]
+
+    return tax_df.to_dict(orient="records"), int(tax_df["count"].sum())
+
+
+def import_taxonomy(
+    analysis: analyses.models.Analysis,
+    dir_for_analysis: Path,
+    allow_non_exist: bool = True,
+):
+    dir_rules = [DirectoryExistsRule] if not allow_non_exist else []
+
+    glob_rules = []
+
+    if not allow_non_exist:
+        glob_rules.append(GlobOfTaxonomyFolderHasHtmlAndKronaTxtRule)
+
+    tax_dir = Directory(
+        path=dir_for_analysis  # /hps/prod/...../abc123/ERZ999/
+        / EMG_CONFIG.assembly_analysis_pipeline.taxonomy_folder,  # taxonomy/
+        rules=dir_rules,
+        glob_rules=glob_rules,
+    )
+
+    if not tax_dir.path.is_dir():
+        print(f"No tax dir at {tax_dir.path} – no taxa to import.")
+        return
+
+    tax_table = File(
+        path=tax_dir.path / f"{analysis.assembly.first_accession}.krona.txt.gz",
+        rules=[
+            FileExistsRule,
+            FileIsNotEmptyRule,
+        ],
+    )
+
+    tax_dir.files.append(tax_table)
+
+    krona_files = list(tax_dir.path.glob(f"{analysis.assembly.first_accession}*.html"))
+    for krona_file in krona_files:
+        krona = File(
+            path=Path(krona_file),
+            rules=[
+                FileExistsRule,
+                FileIsNotEmptyRule,
+            ],
+        )
+        tax_dir.files.append(krona)
+
+    taxonomies_to_import, total_read_count = get_annotations_from_tax_table(tax_table)
+    analysis_taxonomies = analysis.annotations.get(analysis.TAXONOMIES, {})
+    if not analysis_taxonomies:
+        analysis_taxonomies = {}
+    analysis_taxonomies[analysis.TaxonomySources.UNIREF] = taxonomies_to_import
+    analysis.annotations[analysis.TAXONOMIES] = analysis_taxonomies
+    analysis.save()
+    analysis.refresh_from_db()
+
+    analysis.add_download(
+        DownloadFile(
+            path=tax_table.path.relative_to(analysis.results_dir),
+            file_type=DownloadFileType.TSV,
+            alias=tax_dir.path.name,
+            download_type=DownloadType.TAXONOMIC_ANALYSIS,
+            download_group=f"{analysis.TAXONOMIES}.{analysis.CLOSED_REFERENCE}.{analysis.TaxonomySources.UNIREF}",
+            parent_identifier=analysis.accession,
+            short_description="UniRef90 contig taxonomy table",
+            long_description="Table with contig counts for each taxonomic assignment",
+        )
+    )
+
+
+class AssemblyV6AnnotationTableSchema(BaseModel):
+    folder_name: str
+    tsv_suffix: str
+    expect_index: bool = Field(True)
+    download_subgroup: str
+    import_to_annotations_key: str | None = Field(None)
+    import_from_column: str | None = Field(None)
+    short_description: str
+    long_description: str
+
+
+def _import_annotations(
+    analysis: analyses.models.Analysis,
+    dir_for_analysis: Path,
+    schemas_list,
+    folder_path: str,
+    folder_name: str,
+    allow_non_exist: bool = True,
+):
+    """
+    Common helper function to import annotations from a directory.
+
+    :param analysis: The analysis to import annotations for
+    :param dir_for_analysis: Path to the directory containing the analysis results
+    :param schemas_list: List of annotation table schemas to process
+    :param folder_path: Path to the folder containing the annotations
+    :param folder_name: Name of the folder (for logging)
+    :param allow_non_exist: Whether to allow the directory to not exist
+    """
+    dir_rules = [DirectoryExistsRule] if not allow_non_exist else []
+    annotations_dir = Directory(
+        path=dir_for_analysis / folder_path,
+        rules=dir_rules,
+    )
+
+    if not annotations_dir.path.is_dir():
+        print(
+            f"No {folder_name} dir at {annotations_dir.path} – no {folder_name} to import."
+        )
+        return
+
+    for schema in schemas_list:
+        try:
+            annot_dir = Directory(
+                path=annotations_dir.path / schema.folder_name,
+                rules=[DirectoryExistsRule],
+            )
+        except ValidationError:
+            logging.warning(
+                f"No {folder_name} dir at {annotations_dir.path / schema.folder_name}. Nothing to import."
+            )
+            continue
+
+        try:
+            if schema.expect_index:
+                annot_dir.glob_rules = [GlobOfFolderHasTsvGzAndIndex]
+            else:
+                annot_dir.glob_rules = [GlobHasFilesRule]
+        except ValidationError as e:
+            logging.warning(
+                f"Validation failure for TSV files at {annot_dir.path}: {e}. Skipping."
+            )
+            continue
+
+        annot_tsv = (
+            annot_dir.path / f"{analysis.assembly.first_accession}{schema.tsv_suffix}"
+        )
+
+        if not schema.expect_index:
+            index = None
+        else:
+            index = DownloadFileIndexFile(
+                path=annot_tsv.with_suffix(".gz.gzi").relative_to(analysis.results_dir),
                 index_type="gzi",
             )
 
-        return DownloadFile(
-            path=tsv_path.relative_to(analysis.results_dir),
-            file_type=DownloadFileType.TSV,
-            alias=tsv_path.name,
-            download_type=DownloadType.FUNCTIONAL_ANALYSIS,
-            download_group=f"{analyses.models.Analysis.FUNCTIONAL_ANNOTATION}.{self.download_subgroup}",
-            parent_identifier=analysis.accession,
-            short_description=self.short_description,
-            long_description=self.long_description,
-            index_file=index_file,
-        )
-
-    def import_annotations(
-        self, analysis: "analyses.models.Analysis", base_path: Path
-    ) -> None:
-        """Import annotations from this table into the analysis."""
-        if not self.import_to_annotations_key or not self.import_from_column:
-            return
-
-        tsv_path = (
-            base_path
-            / self.folder_name
-            / self.get_filename(analysis.assembly.first_accession)
-        )
-
-        try:
-            df = pd.read_csv(tsv_path, sep=CSVDelimiter.TAB)
-            analysis.annotations[self.import_to_annotations_key] = df[
-                self.import_from_column
-            ].to_list()
-            analysis.save()
-        except pd.errors.EmptyDataError:
-            logging.error(f"Found empty annotation TSV at {tsv_path}")
-        except Exception as e:
-            logging.error(f"Failed to import annotations from {tsv_path}: {e}")
-
-
-class AssemblyAnalysisDirectorySchema(BaseModel):
-    """Unified schema for assembly analysis directory validation and import."""
-
-    qc_directory: AssemblyDirectorySchema
-    cds_directory: AssemblyDirectorySchema
-    taxonomy_directory: AssemblyDirectorySchema
-    functional_annotation_directory: AssemblyDirectorySchema
-    pathways_systems_directory: AssemblyDirectorySchema
-    annotation_summary_directory: AssemblyDirectorySchema
-
-    def validate_directory_structure(
-        self, base_path: Path, assembly_id: str
-    ) -> Directory:
-        """Validate the complete directory structure and return the validated Directory object."""
-        # Create the main directory
-        main_dir = create_directory(base_path / assembly_id)
-
-        # Validate each subdirectory
-        for dir_schema in [
-            self.qc_directory,
-            self.cds_directory,
-            self.taxonomy_directory,
-            self.functional_annotation_directory,
-            self.pathways_systems_directory,
-            self.annotation_summary_directory,
-        ]:
-            validated_subdir = self._validate_subdirectory(
-                main_dir.path, dir_schema, assembly_id
-            )
-            main_dir.files.append(validated_subdir)
-
-        return main_dir
-
-    def _validate_subdirectory(
-        self, base_path: Path, dir_schema: AssemblyDirectorySchema, assembly_id: str
-    ) -> Directory:
-        """Validate a single subdirectory based on its schema."""
-        subdir_path = base_path / dir_schema.folder_name
-
-        # Prepare files for validation
-        files_to_validate = []
-        for file_schema in dir_schema.files:
-            filename = file_schema.get_filename(assembly_id)
-            if file_schema.required:
-                files_to_validate.append((filename, file_schema.validation_rules))
-
-        # Create the directory with validation
-        validated_dir = create_directory(
-            subdir_path,
-            files=files_to_validate,
-            rules=dir_schema.validation_rules,
-            glob_rules=dir_schema.glob_rules,
-        )
-
-        # Handle subdirectories recursively
-        for subdir_schema in dir_schema.subdirectories:
-            sub_validated_dir = self._validate_subdirectory(
-                subdir_path, subdir_schema, assembly_id
-            )
-            validated_dir.files.append(sub_validated_dir)
-
-        return validated_dir
-
-    def import_analysis_results(
-        self, analysis: "analyses.models.Analysis", base_path: Path
-    ) -> None:
-        """Import all analysis results from the validated directory structure."""
-
-        logger = get_run_logger()
-
-        logger.info(f"Importing results from {base_path}")
-
-        logger.info("Importing QC results...")
-        self._import_qc_results(analysis, base_path)
-
-        logger.info("Importing CDS results...")
-        self._import_cds_results(analysis, base_path)
-
-        logger.info("Importing Taxonomy results...")
-        self._import_taxonomy_results(analysis, base_path)
-
-        logger.info("Importing Functional annotation results...")
-        self._import_functional_results(analysis, base_path)
-
-        logger.info("Importing Pathways and systems results...")
-        self._import_pathways_results(analysis, base_path)
-
-    def _import_qc_results(
-        self, analysis: "analyses.models.Analysis", base_path: Path
-    ) -> None:
-        """Import QC results."""
-        qc_path = (
-            base_path
-            / analysis.assembly.first_accession
-            / self.qc_directory.folder_name
-        )
-
-        if not qc_path.exists():
-            logging.info(f"No QC directory at {qc_path}")
-            return
-
-        # Import MultiQC report
-        for file_schema in self.qc_directory.files:
-            if "multiqc_report.html" in file_schema.filename_template:
-                download_file = DownloadFile(
-                    path=Path(
-                        qc_path
-                        / file_schema.get_filename(analysis.assembly.first_accession)
-                    ).relative_to(analysis.results_dir),
-                    file_type=file_schema.file_type,
-                    alias=file_schema.get_filename(analysis.assembly.first_accession),
-                    download_type=file_schema.download_type,
-                    download_group=file_schema.download_group,
-                    parent_identifier=analysis.accession,
-                    short_description=file_schema.short_description,
-                    long_description=file_schema.long_description,
-                )
-                analysis.add_download(download_file)
-
-        analysis.save()
-
-    def _import_cds_results(
-        self, analysis: "analyses.models.Analysis", base_path: Path
-    ) -> None:
-        """Import CDS results."""
-        cds_path = (
-            base_path
-            / analysis.assembly.first_accession
-            / self.cds_directory.folder_name
-        )
-
-        if not cds_path.exists():
-            logging.info(f"No CDS directory at {cds_path}")
-            return
-
-        for file_schema in self.cds_directory.files:
-            download_file = DownloadFile(
-                path=Path(
-                    cds_path
-                    / file_schema.get_filename(analysis.assembly.first_accession)
-                ).relative_to(analysis.results_dir),
-                file_type=file_schema.file_type,
-                alias=file_schema.get_filename(analysis.assembly.first_accession),
-                download_type=file_schema.download_type,
-                download_group=file_schema.download_group,
-                parent_identifier=analysis.accession,
-                short_description=file_schema.short_description,
-                long_description=file_schema.long_description,
-            )
-            analysis.add_download(download_file)
-
-        analysis.save()
-
-    def _import_taxonomy_results(
-        self, analysis: "analyses.models.Analysis", base_path: Path
-    ) -> None:
-        """Import taxonomy results."""
-        tax_path = (
-            base_path
-            / analysis.assembly.first_accession
-            / self.taxonomy_directory.folder_name
-        )
-
-        if not tax_path.exists():
-            logging.info(f"No taxonomy directory at {tax_path}")
-            return
-
-        # Import Krona file and parse taxonomies
-        krona_file = tax_path / f"{analysis.assembly.first_accession}.krona.txt.gz"
-        if krona_file.exists():
-            taxonomies_to_import, total_read_count = (
-                self._get_annotations_from_tax_table(krona_file)
-            )
-            analysis_taxonomies = analysis.annotations.get(analysis.TAXONOMIES, {})
-            if not analysis_taxonomies:
-                analysis_taxonomies = {}
-            analysis_taxonomies[analysis.TaxonomySources.UNIREF] = taxonomies_to_import
-            analysis.annotations[analysis.TAXONOMIES] = analysis_taxonomies
-
-            # Add download
-            download_file = DownloadFile(
-                path=krona_file.relative_to(analysis.results_dir),
+        analysis.add_download(
+            DownloadFile(
+                path=annot_tsv.relative_to(analysis.results_dir),
                 file_type=DownloadFileType.TSV,
-                alias=krona_file.name,
-                download_type=DownloadType.TAXONOMIC_ANALYSIS,
-                download_group=f"{analysis.TAXONOMIES}.{analysis.CLOSED_REFERENCE}.{analysis.TaxonomySources.UNIREF}",
-                parent_identifier=analysis.accession,
-                short_description="UniRef90 contig taxonomy table",
-                long_description="Table with contig counts for each taxonomic assignment",
-            )
-            analysis.add_download(download_file)
-
-        analysis.save()
-
-    def _import_functional_results(
-        self, analysis: "analyses.models.Analysis", base_path: Path
-    ) -> None:
-        """Import functional annotation results using the annotation table schemas."""
-        func_path = (
-            base_path
-            / analysis.assembly.first_accession
-            / self.functional_annotation_directory.folder_name
-        )
-
-        if not func_path.exists():
-            raise ValueError(f"No functional annotation directory at {func_path}")
-
-        # Process each functional annotation subdirectory
-        for subdir_schema in self.functional_annotation_directory.subdirectories:
-            print(f"Subdir {subdir_schema.folder_name}")
-            subdir_path = func_path / subdir_schema.folder_name
-            if not subdir_path.exists():
-                continue
-
-            print(f"Subdir {subdir_schema.folder_name} exists, importing files... ")
-
-            # Import files in this subdirectory
-            for file_schema in subdir_schema.files:
-                file_path = subdir_path / file_schema.get_filename(
-                    analysis.assembly.first_accession
-                )
-                if file_path.exists():
-                    download_file = DownloadFile(
-                        path=file_path.relative_to(analysis.results_dir),
-                        file_type=file_schema.file_type,
-                        alias=file_path.name,
-                        download_type=file_schema.download_type,
-                        download_group=file_schema.download_group,
-                        parent_identifier=analysis.accession,
-                        short_description=file_schema.short_description,
-                        long_description=file_schema.long_description,
-                    )
-                    analysis.add_download(download_file)
-
-                    logging.info(f"{file_path.name}")
-
-                    # Import annotations if the schema has import_to_annotations_key and import_from_column
-                    if file_schema.import_to_annotations_key:
-                        file_schema.import_annotations(analysis, file_path)
-
-        analysis.save()
-
-    def _import_pathways_results(
-        self, analysis: "analyses.models.Analysis", base_path: Path
-    ) -> None:
-        """Import pathways and systems results."""
-        pathways_path = (
-            base_path
-            / analysis.assembly.first_accession
-            / self.pathways_systems_directory.folder_name
-        )
-
-        if not pathways_path.exists():
-            logging.info(f"No pathways directory at {pathways_path}")
-            return
-
-        # Process each pathway subdirectory
-        for subdir_schema in self.pathways_systems_directory.subdirectories:
-            subdir_path = pathways_path / subdir_schema.folder_name
-            if not subdir_path.exists():
-                continue
-
-            # Import files in this subdirectory
-            for file_schema in subdir_schema.files:
-                file_path = subdir_path / file_schema.get_filename(
-                    analysis.assembly.first_accession
-                )
-                if file_path.exists():
-                    download_file = DownloadFile(
-                        path=file_path.relative_to(analysis.results_dir),
-                        file_type=file_schema.file_type,
-                        alias=file_path.name,
-                        download_type=file_schema.download_type,
-                        download_group=file_schema.download_group,
-                        parent_identifier=analysis.accession,
-                        short_description=file_schema.short_description,
-                        long_description=file_schema.long_description,
-                    )
-                    analysis.add_download(download_file)
-
-                    # Import annotations if the schema has import_to_annotations_key and import_from_column
-                    if (
-                        hasattr(file_schema, "import_to_annotations_key")
-                        and file_schema.import_to_annotations_key
-                    ):
-                        file_schema.import_annotations(analysis, file_path)
-
-        analysis.save()
-
-    def _get_annotations_from_tax_table(
-        self, tax_table_path: Path
-    ) -> tuple[list[dict], int]:
-        """Parse taxonomy table and return annotations."""
-        try:
-            with gzip.open(tax_table_path, "rt") as tax_tsv:
-                move_file_pointer_past_comment_lines(
-                    tax_tsv, delimiter=CSVDelimiter.TAB, comment_char="#"
-                )
-                tax_df = pd.read_csv(
-                    tax_tsv, sep=CSVDelimiter.TAB, names=TAXONOMY_COLUMN_NAMES
-                ).fillna("")
-        except pd.errors.EmptyDataError:
-            logging.error(f"Found empty taxonomy TSV at {tax_table_path}")
-            return [], 0
-
-        tax_df["organism"] = (
-            tax_df[TAXONOMY_COLUMN_NAMES[1:]].agg(";".join, axis=1).str.strip(";")
-        )
-        tax_df.rename(columns={"Count": "count"}, inplace=True)
-        tax_df["count"] = (
-            pd.to_numeric(tax_df["count"], errors="coerce").fillna(1).astype(int)
-        )
-        tax_df = tax_df[["organism", "count"]]
-
-        return tax_df.to_dict(orient="records"), int(tax_df["count"].sum())
-
-
-def create_assembly_v6_schema() -> AssemblyAnalysisDirectorySchema:
-    """Create the default assembly analysis schema for v6 pipeline."""
-
-    # QC Directory
-    qc_dir = AssemblyDirectorySchema(
-        folder_name=EMG_CONFIG.assembly_analysis_pipeline.qc_folder,
-        validation_rules=[DirectoryExistsRule],
-        files=[
-            AssemblyFileSchema(
-                filename_template="{assembly_id}_filtered_contigs.fasta.gz",
-                file_type=DownloadFileType.FASTA,
-                download_type=DownloadType.QUALITY_CONTROL,
-                download_group="quality_control",
-                short_description="Filtered contigs FASTA file",
-                long_description="Filtered contigs FASTA file used in downstream pipelines",
-                validation_rules=[FileExistsRule, FileIsNotEmptyRule],
-            ),
-            AssemblyFileSchema(
-                filename_template="{assembly_id}.tsv",
-                file_type=DownloadFileType.TSV,
-                download_type=DownloadType.QUALITY_CONTROL,
-                download_group="quality_control",
-                short_description="Assembly QC metrics",
-                long_description="Quality control metrics for the assembly",
-                validation_rules=[FileExistsRule, FileIsNotEmptyRule],
-            ),
-            AssemblyFileSchema(
-                filename_template="multiqc_report.html",
-                file_type=DownloadFileType.HTML,
-                download_type=DownloadType.QUALITY_CONTROL,
-                download_group="quality_control",
-                short_description="MultiQC quality control report",
-                long_description="MultiQC webpage showing quality control steps and metrics",
-                validation_rules=[FileExistsRule],
-            ),
-        ],
-        subdirectories=[
-            AssemblyDirectorySchema(
-                folder_name="multiqc_data",
-                validation_rules=[DirectoryExistsRule],
-            )
-        ],
-    )
-
-    # CDS Directory
-    cds_dir = AssemblyDirectorySchema(
-        folder_name=EMG_CONFIG.assembly_analysis_pipeline.cds_folder,
-        validation_rules=[DirectoryExistsRule],
-        files=[
-            AssemblyFileSchema(
-                filename_template="{assembly_id}_predicted_orf.ffn.gz",
-                file_type=DownloadFileType.FASTA,
-                download_type=DownloadType.CODING_SEQUENCES,
-                download_group=analyses.models.Analysis.CODING_SEQUENCES,
-                short_description="Predicted ORF nucleotide sequences",
-                long_description="Predicted ORF nucleotide sequences",
-                validation_rules=[FileExistsRule, FileIsNotEmptyRule],
-            ),
-            AssemblyFileSchema(
-                filename_template="{assembly_id}_predicted_cds.faa.gz",
-                file_type=DownloadFileType.FASTA,
-                download_type=DownloadType.CODING_SEQUENCES,
-                download_group=analyses.models.Analysis.CODING_SEQUENCES,
-                short_description="Predicted CDS proteins",
-                long_description="Predicted CDS proteins",
-                validation_rules=[FileExistsRule, FileIsNotEmptyRule],
-            ),
-            AssemblyFileSchema(
-                filename_template="{assembly_id}_predicted_cds.gff.gz",
-                file_type=DownloadFileType.GFF,
-                download_type=DownloadType.CODING_SEQUENCES,
-                download_group=analyses.models.Analysis.CODING_SEQUENCES,
-                short_description="Predicted CDS",
-                long_description="Predicted CDS annotations",
-                validation_rules=[FileExistsRule, FileIsNotEmptyRule],
-            ),
-        ],
-    )
-
-    # Taxonomy Directory
-    taxonomy_dir = AssemblyDirectorySchema(
-        folder_name=EMG_CONFIG.assembly_analysis_pipeline.taxonomy_folder,
-        validation_rules=[DirectoryExistsRule],
-        glob_rules=[GlobOfTaxonomyFolderHasHtmlAndKronaTxtRule],
-        files=[
-            AssemblyFileSchema(
-                filename_template="{assembly_id}_contigs_taxonomy.tsv.gz",
-                file_type=DownloadFileType.TSV,
-                download_type=DownloadType.TAXONOMIC_ANALYSIS,
-                download_group="taxonomy",
-                short_description="Contig taxonomy table",
-                long_description="Taxonomic assignments for contigs",
-                validation_rules=[FileExistsRule, FileIsNotEmptyRule],
-            ),
-            AssemblyFileSchema(
-                filename_template="{assembly_id}.krona.txt.gz",
-                file_type=DownloadFileType.TSV,
-                download_type=DownloadType.TAXONOMIC_ANALYSIS,
-                download_group="taxonomy",
-                short_description="Krona taxonomy table",
-                long_description="Taxonomy table for Krona visualization",
-                validation_rules=[FileExistsRule, FileIsNotEmptyRule],
-            ),
-            AssemblyFileSchema(
-                filename_template="{assembly_id}.html",
-                file_type=DownloadFileType.HTML,
-                download_type=DownloadType.TAXONOMIC_ANALYSIS,
-                download_group="taxonomy",
-                short_description="Krona taxonomy visualization",
-                long_description="Interactive Krona taxonomy chart",
-                validation_rules=[FileExistsRule, FileIsNotEmptyRule],
-            ),
-        ],
-    )
-
-    # Functional Annotation Directory with subdirectories
-    functional_dir = AssemblyDirectorySchema(
-        folder_name=EMG_CONFIG.assembly_analysis_pipeline.functional_annotation_folder,
-        validation_rules=[DirectoryExistsRule],
-        subdirectories=[
-            # InterPro subdirectory
-            AssemblyDirectorySchema(
-                folder_name="interpro",
-                validation_rules=[DirectoryExistsRule],
-                files=[
-                    AssemblyFileSchema(
-                        filename_template="{assembly_id}_interproscan.tsv.gz",
-                        file_type=DownloadFileType.TSV,
-                        download_type=DownloadType.FUNCTIONAL_ANALYSIS,
-                        download_group=f"{analyses.models.Analysis.FUNCTIONAL_ANNOTATION}.interpro",
-                        short_description="InterProScan results",
-                        long_description="InterProScan functional annotation results",
-                        validation_rules=[FileExistsRule, FileIsNotEmptyRule],
-                    ),
-                    AssemblyFileSchema(
-                        filename_template="{assembly_id}_interpro_summary.tsv.gz",
-                        file_type=DownloadFileType.TSV,
-                        download_type=DownloadType.FUNCTIONAL_ANALYSIS,
-                        download_group=f"{analyses.models.Analysis.FUNCTIONAL_ANNOTATION}.{analyses.models.Analysis.INTERPRO_IDENTIFIERS}",
-                        short_description="InterPro Identifier counts",
-                        long_description="Table with counts for each InterPro identifier found",
-                        validation_rules=[FileExistsRule, FileIsNotEmptyRule],
-                        import_to_annotations_key=analyses.models.Analysis.INTERPRO_IDENTIFIERS,
-                    ),
-                    AssemblyFileSchema(
-                        filename_template="{assembly_id}_interpro_summary.tsv.gz.gzi",
-                        file_type=DownloadFileType.OTHER,
-                        download_type=DownloadType.FUNCTIONAL_ANALYSIS,
-                        download_group=f"{analyses.models.Analysis.FUNCTIONAL_ANNOTATION}.{analyses.models.Analysis.INTERPRO_IDENTIFIERS}",
-                        short_description="InterPro summary index",
-                        long_description="Index file for InterPro summary",
-                        validation_rules=[FileExistsRule],
-                    ),
-                ],
-            ),
-            # Pfam subdirectory
-            AssemblyDirectorySchema(
-                folder_name="pfam",
-                validation_rules=[DirectoryExistsRule],
-                files=[
-                    AssemblyFileSchema(
-                        filename_template="{assembly_id}_pfam_summary.tsv.gz",
-                        file_type=DownloadFileType.TSV,
-                        download_type=DownloadType.FUNCTIONAL_ANALYSIS,
-                        download_group=f"{analyses.models.Analysis.FUNCTIONAL_ANNOTATION}.{analyses.models.Analysis.PFAMS}",
-                        short_description="Pfam accession counts",
-                        long_description="Table with counts for each Pfam accession found",
-                        validation_rules=[FileExistsRule, FileIsNotEmptyRule],
-                        import_to_annotations_key=analyses.models.Analysis.PFAMS,
-                    ),
-                    AssemblyFileSchema(
-                        filename_template="{assembly_id}_pfam_summary.tsv.gz.gzi",
-                        file_type=DownloadFileType.OTHER,
-                        download_type=DownloadType.FUNCTIONAL_ANALYSIS,
-                        download_group=f"{analyses.models.Analysis.FUNCTIONAL_ANNOTATION}.{analyses.models.Analysis.PFAMS}",
-                        short_description="Pfam summary index",
-                        long_description="Index file for Pfam summary",
-                        validation_rules=[FileExistsRule],
-                    ),
-                ],
-            ),
-            # GO subdirectory
-            AssemblyDirectorySchema(
-                folder_name="go",
-                validation_rules=[DirectoryExistsRule],
-                files=[
-                    AssemblyFileSchema(
-                        filename_template="{assembly_id}_go_summary.tsv.gz",
-                        file_type=DownloadFileType.TSV,
-                        download_type=DownloadType.FUNCTIONAL_ANALYSIS,
-                        download_group=f"{analyses.models.Analysis.FUNCTIONAL_ANNOTATION}.{analyses.models.Analysis.GO_TERMS}",
-                        short_description="GO Term counts",
-                        long_description="Table with counts for each Gene Ontology (GO) Term found",
-                        validation_rules=[FileExistsRule, FileIsNotEmptyRule],
-                        import_to_annotations_key=analyses.models.Analysis.GO_TERMS,
-                    ),
-                    AssemblyFileSchema(
-                        filename_template="{assembly_id}_go_summary.tsv.gz.gzi",
-                        file_type=DownloadFileType.OTHER,
-                        download_type=DownloadType.FUNCTIONAL_ANALYSIS,
-                        download_group=f"{analyses.models.Analysis.FUNCTIONAL_ANNOTATION}.{analyses.models.Analysis.GO_TERMS}",
-                        short_description="GO summary index",
-                        long_description="Index file for GO summary",
-                        validation_rules=[FileExistsRule],
-                    ),
-                    AssemblyFileSchema(
-                        filename_template="{assembly_id}_goslim_summary.tsv.gz",
-                        file_type=DownloadFileType.TSV,
-                        download_type=DownloadType.FUNCTIONAL_ANALYSIS,
-                        download_group=f"{analyses.models.Analysis.FUNCTIONAL_ANNOTATION}.{analyses.models.Analysis.GO_SLIMS}",
-                        short_description="GO-Slim Term counts",
-                        long_description="Table with counts for each Gene Ontology (GO)-Slim Term found",
-                        validation_rules=[FileExistsRule, FileIsNotEmptyRule],
-                        import_to_annotations_key=analyses.models.Analysis.GO_SLIMS,
-                    ),
-                    AssemblyFileSchema(
-                        filename_template="{assembly_id}_goslim_summary.tsv.gz.gzi",
-                        file_type=DownloadFileType.OTHER,
-                        download_type=DownloadType.FUNCTIONAL_ANALYSIS,
-                        download_group=f"{analyses.models.Analysis.FUNCTIONAL_ANNOTATION}.{analyses.models.Analysis.GO_SLIMS}",
-                        short_description="GO-Slim summary index",
-                        long_description="Index file for GO-Slim summary",
-                        validation_rules=[FileExistsRule],
-                    ),
-                ],
-            ),
-            # EggNOG subdirectory
-            AssemblyDirectorySchema(
-                folder_name="eggnog",
-                validation_rules=[DirectoryExistsRule],
-                files=[
-                    AssemblyFileSchema(
-                        filename_template="{assembly_id}_emapper_seed_orthologs.tsv.gz",
-                        file_type=DownloadFileType.TSV,
-                        download_type=DownloadType.FUNCTIONAL_ANALYSIS,
-                        download_group=f"{analyses.models.Analysis.FUNCTIONAL_ANNOTATION}.eggnog",
-                        short_description="EggNOG seed orthologs",
-                        long_description="EggNOG seed ortholog assignments",
-                        validation_rules=[FileExistsRule, FileIsNotEmptyRule],
-                    ),
-                    AssemblyFileSchema(
-                        filename_template="{assembly_id}_emapper_annotations.tsv.gz",
-                        file_type=DownloadFileType.TSV,
-                        download_type=DownloadType.FUNCTIONAL_ANALYSIS,
-                        download_group=f"{analyses.models.Analysis.FUNCTIONAL_ANNOTATION}.eggnog",
-                        short_description="EggNOG annotations",
-                        long_description="EggNOG functional annotations",
-                        validation_rules=[FileExistsRule, FileIsNotEmptyRule],
-                    ),
-                ],
-            ),
-            # KEGG subdirectory
-            AssemblyDirectorySchema(
-                folder_name="kegg",
-                validation_rules=[DirectoryExistsRule],
-                files=[
-                    AssemblyFileSchema(
-                        filename_template="{assembly_id}_ko_summary.tsv.gz",
-                        file_type=DownloadFileType.TSV,
-                        download_type=DownloadType.FUNCTIONAL_ANALYSIS,
-                        download_group=f"{analyses.models.Analysis.FUNCTIONAL_ANNOTATION}.kegg",
-                        short_description="KEGG KO summary",
-                        long_description="KEGG Orthology assignments summary",
-                        validation_rules=[FileExistsRule, FileIsNotEmptyRule],
-                    ),
-                    AssemblyFileSchema(
-                        filename_template="{assembly_id}_ko_summary.tsv.gz.gzi",
-                        file_type=DownloadFileType.OTHER,
-                        download_type=DownloadType.FUNCTIONAL_ANALYSIS,
-                        download_group=f"{analyses.models.Analysis.FUNCTIONAL_ANNOTATION}.kegg",
-                        short_description="KEGG KO summary index",
-                        long_description="Index file for KEGG KO summary",
-                        validation_rules=[FileExistsRule],
-                    ),
-                ],
-            ),
-            # Rhea subdirectory
-            AssemblyDirectorySchema(
-                folder_name="rhea-reactions",
-                validation_rules=[DirectoryExistsRule],
-                files=[
-                    AssemblyFileSchema(
-                        filename_template="{assembly_id}_proteins2rhea.tsv.gz",
-                        file_type=DownloadFileType.TSV,
-                        download_type=DownloadType.FUNCTIONAL_ANALYSIS,
-                        download_group=f"{analyses.models.Analysis.FUNCTIONAL_ANNOTATION}.{analyses.models.Analysis.RHEA_REACTIONS}",
-                        short_description="Rhea reaction counts",
-                        long_description="Table with counts of each Rhea reaction found",
-                        validation_rules=[FileExistsRule, FileIsNotEmptyRule],
-                        import_to_annotations_key=analyses.models.Analysis.RHEA_REACTIONS,
-                    ),
-                    AssemblyFileSchema(
-                        filename_template="{assembly_id}_proteins2rhea.tsv.gz.gzi",
-                        file_type=DownloadFileType.OTHER,
-                        download_type=DownloadType.FUNCTIONAL_ANALYSIS,
-                        download_group=f"{analyses.models.Analysis.FUNCTIONAL_ANNOTATION}.{analyses.models.Analysis.RHEA_REACTIONS}",
-                        short_description="Rhea reactions index",
-                        long_description="Index file for Rhea reactions",
-                        validation_rules=[FileExistsRule],
-                    ),
-                ],
-            ),
-            # dbCAN subdirectory
-            AssemblyDirectorySchema(
-                folder_name="dbcan",
-                validation_rules=[DirectoryExistsRule],
-                files=[
-                    AssemblyFileSchema(
-                        filename_template="{assembly_id}_dbcan_cgc.gff.gz",
-                        file_type=DownloadFileType.GFF,
-                        download_type=DownloadType.FUNCTIONAL_ANALYSIS,
-                        download_group=f"{analyses.models.Analysis.FUNCTIONAL_ANNOTATION}.dbcan",
-                        short_description="dbCAN CGC annotations",
-                        long_description="dbCAN carbohydrate-active enzyme gene cluster annotations",
-                        validation_rules=[FileExistsRule, FileIsNotEmptyRule],
-                    ),
-                    AssemblyFileSchema(
-                        filename_template="{assembly_id}_dbcan_standard_out.tsv.gz",
-                        file_type=DownloadFileType.TSV,
-                        download_type=DownloadType.FUNCTIONAL_ANALYSIS,
-                        download_group=f"{analyses.models.Analysis.FUNCTIONAL_ANNOTATION}.dbcan",
-                        short_description="dbCAN standard output",
-                        long_description="dbCAN standard analysis output",
-                        validation_rules=[FileExistsRule, FileIsNotEmptyRule],
-                    ),
-                    AssemblyFileSchema(
-                        filename_template="{assembly_id}_dbcan_overview.tsv.gz",
-                        file_type=DownloadFileType.TSV,
-                        download_type=DownloadType.FUNCTIONAL_ANALYSIS,
-                        download_group=f"{analyses.models.Analysis.FUNCTIONAL_ANNOTATION}.dbcan",
-                        short_description="dbCAN overview",
-                        long_description="dbCAN analysis overview",
-                        validation_rules=[FileExistsRule, FileIsNotEmptyRule],
-                    ),
-                    AssemblyFileSchema(
-                        filename_template="{assembly_id}_dbcan_sub_hmm.tsv.gz",
-                        file_type=DownloadFileType.TSV,
-                        download_type=DownloadType.FUNCTIONAL_ANALYSIS,
-                        download_group=f"{analyses.models.Analysis.FUNCTIONAL_ANNOTATION}.dbcan",
-                        short_description="dbCAN sub-HMM results",
-                        long_description="dbCAN sub-HMM analysis results",
-                        validation_rules=[FileExistsRule, FileIsNotEmptyRule],
-                    ),
-                    AssemblyFileSchema(
-                        filename_template="{assembly_id}_dbcan_substrates.tsv.gz",
-                        file_type=DownloadFileType.TSV,
-                        download_type=DownloadType.FUNCTIONAL_ANALYSIS,
-                        download_group=f"{analyses.models.Analysis.FUNCTIONAL_ANNOTATION}.dbcan",
-                        short_description="dbCAN substrates",
-                        long_description="dbCAN predicted substrates",
-                        validation_rules=[FileExistsRule, FileIsNotEmptyRule],
-                    ),
-                ],
-            ),
-        ],
-    )
-
-    # Pathways and Systems Directory with subdirectories
-    pathways_dir = AssemblyDirectorySchema(
-        folder_name=EMG_CONFIG.assembly_analysis_pipeline.pathways_systems_folder,
-        validation_rules=[DirectoryExistsRule],
-        subdirectories=[
-            # antiSMASH subdirectory
-            AssemblyDirectorySchema(
-                folder_name="antismash",
-                validation_rules=[DirectoryExistsRule],
-                files=[
-                    AssemblyFileSchema(
-                        filename_template="{assembly_id}_antismash.gbk.gz",
-                        file_type=DownloadFileType.OTHER,
-                        download_type=DownloadType.FUNCTIONAL_ANALYSIS,
-                        download_group=f"{analyses.models.Analysis.FUNCTIONAL_ANNOTATION}.antismash",
-                        short_description="antiSMASH GenBank output",
-                        long_description="antiSMASH biosynthetic gene cluster predictions in GenBank format",
-                        validation_rules=[FileExistsRule, FileIsNotEmptyRule],
-                    ),
-                    AssemblyFileSchema(
-                        filename_template="{assembly_id}_antismash.gff.gz",
-                        file_type=DownloadFileType.GFF,
-                        download_type=DownloadType.FUNCTIONAL_ANALYSIS,
-                        download_group=f"{analyses.models.Analysis.FUNCTIONAL_ANNOTATION}.antismash",
-                        short_description="antiSMASH GFF output",
-                        long_description="antiSMASH biosynthetic gene cluster predictions in GFF format",
-                        validation_rules=[FileExistsRule, FileIsNotEmptyRule],
-                    ),
-                    AssemblyFileSchema(
-                        filename_template="{assembly_id}_antismash_summary.tsv.gz",
-                        file_type=DownloadFileType.TSV,
-                        download_type=DownloadType.FUNCTIONAL_ANALYSIS,
-                        download_group=f"{analyses.models.Analysis.FUNCTIONAL_ANNOTATION}.{analyses.models.Analysis.ANTISMASH_GENE_CLUSTERS}",
-                        short_description="antiSMASH BGC counts",
-                        long_description="Table with counts for each BGC found",
-                        validation_rules=[FileExistsRule, FileIsNotEmptyRule],
-                        import_to_annotations_key=analyses.models.Analysis.ANTISMASH_GENE_CLUSTERS,
-                    ),
-                    AssemblyFileSchema(
-                        filename_template="{assembly_id}_antismash_summary.tsv.gz.gzi",
-                        file_type=DownloadFileType.OTHER,
-                        download_type=DownloadType.FUNCTIONAL_ANALYSIS,
-                        download_group=f"{analyses.models.Analysis.FUNCTIONAL_ANNOTATION}.{analyses.models.Analysis.ANTISMASH_GENE_CLUSTERS}",
-                        short_description="antiSMASH summary index",
-                        long_description="Index file for antiSMASH summary",
-                        validation_rules=[FileExistsRule],
-                    ),
-                ],
-            ),
-            # SanntiS subdirectory
-            AssemblyDirectorySchema(
-                folder_name="sanntis",
-                validation_rules=[DirectoryExistsRule],
-                files=[
-                    AssemblyFileSchema(
-                        filename_template="{assembly_id}_sanntis_concatenated.gff.gz",
-                        file_type=DownloadFileType.GFF,
-                        download_type=DownloadType.FUNCTIONAL_ANALYSIS,
-                        download_group=f"{analyses.models.Analysis.FUNCTIONAL_ANNOTATION}.sanntis",
-                        short_description="SanntiS GFF output",
-                        long_description="SanntiS biosynthetic gene cluster predictions",
-                        validation_rules=[FileIfExistsIsNotEmptyRule],
-                        required=False,
-                    ),
-                    AssemblyFileSchema(
-                        filename_template="{assembly_id}_sanntis_summary.tsv.gz",
-                        file_type=DownloadFileType.TSV,
-                        download_type=DownloadType.FUNCTIONAL_ANALYSIS,
-                        download_group=f"{analyses.models.Analysis.FUNCTIONAL_ANNOTATION}.{analyses.models.Analysis.SANNTIS_GENE_CLUSTERS}",
-                        short_description="SanntiS BGC counts",
-                        long_description="Table with counts for each BGC found",
-                        validation_rules=[FileIfExistsIsNotEmptyRule],
-                        required=False,
-                        import_to_annotations_key=analyses.models.Analysis.SANNTIS_GENE_CLUSTERS,
-                    ),
-                    AssemblyFileSchema(
-                        filename_template="{assembly_id}_sanntis_summary.tsv.gz.gzi",
-                        file_type=DownloadFileType.OTHER,
-                        download_type=DownloadType.FUNCTIONAL_ANALYSIS,
-                        download_group=f"{analyses.models.Analysis.FUNCTIONAL_ANNOTATION}.{analyses.models.Analysis.SANNTIS_GENE_CLUSTERS}",
-                        short_description="SanntiS summary index",
-                        long_description="Index file for SanntiS summary",
-                        validation_rules=[FileIfExistsIsNotEmptyRule],
-                        required=False,
-                    ),
-                ],
-            ),
-            # Genome Properties subdirectory
-            AssemblyDirectorySchema(
-                folder_name="genome-properties",
-                validation_rules=[DirectoryExistsRule],
-                files=[
-                    AssemblyFileSchema(
-                        filename_template="{assembly_id}_gp.json.gz",
-                        file_type=DownloadFileType.OTHER,
-                        download_type=DownloadType.FUNCTIONAL_ANALYSIS,
-                        download_group=f"{analyses.models.Analysis.FUNCTIONAL_ANNOTATION}.genome_properties",
-                        short_description="Genome Properties JSON",
-                        long_description="Genome Properties results in JSON format",
-                        validation_rules=[FileExistsRule, FileIsNotEmptyRule],
-                    ),
-                    AssemblyFileSchema(
-                        filename_template="{assembly_id}_gp.tsv.gz",
-                        file_type=DownloadFileType.TSV,
-                        download_type=DownloadType.FUNCTIONAL_ANALYSIS,
-                        download_group=f"{analyses.models.Analysis.FUNCTIONAL_ANNOTATION}.{analyses.models.Analysis.GENOME_PROPERTIES}",
-                        short_description="Genome Properties counts",
-                        long_description="Table with counts for each Genome Property found",
-                        validation_rules=[FileExistsRule, FileIsNotEmptyRule],
-                        import_to_annotations_key=analyses.models.Analysis.GENOME_PROPERTIES,
-                    ),
-                    AssemblyFileSchema(
-                        filename_template="{assembly_id}_gp.txt.gz",
-                        file_type=DownloadFileType.OTHER,
-                        download_type=DownloadType.FUNCTIONAL_ANALYSIS,
-                        download_group=f"{analyses.models.Analysis.FUNCTIONAL_ANNOTATION}.genome_properties",
-                        short_description="Genome Properties text output",
-                        long_description="Genome Properties results in text format",
-                        validation_rules=[FileExistsRule, FileIsNotEmptyRule],
-                    ),
-                ],
-            ),
-            # KEGG Modules subdirectory
-            AssemblyDirectorySchema(
-                folder_name="kegg-modules",
-                validation_rules=[DirectoryExistsRule],
-                files=[
-                    AssemblyFileSchema(
-                        filename_template="{assembly_id}_kegg_modules_per_contigs.tsv.gz",
-                        file_type=DownloadFileType.TSV,
-                        download_type=DownloadType.FUNCTIONAL_ANALYSIS,
-                        download_group=f"{analyses.models.Analysis.FUNCTIONAL_ANNOTATION}.kegg_modules",
-                        short_description="KEGG Modules per contig",
-                        long_description="KEGG Modules found per contig",
-                        validation_rules=[FileExistsRule, FileIsNotEmptyRule],
-                    ),
-                    AssemblyFileSchema(
-                        filename_template="{assembly_id}_kegg_modules_per_contigs.tsv.gz.gzi",
-                        file_type=DownloadFileType.OTHER,
-                        download_type=DownloadType.FUNCTIONAL_ANALYSIS,
-                        download_group=f"{analyses.models.Analysis.FUNCTIONAL_ANNOTATION}.kegg_modules",
-                        short_description="KEGG Modules per contig index",
-                        long_description="Index file for KEGG Modules per contig",
-                        validation_rules=[FileExistsRule],
-                    ),
-                    AssemblyFileSchema(
-                        filename_template="{assembly_id}_kegg_modules_summary.tsv.gz",
-                        file_type=DownloadFileType.TSV,
-                        download_type=DownloadType.FUNCTIONAL_ANALYSIS,
-                        download_group=f"{analyses.models.Analysis.FUNCTIONAL_ANNOTATION}.{analyses.models.Analysis.KEGG_MODULES}",
-                        short_description="KEGG Modules counts",
-                        long_description="Table with counts for each KEGG Module found",
-                        validation_rules=[FileExistsRule, FileIsNotEmptyRule],
-                        import_to_annotations_key=analyses.models.Analysis.KEGG_MODULES,
-                    ),
-                    AssemblyFileSchema(
-                        filename_template="{assembly_id}_kegg_modules_summary.tsv.gz.gzi",
-                        file_type=DownloadFileType.OTHER,
-                        download_type=DownloadType.FUNCTIONAL_ANALYSIS,
-                        download_group=f"{analyses.models.Analysis.FUNCTIONAL_ANNOTATION}.{analyses.models.Analysis.KEGG_MODULES}",
-                        short_description="KEGG Modules summary index",
-                        long_description="Index file for KEGG Modules summary",
-                        validation_rules=[FileExistsRule],
-                    ),
-                ],
-            ),
-            # DRAM Distill subdirectory
-            AssemblyDirectorySchema(
-                folder_name="dram-distill",
-                validation_rules=[DirectoryExistsRule],
-                files=[
-                    AssemblyFileSchema(
-                        filename_template="{assembly_id}_dram.tsv.gz",
-                        file_type=DownloadFileType.TSV,
-                        download_type=DownloadType.FUNCTIONAL_ANALYSIS,
-                        download_group=f"{analyses.models.Analysis.FUNCTIONAL_ANNOTATION}.dram_distill",
-                        short_description="DRAM Distill results",
-                        long_description="Table with DRAM Distill results",
-                        validation_rules=[FileExistsRule, FileIsNotEmptyRule],
-                    ),
-                    AssemblyFileSchema(
-                        filename_template="{assembly_id}_dram.html.gz",
-                        file_type=DownloadFileType.HTML,
-                        download_type=DownloadType.FUNCTIONAL_ANALYSIS,
-                        download_group=f"{analyses.models.Analysis.FUNCTIONAL_ANNOTATION}.dram_distill",
-                        short_description="DRAM Distill HTML report",
-                        long_description="DRAM Distill HTML visualization",
-                        validation_rules=[FileExistsRule, FileIsNotEmptyRule],
-                    ),
-                    AssemblyFileSchema(
-                        filename_template="{assembly_id}_genome_stats.tsv.gz",
-                        file_type=DownloadFileType.TSV,
-                        download_type=DownloadType.FUNCTIONAL_ANALYSIS,
-                        download_group=f"{analyses.models.Analysis.FUNCTIONAL_ANNOTATION}.dram_distill",
-                        short_description="DRAM genome statistics",
-                        long_description="DRAM genome statistics table",
-                        validation_rules=[FileExistsRule, FileIsNotEmptyRule],
-                    ),
-                    AssemblyFileSchema(
-                        filename_template="{assembly_id}_metabolism_summary.xlsx.gz",
-                        file_type=DownloadFileType.OTHER,
-                        download_type=DownloadType.FUNCTIONAL_ANALYSIS,
-                        download_group=f"{analyses.models.Analysis.FUNCTIONAL_ANNOTATION}.dram_distill",
-                        short_description="DRAM metabolism summary",
-                        long_description="DRAM metabolism summary spreadsheet",
-                        validation_rules=[FileExistsRule, FileIsNotEmptyRule],
-                    ),
-                ],
-            ),
-        ],
-    )
-
-    # Annotation Summary Directory
-    annotation_summary_dir = AssemblyDirectorySchema(
-        folder_name=EMG_CONFIG.assembly_analysis_pipeline.annotation_summary_folder,
-        validation_rules=[DirectoryExistsRule],
-        files=[
-            AssemblyFileSchema(
-                filename_template="{assembly_id}_annotation_summary.gff.gz",
-                file_type=DownloadFileType.GFF,
+                alias=annot_tsv.name,
                 download_type=DownloadType.FUNCTIONAL_ANALYSIS,
-                download_group="annotation_summary",
-                short_description="Annotation summary GFF",
-                long_description="Comprehensive annotation summary in GFF format",
-                validation_rules=[FileExistsRule, FileIsNotEmptyRule],
-            ),
-        ],
+                download_group=f"{analyses.models.Analysis.FUNCTIONAL_ANNOTATION}.{schema.download_subgroup}",
+                parent_identifier=analysis.accession,
+                short_description=schema.short_description,
+                long_description=schema.long_description,
+                index_file=index,
+            )
+        )
+
+        if schema.import_to_annotations_key:
+            try:
+                df = pd.read_csv(annot_tsv, sep=CSVDelimiter.TAB)
+            except pd.errors.EmptyDataError:
+                logging.error(
+                    f"Found empty {folder_name} annotations TSV at {annot_tsv}. Probably unit testing, otherwise we should never be here"
+                )
+            else:
+                analysis.annotations[schema.import_to_annotations_key] = df[
+                    schema.import_from_column
+                ].to_list()
+                analysis.save()
+
+
+FUNCTIONAL_TABLE_SCHEMAS = [
+    AssemblyV6AnnotationTableSchema(
+        folder_name="go",
+        tsv_suffix="_go_summary.tsv.gz",
+        expect_index=True,
+        download_subgroup=analyses.models.Analysis.GO_TERMS,
+        import_to_annotations_key=None,
+        short_description="GO Term counts",
+        long_description="Table with counts for each Gene Ontology (GO) Term found",
+    ),
+    AssemblyV6AnnotationTableSchema(
+        folder_name="go",
+        tsv_suffix="_goslim_summary.tsv.gz",
+        expect_index=True,
+        download_subgroup=analyses.models.Analysis.GO_SLIMS,
+        import_to_annotations_key=analyses.models.Analysis.GO_SLIMS,
+        import_from_column="go",
+        short_description="GO-Slim Term counts",
+        long_description="Table with counts for each Gene Ontology (GO)-Slim Term found",
+    ),
+    AssemblyV6AnnotationTableSchema(
+        folder_name="interpro",
+        tsv_suffix="_interpro_summary.tsv.gz",
+        expect_index=True,
+        download_subgroup=analyses.models.Analysis.INTERPRO_IDENTIFIERS,
+        import_to_annotations_key=analyses.models.Analysis.INTERPRO_IDENTIFIERS,
+        import_from_column="interpro_accession",
+        short_description="InterPro Identifier counts",
+        long_description="Table with counts for each InterPro identifier found",
+    ),
+    AssemblyV6AnnotationTableSchema(
+        folder_name="pfam",
+        tsv_suffix="_pfam_summary.tsv.gz",
+        expect_index=True,
+        download_subgroup=analyses.models.Analysis.PFAMS,
+        import_to_annotations_key=None,
+        short_description="Pfam accession counts",
+        long_description="Table with counts for each Pfam accession found",
+    ),
+    AssemblyV6AnnotationTableSchema(
+        folder_name="rhea-reactions",
+        tsv_suffix="_proteins2rhea.tsv.gz",
+        expect_index=True,
+        download_subgroup=analyses.models.Analysis.RHEA_REACTIONS,
+        import_to_annotations_key=None,
+        short_description="Rhea reaction counts",
+        long_description="Table with counts of each Rhea reaction found",
+    ),
+]
+
+
+def import_functions(
+    analysis: analyses.models.Analysis,
+    dir_for_analysis: Path,
+    allow_non_exist: bool = True,
+):
+    """
+    Import functional annotation results for the assembly analysis.
+
+    :param analysis: The analysis to import functional annotations for
+    :param dir_for_analysis: Path to the directory containing the analysis results
+    :param allow_non_exist: Whether to allow the functional directory to not exist
+    """
+    _import_annotations(
+        analysis=analysis,
+        dir_for_analysis=dir_for_analysis,
+        schemas_list=FUNCTIONAL_TABLE_SCHEMAS,
+        folder_path=EMG_CONFIG.assembly_analysis_pipeline.functional_folder,
+        folder_name="functional-annotation",
+        allow_non_exist=allow_non_exist,
     )
 
-    return AssemblyAnalysisDirectorySchema(
-        qc_directory=qc_dir,
-        cds_directory=cds_dir,
-        taxonomy_directory=taxonomy_dir,
-        functional_annotation_directory=functional_dir,
-        pathways_systems_directory=pathways_dir,
-        annotation_summary_directory=annotation_summary_dir,
+
+PATHWAYS_AND_SYSTEMS_TABLE_SCHEMAS = [
+    AssemblyV6AnnotationTableSchema(
+        folder_name="antismash",
+        tsv_suffix="_antismash_summary.tsv.gz",
+        expect_index=True,
+        download_subgroup=analyses.models.Analysis.ANTISMASH_GENE_CLUSTERS,
+        import_to_annotations_key=analyses.models.Analysis.ANTISMASH_GENE_CLUSTERS,
+        import_from_column="label",
+        short_description="antiSMASH BGC counts",
+        long_description="Table with counts for each BGC found",
+    ),
+    AssemblyV6AnnotationTableSchema(
+        folder_name="sanntis",
+        tsv_suffix="_sanntis_summary.tsv.gz",
+        expect_index=True,
+        download_subgroup=analyses.models.Analysis.SANNTIS_GENE_CLUSTERS,
+        import_to_annotations_key=analyses.models.Analysis.SANNTIS_GENE_CLUSTERS,
+        import_from_column="description",
+        short_description="SanntiS BGC counts",
+        long_description="Table with counts for each BGC found",
+    ),
+    AssemblyV6AnnotationTableSchema(
+        folder_name="genome_properties",
+        tsv_suffix="_gp.tsv.gz",
+        expect_index=True,
+        download_subgroup=analyses.models.Analysis.GENOME_PROPERTIES,
+        import_to_annotations_key=analyses.models.Analysis.GENOME_PROPERTIES,
+        import_from_column="property_id",
+        short_description="Genome Properties counts",
+        long_description="Table with counts for each Genome Property found",
+    ),
+    AssemblyV6AnnotationTableSchema(
+        folder_name="kegg_modules",
+        tsv_suffix="_kegg_modules_summary.tsv.gz",
+        expect_index=True,
+        download_subgroup=analyses.models.Analysis.KEGG_MODULES,
+        import_to_annotations_key=analyses.models.Analysis.KEGG_MODULES,
+        import_from_column="module_id",
+        short_description="KEGG Modules counts",
+        long_description="Table with counts for each KEGG Module found",
+    ),
+    AssemblyV6AnnotationTableSchema(
+        folder_name="dram_distill",
+        tsv_suffix="_dram.tsv.gz",
+        expect_index=False,
+        download_subgroup="dram_distill",
+        import_to_annotations_key=None,
+        short_description="DRAM Distill results",
+        long_description="Table with DRAM Distill results",
+    ),
+]
+
+
+def import_pathways(
+    analysis: analyses.models.Analysis,
+    dir_for_analysis: Path,
+    allow_non_exist: bool = True,
+):
+    """
+    Import pathways and systems results for the assembly analysis.
+
+    :param analysis: The analysis to import pathways for
+    :param dir_for_analysis: Path to the directory containing the analysis results
+    :param allow_non_exist: Whether to allow the pathways directory to not exist
+    """
+    _import_annotations(
+        analysis=analysis,
+        dir_for_analysis=dir_for_analysis,
+        schemas_list=PATHWAYS_AND_SYSTEMS_TABLE_SCHEMAS,
+        folder_path=EMG_CONFIG.assembly_analysis_pipeline.pathways_systems_folder,
+        folder_name="pathways-and-systems",
+        allow_non_exist=allow_non_exist,
     )
