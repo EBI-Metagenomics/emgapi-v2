@@ -79,6 +79,7 @@ def test_make_dev_data(
     mgnify_assemblies_completed,
     amplicon_analysis_with_downloads,
     prefect_harness,
+    webin_private_study,
 ):
     """
     Dummy test that just sets up fixtures and dumps them to JSON for using as dev data.

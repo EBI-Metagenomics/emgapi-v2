@@ -37,6 +37,9 @@ from workflows.ena_utils.sample import ENASampleFields
 # Some models associated with MGnify Analyses (MGYS, MGYA etc).
 
 
+logger = logging.getLogger(__name__)
+
+
 class Biome(TreeModel):
     biome_name = models.CharField(max_length=255)
 
@@ -73,15 +76,15 @@ class Biome(TreeModel):
 
 class StudyManager(ENADerivedManager):
     def get_or_create_for_ena_study(self, ena_study_accession):
-        logging.info(f"Will get/create MGnify study for {ena_study_accession}")
+        logger.info(f"Will get/create MGnify study for {ena_study_accession}")
         try:
             ena_study = ena.models.Study.objects.filter(
                 Q(accession=ena_study_accession)
                 | Q(additional_accessions__icontains=ena_study_accession)
             ).first()
-            logging.debug(f"Got {ena_study}")
+            logger.debug(f"Got {ena_study}")
         except (MultipleObjectsReturned, ObjectDoesNotExist):
-            logging.warning(
+            logger.warning(
                 f"Problem getting ENA study {ena_study_accession} from ENA models DB"
             )
         study, _ = Study.objects.get_or_create(
@@ -757,7 +760,7 @@ def on_study_saved_update_analyses_suppression_states(
         is_suppressed=instance.is_suppressed
     )
     for analysis in analyses_to_update_suppression_of:
-        logging.info(
+        logger.info(
             f"Setting is_suppressed to {instance.is_suppressed} on {analysis.accession} via {instance.accession}"
         )
         analysis.is_suppressed = instance.is_suppressed

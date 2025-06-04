@@ -1,35 +1,52 @@
 from typing import List
 
 from ninja.pagination import RouterPaginated
-from ninja.security import django_auth_superuser
 
 import analyses.models
 from analyses.schemas import MGnifyAnalysis, MGnifyStudy
 from emgapiv2.api import ApiSections
+from emgapiv2.api.auth import DjangoSuperUserAuth, WebinJWTAuth
 
-router = RouterPaginated()
+router = RouterPaginated(auth=[WebinJWTAuth(), DjangoSuperUserAuth()])
 
 
 @router.get(
     "/analyses/",
     response=List[MGnifyAnalysis],
-    tags=[ApiSections.ANALYSES.value],
+    tags=[ApiSections.PRIVATE_DATA.value],
     summary="List all private analyses (MGYAs) available from MGnify",
     operation_id="list_private_mgnify_analyses",
-    auth=django_auth_superuser,
 )
-def list_private_mgnify_analyses():
-    qs = analyses.models.Analysis.public_objects()
+def list_private_mgnify_analyses(request):
+    auth = request.auth
+    qs = analyses.models.Analysis.objects
+
+    if auth and auth.is_superuser:
+        qs = qs.all()
+    elif auth and (webin_id := auth.username):
+        qs = qs.filter(webin_submitter=webin_id)
+    else:
+        qs = qs.none()
+
     return qs
 
 
 @router.get(
     "/studies/",
     response=List[MGnifyStudy],
+    tags=[ApiSections.PRIVATE_DATA.value],
     summary="List all private studies available from MGnify",
     operation_id="list_private_mgnify_studies",
-    auth=django_auth_superuser,
 )
-def list_private_mgnify_studies():
-    qs = analyses.models.Study.objects()
+def list_private_mgnify_studies(request):
+    auth = request.auth
+    qs = analyses.models.Study.objects
+
+    if auth and auth.is_superuser:
+        qs = qs.all()
+    elif auth and (webin_id := auth.username):
+        qs = qs.filter(webin_submitter=webin_id)
+    else:
+        qs = qs.none()
+
     return qs

@@ -14,6 +14,7 @@ class ApiSections(FutureStrEnum):
     ANALYSES = "Analyses"
     REQUESTS = "Requests"
     PRIVATE_DATA = "Private Data"
+    AUTH = "Authentication"
 
 
 class OpenApiKeywords(FutureStrEnum):

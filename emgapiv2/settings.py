@@ -12,6 +12,7 @@ https://docs.djangoproject.com/en/4.1/ref/settings/
 
 import logging
 import os
+from datetime import timedelta
 from pathlib import Path
 
 import dj_database_url
@@ -63,9 +64,6 @@ INSTALLED_APPS = [
     "unfold.contrib.filters",
     "unfold.contrib.forms",
     "unfold.contrib.inlines",
-    # "unfold.contrib.import_export",  # optional, if django-import-export package is used
-    # "unfold.contrib.guardian",  # optional, if django-guardian package is used
-    # "unfold.contrib.simple_history",  # optional, if django-simple-history package is used
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
@@ -77,6 +75,8 @@ INSTALLED_APPS = [
     "django_admin_inline_paginator_plus",
     "django_json_widget",
     "corsheaders",
+    "ninja_extra",
+    "ninja_jwt",
     "ena",
     "analyses",
     "workflows",
@@ -367,3 +367,15 @@ LOGGING = {
 }
 
 NINJA_PAGINATION_CLASS = "ninja.pagination.PageNumberPagination"
+
+# Django Ninja JWT settings
+NINJA_JWT = {
+    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=EMG_CONFIG.webin.jwt_expiration_minutes),
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=1),
+    "ALGORITHM": EMG_CONFIG.webin.jwt_algorithm,
+    "SIGNING_KEY": EMG_CONFIG.webin.jwt_secret_key or SECRET_KEY,
+    "AUTH_HEADER_TYPES": ("Bearer",),
+    "AUTH_TOKEN_CLASSES": ("ninja_jwt.tokens.SlidingToken",),
+    "TOKEN_USER_CLASS": "emgapiv2.api.auth.WebinUser",
+    "USER_ID_CLAIM": "username",
+}

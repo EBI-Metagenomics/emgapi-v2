@@ -40,3 +40,16 @@ def study_downloads(raw_reads_mgnify_study):
     raw_reads_mgnify_study.results_dir = "/app/data/tests/amplicon_v6_output"
     raw_reads_mgnify_study.external_results_dir = f"{accession_prefix_separated_dir_path(raw_reads_mgnify_study.first_accession, -3)}/"
     raw_reads_mgnify_study.save()
+
+
+@pytest.fixture
+def webin_private_study(webin_private_ena_study):
+    # Create an ENA Study with a webin_submitter
+    mgnify_study = mg_models.Study.objects.create(
+        accession="MGYS00000999",
+        ena_study=webin_private_ena_study,
+        title="Private MGnify Study",
+        is_private=True,
+        webin_submitter=webin_private_ena_study.webin_submitter,
+    )
+    return mgnify_study

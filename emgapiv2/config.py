@@ -117,6 +117,10 @@ class WebinConfig(BaseModel):
     broker_password: str = None
     webin_cli_retries: int = 6
     webin_cli_retry_delay_seconds: int = 60
+    auth_endpoint: AnyHttpUrl = "https://www.ebi.ac.uk/ena/submit/webin/auth"
+    jwt_secret_key: str = None
+    jwt_algorithm: str = "HS256"
+    jwt_expiration_minutes: int = 60
 
 
 class ENAConfig(BaseModel):

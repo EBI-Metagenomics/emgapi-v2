@@ -14,11 +14,26 @@ fileignoreconfig:
 - filename: analyses/tests/test_models.py
   allowed_patterns: [key]
 
+- filename: conftest.py
+  allowed_patterns: [password="password123"]
+
 - filename: deployment/ebi-wp-k8s-hl/ebi-wp-k8s-hl.yaml
   checksum: a4476f78908b6e6a9f4801fd21c0c9f034869f088dea9eff7baffa2117693255
 
+- filename: docker-compose.yaml
+  allowed_patterns: [EMG_WEBIN__JWT_SECRET_KEY=dummy-key]
+
 - filename: emgapiv2/api/__init__.py
   allowed_patterns: [OpenApiKeywords]
+
+- filename: emgapiv2/api/auth.py
+  checksum: c6f5567123aa0ab79412e2244398b2e6355a61635d8c861ab2fd650e0ae0f9bd
+
+- filename: emgapiv2/test_auth.py
+  checksum: 19a51439bd343ffc74befbc568364a9fb7d1965f1c7dbcaefcd978762d9f17f4
+
+- filename: emgapiv2/api/token_controller.py
+  checksum: 0ee9cf777e9a303dcf7554dd718c3ce0ce9385fe8ce12adb37a4f5a5ddd58240
 
 - filename: emgapiv2/dict_utils.py
   allowed_patterns: [keys]
@@ -27,10 +42,10 @@ fileignoreconfig:
   allowed_patterns: [key]
 
 - filename: emgapiv2/config.py
-  checksum: 1e1a8f41069509ddfe643f09455c5c8a52c98ecfa3e3f467cca9798ef0639030
+  checksum: 3afe465b36e4e141124bd84c8459c5aa81332eedf49b691eff22c74df63a0f18
 
 - filename: emgapiv2/settings.py
-  ignore_detectors: [filename]
+  checksum: 20d98d8b4ad7546637b643012da16a6d64f46c75b2c4c1120613fea5ee17d94d
 
 - filename: emgapiv2/settings_test.py
   checksum: ded898400b4eda7e3cf75694af1b66235975a85eb5b8f49f3a2c708163a7aad4
