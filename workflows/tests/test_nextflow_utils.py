@@ -242,11 +242,10 @@ def test_nextflow_trace_from_pipeline_info(
     mock_start_cluster_job,
     mock_cluster_can_accept_jobs_yes,
     mock_check_cluster_job_all_completed,
+    tmp_path,
 ):
     trace_file_location = (
-        Path(settings.EMG_CONFIG.slurm.default_workdir)
-        / "hello-nextflow"
-        / "pipeline_info/execution_trace_2025-05-01.txt"
+        tmp_path / "hello-nextflow" / "pipeline_info/execution_trace_2025-05-01.txt"
     )
 
     def make_trace_file(*args, **kwargs):
@@ -262,11 +261,9 @@ def test_nextflow_trace_from_pipeline_info(
         resubmit_policy=ResubmitAlwaysPolicy,
         memory="100M",
         environment="ALL",
-        working_dir=Path(settings.EMG_CONFIG.slurm.default_workdir) / "hello-nextflow",
+        working_dir=tmp_path / "hello-nextflow",
     )
 
     assert len(hello_nextfow_flow.nextflow_trace)
     # Fixture - data
     assert hello_nextfow_flow.nextflow_trace[0]["hash"] == "c4/1f6cf1"
-
-    trace_file_location.unlink()
