@@ -152,10 +152,7 @@ class ServiceURLsConfig(BaseModel):
     transfer_services_url_root: str = (
         "http://localhost:8080/pub/databases/metagenomics/mgnify_results/"
     )
-
-
-class SlackConfig(BaseModel):
-    slack_webhook_prefect_block_name: str = "slack-webhook"
+    private_data_url_root: str = "http://localhost:8081/private-data/"
 
 
 class MaskReplacement(BaseModel):
@@ -186,7 +183,6 @@ class EMGConfig(BaseSettings):
     environment: str = "development"
     legacy_service: LegacyServiceConfig = LegacyServiceConfig()
     service_urls: ServiceURLsConfig = ServiceURLsConfig()
-    slack: SlackConfig = SlackConfig()
     slurm: SlurmConfig = SlurmConfig()
     webin: WebinConfig = WebinConfig()
     log_masking: LogMaskingConfig = LogMaskingConfig()
