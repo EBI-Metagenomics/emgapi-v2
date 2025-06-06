@@ -121,6 +121,7 @@ services:
       - DATABASE_URL=postgres://postgres:postgres@app-database:5432/emg
       - EMG_WEBIN__JWT_SECRET_KEY=dummy-key
       - EMG_WEBIN__AUTH_ENDPOINT=http://httpbin/status/200
+      - PRIVATE_DATA_SECURE_LINK_SECRET_KEY=dummy-key
     volumes:
       - ".:/app"
       - "./slurm-dev-environment/fs/nfs/public:/app/data"  # similar to the k8s volume mount in production
@@ -144,7 +145,20 @@ services:
       - "./slurm-dev-environment/configs/apache-override.conf:/usr/local/apache2/conf/httpd.conf:ro"
     restart: unless-stopped
     networks: [emg]
-    profiles: ["all"]
+    profiles: ["all", "app"]
+
+  private-data-server:
+    # For serving private data with pre-signed links
+    image: openresty/openresty:alpine
+    container_name: private-data-server
+    ports:
+      - "8081:80"
+    volumes:
+      - "./slurm-dev-environment/fs/nfs/public/services/private-data:/var/www/private-data/"
+      - "./slurm-dev-environment/configs/private-data-nginx.conf:/usr/local/openresty/nginx/conf/nginx.conf"
+    restart: unless-stopped
+    networks: [emg]
+    profiles: ["all", "app"]
 
   httpbin:
     # For mocking APIs like ENA auth

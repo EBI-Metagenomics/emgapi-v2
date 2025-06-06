@@ -92,6 +92,17 @@ def test_token_endpoint(ninja_api_client, webin_private_study, httpx_mock):
     validated_token = SlidingToken(token)
     assert validated_token.get("username") == webin_private_study.webin_submitter
 
+    # Test refresh
+    response = ninja_api_client.post(
+        "/auth/sliding/refresh",
+        json={"token": token},
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert "token" in data
+    validated_token = SlidingToken(token)
+    assert validated_token.get("username") == webin_private_study.webin_submitter
+
     # Test failed authentication
     httpx_mock.add_response(
         url="http://fake-auth.example.com/auth",

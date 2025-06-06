@@ -119,8 +119,10 @@ class WebinConfig(BaseModel):
     webin_cli_retry_delay_seconds: int = 60
     auth_endpoint: AnyHttpUrl = "https://www.ebi.ac.uk/ena/submit/webin/auth"
     jwt_secret_key: str = None
-    jwt_algorithm: str = "HS256"
-    jwt_expiration_minutes: int = 60
+    jwt_expiration_minutes: int = (
+        1440  # TODO: shorten once https://github.com/eadwinCode/django-ninja-jwt/issues/33 is fixed
+    )
+    jwt_refresh_expiration_hours: int = 24
 
 
 class ENAConfig(BaseModel):

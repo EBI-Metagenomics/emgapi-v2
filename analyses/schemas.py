@@ -17,6 +17,7 @@ from analyses.base_models.with_downloads_models import (
     DownloadFile,
     DownloadFileIndexFile,
 )
+from emgapiv2.api.storage import private_storage
 from emgapiv2.enum_utils import FutureStrEnum
 from workflows.data_io_utils.filenames import trailing_slash_ensured_dir
 
@@ -161,6 +162,10 @@ class MGnifyAnalysisDownloadFile(Schema, DownloadFile):
             )
             return None
 
+        if analysis.is_private:
+            private_path = Path(analysis.external_results_dir) / obj.path
+            return private_storage.url(private_path)
+
         return urljoin(
             EMG_CONFIG.service_urls.transfer_services_url_root,
             urljoin(
@@ -183,6 +188,10 @@ class MGnifyStudyDownloadFile(MGnifyAnalysisDownloadFile):
                 f"No parent Study object found with identified {obj.parent_identifier}"
             )
             return None
+
+        if study.is_private:
+            private_path = Path(study.external_results_dir) / obj.path
+            return private_storage.url(private_path)
 
         return f"{EMG_CONFIG.service_urls.transfer_services_url_root.rstrip('/')}/{study.external_results_dir}/{obj.path}"
 

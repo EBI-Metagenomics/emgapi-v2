@@ -77,6 +77,7 @@ INSTALLED_APPS = [
     "corsheaders",
     "ninja_extra",
     "ninja_jwt",
+    "nginx_secure_links",
     "ena",
     "analyses",
     "workflows",
@@ -370,12 +371,18 @@ NINJA_PAGINATION_CLASS = "ninja.pagination.PageNumberPagination"
 
 # Django Ninja JWT settings
 NINJA_JWT = {
-    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=EMG_CONFIG.webin.jwt_expiration_minutes),
-    "REFRESH_TOKEN_LIFETIME": timedelta(days=1),
-    "ALGORITHM": EMG_CONFIG.webin.jwt_algorithm,
+    "SLIDING_TOKEN_LIFETIME": timedelta(
+        minutes=EMG_CONFIG.webin.jwt_expiration_minutes
+    ),
+    "SLIDING_TOKEN_REFRESH_LIFETIME": timedelta(
+        hours=EMG_CONFIG.webin.jwt_refresh_expiration_hours
+    ),
     "SIGNING_KEY": EMG_CONFIG.webin.jwt_secret_key or SECRET_KEY,
     "AUTH_HEADER_TYPES": ("Bearer",),
     "AUTH_TOKEN_CLASSES": ("ninja_jwt.tokens.SlidingToken",),
     "TOKEN_USER_CLASS": "emgapiv2.api.auth.WebinUser",
     "USER_ID_CLAIM": "username",
 }
+
+# Django Nginx Secure Links settings - pre-signed URLs for private data
+SECURE_LINK_SECRET_KEY = os.getenv("PRIVATE_DATA_SECURE_LINK_SECRET_KEY", SECRET_KEY)

@@ -53,3 +53,22 @@ def webin_private_study(webin_private_ena_study):
         webin_submitter=webin_private_ena_study.webin_submitter,
     )
     return mgnify_study
+
+
+@pytest.fixture
+def private_study_with_download(webin_private_study):
+    webin_private_study.external_results_dir = "MGYS/00/000/999"
+    webin_private_study.save()
+
+    webin_private_study.add_download(
+        DownloadFile(
+            download_type=DownloadType.TAXONOMIC_ANALYSIS,
+            file_type=DownloadFileType.TSV,
+            alias=f"{webin_private_study.accession}_private_study_summary.tsv",
+            short_description="Private study summary",
+            long_description="Summary of taxonomic assignments for private study",
+            path="study-summaries/private_study_summary.tsv",
+            download_group="study_summary.private",
+        )
+    )
+    return webin_private_study
