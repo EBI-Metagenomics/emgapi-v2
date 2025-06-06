@@ -30,7 +30,7 @@ pytest_plugins = [
 
 @pytest.fixture(scope="session")
 def prefect_harness():
-    with prefect_test_harness():
+    with prefect_test_harness(server_startup_timeout=60):
         yield
 
 

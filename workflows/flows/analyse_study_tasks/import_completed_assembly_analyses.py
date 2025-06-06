@@ -10,7 +10,7 @@ from workflows.data_io_utils.mgnify_v6_utils.assembly import (
     import_functions,
 )
 from workflows.flows.analyse_study_tasks.analysis_states import AnalysisStates
-from workflows.prefect_utils.analyses_models_helpers import task_mark_analysis_status
+from workflows.prefect_utils.analyses_models_helpers import mark_analysis_status
 
 
 @task
@@ -33,7 +33,7 @@ def import_completed_assembly_analysis(analysis: analyses.models.Analysis):
     # TODO: Import pathways
 
     # Mark the analysis as having its annotations imported
-    task_mark_analysis_status(
+    mark_analysis_status(
         analysis,
         analysis.AnalysisStates.ANALYSIS_ANNOTATIONS_IMPORTED,
         unset_statuses=[

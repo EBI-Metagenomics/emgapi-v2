@@ -8,7 +8,7 @@ from activate_django_first import EMG_CONFIG
 
 import analyses.models
 from workflows.flows.analyse_study_tasks.analysis_states import AnalysisStates
-from workflows.prefect_utils.analyses_models_helpers import task_mark_analysis_status
+from workflows.prefect_utils.analyses_models_helpers import mark_analysis_status
 
 
 @task(
@@ -289,7 +289,7 @@ def sanity_check_amplicon_results(
     logger.info(f"Post sanity check for {run_id}: {reason}")
 
     if reason:
-        task_mark_analysis_status(
+        mark_analysis_status(
             analysis,
             status=AnalysisStates.ANALYSIS_POST_SANITY_CHECK_FAILED,
             reason=reason,

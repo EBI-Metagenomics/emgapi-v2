@@ -30,11 +30,11 @@ jobs:
 
       - name: Build Docker image
         run: |
-          docker build --target django -t app:latest .
+          docker build --target ci -t app:latest .
 
       - name: Check for unmigrated code
         run: |
-          docker run --rm app:latest makemigrations --check
+          docker run --rm app:latest python manage.py makemigrations --check
 
       - name: Run tests
         run: |
