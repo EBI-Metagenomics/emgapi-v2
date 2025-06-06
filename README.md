@@ -35,6 +35,8 @@ This is in the `slurm-dev-environment` directory: see [slurm-dev-environment/REA
 
 There is also an apache web server, as a mock "transfer services area" for serving data files over HTTP.
 
+There is also an openresty/nginx server with the http_secure_link_module, as a "private-data-server" for serving private data files with secure pre-signed URLs. This is used for private studies and analyses.
+
 #### Set up docker-compose
 E.g. following [the docker docs](https://docs.docker.com/compose/install/) or using Podman or Colima, as you prefer. In theory all should work.
 (There is a docker compose file rooted at `./docker-compose.yaml`,

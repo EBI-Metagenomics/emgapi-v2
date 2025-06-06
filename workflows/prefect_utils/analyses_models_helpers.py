@@ -11,12 +11,11 @@ from analyses.models import Analysis, Assembly, Study
 logger = logging.getLogger(__name__)
 
 
-@task(log_prints=True)
-def task_mark_assembly_status(
+def mark_assembly_status(
     assembly: Assembly,
     status: Assembly.AssemblyStates,
     reason: str = None,
-    unset_statuses: [Assembly.AssemblyStates] = None,
+    unset_statuses: list[Assembly.AssemblyStates] = None,
 ) -> None:
     """
     Logs and updates the status of a given assembly.
@@ -37,7 +36,7 @@ def task_mark_assembly_status(
             f"Invalid status '{status}'. Must be one of the predefined AssemblyStates."
         )
 
-    print(f"Assembly {assembly} status is {status} now.")
+    logger.info(f"Assembly {assembly} status is {status} now.")
     assembly.mark_status(status, reason=reason)
     for unset_status in unset_statuses or []:
         if assembly.status.get(unset_status, None):
@@ -48,12 +47,11 @@ def task_mark_assembly_status(
             )
 
 
-@task(log_prints=True)
-def task_mark_analysis_status(
+def mark_analysis_status(
     analysis: Analysis,
     status: Analysis.AnalysisStates,
     reason: str = None,
-    unset_statuses: [Analysis.AnalysisStates] = None,
+    unset_statuses: list[Analysis.AnalysisStates] = None,
 ) -> None:
     """
     Logs and updates the status of a given analysis.

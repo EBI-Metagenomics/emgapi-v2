@@ -40,3 +40,35 @@ def study_downloads(raw_reads_mgnify_study):
     raw_reads_mgnify_study.results_dir = "/app/data/tests/amplicon_v6_output"
     raw_reads_mgnify_study.external_results_dir = f"{accession_prefix_separated_dir_path(raw_reads_mgnify_study.first_accession, -3)}/"
     raw_reads_mgnify_study.save()
+
+
+@pytest.fixture
+def webin_private_study(webin_private_ena_study):
+    # Create an ENA Study with a webin_submitter
+    mgnify_study = mg_models.Study.objects.create(
+        accession="MGYS00000999",
+        ena_study=webin_private_ena_study,
+        title="Private MGnify Study",
+        is_private=True,
+        webin_submitter=webin_private_ena_study.webin_submitter,
+    )
+    return mgnify_study
+
+
+@pytest.fixture
+def private_study_with_download(webin_private_study):
+    webin_private_study.external_results_dir = "MGYS/00/000/999"
+    webin_private_study.save()
+
+    webin_private_study.add_download(
+        DownloadFile(
+            download_type=DownloadType.TAXONOMIC_ANALYSIS,
+            file_type=DownloadFileType.TSV,
+            alias=f"{webin_private_study.accession}_private_study_summary.tsv",
+            short_description="Private study summary",
+            long_description="Summary of taxonomic assignments for private study",
+            path="study-summaries/private_study_summary.tsv",
+            download_group="study_summary.private",
+        )
+    )
+    return webin_private_study

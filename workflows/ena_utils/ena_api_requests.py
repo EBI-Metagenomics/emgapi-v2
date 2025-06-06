@@ -55,17 +55,6 @@ def library_strategy_policy_to_filter(
     return []
 
 
-def create_ena_api_request(result_type, query, limit, fields, result_format="json"):
-    return (
-        f"{EMG_CONFIG.ena.portal_search_api}?"
-        f"result={result_type}&"
-        f"query={query}&"
-        f"limit={limit}&"
-        f"format={result_format}&"
-        f"fields={fields}"
-    )
-
-
 @task(
     retries=RETRIES,
     retry_delay_seconds=RETRY_DELAY,

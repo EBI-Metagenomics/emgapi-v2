@@ -95,6 +95,7 @@ items:
       EMG_SLURM__SAMPLE_EDITING_PATH_FROM_SHARED_FILESYSTEM: "temporary_samplesheet_edits"
       EMG_SLURM__DEFAULT_WORKDIR: "/nfs/production/rdf/metagenomics/projects/automation/slurm_workdir"
       EMG_SERVICE_URLS__TRANSFER_SERVICES_URL_ROOT: "https://ftp.ebi.ac.uk/pub/databases/metagenomics/mgnify_results/"
+      EMG_SERVICE_URLS__PRIVATE_DATA_URL_ROOT: "https://www.ebi.ac.uk/metagenomics/api/v2/private-data/"
       EMG_SERVICE_URLS__BASE_URL: "metagenomics/api/v2"
   - apiVersion: apps/v1
     kind: Deployment
@@ -494,5 +495,120 @@ items:
                 backend:
                   service:
                     name: webclient
+                    port:
+                      number: 80
+  ###############################
+  #### PRIVATE DATA SERVER   ####
+  ###############################
+  - apiVersion: v1
+    kind: PersistentVolume
+    metadata:
+      name: private-data-vol-nfs
+      namespace: emgapiv2-hl-exp
+    spec:
+      capacity:
+        storage: 10Gi
+      volumeMode: Filesystem
+      accessModes:
+        - ReadOnlyMany
+      mountOptions:
+        - nfsvers=3
+      nfs:
+        server: hh-isi-srv-vlan1496.ebi.ac.uk
+        path: /ifs/public/services/metagenomics/results
+  - apiVersion: v1
+    kind: PersistentVolumeClaim
+    metadata:
+      name: private-data-volume-claim
+      namespace: emgapiv2-hl-exp
+    spec:
+      storageClassName: ""
+      accessModes:
+        - ReadOnlyMany
+      resources:
+        requests:
+          storage: 3Gi
+      volumeName: private-data-vol-nfs
+  - apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      name: private-data-server
+      namespace: emgapiv2-hl-exp
+      labels:
+        app: private-data-server
+    spec:
+      replicas: 1
+      selector:
+        matchLabels:
+          app: private-data-server
+      template:
+        metadata:
+          labels:
+            app: private-data-server
+        spec:
+          volumes:
+            - name: private-data-storage
+              persistentVolumeClaim:
+                claimName: private-data-volume-claim
+            - name: nginx-config
+              secret:
+                secretName: nginx-private-data-config-secret
+          containers:
+            - name: private-data-server
+              image: openresty/openresty:alpine
+              imagePullPolicy: IfNotPresent
+              ports:
+                - containerPort: 80
+              resources:
+                requests:
+                  cpu: "500m"
+                  memory: "256Mi"
+                limits:
+                  cpu: "1"
+                  memory: "1Gi"
+              volumeMounts:
+                - name: private-data-storage
+                  mountPath: /var/www/private-data
+                - name: nginx-config
+                  mountPath: /usr/local/openresty/nginx/conf/nginx.conf
+                  subPath: nginx.conf
+              livenessProbe:
+                httpGet:
+                  path: /health
+                  port: 80
+                initialDelaySeconds: 30
+                periodSeconds: 300
+  - apiVersion: v1
+    kind: Service
+    metadata:
+      name: private-data-server
+      namespace: emgapiv2-hl-exp
+      labels:
+        app: private-data-server
+    spec:
+      type: NodePort
+      selector:
+        app: private-data-server
+      ports:
+        - port: 80
+          targetPort: 80
+          protocol: TCP
+  - apiVersion: networking.k8s.io/v1
+    kind: Ingress
+    metadata:
+      name: private-data-server-ingress
+      namespace: emgapiv2-hl-exp
+      annotations:
+        kubernetes.io/ingress.class: "nginx"
+    spec:
+      rules:
+        - host: "www.ebi.ac.uk"
+          http:
+            paths:
+              - path: /metagenomics/api/v2/private-data
+                pathType: Prefix
+                backend:
+                  service:
+                    name: private-data-server
                     port:
                       number: 80
