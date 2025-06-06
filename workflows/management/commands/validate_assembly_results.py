@@ -4,7 +4,7 @@ import logging
 from django.core.management.base import BaseCommand
 
 from workflows.flows.analyse_study_tasks.sanity_check_assembly_results import (
-    AssemblyAnalysisResultsSchema,
+    create_assembly_analysis_schema,
 )
 
 logger = logging.getLogger(__name__)
@@ -42,11 +42,11 @@ class Command(BaseCommand):
         folder_path = Path(options["folder_path"])
 
         try:
-            AssemblyAnalysisResultsSchema.create_schema(
+            create_assembly_analysis_schema(
                 assembly_current_outdir=folder_path, assembly_id=options["assembly_id"]
             )
 
-            self.stderr.write(
+            self.stdout.write(
                 self.style.SUCCESS(
                     f"Validation successful for assembly results in '{folder_path}'"
                 )

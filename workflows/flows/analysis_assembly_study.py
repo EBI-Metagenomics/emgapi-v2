@@ -48,7 +48,6 @@ def analysis_assembly_study(study_accession: str):
     :param study_accession: e.g. PRJ or ERP accession
     """
     logger = get_run_logger()
-    EMG_CONFIG
 
     # Study fetching and creation
     ena_study = ena.models.Study.objects.get_ena_study(study_accession)

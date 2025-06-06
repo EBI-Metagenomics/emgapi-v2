@@ -199,78 +199,45 @@ class AssemblyV6AnnotationTableSchema(BaseModel):
     long_description: str
 
 
-FUNCTIONAL_TABLE_SCHEMAS = [
-    AssemblyV6AnnotationTableSchema(
-        folder_name="go",
-        tsv_suffix="_go_summary.tsv.gz",
-        expect_index=True,
-        download_subgroup=analyses.models.Analysis.GO_TERMS,
-        import_to_annotations_key=None,
-        short_description="GO Term counts",
-        long_description="Table with counts for each Gene Ontology (GO) Term found",
-    ),
-    AssemblyV6AnnotationTableSchema(
-        folder_name="go",
-        tsv_suffix="_goslim_summary.tsv.gz",
-        expect_index=True,
-        download_subgroup=analyses.models.Analysis.GO_SLIMS,
-        import_to_annotations_key=analyses.models.Analysis.GO_SLIMS,
-        import_from_column="go",
-        short_description="GO-Slim Term counts",
-        long_description="Table with counts for each Gene Ontology (GO)-Slim Term found",
-    ),
-    AssemblyV6AnnotationTableSchema(
-        folder_name="interpro",
-        tsv_suffix="_interpro_summary.tsv.gz",
-        expect_index=True,
-        download_subgroup=analyses.models.Analysis.INTERPRO_IDENTIFIERS,
-        import_to_annotations_key=analyses.models.Analysis.INTERPRO_IDENTIFIERS,
-        import_from_column="interpro_identifier",
-        short_description="InterPro Identifier counts",
-        long_description="Table with counts for each InterPro identifier found",
-    ),
-    AssemblyV6AnnotationTableSchema(
-        folder_name="pfam",
-        tsv_suffix="_pfam_summary.tsv.gz",
-        expect_index=True,
-        download_subgroup=analyses.models.Analysis.PFAMS,
-        import_to_annotations_key=None,
-        short_description="Pfam accession counts",
-        long_description="Table with counts for each Pfam accession found",
-    ),
-    AssemblyV6AnnotationTableSchema(
-        folder_name="rhea-reactions",
-        tsv_suffix="_proteins2rhea.tsv.gz",
-        expect_index=True,
-        download_subgroup=analyses.models.Analysis.RHEA_REACTIONS,
-        import_to_annotations_key=None,
-        short_description="Rhea reaction counts",
-        long_description="Table with counts of each Rhea reaction found",
-    ),
-]
-
-
-def import_functions(
+def _import_annotations(
     analysis: analyses.models.Analysis,
     dir_for_analysis: Path,
+    schemas_list,
+    folder_path: str,
+    folder_name: str,
     allow_non_exist: bool = True,
 ):
+    """
+    Common helper function to import annotations from a directory.
+
+    :param analysis: The analysis to import annotations for
+    :param dir_for_analysis: Path to the directory containing the analysis results
+    :param schemas_list: List of annotation table schemas to process
+    :param folder_path: Path to the folder containing the annotations
+    :param folder_name: Name of the folder (for logging)
+    :param allow_non_exist: Whether to allow the directory to not exist
+    """
     dir_rules = [DirectoryExistsRule] if not allow_non_exist else []
-    functional_dir = Directory(
-        path=dir_for_analysis  # /hps/prod/...../abc123/ERZ999/
-        / EMG_CONFIG.assembly_analysis_pipeline.functional_folder,  # functional-annotation/
+    annotations_dir = Directory(
+        path=dir_for_analysis / folder_path,
         rules=dir_rules,
     )
 
-    for schema in FUNCTIONAL_TABLE_SCHEMAS:
+    if not annotations_dir.path.is_dir():
+        print(
+            f"No {folder_name} dir at {annotations_dir.path} – no {folder_name} to import."
+        )
+        return
+
+    for schema in schemas_list:
         try:
             annot_dir = Directory(
-                path=functional_dir.path / schema.folder_name,
+                path=annotations_dir.path / schema.folder_name,
                 rules=[DirectoryExistsRule],
             )
         except ValidationError:
             logging.warning(
-                f"No functional-annotation dir at {functional_dir.path / schema.folder_name}. Nothing to import."
+                f"No {folder_name} dir at {annotations_dir.path / schema.folder_name}. Nothing to import."
             )
             continue
 
@@ -316,7 +283,7 @@ def import_functions(
                 df = pd.read_csv(annot_tsv, sep=CSVDelimiter.TAB)
             except pd.errors.EmptyDataError:
                 logging.error(
-                    f"Found empty functional annotations TSV at {annot_tsv}. Probably unit testing, otherwise we should never be here"
+                    f"Found empty {folder_name} annotations TSV at {annot_tsv}. Probably unit testing, otherwise we should never be here"
                 )
             else:
                 analysis.annotations[schema.import_to_annotations_key] = df[
@@ -325,24 +292,15 @@ def import_functions(
                 analysis.save()
 
 
-PATHWAYS_AND_SYSTEMS_TABLE_SCHEMAS = [
+FUNCTIONAL_TABLE_SCHEMAS = [
     AssemblyV6AnnotationTableSchema(
-        folder_name="antismash",
-        tsv_suffix="_antismash_summary.tsv.gz",
+        folder_name="go",
+        tsv_suffix="_go_summary.tsv.gz",
         expect_index=True,
-        download_subgroup=analyses.models.Analysis.ANTISMASH_GENE_CLUSTERS,
+        download_subgroup=analyses.models.Analysis.GO_TERMS,
         import_to_annotations_key=None,
-        short_description="antiSMASH BGC counts",
-        long_description="Table with counts for each BGC found",
-    ),
-    AssemblyV6AnnotationTableSchema(
-        folder_name="sanntis",
-        tsv_suffix="_sanntis_summary.tsv.gz",
-        expect_index=True,
-        download_subgroup=analyses.models.Analysis.SANNTIS_GENE_CLUSTERS,
-        import_to_annotations_key=None,
-        short_description="antiSMASH BGC counts",
-        long_description="Table with counts for each BGC found",
+        short_description="GO Term counts",
+        long_description="Table with counts for each Gene Ontology (GO) Term found",
     ),
     AssemblyV6AnnotationTableSchema(
         folder_name="go",
@@ -360,7 +318,7 @@ PATHWAYS_AND_SYSTEMS_TABLE_SCHEMAS = [
         expect_index=True,
         download_subgroup=analyses.models.Analysis.INTERPRO_IDENTIFIERS,
         import_to_annotations_key=analyses.models.Analysis.INTERPRO_IDENTIFIERS,
-        import_from_column="interpro_identifier",
+        import_from_column="interpro_accession",
         short_description="InterPro Identifier counts",
         long_description="Table with counts for each InterPro identifier found",
     ),
@@ -383,3 +341,100 @@ PATHWAYS_AND_SYSTEMS_TABLE_SCHEMAS = [
         long_description="Table with counts of each Rhea reaction found",
     ),
 ]
+
+
+def import_functions(
+    analysis: analyses.models.Analysis,
+    dir_for_analysis: Path,
+    allow_non_exist: bool = True,
+):
+    """
+    Import functional annotation results for the assembly analysis.
+
+    :param analysis: The analysis to import functional annotations for
+    :param dir_for_analysis: Path to the directory containing the analysis results
+    :param allow_non_exist: Whether to allow the functional directory to not exist
+    """
+    _import_annotations(
+        analysis=analysis,
+        dir_for_analysis=dir_for_analysis,
+        schemas_list=FUNCTIONAL_TABLE_SCHEMAS,
+        folder_path=EMG_CONFIG.assembly_analysis_pipeline.functional_folder,
+        folder_name="functional-annotation",
+        allow_non_exist=allow_non_exist,
+    )
+
+
+PATHWAYS_AND_SYSTEMS_TABLE_SCHEMAS = [
+    AssemblyV6AnnotationTableSchema(
+        folder_name="antismash",
+        tsv_suffix="_antismash_summary.tsv.gz",
+        expect_index=True,
+        download_subgroup=analyses.models.Analysis.ANTISMASH_GENE_CLUSTERS,
+        import_to_annotations_key=analyses.models.Analysis.ANTISMASH_GENE_CLUSTERS,
+        import_from_column="label",
+        short_description="antiSMASH BGC counts",
+        long_description="Table with counts for each BGC found",
+    ),
+    AssemblyV6AnnotationTableSchema(
+        folder_name="sanntis",
+        tsv_suffix="_sanntis_summary.tsv.gz",
+        expect_index=True,
+        download_subgroup=analyses.models.Analysis.SANNTIS_GENE_CLUSTERS,
+        import_to_annotations_key=analyses.models.Analysis.SANNTIS_GENE_CLUSTERS,
+        import_from_column="description",
+        short_description="SanntiS BGC counts",
+        long_description="Table with counts for each BGC found",
+    ),
+    AssemblyV6AnnotationTableSchema(
+        folder_name="genome_properties",
+        tsv_suffix="_gp.tsv.gz",
+        expect_index=True,
+        download_subgroup=analyses.models.Analysis.GENOME_PROPERTIES,
+        import_to_annotations_key=analyses.models.Analysis.GENOME_PROPERTIES,
+        import_from_column="property_id",
+        short_description="Genome Properties counts",
+        long_description="Table with counts for each Genome Property found",
+    ),
+    AssemblyV6AnnotationTableSchema(
+        folder_name="kegg_modules",
+        tsv_suffix="_kegg_modules_summary.tsv.gz",
+        expect_index=True,
+        download_subgroup=analyses.models.Analysis.KEGG_MODULES,
+        import_to_annotations_key=analyses.models.Analysis.KEGG_MODULES,
+        import_from_column="module_id",
+        short_description="KEGG Modules counts",
+        long_description="Table with counts for each KEGG Module found",
+    ),
+    AssemblyV6AnnotationTableSchema(
+        folder_name="dram_distill",
+        tsv_suffix="_dram.tsv.gz",
+        expect_index=False,
+        download_subgroup="dram_distill",
+        import_to_annotations_key=None,
+        short_description="DRAM Distill results",
+        long_description="Table with DRAM Distill results",
+    ),
+]
+
+
+def import_pathways(
+    analysis: analyses.models.Analysis,
+    dir_for_analysis: Path,
+    allow_non_exist: bool = True,
+):
+    """
+    Import pathways and systems results for the assembly analysis.
+
+    :param analysis: The analysis to import pathways for
+    :param dir_for_analysis: Path to the directory containing the analysis results
+    :param allow_non_exist: Whether to allow the pathways directory to not exist
+    """
+    _import_annotations(
+        analysis=analysis,
+        dir_for_analysis=dir_for_analysis,
+        schemas_list=PATHWAYS_AND_SYSTEMS_TABLE_SCHEMAS,
+        folder_path=EMG_CONFIG.assembly_analysis_pipeline.pathways_systems_folder,
+        folder_name="pathways-and-systems",
+        allow_non_exist=allow_non_exist,
+    )

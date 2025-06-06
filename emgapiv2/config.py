@@ -102,7 +102,7 @@ class AssemblyAnalysisPipelineConfig(BaseModel):
     samplesheet_chunk_size: int = 10
     nextflow_master_job_memory_gb: int = 1
     completed_assemblies_csv: str = "analysed_assemblies.csv"
-    failed_assemblies_csv: str = "qc_failed_assemblies.csv"
+    qc_failed_assemblies: str = "qc_failed_assemblies.csv"
     # Results folders
     qc_folder: str = "qc"
     cds_folder: str = "cds"
