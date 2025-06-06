@@ -79,6 +79,7 @@ tasks:
 
   make-dev-data:
     desc: "Populate the app database with some demo data for development purposes"
+    prompt: "This asks for a password in a moment, but this IS NOT your computer password. It is a new one (anything you like) just to log into the demo admin panel as emgdev. Okay?"
     cmds:
       - docker compose --profile all down
       - docker volume rm -f emgapiv2_appdb  # force so that no error if volume doesn't exist.

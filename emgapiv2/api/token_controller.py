@@ -12,6 +12,7 @@ from emgapiv2.api.auth import (
     WebinUser,
     WebinTokenRequest,
     WebinTokenResponse,
+    WebinTokenRefreshRequest,
 )
 
 logger = logging.getLogger(__name__)
@@ -47,3 +48,15 @@ class WebinJwtController(NinjaJWTSlidingController):
         token["username"] = username
 
         return WebinTokenResponse(token=str(token), token_type="sliding")
+
+    @http_post(
+        "/sliding/refresh",
+        response=WebinTokenResponse,
+        url_name="token_refresh_sliding",
+        operation_id="token_refresh_sliding",
+        summary="Refresh an authentication token to increase its validity duration.",
+        description="If a token's expiry has passed, but its (longer) refresh expiry remains valid, "
+        "this endpoint can be used to fetch a replacement token without logging in again. ",
+    )
+    def refresh_token(self, refresh_token: WebinTokenRefreshRequest):
+        return super().refresh_token(refresh_token)

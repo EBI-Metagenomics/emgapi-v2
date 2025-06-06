@@ -18,10 +18,13 @@ fileignoreconfig:
   allowed_patterns: [password="password123"]
 
 - filename: deployment/ebi-wp-k8s-hl/ebi-wp-k8s-hl.yaml
-  checksum: a4476f78908b6e6a9f4801fd21c0c9f034869f088dea9eff7baffa2117693255
+  checksum: 9d3bf3f50f0cf9bf89f00167c14b0a81d453a6b925947e0957bc26d966de5171
+
+- filename: deployment/ebi-wp-k8s-hl/README.md
+  allowed_patterns: [kubectl create secret generic nginx-private-data-config-secret --from-file=private-data-nginx.conf -n emgapiv2-hl-exp]
 
 - filename: docker-compose.yaml
-  allowed_patterns: [EMG_WEBIN__JWT_SECRET_KEY=dummy-key]
+  allowed_patterns: [EMG_WEBIN__JWT_SECRET_KEY=dummy-key, PRIVATE_DATA_SECURE_LINK_SECRET_KEY=dummy-key]
 
 - filename: emgapiv2/api/__init__.py
   allowed_patterns: [OpenApiKeywords]
@@ -33,7 +36,7 @@ fileignoreconfig:
   checksum: 19a51439bd343ffc74befbc568364a9fb7d1965f1c7dbcaefcd978762d9f17f4
 
 - filename: emgapiv2/api/token_controller.py
-  checksum: 0ee9cf777e9a303dcf7554dd718c3ce0ce9385fe8ce12adb37a4f5a5ddd58240
+  checksum: 545749dba1bdae2b79e23d43af01344331b8ff03cc909a730c57502ae016bbae
 
 - filename: emgapiv2/dict_utils.py
   allowed_patterns: [keys]
@@ -45,7 +48,7 @@ fileignoreconfig:
   checksum: 3afe465b36e4e141124bd84c8459c5aa81332eedf49b691eff22c74df63a0f18
 
 - filename: emgapiv2/settings.py
-  checksum: 20d98d8b4ad7546637b643012da16a6d64f46c75b2c4c1120613fea5ee17d94d
+  checksum: 3c3b19171ffc4de382ddfa8b1b5194eef5fe09c7fc64106020121ccbfb6f120f
 
 - filename: emgapiv2/settings_test.py
   checksum: ded898400b4eda7e3cf75694af1b66235975a85eb5b8f49f3a2c708163a7aad4
@@ -70,6 +73,9 @@ fileignoreconfig:
 
 - filename: slurm-dev-environment/fs/nfs/public/tests/amplicon_v6_output/SRR6180434/taxonomy-summary/SILVA-SSU/SRR6180434.html
   checksum: be322a6ac4686d8fa31b271a862510603403c2da8dbdce60dbb7ad3877aa7b47
+
+- filename: Taskfile.yaml
+  allowed_patterns: [a password in]
 
 - filename: workflows/data_io_utils/csv/csv_comment_handler.py
   allowed_patterns: [keys()]

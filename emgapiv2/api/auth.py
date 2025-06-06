@@ -16,10 +16,11 @@ __all__ = [
     "WebinTokenRequest",
     "WebinTokenResponse",
     "WebinUser",
+    "WebinTokenRefreshRequest",
 ]
 
 from ninja_jwt.models import TokenUser
-
+from ninja_jwt.schema import TokenRefreshSlidingInputSchema
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +28,10 @@ logger = logging.getLogger(__name__)
 class WebinTokenRequest(Schema):
     username: str
     password: str
+
+
+class WebinTokenRefreshRequest(TokenRefreshSlidingInputSchema):
+    token: str
 
 
 class WebinTokenResponse(Schema):
