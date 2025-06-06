@@ -1,12 +1,10 @@
 import csv
 import tempfile
-import time
 from datetime import timedelta
 from pathlib import Path
 
 import pytest
 
-from django.conf import settings
 
 import analyses.models
 import ena.models
@@ -205,12 +203,9 @@ def test_nextflow_trace_from_flag(
     mock_start_cluster_job,
     mock_cluster_can_accept_jobs_yes,
     mock_check_cluster_job_all_completed,
+    tmp_path,
 ):
-    trace_file_location = (
-        Path(settings.EMG_CONFIG.slurm.default_workdir)
-        / "hello-nextflow"
-        / "trace-hello.txt"
-    )
+    trace_file_location = tmp_path / "hello-nextflow" / "trace-hello.txt"
 
     def make_trace_file(*args, **kwargs):
         write_nextflow_tracefile(trace_file_location)
@@ -225,10 +220,9 @@ def test_nextflow_trace_from_flag(
         resubmit_policy=ResubmitAlwaysPolicy,
         memory="100M",
         environment="ALL",
-        working_dir=Path(settings.EMG_CONFIG.slurm.default_workdir) / "hello-nextflow",
+        working_dir=tmp_path / "hello-nextflow",
     )
 
-    time.sleep(5)
     assert len(hello_nextfow_flow.nextflow_trace)
     # Fixture - data
     assert hello_nextfow_flow.nextflow_trace[0]["hash"] == "c4/1f6cf1"
