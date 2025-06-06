@@ -20,7 +20,7 @@ from prefect import flow, get_run_logger, task
 
 import analyses.models
 import ena.models
-from workflows.prefect_utils.analyses_models_helpers import task_mark_assembly_status
+from workflows.prefect_utils.analyses_models_helpers import mark_assembly_status
 from workflows.prefect_utils.slurm_flow import (
     ClusterJobFailedException,
     run_cluster_job,
@@ -396,7 +396,7 @@ def submit_assembly_slurm(
         logger.error(
             f"Something went wrong running webin-cli upload for {mgnify_assembly}"
         )
-        task_mark_assembly_status(
+        mark_assembly_status(
             mgnify_assembly,
             status=mgnify_assembly.AssemblyStates.ASSEMBLY_UPLOAD_FAILED,
         )
@@ -404,7 +404,7 @@ def submit_assembly_slurm(
         logger.info(f"Successfully ran webin-cli upload for {mgnify_assembly}")
         if dry_run:
             # no webin.report generated
-            task_mark_assembly_status(
+            mark_assembly_status(
                 mgnify_assembly,
                 status=mgnify_assembly.AssemblyStates.ASSEMBLY_UPLOADED,
                 unset_statuses=[mgnify_assembly.AssemblyStates.ASSEMBLY_UPLOAD_FAILED],
@@ -415,7 +415,7 @@ def submit_assembly_slurm(
             if erz_accession:
                 logger.info(f"Upload completed for {mgnify_assembly}")
                 add_erz_accession(mgnify_assembly, erz_accession)
-                task_mark_assembly_status(
+                mark_assembly_status(
                     mgnify_assembly,
                     status=mgnify_assembly.AssemblyStates.ASSEMBLY_UPLOADED,
                     unset_statuses=[
@@ -424,7 +424,7 @@ def submit_assembly_slurm(
                 )
             else:
                 logger.info(f"Upload failed for {mgnify_assembly}")
-                task_mark_assembly_status(
+                mark_assembly_status(
                     mgnify_assembly,
                     status=mgnify_assembly.AssemblyStates.ASSEMBLY_UPLOAD_FAILED,
                 )
@@ -479,7 +479,7 @@ def upload_assembly(
     if check_assembly(mgnify_assembly, assembly_path):
         logger.info(f"Assembly {mgnify_assembly} passed sanity check")
     else:
-        task_mark_assembly_status(
+        mark_assembly_status(
             mgnify_assembly,
             status=mgnify_assembly.AssemblyStates.POST_ASSEMBLY_QC_FAILED,
         )
