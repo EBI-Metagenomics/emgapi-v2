@@ -41,6 +41,7 @@ def import_completed_assembly_analysis(analysis: analyses.models.Analysis):
 
     # Mark the analysis as having its annotations imported
     copy_v6_pipeline_results(analysis.accession)
+
     mark_analysis_status(
         analysis,
         analysis.AnalysisStates.ANALYSIS_ANNOTATIONS_IMPORTED,

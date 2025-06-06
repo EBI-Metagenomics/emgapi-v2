@@ -6,10 +6,8 @@ from prefect import task
 from prefect.tasks import task_input_hash
 
 from workflows.flows.analyse_study_tasks.analysis_states import AnalysisStates
-from workflows.flows.analyse_study_tasks.sanity_check_assembly_results import (
-    sanity_check_assembly_analysis_results,
-)
-from workflows.prefect_utils.analyses_models_helpers import task_mark_analysis_status
+
+from workflows.prefect_utils.analyses_models_helpers import mark_analysis_status
 
 
 @task(
@@ -62,13 +60,13 @@ def set_post_assembly_analysis_states(
                 )
             except Exception:
                 # TODO define exception type
-                task_mark_analysis_status(
+                mark_analysis_status(
                     analysis,
                     status=AnalysisStates.ANALYSIS_QC_FAILED,
                     reason="QC ERROR",  # TODO: get validation error
                 )
             else:
-                task_mark_analysis_status(
+                mark_analysis_status(
                     analysis,
                     status=AnalysisStates.ANALYSIS_COMPLETED,
                     reason=analysed_assemblies[analysis.assembly.first_accession],
