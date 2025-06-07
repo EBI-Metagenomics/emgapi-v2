@@ -69,6 +69,9 @@ def copy_v6_pipeline_results(analysis_accession: str):
 @task(name="Copy V6 Study Summaries", log_prints=True)
 def copy_v6_study_summaries(study_accession: str):
     study = Study.objects.get(accession=study_accession)
+    if not study.results_dir:
+        print(f"Study {study} has no results dir, skipping")
+        return
     command = cli_command(
         [
             "rsync",

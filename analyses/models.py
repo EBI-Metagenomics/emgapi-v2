@@ -708,6 +708,7 @@ class Analysis(
         return self.assembly.run if self.assembly else self.run
 
     def inherit_experiment_type(self):
+        prev_experiment_type = f"{self.experiment_type}"
         if self.assembly:
             self.experiment_type = self.ExperimentTypes.ASSEMBLY
             # TODO: long reads and hybrids
@@ -715,7 +716,8 @@ class Analysis(
             self.experiment_type = (
                 self.run.experiment_type or self.ExperimentTypes.UNKNOWN
             )
-        self.save()
+        if prev_experiment_type != self.experiment_type:
+            self.save()
 
     class Meta:
         verbose_name_plural = "Analyses"

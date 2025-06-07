@@ -1,4 +1,6 @@
+import operator
 from datetime import timedelta
+from functools import reduce
 from typing import List, Optional, Type, Union
 
 from django.conf import settings
@@ -9,6 +11,7 @@ from prefect.tasks import task_input_hash
 import analyses.models
 import ena.models
 from emgapiv2.dict_utils import some
+from emgapiv2.enum_utils import FutureStrEnum
 from workflows.ena_utils.abstract import ENAPortalResultType, ENAPortalDataPortal
 from workflows.ena_utils.analysis import ENAAnalysisFields, ENAAnalysisQuery
 from workflows.ena_utils.ena_accession_matching import (
@@ -29,6 +32,27 @@ EMG_CONFIG = settings.EMG_CONFIG
 
 RETRIES = EMG_CONFIG.ena.portal_search_api_max_retries
 RETRY_DELAY = EMG_CONFIG.ena.portal_search_api_retry_delay_seconds
+
+
+class ENALibraryStrategyPolicy(FutureStrEnum):
+    ONLY_IF_CORRECT_IN_ENA = "only_if_correct_in_ena"
+    ASSUME_OTHER_ALSO_MATCHES = "assume_other_also_matches"
+    OVERRIDE_ALL = "override_all"
+
+
+def library_strategy_policy_to_filter(
+    primary_library_strategy: str,
+    other_library_strategies: list[str] = None,
+    policy: ENALibraryStrategyPolicy = ENALibraryStrategyPolicy.ONLY_IF_CORRECT_IN_ENA,
+) -> list[str]:
+    if other_library_strategies is None:
+        other_library_strategies = []
+
+    if policy == ENALibraryStrategyPolicy.ONLY_IF_CORRECT_IN_ENA:
+        return [primary_library_strategy] + other_library_strategies
+    elif policy == ENALibraryStrategyPolicy.ASSUME_OTHER_ALSO_MATCHES:
+        return [primary_library_strategy] + other_library_strategies + ["OTHER"]
+    return []
 
 
 def create_ena_api_request(result_type, query, limit, fields, result_format="json"):
@@ -237,7 +261,7 @@ def _make_samples_and_run(
 def get_study_readruns_from_ena(
     accession: str,
     limit: int = 20,
-    filter_library_strategy: str = None,
+    filter_library_strategy: list[str] = None,
     raise_on_empty: bool = True,
 ) -> List[str]:
     """
@@ -246,7 +270,7 @@ def get_study_readruns_from_ena(
 
     :param accession: Study accession on ENA
     :param limit: Maximum number of read_runs to fetch
-    :param filter_library_strategy: E.g. AMPLICON, to only fetch library-strategy: amplicon reads
+    :param filter_library_strategy: E.g. ["AMPLICON"], to only fetch library-strategy: amplicon reads
     :param raise_on_empty: Raise an exception if no read_runs are found for the given study (default True, as some ENA failure modes may result in no read_runs being returned)
     :return: A list of run accessions that have been fetched and matched the specified library strategy. Study may also contain other non-matching runs.
     """
@@ -264,7 +288,11 @@ def get_study_readruns_from_ena(
         secondary_study_accession=accession
     )
     if filter_library_strategy:
-        query &= ENAReadRunQuery(library_strategy=filter_library_strategy)
+        strategy_queries = reduce(
+            operator.or_,
+            [ENAReadRunQuery(library_strategy=ls) for ls in filter_library_strategy],
+        )
+        query &= strategy_queries
 
     _ = ENAReadRunFields
 
