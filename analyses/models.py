@@ -599,6 +599,7 @@ class Analysis(
     KEGG_MODULES = "kegg_modules"
     KEGG_ORTHOLOGS = "kegg_orthologs"
     ANTISMASH_GENE_CLUSTERS = "antismash_gene_clusters"
+    SANNTIS_GENE_CLUSTERS = "sanntis_gene_clusters"
     PFAMS = "pfams"
     RHEA_REACTIONS = "rhea_reactions"
 
