@@ -144,7 +144,7 @@ def make_samplesheets_for_runs_to_assemble(
     mgnify_study: analyses.models.Study,
     assembler: analyses.models.Assembler,
     chunk_size: int = 10,
-) -> [(Path, str)]:
+) -> list[tuple[Path, str]]:
 
     if mgnify_study.assemblies_reads.exclude(
         is_private=mgnify_study.is_private
