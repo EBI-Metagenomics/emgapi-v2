@@ -1,7 +1,6 @@
 import json
 import os
 import shutil
-from enum import Enum
 from pathlib import Path
 from typing import Optional, List
 from unittest.mock import patch
@@ -24,13 +23,25 @@ from workflows.flows.assemble_study_tasks.make_samplesheets import (
 )
 from workflows.prefect_utils.analyses_models_helpers import (
     mark_assembly_status,
-    get_users_as_choices,
 )
 from workflows.prefect_utils.testing_utils import (
     should_not_mock_httpx_requests_to_prefect_server,
 )
 
 EMG_CONFIG = settings.EMG_CONFIG
+
+
+@pytest.fixture
+def assembly_study_input_mocker(biome_choices, user_choices):
+    ## Pretend that a human resumed the flow with the biome picker, and then with the assembler selector.
+
+    class MockAssembleStudyInput(BaseModel):
+        biome: biome_choices
+        assembler: AssemblerChoices
+        webin_owner: Optional[str]
+        watchers: List[user_choices]
+
+    return MockAssembleStudyInput
 
 
 @pytest.mark.httpx_mock(should_mock=should_not_mock_httpx_requests_to_prefect_server)
@@ -50,6 +61,9 @@ def test_prefect_assemble_study_flow(
     top_level_biomes,
     assemblers,
     admin_user,
+    biome_choices,
+    user_choices,
+    assembly_study_input_mocker,
 ):
     ### ENA MOCKING ###
     accession = "SRP1"
@@ -191,23 +205,13 @@ def test_prefect_assemble_study_flow(
         ],
     )
 
-    ## Pretend that a human resumed the flow with the biome picker, and then with the assembler selector.
-    BiomeChoices = Enum("BiomeChoices", {"root.engineered": "Root:Engineered"})
-    UserChoices = get_users_as_choices()
-
-    class AssembleStudyInput(BaseModel):
-        biome: BiomeChoices
-        assembler: AssemblerChoices
-        webin_owner: Optional[str]
-        watchers: List[UserChoices]
-
     def suspend_side_effect(wait_for_input=None):
         if wait_for_input.__name__ == "AssembleStudyInput":
-            return AssembleStudyInput(
-                biome=BiomeChoices["root.engineered"],
+            return assembly_study_input_mocker(
+                biome=biome_choices["root.engineered"],
                 assembler=AssemblerChoices.pipeline_default,
                 webin_owner=None,
-                watchers=[UserChoices[admin_user.username]],
+                watchers=[user_choices[admin_user.username]],
             )
 
     mock_suspend_flow_run.side_effect = suspend_side_effect
@@ -364,6 +368,9 @@ def test_prefect_assemble_private_study_flow(
     top_level_biomes,
     assemblers,
     admin_user,
+    user_choices,
+    biome_choices,
+    assembly_study_input_mocker,
 ):
     ### ENA MOCKING ###
     accession = "SRP1"
@@ -468,22 +475,13 @@ def test_prefect_assemble_private_study_flow(
     )
 
     ## Pretend that a human resumed the flow with the biome picker, and then with the assembler selector.
-    BiomeChoices = Enum("BiomeChoices", {"root.engineered": "Root:Engineered"})
-    UserChoices = get_users_as_choices()
-
-    class AssembleStudyInput(BaseModel):
-        biome: BiomeChoices
-        assembler: AssemblerChoices
-        webin_owner: Optional[str]
-        watchers: List[UserChoices]
-
     def suspend_side_effect(wait_for_input=None):
         if wait_for_input.__name__ == "AssembleStudyInput":
-            return AssembleStudyInput(
-                biome=BiomeChoices["root.engineered"],
+            return assembly_study_input_mocker(
+                biome=biome_choices["root.engineered"],
                 assembler=AssemblerChoices.pipeline_default,
                 webin_owner="Webin-1",
-                watchers=[UserChoices[admin_user.username]],
+                watchers=[user_choices[admin_user.username]],
             )
 
     mock_suspend_flow_run.side_effect = suspend_side_effect
