@@ -24,6 +24,7 @@ pytest_plugins = [
     "analyses.fixtures.study.conftest",
     "workflows.fixtures.legacy_emg_dbs.conftest",
     "workflows.fixtures.slurm.conftest",
+    "workflows.fixtures.flowrun_input.conftest",
     "workflows.nextflow_utils.fixtures.conftest",
 ]
 
