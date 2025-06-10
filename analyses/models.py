@@ -6,6 +6,7 @@ import re
 from pathlib import Path
 from typing import ClassVar, Union
 
+from aenum import extend_enum
 from django.contrib.postgres.indexes import GinIndex
 from django.core.exceptions import MultipleObjectsReturned, ObjectDoesNotExist
 from django.db import models
@@ -213,8 +214,11 @@ class PublicRunManager(PrivacyFilterManagerMixin, models.Manager): ...
 
 class Run(TimeStampedModel, ENADerivedModel, WithExperimentTypeModel):
     CommonMetadataKeys = ENAReadRunFields
-    CommonMetadataKeys.FASTQ_FTPS = (
-        "fastq_ftps"  # plural convention mismatch to ENA; TODO
+    extend_enum(
+        CommonMetadataKeys, "FASTQ_FTPS", "fastq_ftps"
+    ),  # plural convention mismatch to ENA; TODO
+    extend_enum(
+        CommonMetadataKeys, "INFERRED_LIBRARY_LAYOUT", "inferred_library_layout"
     )
 
     class InstrumentPlatformKeys:
