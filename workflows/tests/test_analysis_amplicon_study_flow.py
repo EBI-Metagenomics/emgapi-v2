@@ -1135,3 +1135,6 @@ def test_prefect_analyse_amplicon_flow_private_data(
         name: str = kwargs.get("name")
         if name.startswith("Move"):
             assert EMG_CONFIG.slurm.private_results_dir in job_submit_description.script
+            break
+    else:
+        assert False, "No Move cluster job submitted"
