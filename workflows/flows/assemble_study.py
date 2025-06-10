@@ -19,6 +19,7 @@ from workflows.ena_utils.ena_api_requests import (
     get_study_from_ena,
     get_study_readruns_from_ena,
 )
+from workflows.ena_utils.webin_owner_utils import validate_and_set_webin_owner
 from workflows.flows.assemble_study_tasks.assemble_samplesheets import (
     run_assembler_for_samplesheet,
 )
@@ -137,11 +138,8 @@ def assemble_study(
         )
     )
 
-    if assemble_study_input.webin_owner:
-        webin_owner = assemble_study_input.webin_owner.title()
-        assert webin_owner.startswith("Webin-")
-    else:
-        webin_owner = None
+    validate_and_set_webin_owner(ena_study, assemble_study_input.webin_owner)
+    mgnify_study.refresh_from_db()
 
     if assemble_study_input.watchers:
         add_study_watchers(mgnify_study, assemble_study_input.watchers)
@@ -164,10 +162,6 @@ def assemble_study(
         .first()
     )
     # assumes latest version...
-
-    if webin_owner:
-        ena_study.webin_submitter = webin_owner
-        ena_study.save()
 
     get_or_create_assemblies_for_runs(mgnify_study, read_runs)
     samplesheets = make_samplesheets_for_runs_to_assemble(mgnify_study, assembler)

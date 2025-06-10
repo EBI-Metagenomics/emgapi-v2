@@ -84,9 +84,11 @@ class StudyManager(ENADerivedManager):
             ).first()
             logger.debug(f"Got {ena_study}")
         except (MultipleObjectsReturned, ObjectDoesNotExist):
-            logger.warning(
-                f"Problem getting ENA study {ena_study_accession} from ENA models DB"
+            logger.error(
+                f"Problem getting ENA study {ena_study_accession} from ENA models DB. "
+                f"The ENA Study needs to have been fetched from ENA APIs first."
             )
+            raise
         study, _ = Study.objects.get_or_create(
             ena_study=ena_study,
             title=ena_study.title,
