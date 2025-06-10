@@ -1,7 +1,7 @@
 import operator
 from datetime import timedelta
 from functools import reduce
-from typing import List, Optional, Type, Union
+from typing import List, Optional, Type, Union, Literal
 
 from django.conf import settings
 from httpx import Auth
@@ -130,45 +130,54 @@ def get_study_from_ena(accession: str, limit: int = 10) -> ena.models.Study:
 
 def check_reads_fastq(
     fastq: list[str], run_accession: str, library_layout: str
-) -> list[str] | None:
-    logger = get_run_logger()
+) -> tuple[List[str] | None, Literal["SINGLE", "PAIRED", None]]:
+    """
+    Analyses and validates a list of FASTQ files for a given run accession and
+    specified library layout. Ensures the FASTQ files align with the expected
+    library layout, such as single-end or paired-end sequencing data.
+
+    :param fastq: A list of FASTQ file paths associated with the sequencing run.
+    :param run_accession: The unique identifier for the sequencing run.
+    :param library_layout: The specified library layout for the data. This should
+        indicate whether the data is single-end ("SINGLE") or paired-end ("PAIRED").
+    :return: A tuple containing the sorted FASTQ file paths and the inferred library
+        layout as "SINGLE" or "PAIRED", or None if validation fails or no valid FASTQ
+        files are provided.
+    """
+    logger = get_run_logger()  # TODO: make this method okay to use outside of prefect
     sorted_fastq = sorted(fastq)  # to keep order [_1, _2, _3(?)]
     if not len(sorted_fastq):
         logger.warning(f"No fastq files for run {run_accession}")
-        return None
+        return None, None
     # potential single end
     elif len(sorted_fastq) == 1:
         if library_layout == PAIRED_END_LIBRARY_LAYOUT:
             logger.warning(
                 f"Incorrect library_layout for {run_accession} having one fastq file"
             )
-            return None
+            return sorted_fastq, "SINGLE"
         if "_2.f" in sorted_fastq[0]:
             # we accept _1 be in SE fastq path
             logger.warning(f"Single fastq file contains _2 for run {run_accession}")
-            return None
+            return None, None
         else:
             logger.info(f"One fastq for {run_accession}: {sorted_fastq}")
-            return sorted_fastq
+            return sorted_fastq, "SINGLE"
     # potential paired end
     elif len(sorted_fastq) == 2:
-        if library_layout == SINGLE_END_LIBRARY_LAYOUT:
-            logger.warning(
-                f"Incorrect library_layout for {run_accession} having two fastq files"
-            )
-            return None
         if "_1.f" in sorted_fastq[0] and "_2.f" in sorted_fastq[1]:
             logger.info(f"Two fastqs for {run_accession}: {sorted_fastq}")
-            return sorted_fastq
+            return sorted_fastq, "PAIRED"
         else:
             logger.warning(
                 f"Incorrect names of fastq files for run {run_accession} (${sorted_fastq})"
             )
-            return None
+            return None, None
     elif len(fastq) > 2:
         logger.info(f"More than 2 fastq files provided for run {run_accession}")
-        return sorted_fastq[:2]
-    return None
+        # Try again with first two files only
+        return check_reads_fastq(sorted_fastq[:2], run_accession, library_layout)
+    return None, None
 
 
 def _make_samples_and_run(
@@ -327,7 +336,7 @@ def get_study_readruns_from_ena(
             continue
 
         # check fastq files order/presence
-        fastq_ftp_reads = check_reads_fastq(
+        fastq_ftp_reads, inferred_library_layout = check_reads_fastq(
             fastq=read_run[_.FASTQ_FTP].split(";"),
             run_accession=read_run[_.RUN_ACCESSION],
             library_layout=read_run[_.LIBRARY_LAYOUT],
@@ -344,6 +353,13 @@ def get_study_readruns_from_ena(
         run.metadata[analyses.models.Run.CommonMetadataKeys.FASTQ_FTPS] = (
             fastq_ftp_reads
         )
+        if not inferred_library_layout == read_run[_.LIBRARY_LAYOUT]:
+            logger.warning(
+                f"Using inferred library layout of {inferred_library_layout} for {read_run[_.RUN_ACCESSION]} instead of metadata-provided {read_run[_.LIBRARY_LAYOUT]}."
+            )
+            run.metadata[
+                analyses.models.Run.CommonMetadataKeys.INFERRED_LIBRARY_LAYOUT
+            ] = inferred_library_layout
         run.save()
 
         run_accessions.append(run.first_accession)
