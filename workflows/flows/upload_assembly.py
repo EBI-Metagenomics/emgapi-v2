@@ -362,8 +362,11 @@ def submit_assembly_slurm(
         else EMG_CONFIG.webin.emg_webin_password
     )
     logger = get_run_logger()
+    xms = int(EMG_CONFIG.assembler.assembly_uploader_mem_gb / 2)
+    xmx = int(EMG_CONFIG.assembler.assembly_uploader_mem_gb)
+    
     command = (
-        f"java -Xms4G -jar {EMG_CONFIG.webin.webin_cli_executor} "
+        f"java -Xms{xms}g -Xmx{xmx}g -jar {EMG_CONFIG.webin.webin_cli_executor} "
         f"-context=genome "
         f"-manifest={manifest} "
         f"-userName='{username}' "
