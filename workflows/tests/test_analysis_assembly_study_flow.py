@@ -46,7 +46,7 @@ def sample_gff_records():
 
 
 def generate_fake_assembly_pipeline_results(
-    study_dir, assembly_dir, assembly_accession, sample_fasta_records
+    assembly_dir, assembly_accession, sample_fasta_records
 ):
     """
     Generate fake assembly pipeline results for testing.
@@ -550,7 +550,6 @@ def generate_fake_assembly_pipeline_results(
         )
 
     with gzip.open(f"{tax_dir}/{assembly_accession}.krona.txt.gz", "wt") as tax_file:
-        # with open(f"{tax_dir}/{assembly_accession}.krona.txt", "wt") as tax_file:
         tax_file.write(
             dedent(
                 """\
@@ -661,21 +660,21 @@ def generate_fake_assembly_pipeline_results(
     "mock_suspend_flow_run", ["workflows.flows.analysis_assembly_study"], indirect=True
 )
 def test_prefect_analyse_assembly_flow(
-    mock_queryset_hash_for_assembly,
-    mock_flow_run_context_assembly,
-    mock_flow_run_context_virify,
-    mock_next_enumerated_subdir,
-    httpx_mock,
-    prefect_harness,
-    mock_cluster_can_accept_jobs_yes,
-    mock_start_cluster_job,
-    mock_check_cluster_job_all_completed,
-    assembly_ena_study,
-    mock_suspend_flow_run,
-    admin_user,
-    top_level_biomes,
-    sample_fasta_records,
-    sample_gff_records,
+        mock_queryset_hash_for_assembly,
+        mock_flow_run_context_assembly,
+        mock_flow_run_context_virify,
+        mock_next_enumerated_subdir,
+        httpx_mock,
+        prefect_harness,
+        mock_cluster_can_accept_jobs_yes,
+        mock_start_cluster_job,
+        mock_check_cluster_job_all_completed,
+        assembly_ena_study,
+        mock_suspend_flow_run,
+        admin_user,
+        top_level_biomes,
+        sample_fasta_records,
+        sample_gff_records,
 ):
     """
     Test should create/get ENA and MGnify study into DB.
@@ -705,12 +704,12 @@ def test_prefect_analyse_assembly_flow(
     # mock ENA response for assemblies
     httpx_mock.add_response(
         url=f"{EMG_CONFIG.ena.portal_search_api}?"
-        f"result=analysis"
-        f"&query=%22%28study_accession={study_accession}+OR+secondary_study_accession={study_accession}%29%22"
-        f"&limit=10000"
-        f"&format=json"
-        f"&fields=sample_accession%2Csample_title%2Csecondary_sample_accession%2Crun_accession%2Canalysis_accession%2Ccompleteness_score%2Ccontamination_score%2Cscientific_name%2Clocation%2Clat%2Clon%2Cgenerated_ftp"
-        f"&dataPortal=metagenome",
+            f"result=analysis"
+            f"&query=%22%28study_accession={study_accession}+OR+secondary_study_accession={study_accession}%29%22"
+            f"&limit=10000"
+            f"&format=json"
+            f"&fields=sample_accession%2Csample_title%2Csecondary_sample_accession%2Crun_accession%2Canalysis_accession%2Ccompleteness_score%2Ccontamination_score%2Cscientific_name%2Clocation%2Clat%2Clon%2Cgenerated_ftp"
+            f"&dataPortal=metagenome",
         json=[
             {
                 "sample_accession": "SAMN08514017",
@@ -747,12 +746,12 @@ def test_prefect_analyse_assembly_flow(
     # mock ENA response for runs
     httpx_mock.add_response(
         url=f"{EMG_CONFIG.ena.portal_search_api}?"
-        f"result=read_run"
-        f"&query=%22%28study_accession={study_accession}+OR+secondary_study_accession={study_accession}%29%22"
-        f"&limit=10000"
-        f"&format=json"
-        f"&fields=run_accession%2Csample_accession%2Csample_title%2Csecondary_sample_accession%2Cfastq_md5%2Cfastq_ftp%2Clibrary_layout%2Clibrary_strategy%2Clibrary_source%2Cscientific_name%2Chost_tax_id%2Chost_scientific_name%2Cinstrument_platform%2Cinstrument_model%2Clocation%2Clat%2Clon"
-        f"&dataPortal=metagenome",
+            f"result=read_run"
+            f"&query=%22%28study_accession={study_accession}+OR+secondary_study_accession={study_accession}%29%22"
+            f"&limit=10000"
+            f"&format=json"
+            f"&fields=run_accession%2Csample_accession%2Csample_title%2Csecondary_sample_accession%2Cfastq_md5%2Cfastq_ftp%2Clibrary_layout%2Clibrary_strategy%2Clibrary_source%2Cscientific_name%2Chost_tax_id%2Chost_scientific_name%2Cinstrument_platform%2Cinstrument_model%2Clocation%2Clat%2Clon"
+            f"&dataPortal=metagenome",
         json=[
             {
                 "sample_accession": "SAMN08514017",

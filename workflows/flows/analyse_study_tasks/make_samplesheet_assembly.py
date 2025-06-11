@@ -45,7 +45,7 @@ def make_samplesheet_assembly(
     sample_sheet_csv = queryset_to_samplesheet(
         queryset=assemblies,
         filename=Path(EMG_CONFIG.slurm.default_workdir)
-        / Path(
+                 / Path(
             f"{mgnify_study.ena_study.accession}_samplesheet_assembly-v6_{ss_hash}.csv"
         ),
         column_map={
@@ -57,8 +57,8 @@ def make_samplesheet_assembly(
                 lookup_string=f"metadata__{ENAAnalysisFields.GENERATED_FTP}",
                 renderer=lambda ftp_path: (
                     # convert_ena_ftp_to_fire_fastq(ftp_path) if ftp_path else ""  # TODO: once ASA supports FIRE
-                    "http://"
-                    + ftp_path
+                        "http://"
+                        + ftp_path
                 ),
             ),
         },
