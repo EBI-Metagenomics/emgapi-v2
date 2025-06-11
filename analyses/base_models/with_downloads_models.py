@@ -10,6 +10,7 @@ from emgapiv2.enum_utils import FutureStrEnum
 
 
 class DownloadType(FutureStrEnum):
+    CODING_SEQUENCES = "Coding Sequences"
     SEQUENCE_DATA = "Sequence data"
     QUALITY_CONTROL = "Quality control"
     FUNCTIONAL_ANALYSIS = "Functional analysis"
@@ -30,6 +31,7 @@ class DownloadFileType(FutureStrEnum):
     SVG = "svg"
     TREE = "tree"  # e.g. newick
     HTML = "html"
+    GFF = "gff"
     OTHER = "other"
 
 

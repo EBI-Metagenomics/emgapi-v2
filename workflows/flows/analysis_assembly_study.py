@@ -142,6 +142,7 @@ def analysis_assembly_study(study_accession: str):
         analysis_type="assembly",
     )
     add_study_summaries_to_downloads(mgnify_study.accession)
+
     copy_v6_study_summaries(mgnify_study.accession)
 
     mgnify_study.refresh_from_db()

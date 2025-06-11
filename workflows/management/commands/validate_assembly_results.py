@@ -3,8 +3,8 @@ import logging
 
 from django.core.management.base import BaseCommand
 
-from workflows.flows.analyse_study_tasks.sanity_check_assembly_results import (
-    create_assembly_analysis_schema,
+from workflows.data_io_utils.mgnify_v6_utils.assembly import (
+    create_assembly_v6_schema,
 )
 
 logger = logging.getLogger(__name__)
@@ -42,8 +42,9 @@ class Command(BaseCommand):
         folder_path = Path(options["folder_path"])
 
         try:
-            create_assembly_analysis_schema(
-                assembly_current_outdir=folder_path, assembly_id=options["assembly_id"]
+            schema = create_assembly_v6_schema()
+            schema.validate_directory_structure(
+                base_path=folder_path, assembly_id=options["assembly_id"]
             )
 
             self.stdout.write(
@@ -54,6 +55,6 @@ class Command(BaseCommand):
 
         except Exception as e:
             self.stderr.write(
-                self.style.ERROR(f"Error validating assembly results: {str(e)}")
+                self.style.ERROR(f"Error validating assembly results: {e}")
             )
             return

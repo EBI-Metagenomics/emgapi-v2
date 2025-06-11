@@ -81,6 +81,10 @@ class File(BaseModel):
 
 
 class Directory(File):
+    # TODO: think about the design of the models (pydantic and django ones)
+    # How do we map this class to the DownloadFile models?
+    # I think there is a bit of repetition going on
+
     files: List[File] = Field(
         default_factory=list,
         description="File objects to specifically check in the directory",
