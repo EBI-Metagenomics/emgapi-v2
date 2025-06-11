@@ -364,7 +364,6 @@ def submit_assembly_slurm(
     logger = get_run_logger()
     xms = int(EMG_CONFIG.assembler.assembly_uploader_mem_gb / 2)
     xmx = int(EMG_CONFIG.assembler.assembly_uploader_mem_gb)
-    
     command = (
         f"java -Xms{xms}g -Xmx{xmx}g -jar {EMG_CONFIG.webin.webin_cli_executor} "
         f"-context=genome "
