@@ -606,7 +606,10 @@ class Analysis(
     TAXONOMIES = "taxonomies"
     CLOSED_REFERENCE = "closed_reference"
     ASV = "asv"
+    CODING_SEQUENCES = "coding_sequences"
     FUNCTIONAL_ANNOTATION = "functional_annotation"
+
+    VIRIFY = "virify"
 
     class TaxonomySources(FutureStrEnum):
         SSU: str = "ssu"
@@ -633,8 +636,19 @@ class Analysis(
         f"{TAXONOMIES}.asv.",
         "quality_control",
         "primer_identification",
-        "asv",
+        ASV,
+        CODING_SEQUENCES,
         FUNCTIONAL_ANNOTATION,
+        GENOME_PROPERTIES,
+        GO_TERMS,
+        GO_SLIMS,
+        INTERPRO_IDENTIFIERS,
+        KEGG_MODULES,
+        KEGG_ORTHOLOGS,
+        ANTISMASH_GENE_CLUSTERS,
+        SANNTIS_GENE_CLUSTERS,
+        PFAMS,
+        VIRIFY,
     ]
 
     @staticmethod

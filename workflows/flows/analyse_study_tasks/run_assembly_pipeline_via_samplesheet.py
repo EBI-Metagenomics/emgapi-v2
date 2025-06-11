@@ -9,15 +9,14 @@ from prefect.runtime import flow_run
 
 import analyses.models
 from activate_django_first import EMG_CONFIG
-from workflows.flows.analyse_study_tasks.analysis_states import (
-    mark_analysis_as_started,
-    mark_analysis_as_failed,
-)
 from workflows.flows.analyse_study_tasks.import_completed_assembly_analyses import (
     import_completed_assembly_analyses,
 )
 from workflows.flows.analyse_study_tasks.make_samplesheet_assembly import (
     make_samplesheet_assembly,
+)
+from workflows.flows.analyse_study_tasks.run_map_via_samplesheet import (
+    run_map_pipeline_via_samplesheet,
 )
 from workflows.flows.analyse_study_tasks.run_virify_pipeline_via_samplesheet import (
     run_virify_pipeline_via_samplesheet,
@@ -34,6 +33,8 @@ from workflows.prefect_utils.slurm_flow import (
     ClusterJobFailedException,
 )
 from workflows.prefect_utils.slurm_policies import ResubmitIfFailedPolicy
+
+AnalysisStates = analyses.models.Analysis.AnalysisStates
 
 
 @flow(name="Run assembly analysis pipeline-v6 via samplesheet", log_prints=True)
@@ -55,7 +56,7 @@ def run_assembly_pipeline_via_samplesheet(
     samplesheet, ss_hash = make_samplesheet_assembly(mgnify_study, assembly_analyses)
 
     for analysis in assembly_analyses:
-        mark_analysis_as_started(analysis)
+        analysis.mark_status(AnalysisStates.ANALYSIS_STARTED)
 
     assembly_current_outdir_parent = Path(
         f"{EMG_CONFIG.slurm.default_workdir}/{mgnify_study.ena_study.accession}_assembly_v6/{flow_run.root_flow_run_id}"
@@ -114,15 +115,24 @@ def run_assembly_pipeline_via_samplesheet(
         )
     except ClusterJobFailedException:
         for analysis in assembly_analyses:
-            mark_analysis_as_failed(analysis)
+            analysis.mark_status(AnalysisStates.ANALYSIS_FAILED)
     else:
         # assume that if job finished, all finished... set statuses
         set_post_assembly_analysis_states(assembly_current_outdir, assembly_analyses)
 
         import_completed_assembly_analyses(assembly_current_outdir, assembly_analyses)
 
+        # TODO: We should mark these as intermediary statuses
+
         # Run the virify pipeline on the assemblies
         run_virify_pipeline_via_samplesheet(
+            mgnify_study=mgnify_study,
+            assembly_analyses=assembly_analyses,
+            assembly_pipeline_outdir=assembly_current_outdir,
+        )
+
+        # Run the MAP pipeline on the assemblies after VIRIfy
+        run_map_pipeline_via_samplesheet(
             mgnify_study=mgnify_study,
             assembly_analyses=assembly_analyses,
             assembly_pipeline_outdir=assembly_current_outdir,

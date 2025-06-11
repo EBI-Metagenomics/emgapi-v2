@@ -6,20 +6,18 @@ from django.conf import settings
 from prefect import flow, task, get_run_logger
 from prefect.runtime import flow_run
 
+import analyses.models
 from activate_django_first import EMG_CONFIG
 
-import analyses.models
+AnalysisStates = analyses.models.Analysis.AnalysisStates
+
 from analyses.base_models.with_downloads_models import (
     DownloadFile,
     DownloadType,
     DownloadFileType,
 )
 from workflows.flows.analyse_study_tasks.analysis_states import (
-    mark_analysis_as_started,
     mark_analysis_as_failed,
-)
-from workflows.flows.analyse_study_tasks.shared.study_summary import (
-    generate_study_summary_for_pipeline_run,
 )
 from workflows.prefect_utils.build_cli_command import cli_command
 from workflows.prefect_utils.slurm_flow import (
@@ -73,7 +71,7 @@ def add_virify_gff_to_analysis_downloads(
         path=rel_path,
         alias=f"virify_{gff_file.name}",
         download_type=DownloadType.GENOME_ANALYSIS,
-        file_type=DownloadFileType.OTHER,
+        file_type=DownloadFileType.GFF,
         long_description="Viral genome annotation from VIRify pipeline",
         short_description="Viral annotations",
         download_group="virify",
@@ -118,11 +116,17 @@ def run_virify_pipeline_via_samplesheet(
         logger.warning(
             f"Virify samplesheet {virify_samplesheet_path} does not exist. Skipping virify pipeline."
         )
+        # TODO: update the status of the job
+        # for assembly_analysis in assembly_analyses:
+        #     assembly_analysis ..
         return
 
     # Mark analyses as started
+    # Add the MAP GFF file to each analysis's downloads
+    # TODO: I feel we need and intermediate status  here, otherwise the analysis will cycle through running/started a
+    # a few times
     for analysis in assembly_analyses:
-        mark_analysis_as_started(analysis)
+        analysis.mark_status(AnalysisStates.ANALYSIS_STARTED)
 
     # Create a new output directory for the virify pipeline
     virify_outdir_parent = Path(
@@ -186,10 +190,12 @@ def run_virify_pipeline_via_samplesheet(
     for analysis in assembly_analyses:
         add_virify_gff_to_analysis_downloads(analysis, virify_outdir)
 
-    # Generate study summary
-    generate_study_summary_for_pipeline_run(
-        pipeline_outdir=virify_outdir,
-        mgnify_study_accession=mgnify_study.accession,
-        analysis_type="virify",
-        completed_runs_filename="virify_completed_runs.csv",
-    )
+    # TODO: update status
+    # # Generate study summary
+    # This is not needed - we won't add anything from VIRfy to the study summary
+    # generate_study_summary_for_pipeline_run(
+    #     pipeline_outdir=virify_outdir,
+    #     mgnify_study_accession=mgnify_study.accession,
+    #     analysis_type="virify",
+    #     completed_runs_filename="virify_completed_runs.csv",
+    # )
