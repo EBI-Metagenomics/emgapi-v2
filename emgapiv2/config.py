@@ -117,6 +117,12 @@ class WebinConfig(BaseModel):
     broker_password: str = None
     webin_cli_retries: int = 6
     webin_cli_retry_delay_seconds: int = 60
+    auth_endpoint: AnyHttpUrl = "https://www.ebi.ac.uk/ena/submit/webin/auth"
+    jwt_secret_key: str = None
+    jwt_expiration_minutes: int = (
+        1440  # TODO: shorten once https://github.com/eadwinCode/django-ninja-jwt/issues/33 is fixed
+    )
+    jwt_refresh_expiration_hours: int = 24
 
 
 class ENAConfig(BaseModel):
@@ -148,10 +154,7 @@ class ServiceURLsConfig(BaseModel):
     transfer_services_url_root: str = (
         "http://localhost:8080/pub/databases/metagenomics/mgnify_results/"
     )
-
-
-class SlackConfig(BaseModel):
-    slack_webhook_prefect_block_name: str = "slack-webhook"
+    private_data_url_root: str = "http://localhost:8081/private-data/"
 
 
 class MaskReplacement(BaseModel):
@@ -182,7 +185,6 @@ class EMGConfig(BaseSettings):
     environment: str = "development"
     legacy_service: LegacyServiceConfig = LegacyServiceConfig()
     service_urls: ServiceURLsConfig = ServiceURLsConfig()
-    slack: SlackConfig = SlackConfig()
     slurm: SlurmConfig = SlurmConfig()
     webin: WebinConfig = WebinConfig()
     log_masking: LogMaskingConfig = LogMaskingConfig()

@@ -23,6 +23,7 @@ POSTGRES_PREFECT_USER=...
 POSTGRES_PREFECT_PASSWORD=...
 PREFECT_API_DATABASE_CONNECTION_URL=postgresql+asyncpg://...:...@postgres-prefect:5432/...
 PREFECT_SERVER_API_AUTH_STRING=...<username>:<password>...
+PRIVATE_DATA_SECURE_LINK_SECRET_KEY=...
 ```
 
 Make the secrets
@@ -32,6 +33,11 @@ Make the secrets
 * Get authentication credentials for quay.io (the built image is private). You can get a Kubernetes secrets yaml file from your Quay.io user settings, in the "CLI Password" section.
 * Download the secrets yaml and name the secret `name: quay-pull-secret` in the metadata section. Give it the right namespace. Put it into this folder.
 * `kubectl apply -f secrets-quayio.yml`
+
+### Create a secret for nginx serving of private-data (pre-signed URLs)
+Insert the same value of `PRIVATE_DATA_SECURE_LINK_SECRET_KEY` in `secrets-k8s.env` into a copy of `private-data-nginx.conf.template` as the SECRET-KEY.
+
+`kubectl create secret generic nginx-private-data-config-secret --from-file=private-data-nginx.conf -n emgapiv2-hl-exp`
 
 ### Deploy
 `kubectl apply -f ebi-wp-k8s-hl.yaml`
