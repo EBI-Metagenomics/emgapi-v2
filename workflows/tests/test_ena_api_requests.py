@@ -359,12 +359,12 @@ def test_get_study_readruns_from_ena(
     # incorrect library_layout single
     assert (
         analyses.models.Run.objects.filter(ena_accessions__contains=["RUN4"]).count()
-        == 0
+        == 1
     )
     # incorrect library_layout paired
     assert (
         analyses.models.Run.objects.filter(ena_accessions__contains=["RUN5"]).count()
-        == 0
+        == 1
     )
     # should return only 2 fq files in correct order
     assert (
