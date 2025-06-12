@@ -147,7 +147,7 @@ def check_reads_fastq(
     logger = get_run_logger()  # TODO: make this method okay to use outside of prefect
     sorted_fastq = sorted(fastq)  # to keep order [_1, _2, _3(?)]
     # potential single end
-    elif len(sorted_fastq) == 1:
+    if len(sorted_fastq) == 1:
         if not sorted_fastq[0]: # if it's an empty string
             logger.warning(f"No fastq files for run {run_accession}")
             return None, None
