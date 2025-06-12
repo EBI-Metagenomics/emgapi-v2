@@ -64,7 +64,8 @@ class AssemblerConfig(BaseModel):
     assembly_nextflow_master_job_memory_gb: int = 8
 
     assembly_uploader_mem_gb: int = 4
-    assembly_uploader_time_limit_hrs: int = 2
+    assembly_uploader_time_limit_hrs: int = 8
+    # this should be ~minutes..
 
 
 class AmpliconPipelineConfig(BaseModel):
