@@ -1,13 +1,13 @@
-import enum
+import aenum
 
 from django.utils.version import PY311
 
 # Define StrEnum for Python3.10, to work like 3.11+
 if PY311:  # or later
-    FutureStrEnum = enum.StrEnum
+    FutureStrEnum = aenum.StrEnum
 else:
 
-    class FutureStrEnum(str, enum.Enum):
+    class FutureStrEnum(str, aenum.Enum):
         def __str__(self):
             return str(self.value)
 
