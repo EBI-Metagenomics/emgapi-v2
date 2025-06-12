@@ -2,6 +2,7 @@ import gzip
 import os
 import re
 from datetime import timedelta
+from importlib.resources import files
 from pathlib import Path
 from typing import Optional
 
@@ -11,6 +12,7 @@ from prefect.tasks import task_input_hash
 
 from activate_django_first import EMG_CONFIG
 from workflows.ena_utils.ena_accession_matching import ENA_ASSEMBLY_ACCESSION_REGEX
+from workflows.prefect_utils.build_cli_command import cli_command
 
 from workflows.prefect_utils.env_context import TemporaryEnv, UNSET
 from workflows.prefect_utils.slurm_policies import ResubmitIfFailedPolicy
@@ -25,6 +27,7 @@ from workflows.prefect_utils.slurm_flow import (
     ClusterJobFailedException,
     run_cluster_job,
 )
+from workflows import ena_utils
 
 
 OPTIONAL_SPADES_FILES = [
@@ -364,17 +367,22 @@ def submit_assembly_slurm(
     logger = get_run_logger()
     xms = int(EMG_CONFIG.assembler.assembly_uploader_mem_gb / 2)
     xmx = int(EMG_CONFIG.assembler.assembly_uploader_mem_gb)
-    command = (
-        f"java -Xms{xms}g -Xmx{xmx}g -jar {EMG_CONFIG.webin.webin_cli_executor} "
-        f"-context=genome "
-        f"-manifest={manifest} "
-        f"-userName='{username}' "
-        f"-password='{password}' "
+    logback_config = files(ena_utils) / "webincli_logback.xml"
+    command = cli_command(
+        [
+            ("java", f"-Dlogback.configurationFile={logback_config}"),
+            f"-Xms{xms}g",
+            f"-Xmx{xmx}g",
+            ("-jar", EMG_CONFIG.webin.webin_cli_executor),
+            ("-context", "genome"),
+            ("-manifest", manifest),
+            ("-userName", username),
+            ("-password", password),
+            EMG_CONFIG.webin.aspera_ascp_executor and "-ascp",
+            dry_run and "-test -validate",
+            not dry_run and "-submit",
+        ]
     )
-    if dry_run:
-        command += "-test -validate "
-    else:
-        command += "-submit "
 
     try:
         run_cluster_job.with_options(

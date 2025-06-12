@@ -93,11 +93,14 @@ fileignoreconfig:
   allowed_patterns: [key, InstrumentPlatformKeys]
 
 - filename: workflows/flows/upload_assembly.py
-  allowed_patterns: ["-password='{password}'"]
+  checksum: f82f92058dabd50b9b6caf557d4eadae227ec4f6a0233135653251c20cf3c64b
 
 - filename: workflows/prefect_utils/env_context.py
   checksum: 8f5e11c7e0038bc4a648dc61ec657a679356857f77e557f744e2dd769ad88def
   ignore_detectors: [filename]
+
+- filename: workflows/tests/test_cli_command_utils.py
+  checksum: 3f541206fc17c825cd777704cfce875305fd313475553b95ff764b0f4a0c8f92
 
 - filename: workflows/tests/test_env_context.py
   checksum: 6d3d6b0c08bc5c564a2b7f79c21fb3f10244dc9b770eac0d2344766bdb358fa0
