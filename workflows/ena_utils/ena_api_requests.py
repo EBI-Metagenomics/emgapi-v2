@@ -148,7 +148,8 @@ def check_reads_fastq(
     sorted_fastq = sorted(fastq)  # to keep order [_1, _2, _3(?)]
     # potential single end
     if len(sorted_fastq) == 1:
-        if not sorted_fastq[0]: # if it's an empty string
+        if not sorted_fastq[0]:
+            # if it's an empty string
             logger.warning(f"No fastq files for run {run_accession}")
             return None, None
         if "_2.f" in sorted_fastq[0]:
