@@ -151,15 +151,15 @@ def check_reads_fastq(
         return None, None
     # potential single end
     elif len(sorted_fastq) == 1:
+        if "_2.f" in sorted_fastq[0]:
+            # we accept _1 be in SE fastq path
+            logger.warning(f"Single fastq file contains _2 for run {run_accession}")
+            return None, None
         if library_layout == PAIRED_END_LIBRARY_LAYOUT:
             logger.warning(
                 f"Incorrect library_layout for {run_accession} having one fastq file"
             )
             return sorted_fastq, "SINGLE"
-        if "_2.f" in sorted_fastq[0]:
-            # we accept _1 be in SE fastq path
-            logger.warning(f"Single fastq file contains _2 for run {run_accession}")
-            return None, None
         else:
             logger.info(f"One fastq for {run_accession}: {sorted_fastq}")
             return sorted_fastq, "SINGLE"
