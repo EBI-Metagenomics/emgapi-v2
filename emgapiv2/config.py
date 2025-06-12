@@ -113,6 +113,7 @@ class WebinConfig(BaseModel):
     dcc_password: str = None
     submitting_center_name: str = "EMG"
     webin_cli_executor: str = "/usr/bin/webin-cli/webin-cli.jar"
+    aspera_ascp_executor: str = None
     broker_prefix: str = "mg-"
     broker_password: str = None
     webin_cli_retries: int = 6
