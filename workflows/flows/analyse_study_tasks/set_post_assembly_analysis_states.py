@@ -6,7 +6,9 @@ from prefect import task
 from prefect.tasks import task_input_hash
 
 from workflows.flows.analyse_study_tasks.analysis_states import AnalysisStates
-
+from workflows.flows.analyse_study_tasks.sanity_check_assembly_results import (
+    sanity_check_assembly_analysis_results,
+)
 from workflows.prefect_utils.analyses_models_helpers import task_mark_analysis_status
 
 
@@ -30,20 +32,21 @@ def set_post_assembly_analysis_states(
     qc_failed_assemblies = {}  # Stores {assembly_accession, qc_fail_reason}
 
     if qc_failed_csv.is_file():
+        print("Reading qc failed assemblies...")
         with qc_failed_csv.open(mode="r") as file_handle:
             for row in csv.reader(file_handle, delimiter=","):
                 assembly_accession, fail_reason = row
                 qc_failed_assemblies[assembly_accession] = fail_reason
 
-    # qc_passed_assemblies.csv: assemblyID, info
-    qc_completed_csv = Path(f"{assembly_current_outdir}/qc_passed_assemblies.csv")
-    qc_completed_assemblies = {}  # Stores {assembly_accession, info}
+    # analysed_assemblies.csv: assemblyID, info
+    analysed_assemblies_csv = Path(f"{assembly_current_outdir}/analysed_assemblies.csv")
+    analysed_assemblies = {}  # Stores {assembly_accession, info}
 
-    if qc_completed_csv.is_file():
-        with qc_completed_csv.open(mode="r") as file_handle:
+    if analysed_assemblies_csv.is_file():
+        with analysed_assemblies_csv.open(mode="r") as file_handle:
             for row in csv.reader(file_handle, delimiter=","):
                 assembly_accession, info = row
-                qc_completed_assemblies[assembly_accession] = info
+                analysed_assemblies[assembly_accession] = info
 
     for analysis in assembly_analyses:
         if analysis.assembly.first_accession in qc_failed_assemblies:
@@ -52,16 +55,28 @@ def set_post_assembly_analysis_states(
                 status=AnalysisStates.ANALYSIS_QC_FAILED,
                 reason=qc_failed_assemblies[analysis.assembly.first_accession],
             )
-        elif analysis.assembly.first_accession in qc_completed_assemblies:
-            task_mark_analysis_status(
-                analysis,
-                status=AnalysisStates.ANALYSIS_COMPLETED,
-                reason=qc_completed_assemblies[analysis.assembly.first_accession],
-                unset_statuses=[
-                    AnalysisStates.ANALYSIS_FAILED,
-                    AnalysisStates.ANALYSIS_BLOCKED,
-                ],
-            )
+        elif analysis.assembly.first_accession in analysed_assemblies:
+            try:
+                sanity_check_assembly_analysis_results(
+                    assembly_current_outdir, analysis
+                )
+            except Exception:
+                # TODO define exception type
+                task_mark_analysis_status(
+                    analysis,
+                    status=AnalysisStates.ANALYSIS_QC_FAILED,
+                    reason="QC ERROR",  # TODO: get validation error
+                )
+            else:
+                task_mark_analysis_status(
+                    analysis,
+                    status=AnalysisStates.ANALYSIS_COMPLETED,
+                    reason=analysed_assemblies[analysis.assembly.first_accession],
+                    unset_statuses=[
+                        AnalysisStates.ANALYSIS_FAILED,
+                        AnalysisStates.ANALYSIS_BLOCKED,
+                    ],
+                )
         else:
             task_mark_analysis_status(
                 analysis,

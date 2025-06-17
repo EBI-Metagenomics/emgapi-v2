@@ -9,7 +9,9 @@ __all__ = ["FileRule", "DirectoryRule", "GlobRule"]
 class FileRule(BaseModel):
     rule_name: str = Field(..., description="Nice name of the rule to be applied")
     test: Callable[[Path], bool] = Field(
-        ..., description="Function to call on file to check if rule passes"
+        ...,
+        description="Function to call on file to check if rule passes",
+        exclude=True,
     )
 
 
@@ -23,4 +25,5 @@ class GlobRule(DirectoryRule):
     test: Callable[[Iterable[Path]], bool] = Field(
         ...,
         description="Function to call on the result of glob pattern to check it passes",
+        exclude=True,
     )
