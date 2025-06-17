@@ -35,3 +35,4 @@ httpx~=0.28.1
 typing_extensions~=4.13.2
 asgiref~=3.8.1
 case-converter~=1.2.0
+aenum~=3.1.16
