@@ -165,19 +165,17 @@ def check_reads_fastq(
             logger.info(f"One fastq for {run_accession}: {sorted_fastq}")
             return sorted_fastq, "SINGLE"
     # potential paired end
-    elif len(sorted_fastq) == 2:
-        if "_1.f" in sorted_fastq[0] and "_2.f" in sorted_fastq[1]:
+    elif len(sorted_fastq) >= 2:
+        match_1 = next((f for f in sorted_fastq if "_1" in f), None)
+        match_2 = next((f for f in sorted_fastq if "_2" in f), None)
+        if match_1 and match_2:
             logger.info(f"Two fastqs for {run_accession}: {sorted_fastq}")
-            return sorted_fastq, "PAIRED"
+            return [match_1, match_2], "PAIRED"
         else:
             logger.warning(
                 f"Incorrect names of fastq files for run {run_accession} (${sorted_fastq})"
             )
             return None, None
-    elif len(fastq) > 2:
-        logger.info(f"More than 2 fastq files provided for run {run_accession}")
-        # Try again with first two files only
-        return check_reads_fastq(sorted_fastq[:2], run_accession, library_layout)
     return None, None
 
 
