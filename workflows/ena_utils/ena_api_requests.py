@@ -173,9 +173,13 @@ def check_reads_fastq(
             return [match_1, match_2], "PAIRED"
         else:
             if len(sorted_fastq) > 2:
-                logger.warning(f"More than 2 fastq files provided for run {run_accession}")
+                logger.warning(
+                    f"More than 2 fastq files provided for run {run_accession}"
+                )
             else:
-                logger.warning(f"Incorrect library_layout for {run_accession} having two fastq files")
+                logger.warning(
+                    f"Incorrect library_layout for {run_accession} having two fastq files"
+                )
             logger.warning(
                 f"Incorrect names of fastq files for run {run_accession} (${sorted_fastq})"
             )
