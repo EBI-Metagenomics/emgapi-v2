@@ -395,6 +395,25 @@ def test_get_study_readruns_from_ena(
                 "lon": "0",
                 "location": "hinxton",
             },
+            {
+                "run_accession": "RUN10",
+                "sample_accession": "SAMPLE10",
+                "sample_title": "sample title",
+                "secondary_sample_accession": "SAMP10",
+                "fastq_md5": "md5kjdndk",
+                "fastq_ftp": "fq.fastq.gz;fq_2.fastq.gz;fq_1.fastq.gz",
+                "library_layout": "PAIRED",
+                "library_strategy": "AMPLICON",
+                "library_source": "METAGENOMIC",
+                "scientific_name": "metagenome",
+                "host_tax_id": "7460",
+                "host_scientific_name": "Apis mellifera",
+                "instrument_platform": "ILLUMINA",
+                "instrument_model": "Illumina MiSeq",
+                "lat": "52",
+                "lon": "0",
+                "location": "hinxton",
+            },
         ],
     )
     get_study_readruns_from_ena(study_accession, limit=10)
@@ -449,6 +468,17 @@ def test_get_study_readruns_from_ena(
     assert (
         analyses.models.Run.objects.filter(ena_accessions__contains=["RUN9"]).count()
         == 0
+    )
+    # should return only 2 fq files in correct order [alphabetical order shouldn't affect runs anymore]
+    assert (
+        analyses.models.Run.objects.filter(ena_accessions__contains=["RUN10"]).count()
+        == 1
+    )
+    run = analyses.models.Run.objects.get(ena_accessions__contains=["RUN10"])
+    assert (
+        len(run.metadata["fastq_ftps"]) == 2
+        and "_1" in run.metadata["fastq_ftps"][0]
+        and "_2" in run.metadata["fastq_ftps"][1]
     )
 
     httpx_mock.add_response(
