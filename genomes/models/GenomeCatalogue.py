@@ -1,13 +1,13 @@
 from django.db import models
 from django.utils import timezone
 
+from analyses.base_models.with_downloads_models import WithDownloadsModel
 from analyses.models import Biome
 from emgapiv2 import settings
-from genomes.models.base_model import BaseModel
 
 MARKDOWN_HELP = 'Use <a href="https://commonmark.org/help/" target="_newtab">markdown</a> for links and rich text.'
 
-class GenomeCatalogue(BaseModel):
+class GenomeCatalogue(WithDownloadsModel):
     catalogue_id = models.SlugField(
         db_column='CATALOGUE_ID', max_length=100)
     version = models.CharField(db_column='VERSION', max_length=20)
