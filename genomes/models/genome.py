@@ -13,6 +13,21 @@ class Genome(WithDownloadsModel):
         (ISOLATE, 'Isolate'),
     )
 
+    # Annotation field constants
+    COG_CATEGORIES = 'cog_categories'
+    KEGG_CLASSES = 'kegg_classes'
+    KEGG_MODULES = 'kegg_modules'
+    ANTISMASH_GENE_CLUSTERS = 'antismash_gene_clusters'
+
+    @staticmethod
+    def default_annotations():
+        return {
+            Genome.COG_CATEGORIES: [],
+            Genome.KEGG_CLASSES: [],
+            Genome.KEGG_MODULES: [],
+            Genome.ANTISMASH_GENE_CLUSTERS: [],
+        }
+
     # objects = GenomeManager()
 
     genome_id = models.AutoField(
@@ -84,6 +99,8 @@ class Genome(WithDownloadsModel):
     pangenome_core_size = models.IntegerField(db_column='pangenome_core_prop', null=True, blank=True)
     pangenome_accessory_size = models.IntegerField(db_column='pangenome_accessory_prop', null=True, blank=True)
 
+    annotations = models.JSONField(default=default_annotations.__func__, db_column='annotations')
+
     last_update = models.DateTimeField(db_column='last_update', auto_now=True)
     first_created = models.DateTimeField(db_column='first_created', auto_now_add=True)
 
@@ -93,6 +110,7 @@ class Genome(WithDownloadsModel):
                                                         db_table='genome_pangenome_geographic_range',
                                                         related_name='geographic_range')
 
+    # DEPRECATED: These relationships are being replaced by the annotations field
     cog_matches = models.ManyToManyField('GenomeCogCat',
                                          through='GenomeCogCounts')
     kegg_classes = models.ManyToManyField('GenomeKeggClass',

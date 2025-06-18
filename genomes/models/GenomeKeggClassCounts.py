@@ -5,6 +5,7 @@ from genomes.models.base_model import BaseModel
 from genomes.models import GenomeKeggClass
 
 
+# DEPRECATED: This model is being replaced by the annotations field in the Genome model
 class GenomeKeggClassCounts(BaseModel):
 
     genome = models.ForeignKey(Genome, db_column='GENOME_ID',

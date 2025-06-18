@@ -3,6 +3,7 @@ from django.db import models
 from genomes.models.base_model import BaseModel
 
 
+# DEPRECATED: This model is being replaced by the annotations field in the Genome model
 class GenomeKeggModule(BaseModel):
 
     name = models.CharField(db_column='MODULE_NAME', max_length=10,

@@ -4,6 +4,7 @@ from genomes.models import Genome, GenomeAntiSmashGC
 from genomes.models.base_model import BaseModel
 
 
+# DEPRECATED: This model is being replaced by the annotations field in the Genome model
 class GenomeAntiSmashGCCounts(BaseModel):
     genome = models.ForeignKey(Genome, db_column='GENOME_ID', on_delete=models.CASCADE, db_index=True)
     antismash_genecluster = models.ForeignKey(GenomeAntiSmashGC, db_column='ANTISMASH_GENECLUSTER',

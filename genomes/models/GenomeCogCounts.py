@@ -4,6 +4,7 @@ from genomes.models.GenomeCogCat import GenomeCogCat
 from genomes.models.genome import Genome
 
 
+# DEPRECATED: This model is being replaced by the annotations field in the Genome model
 class GenomeCogCounts(BaseModel):
 
     genome = models.ForeignKey(Genome, db_column='GENOME_ID',

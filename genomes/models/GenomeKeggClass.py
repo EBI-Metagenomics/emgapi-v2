@@ -2,6 +2,7 @@ from django.db import models
 from genomes.models.base_model import BaseModel
 
 
+# DEPRECATED: This model is being replaced by the annotations field in the Genome model
 class GenomeKeggClass(BaseModel):
 
     class_id = models.CharField(db_column='CLASS_ID', max_length=10,
