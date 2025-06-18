@@ -1,6 +1,7 @@
 from genomes.models.base_model import BaseModel
 from django.db import models
 
+# DEPRECATED: This model is being replaced by the annotations field in the Genome model
 class GenomeCogCat(BaseModel):
 
     name = models.CharField(db_column='NAME', max_length=80, unique=True)
