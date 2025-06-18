@@ -17,15 +17,16 @@ from ..lib.genome_util import (
     apparent_accession_of_genome_dir
 )
 from ...models import GenomeCatalogue, GenomeCogCounts, GenomeCogCat, GenomeKeggClass, GenomeKeggClassCounts, \
-    GenomeKeggModule, GenomeKeggModuleCounts, GenomeAntiSmashGC, GenomeAntiSmashGCCounts, DownloadDescriptionLabel, \
-    FileFormat, GeographicLocation, DownloadSubdir, GenomeCatalogueDownload
-from ...models.DownloadGroupType import DownloadGroupType
+    GenomeKeggModule, GenomeKeggModuleCounts, GenomeAntiSmashGC, GenomeAntiSmashGCCounts, \
+    FileFormat, GeographicLocation
 from ...models.GenomeSet import GenomeSet
 
 logger = logging.getLogger(__name__)
 
 cog_cache = {}
 ipr_cache = {}
+
+from analyses.base_models.with_downloads_models import DownloadFile, DownloadType, DownloadFileType
 
 
 class Command(BaseCommand):
@@ -412,126 +413,134 @@ class Command(BaseCommand):
 
     def upload_genome_files(self, genome, directory, has_pangenome):
         logger.info('Uploading genome files...')
-        self.upload_genome_file(genome, directory, 'Predicted CDS (aa)', 'fasta',
-                                genome.accession + '.faa', 'Genome analysis', 'genome', True)
-        self.upload_genome_file(genome, directory, 'Nucleic Acid Sequence', 'fasta',
-                                genome.accession + '.fna', 'Genome analysis', 'genome', True)
-        self.upload_genome_file(genome, directory, 'Nucleic Acid Sequence index', 'fai',
-                                genome.accession + '.fna.fai', 'Genome analysis', 'genome', True, )
-        self.upload_genome_file(genome, directory, 'Genome Annotation', 'gff',
-                                genome.accession + '.gff', 'Genome analysis', 'genome', True)
-        self.upload_genome_file(genome, directory, 'Genome antiSMASH Annotation', 'gff',
-                                genome.accession + '_antismash.gff', 'Genome analysis', 'genome', False)
-        self.upload_genome_file(genome, directory, 'Genome VIRify Annotation', 'gff',
-                                genome.accession + '_virify.gff', 'Genome analysis', 'genome', False)
-        self.upload_genome_file(genome, directory, 'Genome VIRify Regions', 'tsv',
-                                genome.accession + '_virify_metadata.tsv', 'Genome analysis', 'genome', False)
-        self.upload_genome_file(genome, directory, 'Genome SanntiS Annotation', 'gff',
-                                genome.accession + '_sanntis.gff', 'Genome analysis', 'genome', False)
-        self.upload_genome_file(genome, directory, 'EggNog annotation', 'tsv',
-                                genome.accession + '_eggNOG.tsv', 'Genome analysis', 'genome', False)
-        self.upload_genome_file(genome, directory, 'InterProScan annotation', 'tsv',
-                                genome.accession + '_InterProScan.tsv', 'Genome analysis', 'genome', False)
-        self.upload_genome_file(genome, directory, 'Genome rRNA Sequence', 'fasta',
-                                genome.accession + '_rRNAs.fasta', 'Genome analysis', 'genome', False)
-        # pipeline v2 files (if present):
-        self.upload_genome_file(genome, directory, 'Genome AMRFinderPlus Annotation', 'tsv',
-                                genome.accession + '_amrfinderplus.tsv', 'Genome analysis', 'genome', False)
-        self.upload_genome_file(genome, directory, 'Genome CRISPRCasFinder Annotation', 'gff',
-                                genome.accession + '_crisprcasfinder.gff', 'Genome analysis', 'genome', False)
-        self.upload_genome_file(genome, directory, 'Genome CRISPRCasFinder Additional Records', 'tsv',
-                                genome.accession + '_crisprcasfinder.tsv', 'Genome analysis', 'genome', False)
-        self.upload_genome_file(genome, directory, 'Genome Mobilome Annotation', 'gff',
-                                genome.accession + '_mobilome.gff', 'Genome analysis', 'genome', False)
-        # pipeline v2.4.0 files (if not empty):
-        self.upload_genome_file(genome, directory, 'Genome dbCAN Annotation', 'gff',
-                                genome.accession + '_dbcan.gff', 'Genome analysis', 'genome', False)
-        self.upload_genome_file(genome, directory, 'Genome Defense Finder Annotation', 'gff',
-                                genome.accession + '_defense_finder.gff', 'Genome analysis', 'genome', False)
-        self.upload_genome_file(genome, directory, 'Genome GECCO Annotation', 'gff',
-                                genome.accession + '_gecco.gff', 'Genome analysis', 'genome', False)
-        self.upload_genome_file(genome, directory, 'KEGG Pathway Completeness', 'tsv',
-                                genome.accession + '_kegg_pathways.tsv', 'Genome analysis', 'genome', False)
+        files_to_upload = [
+            ('Predicted CDS (aa)', 'fasta', f'{genome.accession}.faa', 'Genome analysis', 'genome', True),
+            ('Nucleic Acid Sequence', 'fasta', f'{genome.accession}.fna', 'Genome analysis', 'genome', True),
+            ('Nucleic Acid Sequence index', 'fai', f'{genome.accession}.fna.fai', 'Genome analysis', 'genome', True),
+            ('Genome Annotation', 'gff', f'{genome.accession}.gff', 'Genome analysis', 'genome', True),
+            ('Genome antiSMASH Annotation', 'gff', f'{genome.accession}_antismash.gff', 'Genome analysis', 'genome',
+             False),
+            ('Genome VIRify Annotation', 'gff', f'{genome.accession}_virify.gff', 'Genome analysis', 'genome', False),
+            ('Genome VIRify Regions', 'tsv', f'{genome.accession}_virify_metadata.tsv', 'Genome analysis', 'genome',
+             False),
+            ('Genome SanntiS Annotation', 'gff', f'{genome.accession}_sanntis.gff', 'Genome analysis', 'genome', False),
+            ('EggNog annotation', 'tsv', f'{genome.accession}_eggNOG.tsv', 'Genome analysis', 'genome', False),
+            ('InterProScan annotation', 'tsv', f'{genome.accession}_InterProScan.tsv', 'Genome analysis', 'genome',
+             False),
+            ('Genome rRNA Sequence', 'fasta', f'{genome.accession}_rRNAs.fasta', 'Genome analysis', 'genome', False),
+            ('Genome AMRFinderPlus Annotation', 'tsv', f'{genome.accession}_amrfinderplus.tsv', 'Genome analysis',
+             'genome', False),
+            ('Genome CRISPRCasFinder Annotation', 'gff', f'{genome.accession}_crisprcasfinder.gff', 'Genome analysis',
+             'genome', False),
+            ('Genome CRISPRCasFinder Additional Records', 'tsv', f'{genome.accession}_crisprcasfinder.tsv',
+             'Genome analysis', 'genome', False),
+            ('Genome Mobilome Annotation', 'gff', f'{genome.accession}_mobilome.gff', 'Genome analysis', 'genome',
+             False),
+            ('Genome dbCAN Annotation', 'gff', f'{genome.accession}_dbcan.gff', 'Genome analysis', 'genome', False),
+            ('Genome Defense Finder Annotation', 'gff', f'{genome.accession}_defense_finder.gff', 'Genome analysis',
+             'genome', False),
+            ('Genome GECCO Annotation', 'gff', f'{genome.accession}_gecco.gff', 'Genome analysis', 'genome', False),
+            ('KEGG Pathway Completeness', 'tsv', f'{genome.accession}_kegg_pathways.tsv', 'Genome analysis', 'genome',
+             False),
+        ]
 
         if has_pangenome:
-            self.upload_genome_file(genome, directory, 'Pangenome core genes list', 'tab',
-                                    'core_genes.txt', 'Pan-Genome analysis', 'pan-genome', False)
-            self.upload_genome_file(genome, directory, 'Pangenome DNA sequence', 'fasta',
-                                    'pan-genome.fna', 'Pan-Genome analysis', 'pan-genome', False)
-            self.upload_genome_file(genome, directory,
-                                    'Gene Presence / Absence matrix',
-                                    'tsv', 'gene_presence_absence.Rtab', 'Pan-Genome analysis', 'pan-genome', False)
-            self.upload_genome_file(genome, directory,
-                                    'Gene Presence / Absence list',
-                                    'csv', 'gene_presence_absence.csv', 'Pan-Genome analysis', 'pan-genome', False)
-            self.upload_genome_file(genome, directory,
-                                    'Pairwise Mash distances of conspecific genomes',
-                                    'nwk', 'mashtree.nwk', 'Pan-Genome analysis', 'pan-genome', False)
+            files_to_upload += [
+                ('Pangenome core genes list', 'tab', 'core_genes.txt', 'Pan-Genome analysis', 'pan-genome', False),
+                ('Pangenome DNA sequence', 'fasta', 'pan-genome.fna', 'Pan-Genome analysis', 'pan-genome', False),
+                ('Gene Presence / Absence matrix', 'tsv', 'gene_presence_absence.Rtab', 'Pan-Genome analysis',
+                 'pan-genome', False),
+                ('Gene Presence / Absence list', 'csv', 'gene_presence_absence.csv', 'Pan-Genome analysis',
+                 'pan-genome', False),
+                ('Pairwise Mash distances of conspecific genomes', 'nwk', 'mashtree.nwk', 'Pan-Genome analysis',
+                 'pan-genome', False),
+            ]
 
-    def prepare_file_upload(self, desc_label, file_format, filename, group_name=None, subdir_name=None):
+        for desc_label, file_format, filename, group_type, subdir, require in files_to_upload:
+            self.upload_file(
+                genome,
+                desc_label,
+                file_format,
+                filename,
+                group_type=group_type,
+                subdir=subdir,
+                directory=directory,
+                require_existent_and_non_empty=require
+            )
 
-        obj = {}
-        # TDO: this should be replaced with the download json field counterpart
-        desc = DownloadDescriptionLabel \
-            .objects.using(self.database) \
-            .filter(description_label__iexact=desc_label) \
-            .first()
-        obj['description'] = desc
-        if desc is None:
-            logger.error('Desc_label missing: {0}'.format(desc_label))
-            quit()
 
-        fmt = FileFormat \
-            .objects.using(self.database) \
-            .filter(format_extension=file_format, compression=False) \
-            .first()
-        obj['file_format'] = fmt
 
-        name = os.path.basename(filename)
-        obj['realname'] = name
-        obj['alias'] = name
+    def upload_catalogue_files(self):
+        self.upload_file(
+            self.catalogue_obj,
+            'Phylogenetic tree of catalogue genomes',
+                                     'json',
+                                     'phylo_tree.json'
 
-        if group_name:
-            group = DownloadGroupType \
-                .objects.using(self.database) \
-                .filter(group_type__iexact=group_name) \
-                .first()
-            obj['group_type'] = group
+        )
 
-        if subdir_name:
-            subdir = DownloadSubdir \
-                .objects.using(self.database) \
-                .filter(subdir=subdir_name) \
-                .first()
-            obj['subdir'] = subdir
 
-        return obj
+    def prepare_downloadable_file(self, desc_label, file_format, file_name, group_type=None, subdir=None):
+        # TODO: need a way to check all the possible file formats and types
+        file_type_mapping = {
+            'fasta': DownloadFileType.FASTA,
+            'fna': DownloadFileType.FASTA,
+            'fai': DownloadFileType.OTHER,
+            'gff': DownloadFileType.OTHER,
+            'tsv': DownloadFileType.TSV,
+            'csv': DownloadFileType.CSV,
+            'json': DownloadFileType.JSON,
+            'tab': DownloadFileType.TSV,
+            'nwk': DownloadFileType.TREE,
+        }
+        file_type = file_type_mapping.get(file_format, DownloadFileType.OTHER)
 
-    def upload_genome_file(self, genome, directory, desc_label, file_format, filename, group_type, subdir,
-                           require_existent_and_non_empty):
-        defaults = self.prepare_file_upload(desc_label, file_format, filename, group_type, subdir)
-        path = os.path.join(directory, subdir, filename)
+        # TODO: need a way to check all the possible file formats and types
+        download_type_mapping = {
+            'Genome analysis': DownloadType.GENOME_ANALYSIS,
+            'Pan-Genome analysis': DownloadType.GENOME_ANALYSIS,
+            'Catalogue summary': DownloadType.GENOME_ANALYSIS,
+            'Phylogenetic tree of catalogue genomes': DownloadType.GENOME_ANALYSIS,
+        }
+
+        key = group_type or desc_label
+        download_type = download_type_mapping.get(key, DownloadType.OTHER)
+        alias = os.path.basename(file_name)
+        relative_path = os.path.join(subdir or "", file_name)
+
+        return DownloadFile(
+            path=relative_path,
+            alias=alias,
+            download_type=download_type,
+            file_type=file_type,
+            long_description=desc_label,
+            short_description=desc_label,
+            download_group=group_type or 'catalogue',
+        )
+
+
+    def upload_file(self, model_instance, desc_label, file_format, file_name, *, group_type=None, subdir=None, directory=None, require_existent_and_non_empty=False):
+        path_parts = [directory, subdir, file_name] if directory else [self.catalogue_dir, file_name]
+        path = os.path.join(*(p for p in path_parts if p))
+
         if not (os.path.isfile(path) and os.path.getsize(path) > 0):
             if require_existent_and_non_empty:
                 raise FileNotFoundError(f"Required file at {path} either missing or empty")
-            else:
-                logger.warning(f"File not found or empty at {path}. This is allowable, but will not be uploaded.")
-                return
-        #     TODO: this should be replaced with the download json field being "created/updated" instead
+            logger.warning(f"File not found or empty at {path}. This is allowable, but will not be uploaded.")
+            return
 
-        # GenomeDownload.objects.using(self.database).update_or_create(genome=genome,
-        #                                                                         alias=defaults['alias'],
-        #                                                                         defaults=defaults)
+        download_file = self.prepare_downloadable_file(desc_label, file_format, file_name, group_type, subdir)
+        try:
+            model_instance.add_download(download_file)
+        except FileExistsError:
+            logger.warning(f"Duplicate download alias found for {download_file.alias}. Updating.")
+            model_instance.downloads = [
+                d for d in (model_instance.downloads or []) if d.get('alias') != download_file.alias
+            ]
+            model_instance.save(using=self.database)
 
-    def upload_catalogue_files(self):
-        self.upload_catalogue_file(self.catalogue_obj,
-                                 'Phylogenetic tree of catalogue genomes',
-                                 'json',
-                                 'phylo_tree.json')
 
-    def upload_catalogue_file(self, catalogue, desc_label, file_format, filename):
-        defaults = self.prepare_file_upload(desc_label, file_format, filename, None, None)
-        GenomeCatalogueDownload.objects.using(self.database).update_or_create(
-            genome_catalogue=catalogue,
-            alias=defaults['alias'],
-            defaults=defaults)
+
+
+
+
