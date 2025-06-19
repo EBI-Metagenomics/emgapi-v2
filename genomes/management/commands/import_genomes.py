@@ -1,5 +1,6 @@
 import logging
 import os
+import re
 from pathlib import Path
 
 from django.core.management import BaseCommand, CommandError
@@ -16,7 +17,6 @@ from ..lib.genome_util import (
     apparent_accession_of_genome_dir
 )
 from ...models import GenomeCatalogue, GeographicLocation, Genome
-from ...models.GenomeSet import GenomeSet
 
 logger = logging.getLogger(__name__)
 
@@ -24,6 +24,14 @@ cog_cache = {}
 ipr_cache = {}
 
 from analyses.base_models.with_downloads_models import DownloadFile, DownloadType, DownloadFileType
+
+
+def validate_pipeline_version(version):
+    pattern = r'^v[1-3](\.\d+)*([a-zA-Z0-9\-]+)?$'
+    if not re.match(pattern, version):
+        raise CommandError(
+            f"Invaild pipeline version: {version}. Expected something like 'v1', 'v2.0', 'v3.0.0dev', or 'v3.1.4'")
+    return version
 
 
 class Command(BaseCommand):
@@ -47,7 +55,7 @@ class Command(BaseCommand):
         parser.add_argument('gold_biome', action='store', type=str,
                             help="Primary biome for the catalogue, as a GOLD lineage. "
                                  "E.g. root:Host-Associated:Human:Digestive\\ System:Large\\ intestine")
-        parser.add_argument('pipeline_version', action='store', type=str,
+        parser.add_argument('pipeline_version', action='store', type=validate_pipeline_version,
                             help='Pipeline version tag that catalogue was produced by. E.g. "1.2.1"')
         parser.add_argument('catalogue_type', action='store', type=str,
                             choices=[choice for choice, _ in GenomeCatalogue.CATALOGUE_TYPE_CHOICES],
@@ -62,109 +70,79 @@ class Command(BaseCommand):
                                  'catalogues of different types. If none, the catalogue name is used.')
 
     def handle(self, *args, **options):
-        ver = options['pipeline_version'].strip()
-        if ver.startswith('v1'):
-            return self.handle_v1(*args, **options)
-        if ver.startswith('v2'):
-            return self.handle_v2(*args, **options)
-        if ver.startswith('v3'):
-            return self.handle_v3(*args, **options)
-        else:
-            raise CommandError("Only pipeline versions v1.x – v3.x are supported.")
+        version_str = options['pipeline_version'].strip()
+        try:
+            major_version_number = int(version_str.lstrip('v').split('.')[0])
+        except (ValueError, IndexError):
+            raise CommandError(f"Invalid pipeline version '{version_str}'. The expected format is v1.x, v2.x, or v3.x")
+        if major_version_number not in {1, 2, 3}:
+            raise CommandError(f"Unsupported pipeline version: v{major_version_number}. Must be 1, 2, or 3.")
+        self._handle_versioned_catalogue(options, version=major_version_number)
 
-    def handle_v1(self, *args, **options):
-        self.results_directory = os.path.realpath(options.get('results_directory').strip())
+    def _parse_common_options(self, options):
+        self.results_directory = os.path.realpath(options['results_directory'].strip())
         if not os.path.exists(self.results_directory):
-            raise FileNotFoundError('Results dir {} does not exist'
-                                    .format(self.results_directory))
+            raise FileNotFoundError(f'Results dir {self.results_directory} does not exist')
 
-        catalogue_name = options['catalogue_name'].strip()
-        version = options['catalogue_version'].strip()
-        catalogue_dir = options['catalogue_directory'].strip()
-        gold_biome = options['gold_biome'].strip()
-        pipeline_version_tag = options['pipeline_version'].strip()
-        catalogue_type = options['catalogue_type'].strip()
-        catalogue_biome_label = options['catalogue_biome_label'].strip() or catalogue_name
-        self.catalogue_dir = os.path.join(self.results_directory, catalogue_dir)
+        self.catalogue_dir = os.path.join(self.results_directory, options['catalogue_directory'].strip())
+        self.catalogue_name = options['catalogue_name'].strip()
+        self.catalogue_version = options['catalogue_version'].strip()
+        self.gold_biome = options['gold_biome'].strip()
+        self.pipeline_version = options['pipeline_version'].strip()
+        self.catalogue_type = options['catalogue_type'].strip()
+        self.catalogue_biome_label = options.get('catalogue_biome_label', '').strip() or self.catalogue_name
+        self.database = options.get('database', 'default')
 
-        self.database = options['database']
-        self.catalogue_obj = self.get_catalogue(
-            catalogue_name,
-            version, gold_biome,
-            catalogue_dir,
-            pipeline_version_tag,
-            catalogue_type,
-            catalogue_biome_label
-        )
-
-        logger.info("CLI %r" % options)
-
-        genome_dirs = find_genome_results(self.catalogue_dir)
-        logger.info(
-            'Found {} genome dirs to upload'.format(len(genome_dirs)))
-
-        [sanity_check_genome_output_proks(d) for d in genome_dirs]
-
-        sanity_check_catalogue_dir(self.catalogue_dir)
-
-        for d in genome_dirs:
-            self.upload_dir(d)
-
-        self.upload_catalogue_files()
-        self.catalogue_obj.calculate_genome_count()
-        self.catalogue_obj.save()
-
-    def handle_v2(self, *args, **options):
-        self.results_directory = os.path.realpath(options.get('results_directory').strip())
-        if not os.path.exists(self.results_directory):
-            raise FileNotFoundError('Results dir {} does not exist'
-                                    .format(self.results_directory))
-
-        catalogue_name = options['catalogue_name'].strip()
-        version = options['catalogue_version'].strip()
-        catalogue_dir = options['catalogue_directory'].strip()
-        gold_biome = options['gold_biome'].strip()
-        pipeline_version_tag = options['pipeline_version'].strip()
-        catalogue_type = options['catalogue_type'].strip()
-        catalogue_biome_label = options['catalogue_biome_label'].strip() or catalogue_name
-        self.catalogue_dir = os.path.join(self.results_directory, catalogue_dir)
-
-        self.database = options['database']
-
-        if options['update_metadata_only']:
+        if options.get('update_metadata_only') and self.pipeline_version.startswith('v2'):
             assert GenomeCatalogue.objects.filter(
-                catalogue_id=self.make_slug(catalogue_name, version)
+                catalogue_id=self.make_slug(self.catalogue_name, self.catalogue_version)
             ).exists()
 
+    def _handle_versioned_catalogue(self, options, version):
+        self._parse_common_options(options)
+
         self.catalogue_obj = self.get_catalogue(
-            catalogue_name,
-            version,
-            gold_biome,
-            catalogue_dir,
-            pipeline_version_tag,
-            catalogue_type,
-            catalogue_biome_label
+            self.catalogue_name,
+            self.catalogue_version,
+            self.gold_biome,
+            self.catalogue_dir,
+            self.pipeline_version,
+            self.catalogue_type,
+            self.catalogue_biome_label
         )
 
         logger.info("CLI %r" % options)
-
         genome_dirs = find_genome_results(self.catalogue_dir)
-        logger.info(
-            'Found {} genome dirs to upload'.format(len(genome_dirs)))
+        logger.info(f'Found {len(genome_dirs)} genome dirs to upload')
 
-        if catalogue_type == 'eukaryotes':
-            [sanity_check_genome_output_euks(d) for d in genome_dirs]
-        elif catalogue_type == 'prokaryotes':
-            [sanity_check_genome_output_proks(d) for d in genome_dirs]
+        sanity_check_map = {
+            'eukaryotes': sanity_check_genome_output_euks,
+            'prokaryotes': sanity_check_genome_output_proks
+        }
+        sanity_check = sanity_check_map.get(self.catalogue_type)
+        if sanity_check:
+            [sanity_check(genome_dir) for genome_dir in genome_dirs]
 
         sanity_check_catalogue_dir(self.catalogue_dir)
 
-        for d in genome_dirs:
-            self.upload_dir(d, update_metadata_only=options['update_metadata_only'])
+        for genome_dir in genome_dirs:
+            self.upload_dir(genome_dir, update_metadata_only=options.get('update_metadata_only', False))
 
         self.upload_catalogue_files()
+
+        if version == 3:
+            self._load_catalogue_summary_json()
+
         self.catalogue_obj.calculate_genome_count()
         self.catalogue_obj.save()
+
+    def _load_catalogue_summary_json(self):
+        summary_file = Path(self.catalogue_dir) / "catalogue_summary.json"
+        self.catalogue_obj.other_stats = read_json(summary_file) if summary_file.is_file() else {}
+        if not summary_file.is_file():
+            logger.warning(f"No catalogue summary found at {summary_file}.")
+        self.catalogue_obj.save()
+        self._prettify_catalogue_summary_field_name()
 
     def _prettify_catalogue_summary_field_name(self):
         if not isinstance(self.catalogue_obj.other_stats, dict):
@@ -175,19 +153,12 @@ class Command(BaseCommand):
                     "Clusters with pan-genomes")
         self.catalogue_obj.save()
 
-    def handle_v3(self, *args, **options):
-        self.handle_v2(*args, **options)
-
-        catalogue_summary_file = Path(self.catalogue_dir) / "catalogue_summary.json"
-        if catalogue_summary_file.is_file():
-            self.catalogue_obj.other_stats = read_json(catalogue_summary_file)
-        else:
-            logger.warning(f"No catalogue summary found at {catalogue_summary_file}.")
-        self.catalogue_obj.save()
-        self._prettify_catalogue_summary_field_name()
-
     def make_slug(self, catalogue_name, catalogue_version):
         return slugify('{0}-v{1}'.format(catalogue_name, catalogue_version).replace('.', '-'))
+
+    def _ensure_annotations(self, genome):
+        if not hasattr(genome, 'annotations') or genome.annotations is None:
+            genome.annotations = genome.default_annotations()
 
     def get_catalogue(self, catalogue_name, catalogue_version, gold_biome, catalogue_dir, pipeline_version_tag,
                       catalogue_type, catalogue_biome_label):
@@ -222,76 +193,46 @@ class Command(BaseCommand):
         self.upload_antismash_geneclusters(genome, directory)
         self.upload_genome_files(genome, directory, has_pangenome)
 
-    # def get_gold_biome(self, lineage):
-    #     logger.info(f'Here is my lineage Getting gold biome for {lineage}')
-    #     biome = Biome.objects.using(self.database).filter(lineage__iexact=lineage).first()
-    #     if not biome:
-    #         raise Biome.DoesNotExist()
-    #     return biome
-
     def get_gold_biome(self, lineage):
         logger.info(f'Getting gold biome for lineage: {lineage}')
-
-        # Convert lineage to ltree path
         path = Biome.lineage_to_path(lineage)
-
         biome = Biome.objects.using(self.database).filter(path=path).first()
         if not biome:
             raise Biome.DoesNotExist()
         return biome
 
-    def get_or_create_genome_set(self, setname):
-        """Get or create a genome set and return a dictionary with its information.
-
-        This method is used to store genome set information in the annotations field.
-        """
-        # Get or create the GenomeSet object to get its ID
-        genome_set_obj = GenomeSet.objects.using(self.database).get_or_create(name=setname)[0]
-
-        # Return a dictionary with the genome set information
-        return {
-            'id': genome_set_obj.id,
-            'name': genome_set_obj.name
-        }
-
     def prepare_genome_data(self, genome_dir):
-        d = read_json(os.path.join(genome_dir, f'{apparent_accession_of_genome_dir(genome_dir)}.json'))
+        genome_dir = read_json(os.path.join(genome_dir, f'{apparent_accession_of_genome_dir(genome_dir)}.json'))
 
-        has_pangenome = 'pangenome' in d
-        d['biome'] = self.get_gold_biome(d['gold_biome'])
+        has_pangenome = 'pangenome' in genome_dir
+        genome_dir['biome'] = self.get_gold_biome(genome_dir['gold_biome'])
 
-        # Get the genome set information
-        genome_set_info = self.get_or_create_genome_set(d.get('genome_set', 'NCBI'))
+        if 'annotations' not in genome_dir:
+            genome_dir['annotations'] = Genome.default_annotations()
 
-        # Initialize the annotations field if it doesn't exist
-        if 'annotations' not in d:
-            d['annotations'] = Genome.default_annotations()
+        genome_set_name = genome_dir.get('genome_set', 'NCBI')
+        genome_dir['annotations']['genome_set'] = {'name': genome_set_name}
 
-        # Add the genome set to the annotations
-        # d['annotations'][Genome.GENOME_SETS].append(genome_set_info)
-
-        # Keep the genome_set field for backward compatibility
-        d['genome_set'] = genome_set_info
+        genome_dir['genome_set'] = genome_set_name
 
         if has_pangenome:
-            d.update(d['pangenome'])
-            del d['pangenome']
-        d.setdefault('num_genomes_total', 1)
+            genome_dir.update(genome_dir['pangenome'])
+            del genome_dir['pangenome']
+        genome_dir.setdefault('num_genomes_total', 1)
 
-        if 'num_genomes_non_redundant' in d:
-            del d['num_genomes_non_redundant']
+        genome_dir.pop('num_genomes_non_redundant', None)
 
-        if 'geographic_origin' in d:
-            d['geo_origin'] = self.get_geo_location(d['geographic_origin'])
-            del d['geographic_origin']
+        if 'geographic_origin' in genome_dir:
+            genome_dir['geo_origin'] = self.get_geo_location(genome_dir['geographic_origin'])
+            del genome_dir['geographic_origin']
 
-        del d['gold_biome']
+        genome_dir.pop('gold_biome', None)
 
-        if 'rna_5.8s' in d:
-            d['rna_5_8s'] = d['rna_5.8s']
-            del d['rna_5.8s']
+        if 'rna_5.8s' in genome_dir:
+            genome_dir['rna_5_8s'] = genome_dir['rna_5.8s']
+            del genome_dir['rna_5.8s']
 
-        return d, has_pangenome
+        return genome_dir, has_pangenome
 
     def get_geo_location(self, location):
         return GeographicLocation \
@@ -314,7 +255,6 @@ class Command(BaseCommand):
             defaults=data)
         g.save(using=self.database)
 
-        # in case we are updating and the geo range metadata has changed:
         if g.pangenome_geographic_range.exists():
             g.pangenome_geographic_range.clear()
 
@@ -323,150 +263,90 @@ class Command(BaseCommand):
 
         return g, has_pangenome
 
-    def upload_cog_results(self, genome, d):
-        genome_cogs = os.path.join(d, 'genome', f'{genome.accession}_cog_summary.tsv')
-        self.upload_cog_result(genome, genome_cogs)
-        logger.info('Loaded Genome COG for {}'.format(genome.accession))
+    def _upload_annotation_file(self, genome, directory, filename_template, subfolder, row_parser, annotation_key):
+        filepath = os.path.join(directory, subfolder, filename_template.format(accession=genome.accession))
+        if not os.path.isfile(filepath):
+            logger.warning(f"Annotation file not found: {filepath}")
+            return
 
-    def upload_cog_result(self, genome, f):
-        counts = read_tsv_w_headers(f)
-        for cc in counts:
-            self.upload_cog_count(genome, cc)
-        logger.info('Loaded Genome COG for {}'.format(genome.accession))
+        self._ensure_annotations(genome)
+        genome.annotations[annotation_key] = []
 
-    def upload_cog_count(self, genome, cog_count):
-        c_name = cog_count['COG_category']
-        count_val = int(cog_count['Counts'])
+        for row in read_tsv_w_headers(filepath):
+            genome.annotations[annotation_key].append(row_parser(row))
 
-        # Check if annotations field exists, initialize if not
-        if not hasattr(genome, 'annotations') or genome.annotations is None:
-            genome.annotations = genome.default_annotations()
-
-        # # Check if the COG category already exists in the annotations
-        cog_entry = next((item for item in genome.annotations['cog_categories']
-                          if item.get('name') == c_name), None)
-
-        if cog_entry:
-            # Update existing entry
-            cog_entry['count'] = count_val
-        else:
-            # Add new entry
-            genome.annotations['cog_categories'].append({
-                'name': c_name,
-                'count': count_val
-            })
-
-        # Save the genome with updated annotations
         genome.save(using=self.database)
+        logger.info(f"Loaded {annotation_key} for {genome.accession}")
 
+    def _parse_cog_row(self, row):
+        return {'name': row['COG_category'], 'count': int(row['Counts'])}
 
-    def upload_kegg_class_results(self, genome, d):
-        genome_kegg_classes = os.path.join(d, 'genome', f'{genome.accession}_kegg_classes.tsv')
-        self.upload_kegg_class_result(genome, genome_kegg_classes)
-        logger.info(
-            'Loaded Genome KEGG classes for {}'.format(genome.accession))
+    def _parse_kegg_class_row(self, row):
+        return {'class_id': row['KEGG_class'], 'count': int(row['Counts'])}
 
-    def upload_kegg_class_result(self, genome, f):
-        kegg_matches = read_tsv_w_headers(f)
-        for kegg_match in kegg_matches:
-            self.upload_kegg_class_count(genome, kegg_match)
+    def _parse_kegg_module_row(self, row):
+        return {'name': row['KEGG_module'], 'count': int(row['Counts'])}
 
-    def upload_kegg_class_count(self, genome, kegg_match):
-        kegg_id = kegg_match['KEGG_class']
-        count_val = int(kegg_match['Counts'])
+    def _parse_antismash_row(self, row):
+        parts = row.strip().split('\t')
+        if len(parts) < 3:
+            return None  # or raise? depends how charitable you feel
+        cluster = parts[-3]
+        features = parts[-2]
+        count_val = len(features.split(';')) if features else 0
 
-        # Check if annotations field exists, initialize if not
-        if not hasattr(genome, 'annotations') or genome.annotations is None:
-            genome.annotations = genome.default_annotations()
+        return {
+            'name': cluster,
+            'count': count_val,
+            'features': features or ""
+        }
 
-        # Check if the KEGG class already exists in the annotations
-        kegg_entry = next((item for item in genome.annotations['kegg_classes']
-                           if item.get('class_id') == kegg_id), None)
+    def upload_cog_results(self, genome, directory):
+        self._upload_annotation_file(
+            genome, directory,
+            filename_template="{accession}_cog_summary.tsv",
+            subfolder="genome",
+            row_parser=self._parse_cog_row,
+            annotation_key="cog_categories"
+        )
 
-        if kegg_entry:
-            # Update existing entry
-            kegg_entry['count'] = count_val
-        else:
-            # Add new entry
-            genome.annotations['kegg_classes'].append({
-                'class_id': kegg_id,
-                'count': count_val
-            })
+    def upload_kegg_class_results(self, genome, directory):
+        self._upload_annotation_file(
+            genome, directory,
+            filename_template="{accession}_kegg_classes.tsv",
+            subfolder="genome",
+            row_parser=self._parse_kegg_class_row,
+            annotation_key="kegg_classes"
+        )
 
-        # Save the genome with updated annotations
-        genome.save(using=self.database)
-
-    def upload_kegg_module_results(self, genome, d):
-        genome_kegg_modules = os.path.join(d, 'genome', f'{genome.accession}_kegg_modules.tsv')
-        self.upload_kegg_module_result(genome, genome_kegg_modules)
-        logger.info(
-            'Loaded Genome KEGG modules for {}'.format(genome.accession))
-
-    def upload_kegg_module_result(self, genome, f):
-        kegg_matches = read_tsv_w_headers(f)
-        for kegg_match in kegg_matches:
-            self.upload_kegg_module_count(genome, kegg_match)
-
-    def upload_kegg_module_count(self, genome, kegg_match):
-        kegg_module_id = kegg_match['KEGG_module']
-        count_val = int(kegg_match['Counts'])
-
-        # Check if annotations field exists, initialize if not
-        if not hasattr(genome, 'annotations') or genome.annotations is None:
-            genome.annotations = genome.default_annotations()
-
-        # Check if the KEGG module already exists in the annotations
-        kegg_entry = next((item for item in genome.annotations['kegg_modules']
-                           if item.get('name') == kegg_module_id), None)
-
-        if kegg_entry:
-            # Update existing entry
-            kegg_entry['count'] = count_val
-        else:
-            # Add new entry
-            genome.annotations['kegg_modules'].append({
-                'name': kegg_module_id,
-                'count': count_val
-            })
-
-        # Save the genome with updated annotations
-        genome.save(using=self.database)
+    def upload_kegg_module_results(self, genome, directory):
+        self._upload_annotation_file(
+            genome, directory,
+            filename_template="{accession}_kegg_modules.tsv",
+            subfolder="genome",
+            row_parser=self._parse_kegg_module_row,
+            annotation_key="kegg_modules"
+        )
 
     def upload_antismash_geneclusters(self, genome, directory):
-        """Upload antiSMASH results to the genome annotations field
-        """
         file = os.path.join(directory, 'genome', 'geneclusters.txt')
-
         if not os.path.exists(file):
             logger.warning('Genome {} does not have antiSMASH geneclusters'.format(genome.accession))
             return
 
-        # Check if annotations field exists, initialize if not
-        if not hasattr(genome, 'annotations') or genome.annotations is None:
-            genome.annotations = genome.default_annotations()
-
-        # Clear existing antiSMASH gene clusters for this genome
-        genome.annotations['antismash_gene_clusters'] = []
+        self._ensure_annotations(genome)
+        genome.annotations[genome.ANTISMASH_GENE_CLUSTERS] = []
 
         with open(file, 'rt') as tsv:
-            for row in tsv:
-                *_, cluster, features, _ = row.split('\t')
+            for line in tsv:
+                parsed = self._parse_antismash_row(line)
+                if not parsed:
+                    continue
 
-                # Calculate the count
-                count_val = len(features.split(';')) if len(features) else 0
+                genome.annotations[genome.ANTISMASH_GENE_CLUSTERS].append(parsed)
 
-                # Add to annotations
-                genome.annotations[genome.ANTISMASH_GENE_CLUSTERS].append({
-                    'name': cluster,
-                    'count': count_val,
-                    'features': features if len(features) else ""
-                })
-
-            # Save the genome with updated annotations
-            genome.save(using=self.database)
-
-            logger.info(
-                'Loaded Genome AntiSMASH geneclusters for {}'.format(genome.accession))
+        genome.save(using=self.database)
+        logger.info(f"Loaded Genome AntiSMASH geneclusters for {genome.accession}")
 
     def upload_genome_files(self, genome, directory, has_pangenome):
         logger.info('Uploading genome files...')
