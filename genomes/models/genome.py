@@ -3,6 +3,22 @@ from django.db import models
 from analyses.base_models.with_downloads_models import WithDownloadsModel
 from analyses.models import Biome
 
+# Annotation field constants
+COG_CATEGORIES = 'cog_categories'
+KEGG_CLASSES = 'kegg_classes'
+KEGG_MODULES = 'kegg_modules'
+ANTISMASH_GENE_CLUSTERS = 'antismash_gene_clusters'
+GENOME_SETS = 'genome_sets'
+
+
+def default_annotations():
+    return {
+        COG_CATEGORIES: [],
+        KEGG_CLASSES: [],
+        KEGG_MODULES: [],
+        ANTISMASH_GENE_CLUSTERS: [],
+        GENOME_SETS: [],
+    }
 
 class Genome(WithDownloadsModel):
 
@@ -12,21 +28,6 @@ class Genome(WithDownloadsModel):
         (MAG, 'MAG'),
         (ISOLATE, 'Isolate'),
     )
-
-    # Annotation field constants
-    COG_CATEGORIES = 'cog_categories'
-    KEGG_CLASSES = 'kegg_classes'
-    KEGG_MODULES = 'kegg_modules'
-    ANTISMASH_GENE_CLUSTERS = 'antismash_gene_clusters'
-
-    @staticmethod
-    def default_annotations():
-        return {
-            Genome.COG_CATEGORIES: [],
-            Genome.KEGG_CLASSES: [],
-            Genome.KEGG_MODULES: [],
-            Genome.ANTISMASH_GENE_CLUSTERS: [],
-        }
 
     # objects = GenomeManager()
 
@@ -99,7 +100,9 @@ class Genome(WithDownloadsModel):
     pangenome_core_size = models.IntegerField(db_column='pangenome_core_prop', null=True, blank=True)
     pangenome_accessory_size = models.IntegerField(db_column='pangenome_accessory_prop', null=True, blank=True)
 
-    annotations = models.JSONField(default=default_annotations.__func__, db_column='annotations')
+    annotations = models.JSONField(default=default_annotations, db_column='annotations')
+    default_annotations = staticmethod(default_annotations)
+
 
     last_update = models.DateTimeField(db_column='last_update', auto_now=True)
     first_created = models.DateTimeField(db_column='first_created', auto_now_add=True)

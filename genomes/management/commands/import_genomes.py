@@ -15,8 +15,7 @@ from ..lib.genome_util import (
     read_tsv_w_headers, read_json,
     apparent_accession_of_genome_dir
 )
-from ...models import GenomeCatalogue, GenomeCogCat, GenomeKeggClass, \
-    GenomeKeggModule, GenomeAntiSmashGC, GeographicLocation, Genome
+from ...models import GenomeCatalogue, GeographicLocation, Genome
 from ...models.GenomeSet import GenomeSet
 
 logger = logging.getLogger(__name__)
@@ -223,21 +222,57 @@ class Command(BaseCommand):
         self.upload_antismash_geneclusters(genome, directory)
         self.upload_genome_files(genome, directory, has_pangenome)
 
+    # def get_gold_biome(self, lineage):
+    #     logger.info(f'Here is my lineage Getting gold biome for {lineage}')
+    #     biome = Biome.objects.using(self.database).filter(lineage__iexact=lineage).first()
+    #     if not biome:
+    #         raise Biome.DoesNotExist()
+    #     return biome
+
     def get_gold_biome(self, lineage):
-        biome = Biome.objects.using(self.database).filter(lineage__iexact=lineage).first()
+        logger.info(f'Getting gold biome for lineage: {lineage}')
+
+        # Convert lineage to ltree path
+        path = Biome.lineage_to_path(lineage)
+
+        biome = Biome.objects.using(self.database).filter(path=path).first()
         if not biome:
             raise Biome.DoesNotExist()
         return biome
 
     def get_or_create_genome_set(self, setname):
-        return GenomeSet.objects.using(self.database).get_or_create(name=setname)[0]
+        """Get or create a genome set and return a dictionary with its information.
+
+        This method is used to store genome set information in the annotations field.
+        """
+        # Get or create the GenomeSet object to get its ID
+        genome_set_obj = GenomeSet.objects.using(self.database).get_or_create(name=setname)[0]
+
+        # Return a dictionary with the genome set information
+        return {
+            'id': genome_set_obj.id,
+            'name': genome_set_obj.name
+        }
 
     def prepare_genome_data(self, genome_dir):
         d = read_json(os.path.join(genome_dir, f'{apparent_accession_of_genome_dir(genome_dir)}.json'))
 
         has_pangenome = 'pangenome' in d
         d['biome'] = self.get_gold_biome(d['gold_biome'])
-        d['genome_set'] = self.get_or_create_genome_set(d.get('genome_set', 'NCBI'))
+
+        # Get the genome set information
+        genome_set_info = self.get_or_create_genome_set(d.get('genome_set', 'NCBI'))
+
+        # Initialize the annotations field if it doesn't exist
+        if 'annotations' not in d:
+            d['annotations'] = Genome.default_annotations()
+
+        # Add the genome set to the annotations
+        # d['annotations'][Genome.GENOME_SETS].append(genome_set_info)
+
+        # Keep the genome_set field for backward compatibility
+        d['genome_set'] = genome_set_info
+
         if has_pangenome:
             d.update(d['pangenome'])
             del d['pangenome']
@@ -303,15 +338,12 @@ class Command(BaseCommand):
         c_name = cog_count['COG_category']
         count_val = int(cog_count['Counts'])
 
-        # Get the COG category for description
-        cog = self.get_cog_cat(c_name)
-
         # Check if annotations field exists, initialize if not
         if not hasattr(genome, 'annotations') or genome.annotations is None:
             genome.annotations = genome.default_annotations()
 
-        # Check if the COG category already exists in the annotations
-        cog_entry = next((item for item in genome.annotations[genome.COG_CATEGORIES]
+        # # Check if the COG category already exists in the annotations
+        cog_entry = next((item for item in genome.annotations['cog_categories']
                           if item.get('name') == c_name), None)
 
         if cog_entry:
@@ -319,18 +351,14 @@ class Command(BaseCommand):
             cog_entry['count'] = count_val
         else:
             # Add new entry
-            genome.annotations[genome.COG_CATEGORIES].append({
+            genome.annotations['cog_categories'].append({
                 'name': c_name,
-                'description': cog.description,
                 'count': count_val
             })
 
         # Save the genome with updated annotations
         genome.save(using=self.database)
 
-    def get_cog_cat(self, c_name):
-        return GenomeCogCat.objects.using(self.database) \
-            .get_or_create(name=c_name)[0]
 
     def upload_kegg_class_results(self, genome, d):
         genome_kegg_classes = os.path.join(d, 'genome', f'{genome.accession}_kegg_classes.tsv')
@@ -343,23 +371,16 @@ class Command(BaseCommand):
         for kegg_match in kegg_matches:
             self.upload_kegg_class_count(genome, kegg_match)
 
-    def get_kegg_class(self, kegg_cls_id):
-        return GenomeKeggClass.objects.using(self.database) \
-            .get_or_create(class_id=kegg_cls_id)[0]
-
     def upload_kegg_class_count(self, genome, kegg_match):
         kegg_id = kegg_match['KEGG_class']
         count_val = int(kegg_match['Counts'])
-
-        # Get the KEGG class for name and parent info
-        kegg_class = self.get_kegg_class(kegg_id)
 
         # Check if annotations field exists, initialize if not
         if not hasattr(genome, 'annotations') or genome.annotations is None:
             genome.annotations = genome.default_annotations()
 
         # Check if the KEGG class already exists in the annotations
-        kegg_entry = next((item for item in genome.annotations[genome.KEGG_CLASSES]
+        kegg_entry = next((item for item in genome.annotations['kegg_classes']
                            if item.get('class_id') == kegg_id), None)
 
         if kegg_entry:
@@ -367,12 +388,8 @@ class Command(BaseCommand):
             kegg_entry['count'] = count_val
         else:
             # Add new entry
-            parent_id = kegg_class.parent.class_id if kegg_class.parent else None
-
-            genome.annotations[genome.KEGG_CLASSES].append({
+            genome.annotations['kegg_classes'].append({
                 'class_id': kegg_id,
-                'name': kegg_class.name,
-                'parent_id': parent_id,
                 'count': count_val
             })
 
@@ -390,23 +407,16 @@ class Command(BaseCommand):
         for kegg_match in kegg_matches:
             self.upload_kegg_module_count(genome, kegg_match)
 
-    def get_kegg_module(self, name):
-        return GenomeKeggModule.objects.using(self.database) \
-            .get_or_create(name=name)[0]
-
     def upload_kegg_module_count(self, genome, kegg_match):
         kegg_module_id = kegg_match['KEGG_module']
         count_val = int(kegg_match['Counts'])
-
-        # Get the KEGG module for description
-        kegg_module = self.get_kegg_module(kegg_module_id)
 
         # Check if annotations field exists, initialize if not
         if not hasattr(genome, 'annotations') or genome.annotations is None:
             genome.annotations = genome.default_annotations()
 
         # Check if the KEGG module already exists in the annotations
-        kegg_entry = next((item for item in genome.annotations[genome.KEGG_MODULES]
+        kegg_entry = next((item for item in genome.annotations['kegg_modules']
                            if item.get('name') == kegg_module_id), None)
 
         if kegg_entry:
@@ -414,9 +424,8 @@ class Command(BaseCommand):
             kegg_entry['count'] = count_val
         else:
             # Add new entry
-            genome.annotations[genome.KEGG_MODULES].append({
+            genome.annotations['kegg_modules'].append({
                 'name': kegg_module_id,
-                'description': kegg_module.description,
                 'count': count_val
             })
 
@@ -437,16 +446,11 @@ class Command(BaseCommand):
             genome.annotations = genome.default_annotations()
 
         # Clear existing antiSMASH gene clusters for this genome
-        genome.annotations[genome.ANTISMASH_GENE_CLUSTERS] = []
+        genome.annotations['antismash_gene_clusters'] = []
 
         with open(file, 'rt') as tsv:
             for row in tsv:
                 *_, cluster, features, _ = row.split('\t')
-
-                # Get or create the antiSMASH gene cluster
-                as_cluster, _ = GenomeAntiSmashGC.objects \
-                    .using(self.database) \
-                    .get_or_create(name=cluster)
 
                 # Calculate the count
                 count_val = len(features.split(';')) if len(features) else 0
@@ -454,7 +458,6 @@ class Command(BaseCommand):
                 # Add to annotations
                 genome.annotations[genome.ANTISMASH_GENE_CLUSTERS].append({
                     'name': cluster,
-                    'description': as_cluster.description,
                     'count': count_val,
                     'features': features if len(features) else ""
                 })
