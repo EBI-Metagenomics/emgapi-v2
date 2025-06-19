@@ -2,7 +2,7 @@ import os
 import re
 from pathlib import Path
 import logging
-from prefect import task, Flow, unmapped, map
+from prefect import task, Flow, unmapped, map, flow
 
 from analyses.models import Biome
 from genomes.management.lib.genome_util import find_genome_results, sanity_check_genome_output_proks, \
@@ -114,13 +114,27 @@ def finalize_catalogue(catalogue):
     catalogue.calculate_genome_count()
     catalogue.save()
 
-with Flow("genome-catalogue-import") as flow:
-    options = parse_options({...})
-    version = validate_pipeline_version(options['pipeline_version'])
-    catalogue = get_catalogue(options)
-    genome_dirs = gather_genome_dirs(options['catalogue_dir'], options['catalogue_type'])
+# with Flow("genome-catalogue-import") as flow:
+#     options = parse_options({...})
+#     version = validate_pipeline_version(options['pipeline_version'])
+#     catalogue = get_catalogue(options)
+#     genome_dirs = gather_genome_dirs(options['catalogue_dir'], options['catalogue_type'])
+#     processed = map(process_genome_dir, unmapped(catalogue), genome_dirs)
+#     finalize_catalogue(catalogue)
+
+@flow(name="import_genomes_flow")
+def import_genomes_flow(options: dict):
+    options = parse_options.fn(options)
+    version = validate_pipeline_version.fn(options['pipeline_version'])
+    catalogue = get_catalogue.fn(options)
+    genome_dirs = gather_genome_dirs.fn(options['catalogue_dir'], options['catalogue_type'])
+
     processed = map(process_genome_dir, unmapped(catalogue), genome_dirs)
-    finalize_catalogue(catalogue)
+    finalize_catalogue.fn(catalogue)
+    upload_catalogue_summary.fn(catalogue, options['catalogue_dir'])
+    upload_catalogue_files.fn(catalogue, options['catalogue_dir'])
+    validate_import_summary.fn(catalogue)
+
 
 @task
 def upload_catalogue_summary(catalogue, catalogue_dir):
