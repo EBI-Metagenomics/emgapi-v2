@@ -4,6 +4,7 @@ from django.db import models
 from pydantic import BaseModel
 
 from emgapiv2.async_utils import anysync_property
+from emgapiv2.dict_utils import some, add
 from emgapiv2.enum_utils import FutureStrEnum
 from emgapiv2.log_utils import mask_sensitive_data
 from emgapiv2.model_utils import JSONFieldWithSchema
@@ -129,3 +130,25 @@ def test_enum_stringification():
 
     assert str(MyEnum.HELLO) == "hello"
     assert str(MyEnum.HELLO.value) == "hello"
+
+
+def test_dict_utils_some():
+    assert some({"planet": "world", "message": "hello"}, {"planet", "message"}) == {
+        "planet": "world",
+        "message": "hello",
+    }
+    assert some({1: 1, 2: 2, 3: 3}, {1, 2}) == {1: 1, 2: 2}
+    assert some({1: 1, 2: 2, 3: 3}, {1, 2, 3, 4}) == {1: 1, 2: 2, 3: 3}
+    assert some({1: 1, 2: 2, 3: 3}, {1, 2, 3, 4}, default=None) == {
+        1: 1,
+        2: 2,
+        3: 3,
+        4: None,
+    }
+    assert some({}, {1}) == {}
+    assert some({}, {1}, None) == {1: None}
+
+
+def test_dict_utils_add():
+    assert add({1: 1}, {2: 2}) == {1: 1, 2: 2}
+    assert add({1: 1}, {1: 2}) == {1: 2}

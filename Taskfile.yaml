@@ -15,7 +15,7 @@ tasks:
   create-pool:
     desc: "Create a Prefect workpool. E.g. NAME=slurm task create-process-pool"
     cmds:
-      - docker compose exec app python manage.py prefectcli work-pool create --annotation_type {{.TYPE}} {{.CLI_ARGS}} {{.NAME}}
+      - docker compose exec -e PREFECT_CLIENT_RETRY_EXTRA_CODES=0 app python manage.py prefectcli work-pool create --type {{.TYPE}} {{.CLI_ARGS}} {{.NAME}}
     vars:
       TYPE: "process"
       NAME: "slurm"
@@ -24,7 +24,7 @@ tasks:
     desc: "Build and deploy a prefect flow. E.g. FLOW=mgnify_run_pipeline_flow task deploy-flow"
     cmds:
       - docker compose --profile prefect up -d
-      - docker compose run app prefectcli deploy {{ .FILE | default (list "workflows/flows/" .FLOW ".py" | join "") }}:{{.FLOW}} --name {{.FLOW}}_deployment -p {{.POOL}} --prefect-file workflows/prefect_deployments/prefect-dev-donco.yaml
+      - docker compose run -e PREFECT_CLIENT_RETRY_EXTRA_CODES=0 app prefectcli deploy {{ .FILE | default (list "workflows/flows/" .FLOW ".py" | join "") }}:{{.FLOW}} --name {{.FLOW}}_deployment -p {{.POOL}} --prefect-file workflows/prefect_deployments/prefect-dev-donco.yaml
     vars:
       POOL: "slurm"
     requires:
@@ -75,7 +75,7 @@ tasks:
   testk:
     desc: "Run pytest for a subset of unit tests, without coverage noise. E.g. `task testk -- amplicon`"
     cmds:
-      - docker compose run --entrypoint /bin/bash app -c "pytest --no-cov -s -k {{.CLI_ARGS}}"
+      - docker compose run --entrypoint /bin/bash app -c "pytest --no-cov -s -p no:sugar -k {{.CLI_ARGS}}"
 
   make-dev-data:
     desc: "Populate the app database with some demo data for development purposes"
@@ -140,3 +140,10 @@ tasks:
       you can verify that the slurm job actually continued to run or completed in the background and is
       "reconnected" to by the restarted flow.
       This is desired behaviour.
+
+  generate-ena-util-stub:
+    desc: "(Re)Generate an ena utils request stub file for a given result type of the ENA Portal API. Usage: task generate-ena-util-study -- study"
+    cmds:
+      - docker compose run --entrypoint /bin/bash app -c "python workflows/ena_utils/generate_ena_model.py {{.CLI_ARGS}}" >> workflows/ena_utils/{{.CLI_ARGS}}.py
+      - echo "See ./workflows/ena_utils/{{.CLI_ARGS}}.py"
+      - echo "You may also need to update workflows/ena_utils/requestors.py:ENAAPIRequest"

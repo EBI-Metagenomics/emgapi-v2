@@ -83,12 +83,25 @@ def generate_markergene_summary_for_pipeline_run(
             ) as f:
                 summary_for_ss = json.load(f)
 
+            if (
+                ampregion_file := Path(workdir)
+                / f"{prefix}_ampregion_study_summary.json"
+            ).exists():
+                with ampregion_file.open("r") as f:
+                    asv_summary_for_ss = json.load(f)
+            else:
+                asv_summary_for_ss = {}
+
     for run_accession, summary_for_run in summary_for_ss.items():
+        marker_gene_summary_for_run = {
+            Analysis.CLOSED_REFERENCE: summary_for_run,
+            Analysis.ASV: asv_summary_for_ss.get(run_accession, {}),
+        }
         analysis = study.analyses.get(
             run__ena_accessions__icontains=run_accession,
             pipeline_version=Analysis.PipelineVersions.v6,
         )
         analysis.metadata[analysis.KnownMetadataKeys.MARKER_GENE_SUMMARY] = (
-            summary_for_run
+            marker_gene_summary_for_run
         )
         analysis.save()

@@ -28,6 +28,7 @@ def mgnify_assemblies(raw_read_run, raw_reads_mgnify_study, assemblers):
             assembler=assembler_metaspades,
             dir="slurm-dev-environment/fs/hps/tests/assembly_uploader",
             metadata={"coverage": 20},
+            sample=run.sample,
         )
         assembly_objects.append(assembly_obj)
 
@@ -40,6 +41,7 @@ def mgnify_assemblies(raw_read_run, raw_reads_mgnify_study, assemblers):
             assembler=assembler_megahit,
             dir="/hps/tests/assembly_uploader",
             metadata={"coverage": 10},
+            sample=run.sample,
         )
         assembly_objects.append(assembly)
     return assembly_objects
@@ -49,7 +51,7 @@ def mgnify_assemblies(raw_read_run, raw_reads_mgnify_study, assemblers):
 def mgnify_assemblies_completed(mgnify_assemblies):
     run_accession = "SRR6180434"
     metaspades_assemblies = mg_models.Assembly.objects.filter(
-        assembler__name="metaspades", run__ena_accessions__contains=run_accession
+        assembler__name="metaspades", run__ena_accessions__contains=[run_accession]
     )
     for item in metaspades_assemblies:
         item.mark_status("assembly_started")
@@ -61,7 +63,7 @@ def mgnify_assemblies_completed(mgnify_assemblies):
 def mgnify_assembly_completed_uploader_sanity_check(mgnify_assemblies):
     run_accession = "SRR6180435"
     metaspades_assemblies = mg_models.Assembly.objects.filter(
-        assembler__name="metaspades", run__ena_accessions__contains=run_accession
+        assembler__name="metaspades", run__ena_accessions__contains=[run_accession]
     )
     for item in metaspades_assemblies:
         item.mark_status("assembly_completed")

@@ -8,6 +8,9 @@ from prefect import task
 from analyses.models import Analysis, Assembly, Study
 
 
+logger = logging.getLogger(__name__)
+
+
 @task(log_prints=True)
 def task_mark_assembly_status(
     assembly: Assembly,
@@ -112,5 +115,5 @@ def add_study_watchers(study: Study, watcher_usernames: List[UserChoicesEnum]):
     for watcher in watcher_usernames:
         user = User.objects.get(username=watcher.name)
         study.watchers.add(user)
-        logging.info(f"{user} now watches {study}")
+        logger.info(f"{user} now watches {study}")
     study.save()
