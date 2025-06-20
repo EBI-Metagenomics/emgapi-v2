@@ -11,7 +11,10 @@ class GenomeCatalogue(BaseModel):
     version = models.CharField(db_column="VERSION", max_length=20)
     name = models.CharField(db_column="NAME", max_length=100, unique=True)
     description = models.TextField(
-        db_column="DESCRIPTION", null=True, blank=True, help_text="This is a description of the catalogue."
+        db_column="DESCRIPTION",
+        null=True,
+        blank=True,
+        help_text="This is a description of the catalogue.",
     )
     protein_catalogue_name = models.CharField(
         db_column="PROTEIN_CATALOGUE_NAME", max_length=100, null=True, blank=True
