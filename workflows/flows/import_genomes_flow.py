@@ -1,8 +1,11 @@
 import os
 import re
 from pathlib import Path
-import logging
-from prefect import task, Flow, unmapped, map, flow
+
+import django
+from prefect import task, flow, get_run_logger
+
+django.setup()
 
 from analyses.models import Biome
 from genomes.management.lib.genome_util import find_genome_results, sanity_check_genome_output_proks, \
@@ -11,7 +14,6 @@ from genomes.management.lib.genome_util import find_genome_results, sanity_check
     upload_antismash_geneclusters, upload_genome_files
 from genomes.models import GenomeCatalogue, Genome, GeographicLocation
 
-logger = logging.getLogger(__name__)
 
 @task
 def validate_pipeline_version(version: str) -> int:
@@ -79,6 +81,7 @@ def gather_genome_dirs(catalogue_dir, catalogue_type):
 @task
 def process_genome_dir(catalogue, genome_dir):
     accession = apparent_accession_of_genome_dir(genome_dir)
+    logger = get_run_logger()
     logger.info(f"Processing genome: {accession}")
 
     genome_data = read_json(os.path.join(genome_dir, f"{accession}.json"))
@@ -114,30 +117,26 @@ def finalize_catalogue(catalogue):
     catalogue.calculate_genome_count()
     catalogue.save()
 
-# with Flow("genome-catalogue-import") as flow:
-#     options = parse_options({...})
-#     version = validate_pipeline_version(options['pipeline_version'])
-#     catalogue = get_catalogue(options)
-#     genome_dirs = gather_genome_dirs(options['catalogue_dir'], options['catalogue_type'])
-#     processed = map(process_genome_dir, unmapped(catalogue), genome_dirs)
-#     finalize_catalogue(catalogue)
-
 @flow(name="import_genomes_flow")
 def import_genomes_flow(options: dict):
     options = parse_options.fn(options)
-    version = validate_pipeline_version.fn(options['pipeline_version'])
     catalogue = get_catalogue.fn(options)
-    genome_dirs = gather_genome_dirs.fn(options['catalogue_dir'], options['catalogue_type'])
 
-    processed = map(process_genome_dir, unmapped(catalogue), genome_dirs)
+    # genome_dirs = gather_genome_dirs.fn(options['catalogue_dir'], options['catalogue_type'])
+
+    # processed = map(process_genome_dir, unmapped(catalogue), genome_dirs)
     finalize_catalogue.fn(catalogue)
     upload_catalogue_summary.fn(catalogue, options['catalogue_dir'])
     upload_catalogue_files.fn(catalogue, options['catalogue_dir'])
     validate_import_summary.fn(catalogue)
 
+    # upload_catalogue_files(catalogue, options['catalogue_dir'])
+
+
 
 @task
 def upload_catalogue_summary(catalogue, catalogue_dir):
+    logger = get_run_logger()
     summary_file = Path(catalogue_dir) / "catalogue_summary.json"
     if summary_file.is_file():
         catalogue.other_stats = read_json(summary_file)
@@ -147,10 +146,11 @@ def upload_catalogue_summary(catalogue, catalogue_dir):
         logger.warning(f"No catalogue summary found at {summary_file}")
     catalogue.save()
 
-upload_catalogue_summary(catalogue, options['catalogue_dir'])
+# upload_catalogue_summary(catalogue, options['catalogue_dir'])
 
 @task
 def upload_genome_downloads(genome, genome_dir, has_pangenome):
+    logger = get_run_logger()
     from analyses.base_models.with_downloads_models import DownloadFile, DownloadType, DownloadFileType
 
     genome_file_specs = [
@@ -197,6 +197,7 @@ def upload_genome_downloads(genome, genome_dir, has_pangenome):
 
 @task
 def upload_catalogue_files(catalogue, catalogue_dir):
+    logger = get_run_logger()
     from analyses.base_models.with_downloads_models import DownloadFile, DownloadType, DownloadFileType
 
     summary_path = Path(catalogue_dir) / "phylo_tree.json"
@@ -215,13 +216,13 @@ def upload_catalogue_files(catalogue, catalogue_dir):
             logger.info("Catalogue phylogenetic tree file uploaded.")
         except FileExistsError:
             logger.warning("Duplicate phylogenetic tree file detected. Skipping upload.")
+
     else:
         logger.warning("No phylogenetic tree file found in catalogue directory.")
 
-upload_catalogue_files(catalogue, options['catalogue_dir'])
-
 @task
 def validate_import_summary(catalogue):
+    logger = get_run_logger()
     genomes = Genome.objects.filter(catalogue=catalogue)
     total = genomes.count()
     with_annot = sum(1 for g in genomes if g.annotations)
@@ -231,5 +232,3 @@ def validate_import_summary(catalogue):
         logger.warning("Some genomes are missing annotations!")
     if total != with_files:
         logger.warning("Some genomes are missing downloads!")
-
-validate_import_summary(catalogue)
