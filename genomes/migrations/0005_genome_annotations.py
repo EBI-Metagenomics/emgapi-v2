@@ -7,13 +7,16 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('genomes', '0004_remove_genomecatalogue_created_at_and_more'),
+        ("genomes", "0004_remove_genomecatalogue_created_at_and_more"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='genome',
-            name='annotations',
-            field=models.JSONField(db_column='annotations', default=genomes.models.genome.default_annotations),
+            model_name="genome",
+            name="annotations",
+            field=models.JSONField(
+                db_column="annotations",
+                default=genomes.models.genome.default_annotations,
+            ),
         ),
     ]

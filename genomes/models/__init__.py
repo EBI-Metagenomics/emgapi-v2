@@ -1,13 +1,5 @@
 from .genome import Genome
-from .GenomeAntiSmashGC import GenomeAntiSmashGC
-from .GenomeAntiSmashGCCounts import GenomeAntiSmashGCCounts
-from .GenomeCatalogue import GenomeCatalogue
-from .GenomeCogCat import GenomeCogCat
-from .GenomeCogCounts import GenomeCogCounts
-from .GenomeKeggClass import GenomeKeggClass
-from .GenomeKeggClassCounts import GenomeKeggClassCounts
-from .GenomeKeggModule import GenomeKeggModule
-from .GenomeKeggModuleCounts import GenomeKeggModuleCounts
-from .GeographicLocation import GeographicLocation
-from .file_format import FileFormat
-from .GenomeSet import GenomeSet
+from .geographic_location import GeographicLocation
+from .genome_catalogue import GenomeCatalogue
+
+__all__ = ["Genome", "GeographicLocation", "GenomeCatalogue"]
