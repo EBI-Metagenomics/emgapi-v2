@@ -44,7 +44,12 @@ DEBUG_TOOLBAR_CONFIG = {
 }
 
 
-ALLOWED_HOSTS = ["apiv2-dev.mgnify.org", "localhost", "www.ebi.ac.uk"]
+ALLOWED_HOSTS = [
+    "apiv2-dev.mgnify.org",
+    "localhost",
+    "www.ebi.ac.uk",
+    "host.docker.internal:8004",
+]
 
 
 emg_config_env = os.getenv("EMG_ENV_FILE")
@@ -79,6 +84,7 @@ INSTALLED_APPS = [
     "corsheaders",
     "ena",
     "analyses",
+    "genomes",
     "workflows",
 ]
 
@@ -367,3 +373,7 @@ LOGGING = {
 }
 
 NINJA_PAGINATION_CLASS = "ninja.pagination.PageNumberPagination"
+
+MAGS_FTP_SITE = "http://ftp.ebi.ac.uk/pub/databases/metagenomics/mgnify_genomes/"
+
+LATEST_MAGS_PIPELINE_TAG = "v1.2.1"
