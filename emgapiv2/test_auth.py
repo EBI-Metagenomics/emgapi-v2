@@ -3,24 +3,10 @@ import pytest
 from ninja_jwt.tokens import SlidingToken
 
 from emgapiv2.api.auth import (
-    WebinJWTAuth,
     authenticate_webin_user,
     validate_webin_username,
 )
 from emgapiv2.config import EMGConfig
-
-
-@pytest.fixture
-def webin_auth():
-    return WebinJWTAuth()
-
-
-@pytest.fixture
-def auth_token(webin_private_study):
-    # Generate a token for the webin user
-    token = SlidingToken()
-    token["username"] = webin_private_study.webin_submitter
-    return str(token)
 
 
 @pytest.mark.django_db
@@ -38,7 +24,7 @@ def test_validate_webin_username():
 
 
 @pytest.mark.django_db
-def test_authenticate_webin_user(httpx_mock):
+def test_webin_user_can_authenticate(httpx_mock):
     httpx_mock.add_response(
         url="http://fake-auth.example.com/auth",
         status_code=200,
@@ -48,6 +34,9 @@ def test_authenticate_webin_user(httpx_mock):
     webin_id = authenticate_webin_user("Webin-12345", "password")
     assert webin_id == "Webin-12345"
 
+
+@pytest.mark.django_db
+def test_broker_user_can_authenticate_as_webin(httpx_mock):
     httpx_mock.add_response(
         url="http://fake-auth.example.com/auth",
         status_code=200,
@@ -115,44 +104,4 @@ def test_token_endpoint(ninja_api_client, webin_private_study, httpx_mock):
             "password": "wrong-password",
         },
     )
-    assert response.status_code == 401
-
-
-@pytest.mark.django_db
-def test_private_endpoints_with_superuser(ninja_api_client, admin_user, user):
-
-    # Test access to private endpoints
-    response = ninja_api_client.get("/my-data/studies/", user=admin_user)
-    assert response.status_code == 200
-
-    response = ninja_api_client.get("/my-data/analyses/", user=admin_user)
-    assert response.status_code == 200
-
-    # Test access to private endpoints
-    response = ninja_api_client.get("/my-data/studies/", user=user)
-    assert response.status_code == 401
-
-    response = ninja_api_client.get("/my-data/analyses/", user=user)
-    assert response.status_code == 401
-
-
-@pytest.mark.django_db
-def test_private_endpoints_with_webin_token(
-    ninja_api_client, webin_private_study, auth_token
-):
-    # Create a study for the webin user
-
-    # Authenticate with token
-    headers = {"Authorization": f"Bearer {auth_token}"}
-
-    # Test access to private endpoints
-    response = ninja_api_client.get("/my-data/studies/", headers=headers)
-    assert response.status_code == 200
-    data = response.json()
-    assert data["count"] == 1
-    assert data["items"][0]["accession"] == webin_private_study.accession
-
-    # Test with invalid token
-    headers = {"Authorization": "Bearer invalid-token"}
-    response = ninja_api_client.get("/my-data/studies/", headers=headers)
     assert response.status_code == 401

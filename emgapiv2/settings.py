@@ -32,8 +32,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "insecure-dev-key")
 
-# SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = os.getenv("DJANGO_DEBUG", False)
 
 
 def show_toolbar(request):
@@ -118,7 +117,12 @@ CORS_ALLOW_HEADERS = [
     "sentry-trace",
 ]
 
-CSRF_TRUSTED_ORIGINS = ["https://*.ebi.ac.uk"]
+CSRF_TRUSTED_ORIGINS = ["https://*.ebi.ac.uk", "http://localhost:9000"]
+
+if DEBUG:
+    logging.warning("DEBUG mode, allowing insecure CSRF cookies")
+    CSRF_COOKIE_HTTPONLY = False
+CSRF_COOKIE_SECURE = not DEBUG
 
 ROOT_URLCONF = "emgapiv2.urls"
 
@@ -367,7 +371,7 @@ LOGGING = {
     },
 }
 
-NINJA_PAGINATION_CLASS = "ninja.pagination.PageNumberPagination"
+NINJA_EXTRA = {"PAGINATION_CLASS": "ninja_extra.pagination.PageNumberPagination"}
 
 # Django Ninja JWT settings
 NINJA_JWT = {

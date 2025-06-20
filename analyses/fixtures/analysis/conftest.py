@@ -67,8 +67,8 @@ def raw_read_analyses(raw_read_run):
 
 
 @pytest.fixture
-def private_analysis_with_download(webin_private_study, raw_read_run):
-    run = raw_read_run[-1]
+def private_analysis_with_download(webin_private_study, private_run):
+    run = private_run
     run.sample.studies.add(webin_private_study)
 
     private_analysis = mg_models.Analysis.objects.create(

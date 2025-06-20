@@ -1,13 +1,12 @@
 from textwrap import dedent
 
-from ninja.pagination import RouterPaginated
 from ninja_extra import NinjaExtraAPI
 
 from emgapiv2.api.schema_utils import OpenApiKeywords, ApiSections
-from .analyses import router as analyses_router
-from .private import router as my_data_router
-from .samples import router as samples_router
-from .studies import router as studies_router
+from .analyses import AnalysisController
+from .private import MyDataController
+from .samples import SampleController
+from .studies import StudyController
 from .token_controller import WebinJwtController
 
 api = NinjaExtraAPI(
@@ -15,9 +14,7 @@ api = NinjaExtraAPI(
     description="The API for [MGnify](https://www.ebi.ac.uk/metagenomics), "
     "EBI’s platform for the submission, analysis, discovery and comparison of metagenomic-derived datasets.",
     urls_namespace="api",
-    csrf=True,
     version="2.0-alpha",
-    default_router=RouterPaginated(),
     docs_url="/",
     openapi_extra={
         "tags": [
@@ -77,10 +74,10 @@ api = NinjaExtraAPI(
     },
 )
 
-api.add_router("/analyses", analyses_router, tags=[ApiSections.ANALYSES])
-api.add_router("/samples", samples_router, tags=[ApiSections.SAMPLES])
-api.add_router("/studies", studies_router, tags=[ApiSections.STUDIES])
-api.add_router("/my-data", my_data_router, tags=[ApiSections.PRIVATE_DATA])
+api.register_controllers(AnalysisController)
+api.register_controllers(SampleController)
+api.register_controllers(StudyController)
+api.register_controllers(MyDataController)
 
 # Private data auth token provider (Webin JWTs)
 api.register_controllers(WebinJwtController)
