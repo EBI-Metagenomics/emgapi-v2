@@ -70,6 +70,7 @@ class Command(BaseCommand):
                                  'catalogues of different types. If none, the catalogue name is used.')
 
     def handle(self, *args, **options):
+
         version_str = options['pipeline_version'].strip()
         try:
             major_version_number = int(version_str.lstrip('v').split('.')[0])
@@ -110,6 +111,12 @@ class Command(BaseCommand):
             self.catalogue_type,
             self.catalogue_biome_label
         )
+        genomes = Genome.objects.filter(catalogue=self.catalogue_obj)
+        total = genomes.count()
+        logger.info(
+            f"IMPORT COMMAND Final Report: {total} genomes imported.")
+
+        return False
 
         logger.info("CLI %r" % options)
         genome_dirs = find_genome_results(self.catalogue_dir)
