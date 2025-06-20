@@ -3,7 +3,7 @@ from unittest.mock import patch, Mock
 
 import django
 import pytest
-from ninja.testing import TestClient
+from ninja_extra.testing import TestClient
 from prefect.testing.utilities import prefect_test_harness
 
 django.setup()

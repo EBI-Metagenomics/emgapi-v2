@@ -4,8 +4,11 @@ from typing import Optional
 
 import httpx
 from django.conf import settings
+from django.contrib.auth.models import AnonymousUser
+from django.http import HttpRequest
 from ninja import Schema
-from ninja.security import SessionAuthSuperUser as DjangoSuperUserAuth
+from ninja.security import SessionAuthSuperUser
+from ninja.security.base import AuthBase
 from ninja_jwt.authentication import JWTStatelessUserAuthentication
 
 __all__ = [
@@ -18,6 +21,8 @@ __all__ = [
     "WebinUser",
     "WebinTokenRefreshRequest",
 ]
+
+DjangoSuperUserAuth = SessionAuthSuperUser
 
 from ninja_jwt.models import TokenUser
 from ninja_jwt.schema import TokenRefreshSlidingInputSchema
@@ -123,3 +128,17 @@ def authenticate_webin_user(username: str, password: str) -> Optional[str]:
         return None
     except httpx.RequestError:
         return None
+
+
+class NoAuth(AuthBase):
+    """
+    This auth class is for public/private endpoints where an unauth'd user should get
+    """
+
+    openapi_type = "none"
+
+    def __call__(self, request: HttpRequest, **kwargs):
+        return self.authenticate(request, **kwargs)
+
+    def authenticate(self, request: HttpRequest, *args, **kwargs):
+        return AnonymousUser()
