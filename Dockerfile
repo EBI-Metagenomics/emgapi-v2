@@ -17,7 +17,7 @@ COPY requirements* .
 RUN pip install --ignore-installed --use-pep517 -r requirements-dev.txt
 RUN pip install --ignore-installed --use-pep517 -r requirements-tools.txt
 COPY . .
-ENTRYPOINT ["python", "manage.py"]
+RUN python manage.py collectstatic --noinput
 
 FROM django AS agent
 RUN apt -y update && apt -y upgrade
@@ -45,3 +45,12 @@ RUN pip install --ignore-installed --upgrade --use-pep517 --no-build-isolation h
 ENV TZ="Etc/UTC"
 
 ENTRYPOINT ["/usr/local/bin/submitter-entrypoint.sh", "python", "manage.py"]
+
+FROM python:3.12 AS ci
+WORKDIR /app
+COPY requirements* .
+RUN pip install --ignore-installed --use-pep517 -r requirements.txt
+RUN pip install --ignore-installed --use-pep517 -r requirements-dev.txt
+RUN pip install --ignore-installed --use-pep517 -r requirements-tools.txt
+COPY . .
+RUN python manage.py collectstatic --noinput

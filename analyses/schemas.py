@@ -17,8 +17,12 @@ from analyses.base_models.with_downloads_models import (
     DownloadFile,
     DownloadFileIndexFile,
 )
+from emgapiv2.api.storage import private_storage
 from emgapiv2.enum_utils import FutureStrEnum
 from workflows.data_io_utils.filenames import trailing_slash_ensured_dir
+
+
+logger = logging.getLogger(__name__)
 
 EMG_CONFIG = settings.EMG_CONFIG
 
@@ -153,10 +157,14 @@ class MGnifyAnalysisDownloadFile(Schema, DownloadFile):
     def resolve_url(obj: MGnifyAnalysisDownloadFile):
         analysis = analyses.models.Analysis.objects.get(accession=obj.parent_identifier)
         if not analysis:
-            logging.warning(
+            logger.warning(
                 f"No parent Analysis object found with identified {obj.parent_identifier}"
             )
             return None
+
+        if analysis.is_private:
+            private_path = Path(analysis.external_results_dir) / obj.path
+            return private_storage.generate_secure_link(private_path)
 
         return urljoin(
             EMG_CONFIG.service_urls.transfer_services_url_root,
@@ -176,10 +184,14 @@ class MGnifyStudyDownloadFile(MGnifyAnalysisDownloadFile):
     def resolve_url(obj: MGnifyStudyDownloadFile):
         study = analyses.models.Study.objects.get(accession=obj.parent_identifier)
         if not study:
-            logging.warning(
+            logger.warning(
                 f"No parent Study object found with identified {obj.parent_identifier}"
             )
             return None
+
+        if study.is_private:
+            private_path = Path(study.external_results_dir) / obj.path
+            return private_storage.generate_secure_link(private_path)
 
         return f"{EMG_CONFIG.service_urls.transfer_services_url_root.rstrip('/')}/{study.external_results_dir}/{obj.path}"
 
@@ -348,11 +360,3 @@ class MGnifyFunctionalAnalysisAnnotationType(FutureStrEnum):
 
 class StudyAnalysisIntent(Schema):
     study_accession: str
-
-
-# AnalysisSchema = create_model()
-
-
-# class MGnifyAnalysisWithTypedAnnotations(Schema):
-#     accession: str
-#     annotations_list = List[MGnifyAnalysisTypedAnnotation]

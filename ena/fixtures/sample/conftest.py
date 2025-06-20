@@ -20,3 +20,11 @@ def raw_read_ena_sample(raw_read_ena_study):
         )
         sample_objects.append(sample_obj)
     return sample_objects
+
+
+@pytest.fixture
+def private_ena_sample(webin_private_ena_study):
+    sample_obj, _ = ena_models.Sample.objects.get_or_create(
+        study=webin_private_ena_study, accession="SAMN00000001"
+    )
+    return sample_obj

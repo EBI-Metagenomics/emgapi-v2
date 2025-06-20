@@ -45,6 +45,8 @@ def create_analyses(
             run=run,
             ena_study=study.ena_study,
             pipeline_version=pipeline,
+            is_private=run.is_private,
+            webin_submitter=run.webin_submitter,
         )
         if created:
             print(
