@@ -20,6 +20,22 @@ def default_annotations():
         GENOME_SETS: [],
     }
 
+
+class GenomeManagerDeferringAnnotations(models.Manager):
+    """
+    The annotations field is a potentially large JSONB field.
+    Defer it by default, since most queries don't need to transfer this large dataset.
+    """
+
+    def get_queryset(self):
+        return super().get_queryset().defer("annotations")
+
+
+class GenomeManagerIncludingAnnotations(models.Manager):
+    def get_queryset(self):
+        return super().get_queryset()
+
+
 class Genome(WithDownloadsModel):
 
     ISOLATE = 'isolate'
@@ -29,7 +45,8 @@ class Genome(WithDownloadsModel):
         (ISOLATE, 'Isolate'),
     )
 
-    # objects = GenomeManager()
+    objects = GenomeManagerDeferringAnnotations()
+    objects_and_annotations = GenomeManagerIncludingAnnotations()
 
     genome_id = models.AutoField(
         db_column='genome_id', primary_key=True)

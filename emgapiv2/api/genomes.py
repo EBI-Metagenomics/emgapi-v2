@@ -1,10 +1,10 @@
-from typing import List
+from typing import List, Dict, Any
 from django.shortcuts import get_object_or_404
 from ninja.pagination import RouterPaginated
 from ninja import Router
 
 from genomes.models import Genome
-from genomes.schemas import GenomeDetail, GenomeList
+from genomes.schemas import GenomeDetail, GenomeList, GenomeWithAnnotations
 
 router = RouterPaginated(tags=["Genomes"])
 
@@ -21,3 +21,15 @@ def get_genome(request, accession: str):
         accession=accession
     )
     return genome
+
+
+@router.get("/{accession}/annotations", response=GenomeWithAnnotations, summary="Get genome annotations by accession", operation_id="get_genome_annotations")
+def get_genome_annotations(request, accession: str):
+    genome = get_object_or_404(
+        Genome.objects_and_annotations,
+        accession=accession
+    )
+    return {
+        "accession": genome.accession,
+        "annotations": genome.annotations,
+    }
