@@ -34,11 +34,6 @@ Make the secrets
 * Download the secrets yaml and name the secret `name: quay-pull-secret` in the metadata section. Give it the right namespace. Put it into this folder.
 * `kubectl apply -f secrets-quayio.yml`
 
-### Create a secret for nginx serving of private-data (pre-signed URLs)
-Insert the same value of `PRIVATE_DATA_SECURE_LINK_SECRET_KEY` in `secrets-k8s.env` into a copy of `private-data-nginx.conf.template` as the SECRET-KEY.
-
-`kubectl create secret generic nginx-private-data-config-secret --from-file=private-data-nginx.conf -n emgapiv2-hl-exp`
-
 ### Deploy
 `kubectl apply -f ebi-wp-k8s-hl.yaml`
 

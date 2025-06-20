@@ -76,7 +76,6 @@ INSTALLED_APPS = [
     "corsheaders",
     "ninja_extra",
     "ninja_jwt",
-    "nginx_secure_links",
     "ena",
     "analyses",
     "workflows",
@@ -390,3 +389,4 @@ NINJA_JWT = {
 
 # Django Nginx Secure Links settings - pre-signed URLs for private data
 SECURE_LINK_SECRET_KEY = os.getenv("PRIVATE_DATA_SECURE_LINK_SECRET_KEY", SECRET_KEY)
+SECURE_LINK_EXPIRATION_SECONDS = 86400

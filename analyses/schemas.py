@@ -164,7 +164,7 @@ class MGnifyAnalysisDownloadFile(Schema, DownloadFile):
 
         if analysis.is_private:
             private_path = Path(analysis.external_results_dir) / obj.path
-            return private_storage.url(private_path)
+            return private_storage.generate_secure_link(private_path)
 
         return urljoin(
             EMG_CONFIG.service_urls.transfer_services_url_root,
@@ -191,7 +191,7 @@ class MGnifyStudyDownloadFile(MGnifyAnalysisDownloadFile):
 
         if study.is_private:
             private_path = Path(study.external_results_dir) / obj.path
-            return private_storage.url(private_path)
+            return private_storage.generate_secure_link(private_path)
 
         return f"{EMG_CONFIG.service_urls.transfer_services_url_root.rstrip('/')}/{study.external_results_dir}/{obj.path}"
 
@@ -360,11 +360,3 @@ class MGnifyFunctionalAnalysisAnnotationType(FutureStrEnum):
 
 class StudyAnalysisIntent(Schema):
     study_accession: str
-
-
-# AnalysisSchema = create_model()
-
-
-# class MGnifyAnalysisWithTypedAnnotations(Schema):
-#     accession: str
-#     annotations_list = List[MGnifyAnalysisTypedAnnotation]
