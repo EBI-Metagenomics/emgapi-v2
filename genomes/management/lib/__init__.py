@@ -22,28 +22,22 @@ class EMGBaseCommand(BaseCommand):
 
     def add_arguments(self, parser):
         parser.add_argument(
-            'accession',
-            action='store',
+            "accession",
+            action="store",
             type=str,
         )
         parser.add_argument(
-            'rootpath',
-            action='store',
+            "rootpath",
+            action="store",
             type=str,
         )
         parser.add_argument(
-            '--pipeline',
-            help='Pipeline version',
-            action='store',
-            dest='pipeline',
-            choices=[
-                '1.0',
-                '2.0',
-                '3.0',
-                '4.0',
-                '4.1',
-                '5.0'],
-            default='5.0'
+            "--pipeline",
+            help="Pipeline version",
+            action="store",
+            dest="pipeline",
+            choices=["1.0", "2.0", "3.0", "4.0", "4.1", "5.0"],
+            default="5.0",
         )
 
     def handle(self, *args, **options):
@@ -52,31 +46,27 @@ class EMGBaseCommand(BaseCommand):
         self.populate_from_accession(options)
 
     def find_accession(self, options):
-        self.accession = options.get('accession', None)
-        self.pipeline = options.get('pipeline', None)
+        self.accession = options.get("accession", None)
+        self.pipeline = options.get("pipeline", None)
 
         if self.accession:
-            queryset = Analysis.objects \
-                .filter(
-                    Q(study__secondary_accession=self.accession) |
-                    Q(sample__accession=self.accession) |
-                    Q(run__accession=self.accession) |
-                    Q(assembly__accession=self.accession))
+            queryset = Analysis.objects.filter(
+                Q(study__secondary_accession=self.accession)
+                | Q(sample__accession=self.accession)
+                | Q(run__accession=self.accession)
+                | Q(assembly__accession=self.accession)
+            )
             if self.pipeline:
-                queryset = queryset.filter(
-                    Q(pipeline__release_version=self.pipeline)
-                )
+                queryset = queryset.filter(Q(pipeline__release_version=self.pipeline))
             self.obj_list = queryset.all()
             if len(self.obj_list) < 1:
-                logger.error(
-                    "No runs %s, SKIPPING!" % self.accession)
+                logger.error("No runs %s, SKIPPING!" % self.accession)
 
     def populate_from_accession(self, options):
         raise NotImplementedError()
 
-    def get_reader(self, filename, delimiter=',', skip_header=True):
-        """Given a filename return an iterator
-        """
+    def get_reader(self, filename, delimiter=",", skip_header=True):
+        """Given a filename return an iterator"""
         if not os.path.exists(filename):
             logger.error("Path %r exist. Empty file. SKIPPING!" % filename)
             return

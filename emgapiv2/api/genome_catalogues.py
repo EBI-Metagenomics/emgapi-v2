@@ -1,6 +1,5 @@
 from typing import List
 from django.shortcuts import get_object_or_404
-from ninja import Router
 from ninja.pagination import RouterPaginated
 
 from genomes.models import GenomeCatalogue
@@ -9,15 +8,24 @@ from genomes.schemas import GenomeCatalogueDetail, GenomeCatalogueBase
 router = RouterPaginated(tags=["Genome Catalogues"])
 
 
-@router.get("/", response=List[GenomeCatalogueBase], summary="List all genome catalogues", operation_id="list_genome_catalogues")
+@router.get(
+    "/",
+    response=List[GenomeCatalogueBase],
+    summary="List all genome catalogues",
+    operation_id="list_genome_catalogues",
+)
 def list_catalogues(request):
     return GenomeCatalogue.objects.select_related("biome")
 
 
-@router.get("/{catalogue_id}", response=GenomeCatalogueDetail, summary="Get genome catalogue by ID", operation_id="get_genome_catalogue")
+@router.get(
+    "/{catalogue_id}",
+    response=GenomeCatalogueDetail,
+    summary="Get genome catalogue by ID",
+    operation_id="get_genome_catalogue",
+)
 def get_catalogue(request, catalogue_id: str):
     catalogue = get_object_or_404(
-        GenomeCatalogue.objects.select_related("biome"),
-        catalogue_id=catalogue_id
+        GenomeCatalogue.objects.select_related("biome"), catalogue_id=catalogue_id
     )
     return catalogue

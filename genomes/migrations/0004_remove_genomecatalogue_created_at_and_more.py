@@ -6,26 +6,28 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('genomes', '0003_remove_genomecataloguedownload_checksum_algorithm_and_more'),
+        ("genomes", "0003_remove_genomecataloguedownload_checksum_algorithm_and_more"),
     ]
 
     operations = [
         migrations.RemoveField(
-            model_name='genomecatalogue',
-            name='created_at',
+            model_name="genomecatalogue",
+            name="created_at",
         ),
         migrations.RemoveField(
-            model_name='genomecatalogue',
-            name='updated_at',
+            model_name="genomecatalogue",
+            name="updated_at",
         ),
         migrations.AddField(
-            model_name='genomecatalogue',
-            name='downloads',
+            model_name="genomecatalogue",
+            name="downloads",
             field=models.JSONField(blank=True, default=list),
         ),
         migrations.AlterField(
-            model_name='genomecatalogue',
-            name='id',
-            field=models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID'),
+            model_name="genomecatalogue",
+            name="id",
+            field=models.BigAutoField(
+                auto_created=True, primary_key=True, serialize=False, verbose_name="ID"
+            ),
         ),
     ]

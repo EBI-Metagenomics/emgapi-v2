@@ -7,256 +7,328 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('analyses', '0041_analysis_external_results_dir_and_more'),
-        ('genomes', '0002_checksumalgorithm_downloaddescriptionlabel_and_more'),
+        ("analyses", "0041_analysis_external_results_dir_and_more"),
+        ("genomes", "0002_checksumalgorithm_downloaddescriptionlabel_and_more"),
     ]
 
     operations = [
         migrations.RemoveField(
-            model_name='genomecataloguedownload',
-            name='checksum_algorithm',
+            model_name="genomecataloguedownload",
+            name="checksum_algorithm",
         ),
         migrations.RemoveField(
-            model_name='genomecataloguedownload',
-            name='description',
+            model_name="genomecataloguedownload",
+            name="description",
         ),
         migrations.RemoveField(
-            model_name='genomecataloguedownload',
-            name='group_type',
+            model_name="genomecataloguedownload",
+            name="group_type",
         ),
         migrations.RemoveField(
-            model_name='genomecataloguedownload',
-            name='subdir',
+            model_name="genomecataloguedownload",
+            name="subdir",
         ),
         migrations.RemoveField(
-            model_name='genomecataloguedownload',
-            name='file_format',
+            model_name="genomecataloguedownload",
+            name="file_format",
         ),
         migrations.RemoveField(
-            model_name='genomecataloguedownload',
-            name='genome_catalogue',
+            model_name="genomecataloguedownload",
+            name="genome_catalogue",
         ),
         migrations.RemoveField(
-            model_name='genomecataloguedownload',
-            name='parent_id',
+            model_name="genomecataloguedownload",
+            name="parent_id",
         ),
         migrations.AlterField(
-            model_name='genome',
-            name='accession',
-            field=models.CharField(db_column='genome_accession', max_length=40, unique=True),
+            model_name="genome",
+            name="accession",
+            field=models.CharField(
+                db_column="genome_accession", max_length=40, unique=True
+            ),
         ),
         migrations.AlterField(
-            model_name='genome',
-            name='biome',
-            field=models.ForeignKey(db_column='biome_id', on_delete=django.db.models.deletion.CASCADE, to='analyses.biome'),
+            model_name="genome",
+            name="biome",
+            field=models.ForeignKey(
+                db_column="biome_id",
+                on_delete=django.db.models.deletion.CASCADE,
+                to="analyses.biome",
+            ),
         ),
         migrations.AlterField(
-            model_name='genome',
-            name='busco_completeness',
-            field=models.FloatField(blank=True, db_column='busco_completeness', null=True),
+            model_name="genome",
+            name="busco_completeness",
+            field=models.FloatField(
+                blank=True, db_column="busco_completeness", null=True
+            ),
         ),
         migrations.AlterField(
-            model_name='genome',
-            name='catalogue',
-            field=models.ForeignKey(db_column='genome_catalogue', on_delete=django.db.models.deletion.CASCADE, related_name='genomes', to='genomes.genomecatalogue'),
+            model_name="genome",
+            name="catalogue",
+            field=models.ForeignKey(
+                db_column="genome_catalogue",
+                on_delete=django.db.models.deletion.CASCADE,
+                related_name="genomes",
+                to="genomes.genomecatalogue",
+            ),
         ),
         migrations.AlterField(
-            model_name='genome',
-            name='completeness',
-            field=models.FloatField(db_column='completeness'),
+            model_name="genome",
+            name="completeness",
+            field=models.FloatField(db_column="completeness"),
         ),
         migrations.AlterField(
-            model_name='genome',
-            name='contamination',
-            field=models.FloatField(db_column='contamination'),
+            model_name="genome",
+            name="contamination",
+            field=models.FloatField(db_column="contamination"),
         ),
         migrations.AlterField(
-            model_name='genome',
-            name='eggnog_coverage',
-            field=models.FloatField(db_column='eggnog_coverage'),
+            model_name="genome",
+            name="eggnog_coverage",
+            field=models.FloatField(db_column="eggnog_coverage"),
         ),
         migrations.AlterField(
-            model_name='genome',
-            name='ena_genome_accession',
-            field=models.CharField(blank=True, db_column='ena_genome_accession', max_length=20, null=True, unique=True),
+            model_name="genome",
+            name="ena_genome_accession",
+            field=models.CharField(
+                blank=True,
+                db_column="ena_genome_accession",
+                max_length=20,
+                null=True,
+                unique=True,
+            ),
         ),
         migrations.AlterField(
-            model_name='genome',
-            name='ena_sample_accession',
-            field=models.CharField(blank=True, db_column='ena_sample_accession', max_length=20, null=True),
+            model_name="genome",
+            name="ena_sample_accession",
+            field=models.CharField(
+                blank=True, db_column="ena_sample_accession", max_length=20, null=True
+            ),
         ),
         migrations.AlterField(
-            model_name='genome',
-            name='ena_study_accession',
-            field=models.CharField(db_column='ena_study_accession', max_length=20, null=True),
+            model_name="genome",
+            name="ena_study_accession",
+            field=models.CharField(
+                db_column="ena_study_accession", max_length=20, null=True
+            ),
         ),
         migrations.AlterField(
-            model_name='genome',
-            name='first_created',
-            field=models.DateTimeField(auto_now_add=True, db_column='first_created'),
+            model_name="genome",
+            name="first_created",
+            field=models.DateTimeField(auto_now_add=True, db_column="first_created"),
         ),
         migrations.AlterField(
-            model_name='genome',
-            name='gc_content',
-            field=models.FloatField(db_column='gc_content'),
+            model_name="genome",
+            name="gc_content",
+            field=models.FloatField(db_column="gc_content"),
         ),
         migrations.AlterField(
-            model_name='genome',
-            name='genome_id',
-            field=models.AutoField(db_column='genome_id', primary_key=True, serialize=False),
+            model_name="genome",
+            name="genome_id",
+            field=models.AutoField(
+                db_column="genome_id", primary_key=True, serialize=False
+            ),
         ),
         migrations.AlterField(
-            model_name='genome',
-            name='genome_set',
-            field=models.JSONField(blank=True, db_column='genome_set_json', help_text='A JSON object with keys: "id" and "name" representing the genome set.', null=True),
+            model_name="genome",
+            name="genome_set",
+            field=models.JSONField(
+                blank=True,
+                db_column="genome_set_json",
+                help_text='A JSON object with keys: "id" and "name" representing the genome set.',
+                null=True,
+            ),
         ),
         migrations.AlterField(
-            model_name='genome',
-            name='geo_origin',
-            field=models.ForeignKey(blank=True, db_column='geographic_origin', null=True, on_delete=django.db.models.deletion.CASCADE, to='genomes.geographiclocation'),
+            model_name="genome",
+            name="geo_origin",
+            field=models.ForeignKey(
+                blank=True,
+                db_column="geographic_origin",
+                null=True,
+                on_delete=django.db.models.deletion.CASCADE,
+                to="genomes.geographiclocation",
+            ),
         ),
         migrations.AlterField(
-            model_name='genome',
-            name='img_genome_accession',
-            field=models.CharField(blank=True, db_column='img_genome_accession', max_length=20, null=True, unique=True),
+            model_name="genome",
+            name="img_genome_accession",
+            field=models.CharField(
+                blank=True,
+                db_column="img_genome_accession",
+                max_length=20,
+                null=True,
+                unique=True,
+            ),
         ),
         migrations.AlterField(
-            model_name='genome',
-            name='ipr_coverage',
-            field=models.FloatField(db_column='ipr_coverage'),
+            model_name="genome",
+            name="ipr_coverage",
+            field=models.FloatField(db_column="ipr_coverage"),
         ),
         migrations.AlterField(
-            model_name='genome',
-            name='last_update',
-            field=models.DateTimeField(auto_now=True, db_column='last_update'),
+            model_name="genome",
+            name="last_update",
+            field=models.DateTimeField(auto_now=True, db_column="last_update"),
         ),
         migrations.AlterField(
-            model_name='genome',
-            name='length',
-            field=models.IntegerField(db_column='length'),
+            model_name="genome",
+            name="length",
+            field=models.IntegerField(db_column="length"),
         ),
         migrations.AlterField(
-            model_name='genome',
-            name='n_50',
-            field=models.IntegerField(db_column='n50'),
+            model_name="genome",
+            name="n_50",
+            field=models.IntegerField(db_column="n50"),
         ),
         migrations.AlterField(
-            model_name='genome',
-            name='nc_rnas',
-            field=models.IntegerField(db_column='nc_rna'),
+            model_name="genome",
+            name="nc_rnas",
+            field=models.IntegerField(db_column="nc_rna"),
         ),
         migrations.AlterField(
-            model_name='genome',
-            name='ncbi_genome_accession',
-            field=models.CharField(blank=True, db_column='ncbi_genome_accession', max_length=20, null=True, unique=True),
+            model_name="genome",
+            name="ncbi_genome_accession",
+            field=models.CharField(
+                blank=True,
+                db_column="ncbi_genome_accession",
+                max_length=20,
+                null=True,
+                unique=True,
+            ),
         ),
         migrations.AlterField(
-            model_name='genome',
-            name='ncbi_sample_accession',
-            field=models.CharField(blank=True, db_column='ncbi_sample_accession', max_length=20, null=True),
+            model_name="genome",
+            name="ncbi_sample_accession",
+            field=models.CharField(
+                blank=True, db_column="ncbi_sample_accession", max_length=20, null=True
+            ),
         ),
         migrations.AlterField(
-            model_name='genome',
-            name='ncbi_study_accession',
-            field=models.CharField(blank=True, db_column='ncbi_study_accession', max_length=20, null=True),
+            model_name="genome",
+            name="ncbi_study_accession",
+            field=models.CharField(
+                blank=True, db_column="ncbi_study_accession", max_length=20, null=True
+            ),
         ),
         migrations.AlterField(
-            model_name='genome',
-            name='num_contigs',
-            field=models.IntegerField(db_column='n_contigs'),
+            model_name="genome",
+            name="num_contigs",
+            field=models.IntegerField(db_column="n_contigs"),
         ),
         migrations.AlterField(
-            model_name='genome',
-            name='num_genomes_total',
-            field=models.IntegerField(blank=True, db_column='pangenome_total_genomes', null=True),
+            model_name="genome",
+            name="num_genomes_total",
+            field=models.IntegerField(
+                blank=True, db_column="pangenome_total_genomes", null=True
+            ),
         ),
         migrations.AlterField(
-            model_name='genome',
-            name='num_proteins',
-            field=models.IntegerField(db_column='num_proteins'),
+            model_name="genome",
+            name="num_proteins",
+            field=models.IntegerField(db_column="num_proteins"),
         ),
         migrations.AlterField(
-            model_name='genome',
-            name='pangenome_accessory_size',
-            field=models.IntegerField(blank=True, db_column='pangenome_accessory_prop', null=True),
+            model_name="genome",
+            name="pangenome_accessory_size",
+            field=models.IntegerField(
+                blank=True, db_column="pangenome_accessory_prop", null=True
+            ),
         ),
         migrations.AlterField(
-            model_name='genome',
-            name='pangenome_core_size',
-            field=models.IntegerField(blank=True, db_column='pangenome_core_prop', null=True),
+            model_name="genome",
+            name="pangenome_core_size",
+            field=models.IntegerField(
+                blank=True, db_column="pangenome_core_prop", null=True
+            ),
         ),
         migrations.AlterField(
-            model_name='genome',
-            name='pangenome_size',
-            field=models.IntegerField(blank=True, db_column='pangenome_size', null=True),
+            model_name="genome",
+            name="pangenome_size",
+            field=models.IntegerField(
+                blank=True, db_column="pangenome_size", null=True
+            ),
         ),
         migrations.AlterField(
-            model_name='genome',
-            name='patric_genome_accession',
-            field=models.CharField(blank=True, db_column='patric_genome_accession', max_length=20, null=True, unique=True),
+            model_name="genome",
+            name="patric_genome_accession",
+            field=models.CharField(
+                blank=True,
+                db_column="patric_genome_accession",
+                max_length=20,
+                null=True,
+                unique=True,
+            ),
         ),
         migrations.AlterField(
-            model_name='genome',
-            name='result_directory',
-            field=models.CharField(blank=True, db_column='result_directory', max_length=100, null=True),
+            model_name="genome",
+            name="result_directory",
+            field=models.CharField(
+                blank=True, db_column="result_directory", max_length=100, null=True
+            ),
         ),
         migrations.AlterField(
-            model_name='genome',
-            name='rna_16s',
-            field=models.FloatField(blank=True, db_column='rna_16s', null=True),
+            model_name="genome",
+            name="rna_16s",
+            field=models.FloatField(blank=True, db_column="rna_16s", null=True),
         ),
         migrations.AlterField(
-            model_name='genome',
-            name='rna_18s',
-            field=models.FloatField(blank=True, db_column='rna_18s', null=True),
+            model_name="genome",
+            name="rna_18s",
+            field=models.FloatField(blank=True, db_column="rna_18s", null=True),
         ),
         migrations.AlterField(
-            model_name='genome',
-            name='rna_23s',
-            field=models.FloatField(blank=True, db_column='rna_23s', null=True),
+            model_name="genome",
+            name="rna_23s",
+            field=models.FloatField(blank=True, db_column="rna_23s", null=True),
         ),
         migrations.AlterField(
-            model_name='genome',
-            name='rna_28s',
-            field=models.FloatField(blank=True, db_column='rna_28s', null=True),
+            model_name="genome",
+            name="rna_28s",
+            field=models.FloatField(blank=True, db_column="rna_28s", null=True),
         ),
         migrations.AlterField(
-            model_name='genome',
-            name='rna_5_8s',
-            field=models.FloatField(blank=True, db_column='rna_5_8s', null=True),
+            model_name="genome",
+            name="rna_5_8s",
+            field=models.FloatField(blank=True, db_column="rna_5_8s", null=True),
         ),
         migrations.AlterField(
-            model_name='genome',
-            name='rna_5s',
-            field=models.FloatField(blank=True, db_column='rna_5s', null=True),
+            model_name="genome",
+            name="rna_5s",
+            field=models.FloatField(blank=True, db_column="rna_5s", null=True),
         ),
         migrations.AlterField(
-            model_name='genome',
-            name='taxon_lineage',
-            field=models.CharField(db_column='taxon_lineage', max_length=400),
+            model_name="genome",
+            name="taxon_lineage",
+            field=models.CharField(db_column="taxon_lineage", max_length=400),
         ),
         migrations.AlterField(
-            model_name='genome',
-            name='type',
-            field=models.CharField(choices=[('mag', 'MAG'), ('isolate', 'Isolate')], db_column='type', max_length=80),
+            model_name="genome",
+            name="type",
+            field=models.CharField(
+                choices=[("mag", "MAG"), ("isolate", "Isolate")],
+                db_column="type",
+                max_length=80,
+            ),
         ),
         migrations.AlterModelTable(
-            name='genome',
-            table='genome_genomes',
+            name="genome",
+            table="genome_genomes",
         ),
         migrations.DeleteModel(
-            name='ChecksumAlgorithm',
+            name="ChecksumAlgorithm",
         ),
         migrations.DeleteModel(
-            name='DownloadDescriptionLabel',
+            name="DownloadDescriptionLabel",
         ),
         migrations.DeleteModel(
-            name='DownloadGroupType',
+            name="DownloadGroupType",
         ),
         migrations.DeleteModel(
-            name='DownloadSubdir',
+            name="DownloadSubdir",
         ),
         migrations.DeleteModel(
-            name='GenomeCatalogueDownload',
+            name="GenomeCatalogueDownload",
         ),
     ]
