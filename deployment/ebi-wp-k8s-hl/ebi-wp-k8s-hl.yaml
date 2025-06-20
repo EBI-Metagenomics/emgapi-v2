@@ -529,6 +529,95 @@ items:
         requests:
           storage: 3Gi
       volumeName: private-data-vol-nfs
+  - apiVersion: v1
+    kind: ConfigMap
+    metadata:
+      name: private-data-nginx-config
+      namespace: emgapiv2-hl-exp
+    data:
+      nginx.conf: >-
+        worker_processes  1;
+
+        events {
+            worker_connections  1024;
+        }
+
+        env SECURE_LINK_SECRET;
+
+        http {
+            include       mime.types;
+            default_type  application/octet-stream;
+            sendfile        on;
+            keepalive_timeout  65;
+
+            error_log  /usr/local/openresty/nginx/logs/error.log debug;
+            access_log /usr/local/openresty/nginx/logs/access.log combined;
+
+        	lua_shared_dict secrets 1m;
+
+            init_by_lua_block {
+                local hmac = require "resty.hmac"
+                local str = require "resty.string"
+
+                local secret = os.getenv("SECURE_LINK_SECRET")
+                if not secret then error("SECURE_LINK_SECRET env var not set") end
+
+                ngx.shared.secrets:set("secret", secret)
+            }
+
+        	server {
+          		listen 80;
+
+          		location /private-data/ {
+
+                    access_by_lua_block {
+                        local uri = ngx.var.uri
+        				local unsigned_uri = string.sub(uri, string.len("/private-data/") + 1)
+
+                        local args = ngx.req.get_uri_args()
+                        local expires = args.e
+                        local sig = args.st
+
+                        if not (expires and sig) then
+                            return ngx.exit(ngx.HTTP_FORBIDDEN)
+                        end
+                        if tonumber(expires) < ngx.time() then
+                            return ngx.exit(ngx.HTTP_GONE)
+                        end
+
+        				ngx.log(ngx.INFO, "Checking ", unsigned_uri, expires, sig)
+
+                        local secret = ngx.shared.secrets:get("secret")
+                        local h = require("resty.hmac"):new(secret, require("resty.hmac").ALGOS.SHA256)
+                        h:update(unsigned_uri .. expires)
+                        local expected = require("resty.string").to_hex(h:final())
+
+                        if expected ~= sig then
+                            return ngx.exit(ngx.HTTP_FORBIDDEN)
+                        end
+                    }
+
+            		alias /var/www/private-data/;
+            	}
+
+                # Health check endpoint
+                location /health {
+                    return 200 'OK';
+                }
+
+                # Redirect root to health check
+                location = / {
+                    return 301 /health;
+                }
+
+                # Error pages
+                error_page   500 502 503 504  /50x.html;
+                location = /50x.html {
+                    root   html;
+                }
+            }
+        }
+
   - apiVersion: apps/v1
     kind: Deployment
     metadata:
@@ -551,12 +640,17 @@ items:
               persistentVolumeClaim:
                 claimName: private-data-volume-claim
             - name: nginx-config
-              secret:
-                secretName: nginx-private-data-config-secret
+              configMap:
+                name: webclient-nginx-config
           containers:
             - name: private-data-server
-              image: openresty/openresty:alpine
+              image: openresty/openresty:1.25.3.2-5-alpine-fat
               imagePullPolicy: IfNotPresent
+              command: ["/bin/sh -c \"opm get jkeys089/lua-resty-hmac && openresty -g 'daemon off;'\""]
+
+              envFrom:
+                - secretRef:
+                    name: emgapi-secret
               ports:
                 - containerPort: 80
               resources:

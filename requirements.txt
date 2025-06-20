@@ -12,7 +12,6 @@ pydantic-settings~=2.9.1
 nextflowpy==0.11.0
 django-unfold==0.59.0
 django-json-widget==2.0.1
-django-nginx-secure-links==0.0.9
 tzdata
 pandas==2.2.3
 django-ltree-2==0.1.12
