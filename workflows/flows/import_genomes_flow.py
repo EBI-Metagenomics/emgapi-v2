@@ -121,17 +121,10 @@ def finalize_catalogue(catalogue):
 def import_genomes_flow(options: dict):
     options = parse_options.fn(options)
     catalogue = get_catalogue.fn(options)
-
-    # genome_dirs = gather_genome_dirs.fn(options['catalogue_dir'], options['catalogue_type'])
-
-    # processed = map(process_genome_dir, unmapped(catalogue), genome_dirs)
     finalize_catalogue.fn(catalogue)
     upload_catalogue_summary.fn(catalogue, options['catalogue_dir'])
     upload_catalogue_files.fn(catalogue, options['catalogue_dir'])
     validate_import_summary.fn(catalogue)
-
-    # upload_catalogue_files(catalogue, options['catalogue_dir'])
-
 
 
 @task
@@ -146,7 +139,6 @@ def upload_catalogue_summary(catalogue, catalogue_dir):
         logger.warning(f"No catalogue summary found at {summary_file}")
     catalogue.save()
 
-# upload_catalogue_summary(catalogue, options['catalogue_dir'])
 
 @task
 def upload_genome_downloads(genome, genome_dir, has_pangenome):
