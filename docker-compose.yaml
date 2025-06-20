@@ -87,6 +87,7 @@ services:
       - DATABASE_URL=postgres://postgres:postgres@app-database:5432/emg
       - HTTP_PROXY=http://localhost:8080
       - http_proxy=http://localhost:8080
+      - DJANGO_DEBUG=1
     profiles: ["prefect", "all"]
     env_file:
       - path: ./secrets-local.env
@@ -114,7 +115,7 @@ services:
       target: django
     container_name: app
     profiles: ["app", "all"]
-    command: "runserver 0:8000"
+    command: "python manage.py runserver 0:8000"
     environment:
       - PREFECT_API_URL=http://prefect-server:4200/api
       - PREFECT_UI_URL=http://localhost:4200
@@ -122,6 +123,7 @@ services:
       - EMG_WEBIN__JWT_SECRET_KEY=dummy-key
       - EMG_WEBIN__AUTH_ENDPOINT=http://httpbin/status/200
       - PRIVATE_DATA_SECURE_LINK_SECRET_KEY=dummy-key
+      - DJANGO_DEBUG=1
     volumes:
       - ".:/app"
       - "./slurm-dev-environment/fs/nfs/public:/app/data"  # similar to the k8s volume mount in production
@@ -130,6 +132,8 @@ services:
         condition: service_started
         # prefect-server:
         # condition: service_healthy
+      httpbin:
+        condition: service_started
     ports:
       - "8000:8000"
     networks: [emg]

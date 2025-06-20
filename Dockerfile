@@ -18,7 +18,6 @@ RUN pip install --ignore-installed --use-pep517 -r requirements-dev.txt
 RUN pip install --ignore-installed --use-pep517 -r requirements-tools.txt
 COPY . .
 RUN python manage.py collectstatic --noinput
-ENTRYPOINT ["python", "manage.py"]
 
 FROM django AS agent
 RUN apt -y update && apt -y upgrade

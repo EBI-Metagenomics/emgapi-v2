@@ -10,7 +10,7 @@ tasks:
   prefect:
     desc: "Run a command on the prefect CLI. E.g. task prefect -- deployment"
     cmds:
-      - docker compose run app prefectcli {{.CLI_ARGS}}
+      - docker compose run app python manage.py prefectcli {{.CLI_ARGS}}
 
   create-pool:
     desc: "Create a Prefect workpool. E.g. NAME=slurm task create-process-pool"
@@ -24,7 +24,7 @@ tasks:
     desc: "Build and deploy a prefect flow. E.g. FLOW=mgnify_run_pipeline_flow task deploy-flow"
     cmds:
       - docker compose --profile prefect up -d
-      - docker compose run -e PREFECT_CLIENT_RETRY_EXTRA_CODES=0 app prefectcli deploy {{ .FILE | default (list "workflows/flows/" .FLOW ".py" | join "") }}:{{.FLOW}} --name {{.FLOW}}_deployment -p {{.POOL}} --prefect-file workflows/prefect_deployments/prefect-dev-donco.yaml
+      - docker compose run -e PREFECT_CLIENT_RETRY_EXTRA_CODES=0 app python manage.py prefectcli deploy {{ .FILE | default (list "workflows/flows/" .FLOW ".py" | join "") }}:{{.FLOW}} --name {{.FLOW}}_deployment -p {{.POOL}} --prefect-file workflows/prefect_deployments/prefect-dev-donco.yaml
     vars:
       POOL: "slurm"
     requires:
@@ -48,7 +48,7 @@ tasks:
   manage:
     desc: "Run a management command. E.g. task manage -- migrate"
     cmds:
-      - docker compose run app {{.CLI_ARGS}}
+      - docker compose run app python manage.py {{.CLI_ARGS}}
 
   sbatch:
     desc: "Dispatch a slurm job to the mini slurm cluster. E.g. task sbatch -- --wait -t 0:00:30 --mem=10M --wrap=\"echo 'hello world'\" -o hello-world.out"
@@ -84,15 +84,15 @@ tasks:
       - docker compose --profile all down
       - docker volume rm -f emgapiv2_appdb  # force so that no error if volume doesn't exist.
       - docker compose run --entrypoint /bin/bash app -c "pytest -m dev_data_maker --no-cov -s"  # dumps a json to dev-db.json
-      - docker compose run app migrate
-      - docker compose run app loaddata dev-db.json
-      - docker compose run app createsuperuser --username emgdev --email emg@example.org
+      - docker compose run app python manage.py migrate
+      - docker compose run app python manage.py loaddata dev-db.json
+      - docker compose run app python manage.py createsuperuser --username emgdev --email emg@example.org
       - rm -fr slurm-dev-environment/fs/nfs/ftp/public/databases/metagenomics/mgnify_results/PRJNA398
       - mkdir -p slurm-dev-environment/fs/nfs/ftp/public/databases/metagenomics/mgnify_results/PRJNA398/PRJNA398089/SRR1111/SRR1111111/V6/
       - cp -r slurm-dev-environment/fs/nfs/public/tests/amplicon_v6_output/SRR1111111 slurm-dev-environment/fs/nfs/ftp/public/databases/metagenomics/mgnify_results/PRJNA398/PRJNA398089/SRR1111/SRR1111111/V6/amplicon
       - mkdir -p slurm-dev-environment/fs/nfs/ftp/public/databases/metagenomics/mgnify_results/PRJNA398/PRJNA398089/study-summaries
       - cp slurm-dev-environment/fs/nfs/public/tests/amplicon_v6_output/*study_summary.tsv slurm-dev-environment/fs/nfs/ftp/public/databases/metagenomics/mgnify_results/PRJNA398/PRJNA398089/study-summaries/
-      - docker compose run app shell -c "a=Analysis.objects.get(accession='MGYA00000004'); a.external_results_dir='PRJNA398/PRJNA398089/SRR1111/SRR1111111/V6/amplicon'; a.save()"
+      - docker compose run app python manage.py shell -c "a=Analysis.objects.get(accession='MGYA00000004'); a.external_results_dir='PRJNA398/PRJNA398089/SRR1111/SRR1111111/V6/amplicon'; a.save()"
 
   debug-break-prefect-connection:
     desc: "Temporarily return 404s from the prefect server, when prefect worker tries to access it"
