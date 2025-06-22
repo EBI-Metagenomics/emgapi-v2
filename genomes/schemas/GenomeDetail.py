@@ -1,10 +1,14 @@
 from typing import Optional, List
 from genomes.schemas.GenomeBase import GenomeBase
-from analyses.schemas import Biome
+from analyses.schemas import Biome, MGnifyAnalysisDownloadFile
 from genomes.schemas.GenomeCatalogue import GenomeCatalogueBase
+from ninja import Field
 
 
 class GenomeDetail(GenomeBase):
+    downloads: List[MGnifyAnalysisDownloadFile] = Field(
+        ..., alias="downloads_as_objects"
+    )
     geographic_origin: Optional[str]
     geographic_range: List[str]
     last_update: str = None
@@ -14,4 +18,9 @@ class GenomeDetail(GenomeBase):
 
     class Config:
         from_attributes = True
-        alias_generator = lambda field_name: field_name + "_iso" if field_name in ["last_update", "first_created"] else field_name
+
+        @staticmethod
+        def alias_generator(field_name):
+            if field_name in ["last_update", "first_created"]:
+                return field_name + "_iso"
+            return field_name
