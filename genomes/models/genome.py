@@ -184,6 +184,14 @@ class Genome(WithDownloadsModel):
             name = None
         return name
 
+    @property
+    def last_update_iso(self):
+        return self.last_update.isoformat() if self.last_update else None
+
+    @property
+    def first_created_iso(self):
+        return self.first_created.isoformat() if self.first_created else None
+
     class Meta:
         db_table = "genome_genomes"
 

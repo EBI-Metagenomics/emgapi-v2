@@ -2,6 +2,7 @@ from typing import List
 from django.shortcuts import get_object_or_404
 from ninja.pagination import RouterPaginated
 
+from emgapiv2.api.schema_utils import make_links_section, make_related_detail_link
 from genomes.models import Genome
 from genomes.schemas import GenomeDetail, GenomeList, GenomeWithAnnotations
 
@@ -25,6 +26,14 @@ def list_genomes(request):
     response=GenomeDetail,
     summary="Get genome by accession",
     operation_id="get_genome",
+    openapi_extra=make_links_section(
+        make_related_detail_link(
+            related_detail_operation_id="get_genome_catalogue",
+            related_object_name="catalogue",
+            self_object_name="genome",
+            related_id_in_response="catalogue_id",
+        )
+    ),
 )
 def get_genome(request, accession: str):
     genome = get_object_or_404(
@@ -33,27 +42,7 @@ def get_genome(request, accession: str):
         ).prefetch_related("pangenome_geographic_range"),
         accession=accession,
     )
-    return {
-        "accession": genome.accession,
-        "ena_genome_accession": genome.ena_genome_accession,
-        "ena_sample_accession": genome.ena_sample_accession,
-        "ncbi_genome_accession": genome.ncbi_genome_accession,
-        "img_genome_accession": genome.img_genome_accession,
-        "patric_genome_accession": genome.patric_genome_accession,
-        "biome_id": genome.biome.id,
-        "length": genome.length,
-        "num_contigs": genome.num_contigs,
-        "n_50": genome.n_50,
-        "gc_content": genome.gc_content,
-        "type": genome.type,
-        "completeness": genome.completeness,
-        "contamination": genome.contamination,
-        "catalogue_id": genome.catalogue.id,
-        "geographic_origin": genome.geographic_origin,
-        "geographic_range": genome.geographic_range,
-        "last_update": genome.last_update.isoformat(),
-        "first_created": genome.first_created.isoformat(),
-    }
+    return genome
 
 
 @router.get(
@@ -64,7 +53,4 @@ def get_genome(request, accession: str):
 )
 def get_genome_annotations(request, accession: str):
     genome = get_object_or_404(Genome.objects_and_annotations, accession=accession)
-    return {
-        "accession": genome.accession,
-        "annotations": genome.annotations,
-    }
+    return genome
