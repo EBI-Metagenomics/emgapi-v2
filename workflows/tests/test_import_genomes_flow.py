@@ -107,42 +107,19 @@ def test_validate_pipeline_version():
 
 def test_parse_options():
     with patch("os.path.exists", return_value=True):
-        options = {
-            "results_directory": "/path/to/results",
-            "catalogue_directory": "catalogue",
-            "catalogue_name": "Sheep rumen",
-            "catalogue_version": "1.0",
-            "gold_biome": "root:Host-associated:Human",
-            "pipeline_version": "v3.0.0dev",
-            "catalogue_type": "prokaryotes",
-            "catalogue_biome_label": "Sheep Rumen",
-            "database": "default",
-        }
+        options = get_default_options()
         parsed_options = parse_options.fn(options)
-        assert parsed_options["catalogue_directory"] == "/path/to/results/catalogue"
-        assert parsed_options["catalogue_name"] == "Sheep rumen"
+        assert parsed_options["catalogue_directory"] == "genomes/sheep-rumen/1.0"
+        assert (parsed_options["catalogue_name"]) == "Sheep rumen"
         assert parsed_options["catalogue_version"] == "1.0"
-        assert (
-            parsed_options["gold_biome"]
-            == "root:Host-Associated:Human:Digestive System"
-        )
-        assert parsed_options["pipeline_version"] == "v1"
+        assert parsed_options["gold_biome"] == "root:Host-associated:Human"
+        assert parsed_options["pipeline_version"] == "v3.0.0dev"
         assert parsed_options["catalogue_type"] == "prokaryotes"
-        assert parsed_options["catalogue_biome_label"] == "Sheep rumen"
+        assert parsed_options["catalogue_biome_label"] == "Sheep Rumen"
         assert parsed_options["database"] == "default"
 
     with patch("os.path.exists", return_value=False):
-        options = {
-            "results_directory": "/path/to/results",
-            "catalogue_directory": "catalogue",
-            "catalogue_name": "Sheep rumen",
-            "catalogue_version": "1.0",
-            "gold_biome": "root:Host-associated:Human",
-            "pipeline_version": "v3.0.0dev",
-            "catalogue_type": "prokaryotes",
-            "catalogue_biome_label": "Sheep Rumen",
-            "database": "default",
-        }
+        options = get_default_options()
         with pytest.raises(FileNotFoundError):
             parse_options.fn(options)
 
@@ -157,17 +134,7 @@ def test_get_catalogue():
         path="root.host_associated.mammals.digestive_system.stomach.rumen",
     )
 
-    options = {
-        "results_directory": "/path/to/results",
-        "catalogue_dir": "genomes/sheep-rumen/1.0",
-        "catalogue_name": "Sheep rumen",
-        "catalogue_version": "1.0",
-        "gold_biome": "root:Host-associated:Human",
-        "pipeline_version": "v3.0.0dev",
-        "catalogue_type": "prokaryotes",
-        "catalogue_biome_label": "Sheep Rumen",
-        "database": "default",
-    }
+    options = get_default_options()
 
     with patch("analyses.models.Biome.lineage_to_path", return_value=biome.path):
         catalogue = get_catalogue.fn(options)
@@ -211,7 +178,6 @@ def test_gather_genome_dirs(
         mock_sanity_check_catalogue.assert_called_once_with("/path/to/catalogue")
 
 
-
 @pytest.mark.django_db
 @patch("analyses.models.Biome.lineage_to_path")
 def test_import_genomes_flow_with_mock_directory(
@@ -237,17 +203,9 @@ def test_import_genomes_flow_with_mock_directory(
 
     run_flow_and_capture_logs(
         import_genomes_flow,
-        options={
-            "results_directory": mock_genome_directory,
-            "catalogue_directory": "catalogue",
-            "catalogue_name": "Sheep rumen",
-            "catalogue_version": "1.0",
-            "gold_biome": "root:Host-associated:Human",
-            "pipeline_version": "v3.0.0dev",
-            "catalogue_type": "prokaryotes",
-            "catalogue_biome_label": "Sheep Rumen",
-            "database": "default",
-        },
+        options=get_default_options(
+            mock_genome_directory, catalogue_directory="catalogue"
+        ),
     )
     catalogue = GenomeCatalogue.objects.get(catalogue_id="sheep-rumen-v1-0")
     assert catalogue.version == "1.0"
@@ -257,14 +215,14 @@ def test_import_genomes_flow_with_mock_directory(
     genomes = Genome.objects.filter(catalogue=catalogue)
     assert genomes.count() == 2
 
-    # Check that the genomes have the expected accessions
     accessions = [g.accession for g in genomes]
     assert "MGYG000000001" in accessions
     assert "MGYG000000002" in accessions
 
-def prepare_options(
-    results_directory: str,
-    catalogue_directory: str = "catalogue",
+
+def get_default_options(
+    results_directory: str = "/path/to/results",
+    catalogue_directory: str = "genomes/sheep-rumen/1.0",
     catalogue_name: str = "Sheep rumen",
     catalogue_version: str = "1.0",
     gold_biome: str = "root:Host-associated:Human",
@@ -276,6 +234,7 @@ def prepare_options(
     return {
         "results_directory": results_directory,
         "catalogue_directory": catalogue_directory,
+        "catalogue_dir": catalogue_directory,
         "catalogue_name": catalogue_name,
         "catalogue_version": catalogue_version,
         "gold_biome": gold_biome,
