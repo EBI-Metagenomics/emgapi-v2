@@ -12,7 +12,7 @@ def test_geographic_location():
     # Test creation
     location = GeographicLocation.objects.create(name="Europe")
     assert location.name == "Europe"
-    
+
     # Test string representation
     assert str(location) == "Europe"
 
@@ -21,8 +21,10 @@ def test_geographic_location():
 def test_genome_catalogue():
     """Test the GenomeCatalogue model."""
     # Create a biome for the catalogue
-    biome = Biome.objects.create(biome_name="Ocean", path="root.environmental.aquatic.marine.ocean")
-    
+    biome = Biome.objects.create(
+        biome_name="Ocean", path="root.environmental.aquatic.marine.ocean"
+    )
+
     # Test creation
     catalogue = GenomeCatalogue.objects.create(
         catalogue_id="ocean-prokaryotes",
@@ -31,9 +33,9 @@ def test_genome_catalogue():
         description="Prokaryotic genomes from ocean environments",
         catalogue_biome_label="Ocean",
         catalogue_type=GenomeCatalogue.PROK,
-        biome=biome
+        biome=biome,
     )
-    
+
     assert catalogue.catalogue_id == "ocean-prokaryotes"
     assert catalogue.version == "1.0"
     assert catalogue.name == "Ocean Prokaryotes"
@@ -41,10 +43,10 @@ def test_genome_catalogue():
     assert catalogue.catalogue_biome_label == "Ocean"
     assert catalogue.catalogue_type == GenomeCatalogue.PROK
     assert catalogue.biome == biome
-    
+
     # Test string representation
     assert str(catalogue) == "Ocean Prokaryotes"
-    
+
     # Test calculate_genome_count method
     assert catalogue.genome_count is None
     catalogue.calculate_genome_count()
@@ -54,17 +56,19 @@ def test_genome_catalogue():
 @pytest.mark.django_db(transaction=True)
 def test_genome():
     """Test the Genome model."""
-    biome = Biome.objects.create(biome_name="Ocean", path="root.environmental.aquatic.marine.ocean")
+    biome = Biome.objects.create(
+        biome_name="Ocean", path="root.environmental.aquatic.marine.ocean"
+    )
     catalogue = GenomeCatalogue.objects.create(
         catalogue_id="ocean-prokaryotes",
         version="1.0",
         name="Ocean Prokaryotes",
         catalogue_biome_label="Ocean",
         catalogue_type=GenomeCatalogue.PROK,
-        biome=biome
+        biome=biome,
     )
     geo_origin = GeographicLocation.objects.create(name="Atlantic Ocean")
-    
+
     # Test creation
     genome = Genome.objects.create(
         accession="MGYG000000001",
@@ -83,9 +87,9 @@ def test_genome():
         ipr_coverage=75.0,
         taxon_lineage="Bacteria;Proteobacteria;Gammaproteobacteria",
         catalogue=catalogue,
-        geo_origin=geo_origin
+        geo_origin=geo_origin,
     )
-    
+
     assert genome.accession == "MGYG000000001"
     assert genome.biome == biome
     assert genome.length == 1000000
@@ -97,25 +101,25 @@ def test_genome():
     assert genome.contamination == 2.0
     assert genome.catalogue == catalogue
     assert genome.geo_origin == geo_origin
-    
+
     # Test string representation
     assert str(genome) == "MGYG000000001"
-    
+
     # Test geographic_origin property
     assert genome.geographic_origin == "Atlantic Ocean"
-    
+
     # Test geographic_range property
     assert genome.geographic_range == []
-    
+
     # Add a geographic range
     pacific = GeographicLocation.objects.create(name="Pacific Ocean")
     genome.pangenome_geographic_range.add(pacific)
     assert genome.geographic_range == ["Pacific Ocean"]
-    
+
     # Test last_update_iso and first_created_iso properties
     assert genome.last_update_iso is not None
     assert genome.first_created_iso is not None
-    
+
     # Test that the genome is counted in the catalogue
     catalogue.calculate_genome_count()
     assert catalogue.genome_count == 1

@@ -65,4 +65,6 @@ api.add_router("/samples", samples_router, tags=[ApiSections.SAMPLES])
 api.add_router("/studies", studies_router, tags=[ApiSections.STUDIES])
 api.add_router("/my-data", my_data_router, tags=[ApiSections.PRIVATE_DATA])
 api.add_router("/genomes", genomes_router, tags=[ApiSections.GENOMES])
-api.add_router("/genome-catalogues", genome_catalogues_router, tags=[ApiSections.GENOMES])
+api.add_router(
+    "/genome-catalogues", genome_catalogues_router, tags=[ApiSections.GENOMES]
+)

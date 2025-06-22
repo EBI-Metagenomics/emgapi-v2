@@ -44,11 +44,7 @@ DEBUG_TOOLBAR_CONFIG = {
 }
 
 
-ALLOWED_HOSTS = [
-    "apiv2-dev.mgnify.org",
-    "localhost",
-    "www.ebi.ac.uk"
-]
+ALLOWED_HOSTS = ["apiv2-dev.mgnify.org", "localhost", "www.ebi.ac.uk"]
 
 
 emg_config_env = os.getenv("EMG_ENV_FILE")

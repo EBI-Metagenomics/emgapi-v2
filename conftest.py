@@ -25,6 +25,7 @@ pytest_plugins = [
     "workflows.fixtures.legacy_emg_dbs.conftest",
     "workflows.fixtures.slurm.conftest",
     "workflows.nextflow_utils.fixtures.conftest",
+    "genomes.fixtures.genome.conftest",
 ]
 
 

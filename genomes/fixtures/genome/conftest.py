@@ -24,9 +24,7 @@ def geographic_locations():
     for location in locations_list:
         print(f"creating geographic location {location['name']}")
         locations_objects.append(
-            GeographicLocation.objects.get_or_create(
-                name=location["name"]
-            )[0]
+            GeographicLocation.objects.get_or_create(name=location["name"])[0]
         )
     return locations_objects
 
@@ -35,7 +33,7 @@ def geographic_locations():
 def genome_catalogues(top_level_biomes):
     # Get the root biome
     root_biome = Biome.objects.get(path="root")
-    
+
     # Create a few genome catalogues
     catalogues_list = [
         {
@@ -57,7 +55,7 @@ def genome_catalogues(top_level_biomes):
             "biome": root_biome,
         },
     ]
-    
+
     catalogues_objects = []
     for catalogue in catalogues_list:
         print(f"creating genome catalogue {catalogue['name']}")
@@ -71,7 +69,7 @@ def genome_catalogues(top_level_biomes):
                     "catalogue_biome_label": catalogue["catalogue_biome_label"],
                     "catalogue_type": catalogue["catalogue_type"],
                     "biome": catalogue["biome"],
-                }
+                },
             )[0]
         )
     return catalogues_objects
@@ -139,30 +137,35 @@ def genomes(top_level_biomes, genome_catalogues, geographic_locations):
             "geo_origin": geographic_locations[5],  # Oceania
         },
     ]
-    
+
     genomes_objects = []
     for genome_data in genomes_list:
         print(f"creating genome {genome_data['accession']}")
         genome, created = Genome.objects.get_or_create(
-            accession=genome_data["accession"],
-            defaults=genome_data
+            accession=genome_data["accession"], defaults=genome_data
         )
-        
+
         # Add geographic range
         if genome_data["accession"] == "MGYG000000001":
             genome.pangenome_geographic_range.add(geographic_locations[0])  # Europe
-            genome.pangenome_geographic_range.add(geographic_locations[1])  # North America
+            genome.pangenome_geographic_range.add(
+                geographic_locations[1]
+            )  # North America
         elif genome_data["accession"] == "MGYG000000002":
-            genome.pangenome_geographic_range.add(geographic_locations[1])  # North America
-            genome.pangenome_geographic_range.add(geographic_locations[2])  # South America
+            genome.pangenome_geographic_range.add(
+                geographic_locations[1]
+            )  # North America
+            genome.pangenome_geographic_range.add(
+                geographic_locations[2]
+            )  # South America
         elif genome_data["accession"] == "MGYG000000003":
             genome.pangenome_geographic_range.add(geographic_locations[5])  # Oceania
             genome.pangenome_geographic_range.add(geographic_locations[6])  # Antarctica
-        
+
         genomes_objects.append(genome)
-    
+
     # Update genome counts in catalogues
     for catalogue in genome_catalogues:
         catalogue.calculate_genome_count()
-    
+
     return genomes_objects
