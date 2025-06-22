@@ -47,8 +47,7 @@ DEBUG_TOOLBAR_CONFIG = {
 ALLOWED_HOSTS = [
     "apiv2-dev.mgnify.org",
     "localhost",
-    "www.ebi.ac.uk",
-    "host.docker.internal:8004",
+    "www.ebi.ac.uk"
 ]
 
 
