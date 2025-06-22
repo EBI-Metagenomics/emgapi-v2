@@ -109,12 +109,18 @@ def process_genome_dir(catalogue, genome_dir):
     genome_data = read_json(os.path.join(genome_dir, f"{accession}.json"))
     has_pangenome = "pangenome" in genome_data
 
+    path = Biome.lineage_to_path(genome_data["gold_biome"])
+
     # Transform data
     genome_data["catalogue"] = catalogue
     genome_data["result_directory"] = get_genome_result_path(genome_dir)
+    # genome_data["biome"] = Biome.objects.filter(
+    #     lineage__iexact=genome_data["gold_biome"]
+    # ).first()
     genome_data["biome"] = Biome.objects.filter(
-        lineage__iexact=genome_data["gold_biome"]
+        path=path
     ).first()
+
     genome_data.pop("gold_biome", None)
     if "annotations" not in genome_data:
         genome_data["annotations"] = Genome.default_annotations()
@@ -154,6 +160,15 @@ def import_genomes_flow(options: dict):
     finalize_catalogue.fn(catalogue)
     upload_catalogue_summary.fn(catalogue, options["catalogue_dir"])
     upload_catalogue_files.fn(catalogue, options["catalogue_dir"])
+    genome_dirs = gather_genome_dirs.fn(
+        options["catalogue_dir"], options["catalogue_type"]
+    )
+    genome_accessions = []
+    for genome_dir in genome_dirs:
+        genome_accession = process_genome_dir.fn(catalogue, genome_dir)
+        genome_accessions.append(genome_accession)
+    logger = get_run_logger()
+    logger.info(f"Processed {len(genome_accessions)} genomes in catalogue {catalogue.name}")
     validate_import_summary.fn(catalogue)
 
 
