@@ -20,6 +20,9 @@ class GenomeCatalogueBase(Schema):
     catalogue_type: str
     other_stats: Optional[Dict]
 
+    class Config:
+        from_attributes = True
+
 
 class GenomeCatalogueDetail(GenomeCatalogueBase):
     biome_id: Optional[int]
