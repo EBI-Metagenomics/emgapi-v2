@@ -4,6 +4,7 @@ import pytest
 from django.core.management import call_command
 
 from analyses.models import Biome, Run, Analysis
+from genomes.models.genome import Genome
 from workflows.flows.analyse_study_tasks.import_completed_amplicon_analyses import (
     import_completed_analysis as import_completed_amplicon_analysis,
 )
@@ -142,6 +143,9 @@ def test_make_dev_data(
     mgnify_assemblies_completed,
     amplicon_analysis_with_downloads,
     prefect_harness,
+    geographic_locations,
+    genome_catalogues,
+    genomes,
     private_analysis_with_download,
     private_study_with_download,
 ):
