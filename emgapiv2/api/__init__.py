@@ -9,6 +9,7 @@ from .private import router as my_data_router
 from .samples import router as samples_router
 from .studies import router as studies_router
 from .genomes import router as genomes_router
+from .genome_catalogues import router as genome_catalogues_router
 
 api = NinjaAPI(
     title="MGnify API",
@@ -64,3 +65,4 @@ api.add_router("/samples", samples_router, tags=[ApiSections.SAMPLES])
 api.add_router("/studies", studies_router, tags=[ApiSections.STUDIES])
 api.add_router("/my-data", my_data_router, tags=[ApiSections.PRIVATE_DATA])
 api.add_router("/genomes", genomes_router, tags=[ApiSections.GENOMES])
+api.add_router("/genome-catalogues", genome_catalogues_router, tags=[ApiSections.GENOMES])

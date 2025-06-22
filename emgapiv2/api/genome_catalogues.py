@@ -2,10 +2,11 @@ from typing import List
 from django.shortcuts import get_object_or_404
 from ninja.pagination import RouterPaginated
 
+from emgapiv2.api import ApiSections
 from genomes.models import GenomeCatalogue
 from genomes.schemas import GenomeCatalogueDetail, GenomeCatalogueBase
 
-router = RouterPaginated(tags=["Genome Catalogues"])
+router = RouterPaginated(tags=[ApiSections.GENOMES])
 
 
 @router.get(
