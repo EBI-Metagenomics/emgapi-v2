@@ -1,11 +1,7 @@
 import os
 import re
 from pathlib import Path
-
-import django
 from prefect import task, flow, get_run_logger
-
-django.setup()
 
 from analyses.models import Biome
 from genomes.management.lib.genome_util import (
@@ -111,25 +107,11 @@ def process_genome_dir(catalogue, genome_dir):
 
     path = Biome.lineage_to_path(genome_data["gold_biome"])
 
-    # Transform data
     genome_data["catalogue"] = catalogue
     genome_data["result_directory"] = get_genome_result_path(genome_dir)
-    # genome_data["biome"] = Biome.objects.filter(
-    #     lineage__iexact=genome_data["gold_biome"]
-    # ).first()
-    genome_data["biome"] = Biome.objects.filter(
-        path=path
-    ).first()
+    genome_data["biome"] = Biome.objects.filter(path=path).first()
 
-    genome_data.pop("gold_biome", None)
-    if "annotations" not in genome_data:
-        genome_data["annotations"] = Genome.default_annotations()
-
-    geo_origin = genome_data.pop("geographic_origin", None)
-    if geo_origin:
-        genome_data["geo_origin"] = GeographicLocation.objects.get_or_create(
-            name=geo_origin
-        )[0]
+    genome_data = clean_genome_data(genome_data)
 
     genome, _ = Genome.objects.update_or_create(
         accession=accession, defaults=genome_data
@@ -147,6 +129,25 @@ def process_genome_dir(catalogue, genome_dir):
     return accession
 
 
+def clean_genome_data(genome_data):
+    """
+    Clean genome data by removing unnecessary fields and ensuring required fields are present.
+    """
+    genome_data.pop("gold_biome", None)
+    if "annotations" not in genome_data:
+        genome_data["annotations"] = Genome.default_annotations()
+
+    geo_origin = genome_data.pop("geographic_origin", None)
+    if geo_origin:
+        genome_data["geo_origin"] = GeographicLocation.objects.get_or_create(
+            name=geo_origin
+        )[0]
+    genome_data.pop("genome_accession", None)
+    genome_data.pop("pangenome", None)
+
+    return genome_data
+
+
 @task
 def finalize_catalogue(catalogue):
     catalogue.calculate_genome_count()
@@ -155,21 +156,23 @@ def finalize_catalogue(catalogue):
 
 @flow(name="import_genomes_flow")
 def import_genomes_flow(options: dict):
-    options = parse_options.fn(options)
-    catalogue = get_catalogue.fn(options)
-    finalize_catalogue.fn(catalogue)
-    upload_catalogue_summary.fn(catalogue, options["catalogue_dir"])
-    upload_catalogue_files.fn(catalogue, options["catalogue_dir"])
-    genome_dirs = gather_genome_dirs.fn(
+    options = parse_options(options)
+    catalogue = get_catalogue(options)
+    finalize_catalogue(catalogue)
+    upload_catalogue_summary(catalogue, options["catalogue_dir"])
+    upload_catalogue_files(catalogue, options["catalogue_dir"])
+    genome_dirs = gather_genome_dirs(
         options["catalogue_dir"], options["catalogue_type"]
     )
     genome_accessions = []
     for genome_dir in genome_dirs:
-        genome_accession = process_genome_dir.fn(catalogue, genome_dir)
+        genome_accession = process_genome_dir(catalogue, genome_dir)
         genome_accessions.append(genome_accession)
     logger = get_run_logger()
-    logger.info(f"Processed {len(genome_accessions)} genomes in catalogue {catalogue.name}")
-    validate_import_summary.fn(catalogue)
+    logger.info(
+        f"Processed {len(genome_accessions)} genomes in catalogue {catalogue.name}"
+    )
+    validate_import_summary(catalogue)
 
 
 @task

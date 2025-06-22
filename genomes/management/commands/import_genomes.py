@@ -272,7 +272,6 @@ class Command(BaseCommand):
         logger.info(f"Getting gold biome for lineage: {lineage}")
         path = Biome.lineage_to_path(lineage)
         biome = Biome.objects.using(self.database).filter(path=path).first()
-        # log the found biome
         logger.info(f"Found gold biome: {biome}")
 
         if not biome:
@@ -291,11 +290,6 @@ class Command(BaseCommand):
 
         if "annotations" not in genome_dir:
             genome_dir["annotations"] = Genome.default_annotations()
-
-        # genome_set_name = genome_dir.get("genome_set", "NCBI")
-        # genome_dir["annotations"]["genome_set"] = {"name": genome_set_name}
-
-        # genome_dir["genome_set"] = genome_set_name
 
         if has_pangenome:
             genome_dir.update(genome_dir["pangenome"])

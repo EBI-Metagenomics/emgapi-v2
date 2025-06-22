@@ -2,8 +2,7 @@ import os
 import json
 import tempfile
 import shutil
-from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 import pytest
 
@@ -17,32 +16,25 @@ def mock_genome_directory():
     Create a temporary directory structure that mimics the expected genome directory structure.
     This allows tests to run without needing the actual large directory structure.
     """
-    # Create a temporary directory
     temp_dir = tempfile.mkdtemp()
 
     try:
-        # Create the catalogue directory
         catalogue_dir = os.path.join(temp_dir, "catalogue")
         os.makedirs(catalogue_dir)
 
-        # Create the phylo_tree.json file in the catalogue directory
         with open(os.path.join(catalogue_dir, "phylo_tree.json"), "w") as f:
             json.dump({"tree": "mock_tree_data"}, f)
 
-        # Create a catalogue_summary.json file
         with open(os.path.join(catalogue_dir, "catalogue_summary.json"), "w") as f:
             json.dump({"summary": "mock_summary_data"}, f)
 
-        # Create genome directories
         genome_accessions = ["MGYG000000001", "MGYG000000002"]
         for accession in genome_accessions:
             genome_dir = os.path.join(catalogue_dir, accession)
             os.makedirs(genome_dir)
 
-            # Create the genome subdirectory
             os.makedirs(os.path.join(genome_dir, "genome"))
 
-            # Create the JSON file with required fields
             json_data = {
                 "accession": accession,
                 "completeness": 95.0,
@@ -61,13 +53,12 @@ def mock_genome_directory():
                 "rna_5s": 1.0,
                 "taxon_lineage": "d__Bacteria;p__Firmicutes;c__Bacilli;o__Lactobacillales;f__Lactobacillaceae;g__Lactobacillus;s__Lactobacillus_gasseri",
                 "trnas": 40.0,
-                "type": "mag"
+                "type": "mag",
             }
 
             with open(os.path.join(genome_dir, f"{accession}.json"), "w") as f:
                 json.dump(json_data, f)
 
-            # Create the required files in the genome subdirectory
             genome_subdir = os.path.join(genome_dir, "genome")
             required_files = [
                 f"{accession}_annotation_coverage.tsv",
@@ -77,9 +68,10 @@ def mock_genome_directory():
                 f"{accession}_kegg_modules.tsv",
                 f"{accession}.faa",
                 f"{accession}.fna",
+                f"{accession}.fna.fai",
                 f"{accession}.gff",
                 f"{accession}_eggNOG.tsv",
-                f"{accession}_InterProScan.tsv"
+                f"{accession}_InterProScan.tsv",
             ]
 
             for file in required_files:
@@ -88,8 +80,8 @@ def mock_genome_directory():
 
         yield temp_dir
     finally:
-        # Clean up the temporary directory
         shutil.rmtree(temp_dir)
+
 
 from workflows.flows.import_genomes_flow import (
     import_genomes_flow,
@@ -118,16 +110,13 @@ def test_parse_options():
         options = {
             "results_directory": "/path/to/results",
             "catalogue_directory": "catalogue",
-            # "catalogue_name": "Test Catalogue",
             "catalogue_name": "Sheep rumen",
             "catalogue_version": "1.0",
-            # "gold_biome": "root:Host-Associated:Human:Digestive System",
             "gold_biome": "root:Host-associated:Human",
-            # "pipeline_version": "v1",
             "pipeline_version": "v3.0.0dev",
             "catalogue_type": "prokaryotes",
             "catalogue_biome_label": "Sheep Rumen",
-            "database": "default"
+            "database": "default",
         }
         parsed_options = parse_options.fn(options)
         assert parsed_options["catalogue_directory"] == "/path/to/results/catalogue"
@@ -146,33 +135,20 @@ def test_parse_options():
         options = {
             "results_directory": "/path/to/results",
             "catalogue_directory": "catalogue",
-            # "catalogue_name": "Test Catalogue",
             "catalogue_name": "Sheep rumen",
             "catalogue_version": "1.0",
-            # "gold_biome": "root:Host-Associated:Human:Digestive System",
             "gold_biome": "root:Host-associated:Human",
-            # "pipeline_version": "v1",
             "pipeline_version": "v3.0.0dev",
             "catalogue_type": "prokaryotes",
             "catalogue_biome_label": "Sheep Rumen",
-            "database": "default"
+            "database": "default",
         }
-        # options = {
-        #     "results_directory": "/path/to/results",
-        #     "catalogue_directory": "catalogue",
-        #     "catalogue_name": "Test Catalogue",
-        #     "catalogue_version": "1.0",
-        #     "gold_biome": "root:Host-Associated:Human:Digestive System",
-        #     "pipeline_version": "v1",
-        #     "catalogue_type": "prokaryotes",
-        # }
         with pytest.raises(FileNotFoundError):
             parse_options.fn(options)
 
 
 @pytest.mark.django_db
 def test_get_catalogue():
-
 
     biome = Biome.objects.create(
         id=1,
@@ -181,38 +157,16 @@ def test_get_catalogue():
         path="root.host_associated.mammals.digestive_system.stomach.rumen",
     )
 
-    # # count how many biomes are in the database
-    # count =  Biome.objects.count()
-    # import logging
-    #
-    # logger = logging.getLogger(__name__)
-    # logger.info(f"Biome count in database: {count}")
-
-    # options = {
-    #     "catalogue_name": "Test Catalogue",
-    #     "catalogue_version": "1.0",
-    #     # "gold_biome": "root:Host-Associated:Human:Digestive System",
-    #     "gold_biome": "root:Host-associated:Human",
-    #     "catalogue_dir": "/path/to/catalogue",
-    #     "pipeline_version": "v1",
-    #     "catalogue_type": "prokaryotes",
-    #     "catalogue_biome_label": "Test Catalogue",
-    #     "database": "default",
-    # }
-
     options = {
         "results_directory": "/path/to/results",
         "catalogue_dir": "genomes/sheep-rumen/1.0",
-        # "catalogue_name": "Test Catalogue",
         "catalogue_name": "Sheep rumen",
         "catalogue_version": "1.0",
-        # "gold_biome": "root:Host-Associated:Human:Digestive System",
         "gold_biome": "root:Host-associated:Human",
-        # "pipeline_version": "v1",
         "pipeline_version": "v3.0.0dev",
         "catalogue_type": "prokaryotes",
         "catalogue_biome_label": "Sheep Rumen",
-        "database": "default"
+        "database": "default",
     }
 
     with patch("analyses.models.Biome.lineage_to_path", return_value=biome.path):
@@ -257,80 +211,10 @@ def test_gather_genome_dirs(
         mock_sanity_check_catalogue.assert_called_once_with("/path/to/catalogue")
 
 
-@pytest.mark.django_db
-@patch("workflows.flows.import_genomes_flow.process_genome_dir")
-@patch("workflows.flows.import_genomes_flow.gather_genome_dirs")
-@patch("workflows.flows.import_genomes_flow.get_catalogue")
-@patch("workflows.flows.import_genomes_flow.parse_options")
-def test_import_genomes_flow(
-    mock_parse_options,
-    mock_get_catalogue,
-    mock_gather_genome_dirs,
-    mock_process_genome_dir,
-    mock_genome_directory
-):
-    mock_parse_options.return_value = {
-        # "results_directory": "/path/to/results",
-        # "catalogue_directory": "/path/to/catalogue",
-        # "catalogue_name": "Test Catalogue",
-        # "catalogue_version": "1.0",
-        # "gold_biome": "root:Host-Associated:Human:Digestive System",
-        # "pipeline_version": "v1",
-        # "catalogue_type": "prokaryotes",
-        # "catalogue_biome_label": "Test Catalogue",
-        # "database": "default",
-
-        "results_directory": mock_genome_directory,
-        "catalogue_dir": "genomes/sheep-rumen/1.0",
-        # "catalogue_name": "Test Catalogue",
-        "catalogue_name": "Sheep rumen",
-        "catalogue_version": "1.0",
-        # "gold_biome": "root:Host-Associated:Human:Digestive System",
-        "gold_biome": "root:Host-associated:Human",
-        # "pipeline_version": "v1",
-        "pipeline_version": "v3.0.0dev",
-        "catalogue_type": "prokaryotes",
-        "catalogue_biome_label": "Sheep Rumen",
-        "database": "default"
-    }
-
-    mock_catalogue = MagicMock()
-    mock_catalogue.id = 1  # Set the id attribute to a valid integer
-    mock_get_catalogue.return_value = mock_catalogue
-    mock_gather_genome_dirs.return_value = ["/path/to/genome1", "/path/to/genome2"]
-    mock_process_genome_dir.return_value = "MGYG000000001"
-
-    flow_run = run_flow_and_capture_logs(
-        import_genomes_flow,
-        options={
-            "results_directory": "/path/to/results",
-            "catalogue_directory": "catalogue",
-            "catalogue_name": "Test Catalogue",
-            "catalogue_version": "1.0",
-            "gold_biome": "root:Host-Associated:Human:Digestive System",
-            "pipeline_version": "v1",
-            "catalogue_type": "prokaryotes",
-        },
-    )
-
-    assert "Final Report:" in flow_run.logs
-
-    mock_parse_options.assert_called_once()
-    mock_get_catalogue.assert_called_once()
-    mock_gather_genome_dirs.assert_called_once()
-
 
 @pytest.mark.django_db
 @patch("analyses.models.Biome.lineage_to_path")
-# @patch("genomes.management.lib.genome_util.read_json", side_effect=lambda f: json.load(open(f)))
-# @patch("workflows.flows.import_genomes_flow.upload_catalogue_summary")
-# @patch("workflows.flows.import_genomes_flow.upload_catalogue_files")
-# @patch("workflows.flows.import_genomes_flow.validate_import_summary")
 def test_import_genomes_flow_with_mock_directory(
-    # mock_validate_import_summary,
-    # mock_upload_catalogue_files,
-    # mock_upload_catalogue_summary,
-    # mock_read_json,
     mock_lineage_to_path,
     mock_genome_directory,
 ):
@@ -351,46 +235,52 @@ def test_import_genomes_flow_with_mock_directory(
     )
     mock_lineage_to_path.return_value = biome.path
 
-    # Run the flow with the mock directory
-    flow_run = run_flow_and_capture_logs(
+    run_flow_and_capture_logs(
         import_genomes_flow,
         options={
             "results_directory": mock_genome_directory,
-            # "results_directory": '/path/to/results',
             "catalogue_directory": "catalogue",
-            # "catalogue_name": "Test Catalogue",
             "catalogue_name": "Sheep rumen",
             "catalogue_version": "1.0",
-            # "gold_biome": "root:Host-Associated:Human:Digestive System",
             "gold_biome": "root:Host-associated:Human",
-            # "pipeline_version": "v1",
             "pipeline_version": "v3.0.0dev",
             "catalogue_type": "prokaryotes",
             "catalogue_biome_label": "Sheep Rumen",
-            "database": "default"
+            "database": "default",
         },
     )
-
-    # get all genomes in db
-
-
-    # gs = Genome.objects.all()
-    # assert gs.count() > 0
-
-    # Check that the flow ran successfully
-    # assert "Final Report:" in flow_run.logs
-
-    # Check that the catalogue was created
     catalogue = GenomeCatalogue.objects.get(catalogue_id="sheep-rumen-v1-0")
     assert catalogue.version == "1.0"
     assert catalogue.name == "Sheep rumen v1.0"
     assert catalogue.biome == biome
 
-    # Check that the genomes were created
     genomes = Genome.objects.filter(catalogue=catalogue)
     assert genomes.count() == 2
 
     # Check that the genomes have the expected accessions
-    # accessions = [g.accession for g in genomes]
-    # assert "MGYG000000001" in accessions
-    # assert "MGYG000000002" in accessions
+    accessions = [g.accession for g in genomes]
+    assert "MGYG000000001" in accessions
+    assert "MGYG000000002" in accessions
+
+def prepare_options(
+    results_directory: str,
+    catalogue_directory: str = "catalogue",
+    catalogue_name: str = "Sheep rumen",
+    catalogue_version: str = "1.0",
+    gold_biome: str = "root:Host-associated:Human",
+    pipeline_version: str = "v3.0.0dev",
+    catalogue_type: str = "prokaryotes",
+    catalogue_biome_label: str = "Sheep Rumen",
+    database: str = "default",
+):
+    return {
+        "results_directory": results_directory,
+        "catalogue_directory": catalogue_directory,
+        "catalogue_name": catalogue_name,
+        "catalogue_version": catalogue_version,
+        "gold_biome": gold_biome,
+        "pipeline_version": pipeline_version,
+        "catalogue_type": catalogue_type,
+        "catalogue_biome_label": catalogue_biome_label,
+        "database": database,
+    }
