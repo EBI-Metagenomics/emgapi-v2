@@ -109,7 +109,7 @@ services:
       target: django
     container_name: app
     profiles: ["app", "all"]
-    command: "runserver 0:8009"
+    command: "runserver 0:8000"
     environment:
       - PREFECT_API_URL=http://prefect-server:4200/api
       - PREFECT_UI_URL=http://localhost:4200
@@ -123,7 +123,7 @@ services:
         # prefect-server:
         # condition: service_healthy
     ports:
-      - "8009:8009"
+      - "8000:8000"
     networks: [emg]
 
   transfer-services:
