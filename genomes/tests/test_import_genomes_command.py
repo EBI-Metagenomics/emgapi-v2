@@ -11,12 +11,10 @@ from genomes.models import GenomeCatalogue
 class TestImportGenomesCommand:
 
     def setup_method(self):
-        # Create a test biome
         self.biome = Biome.objects.create(
-            biome_id=1,
-            biome_name="Test Biome",
-            lineage="root:Host-Associated:Human:Digestive System",
-            depth=4,
+            id=2,
+            biome_name="Engineered",
+            path="root.engineered",
         )
 
     @patch("os.path.exists")

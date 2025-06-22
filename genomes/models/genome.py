@@ -35,6 +35,8 @@ class GenomeManagerIncludingAnnotations(models.Manager):
 
 
 class Genome(WithDownloadsModel):
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     ISOLATE = "isolate"
     MAG = "mag"

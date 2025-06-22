@@ -1,12 +1,14 @@
 from django.db import models
 from django.utils import timezone
 
+from analyses.base_models.with_downloads_models import WithDownloadsModel
 from analyses.models import Biome
 from emgapiv2 import settings
-from genomes.models.base_model import BaseModel
 
 
-class GenomeCatalogue(BaseModel):
+class GenomeCatalogue(WithDownloadsModel):
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
     catalogue_id = models.SlugField(db_column="CATALOGUE_ID", max_length=100)
     version = models.CharField(db_column="VERSION", max_length=20)
     name = models.CharField(db_column="NAME", max_length=100, unique=True)
