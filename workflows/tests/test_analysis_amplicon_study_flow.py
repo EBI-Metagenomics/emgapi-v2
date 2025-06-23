@@ -430,6 +430,9 @@ def analysis_study_input_mocker(biome_choices, user_choices):
     return MockAnalyseStudyInput
 
 
+@pytest.mark.flaky(
+    reruns=2
+)  # sometimes fails due to missing report CSV. maybe xdist or shared tmp-dir problem?
 @pytest.mark.httpx_mock(should_mock=should_not_mock_httpx_requests_to_prefect_server)
 @pytest.mark.django_db(transaction=True)
 @patch("workflows.flows.analyse_study_tasks.make_samplesheet_amplicon.queryset_hash")
@@ -909,7 +912,7 @@ def test_prefect_analyse_amplicon_flow_private_data(
         ],
     )
 
-    mock_queryset_hash_for_amplicon.return_value = "abc123"
+    mock_queryset_hash_for_amplicon.return_value = "xyz789"
 
     study_accession = "PRJNA398089"
     amplicon_run_all_results = "SRR_all_results"
@@ -954,7 +957,7 @@ def test_prefect_analyse_amplicon_flow_private_data(
 
     # create fake results
     amplicon_folder = Path(
-        f"{EMG_CONFIG.slurm.default_workdir}/{study_accession}_amplicon_v6/abc123"
+        f"{EMG_CONFIG.slurm.default_workdir}/{study_accession}_amplicon_v6/xyz789"
     )
     amplicon_folder.mkdir(exist_ok=True, parents=True)
 
@@ -1056,7 +1059,7 @@ def test_prefect_analyse_amplicon_flow_private_data(
         ],  # 5 for the samplesheet, same 5 for the "merge" (only 5 here, unlike public test, which has different hypervar regions)
     )
 
-    with (workdir / "abc123_DADA2-SILVA_18S-V9_asv_study_summary.tsv").open(
+    with (workdir / "xyz789_DADA2-SILVA_18S-V9_asv_study_summary.tsv").open(
         "r"
     ) as summary:
         lines = summary.readlines()

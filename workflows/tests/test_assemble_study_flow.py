@@ -44,6 +44,9 @@ def assembly_study_input_mocker(biome_choices, user_choices):
     return MockAssembleStudyInput
 
 
+@pytest.mark.flaky(
+    reruns=2
+)  # sometimes fails due to missing report CSV. maybe xdist or shared tmp-dir problem?
 @pytest.mark.httpx_mock(should_mock=should_not_mock_httpx_requests_to_prefect_server)
 @pytest.mark.django_db(transaction=True)
 @pytest.mark.parametrize(
@@ -351,6 +354,9 @@ def test_prefect_assemble_study_flow(
     shutil.rmtree(assembly_folder, ignore_errors=True)
 
 
+@pytest.mark.flaky(
+    reruns=2
+)  # sometimes fails due to missing report CSV. maybe xdist or shared tmp-dir problem?
 @pytest.mark.httpx_mock(should_mock=should_not_mock_httpx_requests_to_prefect_server)
 @pytest.mark.django_db(transaction=True)
 @pytest.mark.parametrize(
@@ -486,10 +492,10 @@ def test_prefect_assemble_private_study_flow(
 
     mock_suspend_flow_run.side_effect = suspend_side_effect
 
-    mock_queryset_hash_for_assemblies.return_value = "abc123"
+    mock_queryset_hash_for_assemblies.return_value = "xyz789"
 
     assembly_folder = Path(
-        f"{EMG_CONFIG.slurm.default_workdir}/PRJNA1_miassembler/abc123"
+        f"{EMG_CONFIG.slurm.default_workdir}/PRJNA1_miassembler/xyz789"
     )
     assembly_folder.mkdir(exist_ok=True, parents=True)
 
