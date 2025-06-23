@@ -46,7 +46,7 @@ def sample_gff_records():
 
 
 def generate_fake_assembly_pipeline_results(
-        study_dir, assembly_dir, assembly_accession, sample_fasta_records
+    study_dir, assembly_dir, assembly_accession, sample_fasta_records
 ):
     """
     Generate fake assembly pipeline results for testing.
@@ -102,14 +102,14 @@ def generate_fake_assembly_pipeline_results(
         )
 
     with gzip.open(
-            f"{dbcan_dir}/{assembly_accession}_dbcan_overview.tsv.gz", "wt"
+        f"{dbcan_dir}/{assembly_accession}_dbcan_overview.tsv.gz", "wt"
     ) as f:
         f.write("contig_id\tcazy_family\tsubstrate\n")
         f.write("contig_1\tGH13\talpha-amylase\n")
         f.write("contig_2\tGT2\tglycoside\n")
 
     with gzip.open(
-            f"{dbcan_dir}/{assembly_accession}_dbcan_standard_out.tsv.gz", "wt"
+        f"{dbcan_dir}/{assembly_accession}_dbcan_standard_out.tsv.gz", "wt"
     ) as f:
         f.write("contig_id\tcazy_hit\te_value\tscore\n")
         f.write("contig_1\tGH13\t1e-50\t500\n")
@@ -121,7 +121,7 @@ def generate_fake_assembly_pipeline_results(
         f.write("GT2\tglycoside\n")
 
     with gzip.open(
-            f"{dbcan_dir}/{assembly_accession}_dbcan_substrates.tsv.gz", "wt"
+        f"{dbcan_dir}/{assembly_accession}_dbcan_substrates.tsv.gz", "wt"
     ) as f:
         f.write("contig_id\tsubstrate\n")
         f.write("contig_1\talpha-amylase\n")
@@ -130,7 +130,7 @@ def generate_fake_assembly_pipeline_results(
     eggnog_dir = f"{func_annot_dir}/eggnog"
     os.makedirs(eggnog_dir, exist_ok=True)
     with gzip.open(
-            f"{eggnog_dir}/{assembly_accession}_emapper_annotations.tsv.gz", "wt"
+        f"{eggnog_dir}/{assembly_accession}_emapper_annotations.tsv.gz", "wt"
     ) as f:
         f.write(
             "query\tseed_ortholog\tevalue\tscore\ttaxonomic_group\tprotein_name\tGO_terms\tEC\tKEGG_ko\tKEGG_Pathway\tKEGG_Module\tKEGG_Reaction\tKEGG_rclass\tBRITE\tKEGG_TC\tCAZy\tBiGG_Reaction\ttax_scope\tOG\tbestOG\tCOG_cat\tdescription\n"
@@ -143,7 +143,7 @@ def generate_fake_assembly_pipeline_results(
         )
 
     with gzip.open(
-            f"{eggnog_dir}/{assembly_accession}_emapper_seed_orthologs.tsv.gz", "wt"
+        f"{eggnog_dir}/{assembly_accession}_emapper_seed_orthologs.tsv.gz", "wt"
     ) as f:
         f.write(
             "query_name\tseed_eggNOG_ortholog\tseed_ortholog_evalue\tseed_ortholog_score\n"
@@ -155,7 +155,7 @@ def generate_fake_assembly_pipeline_results(
     go_dir = f"{func_annot_dir}/go"
     os.makedirs(go_dir, exist_ok=True)
     with gzip.open(
-            f"{go_dir}/{assembly_accession}_goslim_summary.tsv.gz", "wt"
+        f"{go_dir}/{assembly_accession}_goslim_summary.tsv.gz", "wt"
     ) as goslim:
         goslim.write(
             dedent(
@@ -201,7 +201,7 @@ def generate_fake_assembly_pipeline_results(
     os.makedirs(interpro_dir, exist_ok=True)
 
     with gzip.open(
-            f"{interpro_dir}/{assembly_accession}_interproscan.tsv.gz", "wt"
+        f"{interpro_dir}/{assembly_accession}_interproscan.tsv.gz", "wt"
     ) as f:
         f.write(
             dedent(
@@ -214,7 +214,7 @@ def generate_fake_assembly_pipeline_results(
         )
 
     with gzip.open(
-            f"{interpro_dir}/{assembly_accession}_interpro_summary.tsv.gz", "wt"
+        f"{interpro_dir}/{assembly_accession}_interpro_summary.tsv.gz", "wt"
     ) as f:
         f.write(
             dedent(
@@ -231,7 +231,7 @@ def generate_fake_assembly_pipeline_results(
 
     # Create a simple gzi index file
     with open(
-            f"{interpro_dir}/{assembly_accession}_interpro_summary.tsv.gz.gzi", "wb"
+        f"{interpro_dir}/{assembly_accession}_interpro_summary.tsv.gz.gzi", "wb"
     ) as f:
         f.write(b"\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00")
 
@@ -309,7 +309,7 @@ def generate_fake_assembly_pipeline_results(
         f.write(b"\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00")
 
     with gzip.open(
-            f"{antismash_dir}/{assembly_accession}_antismash_summary.tsv.gz", "wt"
+        f"{antismash_dir}/{assembly_accession}_antismash_summary.tsv.gz", "wt"
     ) as f:
         f.write(
             dedent(
@@ -326,7 +326,7 @@ def generate_fake_assembly_pipeline_results(
 
     # Create a simple gzi index file
     with open(
-            f"{antismash_dir}/{assembly_accession}_antismash_summary.tsv.gz.gzi", "wb"
+        f"{antismash_dir}/{assembly_accession}_antismash_summary.tsv.gz.gzi", "wb"
     ) as f:
         f.write(b"\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00")
 
@@ -362,7 +362,7 @@ def generate_fake_assembly_pipeline_results(
         )
 
     with gzip.open(
-            f"{dram_dir}/{assembly_accession}_metabolism_summary.xlsx.gz", "wb"
+        f"{dram_dir}/{assembly_accession}_metabolism_summary.xlsx.gz", "wb"
     ) as f:
         # Just write some binary data to simulate an Excel file
         f.write(
@@ -408,7 +408,7 @@ def generate_fake_assembly_pipeline_results(
     os.makedirs(kegg_modules_dir, exist_ok=True)
 
     with gzip.open(
-            f"{kegg_modules_dir}/{assembly_accession}_kegg_modules_summary.tsv.gz", "wt"
+        f"{kegg_modules_dir}/{assembly_accession}_kegg_modules_summary.tsv.gz", "wt"
     ) as f:
         f.write(
             dedent(
@@ -425,13 +425,13 @@ def generate_fake_assembly_pipeline_results(
 
     # Create a simple gzi index file
     with open(
-            f"{kegg_modules_dir}/{assembly_accession}_kegg_modules_summary.tsv.gz.gzi", "wb"
+        f"{kegg_modules_dir}/{assembly_accession}_kegg_modules_summary.tsv.gz.gzi", "wb"
     ) as f:
         f.write(b"\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00")
 
     # Create kegg_modules_per_contigs.tsv.gz with the specified header
     with gzip.open(
-            f"{kegg_modules_dir}/{assembly_accession}_kegg_modules_per_contigs.tsv.gz", "wt"
+        f"{kegg_modules_dir}/{assembly_accession}_kegg_modules_per_contigs.tsv.gz", "wt"
     ) as f:
         f.write(
             "contig\tmodule_accession\tcompleteness\tpathway_name\tpathway_class\tmatching_ko\tmissing_ko\n"
@@ -439,8 +439,8 @@ def generate_fake_assembly_pipeline_results(
 
     # Create a simple gzi index file for kegg_modules_per_contigs
     with open(
-            f"{kegg_modules_dir}/{assembly_accession}_kegg_modules_per_contigs.tsv.gz.gzi",
-            "wb",
+        f"{kegg_modules_dir}/{assembly_accession}_kegg_modules_per_contigs.tsv.gz.gzi",
+        "wb",
     ) as f:
         f.write(b"\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00")
 
@@ -460,7 +460,7 @@ def generate_fake_assembly_pipeline_results(
         )
 
     with gzip.open(
-            f"{sanntis_dir}/{assembly_accession}_sanntis_summary.tsv.gz", "wt"
+        f"{sanntis_dir}/{assembly_accession}_sanntis_summary.tsv.gz", "wt"
     ) as f:
         f.write(
             dedent(
@@ -475,7 +475,7 @@ def generate_fake_assembly_pipeline_results(
 
     # Create a simple gzi index file
     with open(
-            f"{sanntis_dir}/{assembly_accession}_sanntis_summary.tsv.gz.gzi", "wb"
+        f"{sanntis_dir}/{assembly_accession}_sanntis_summary.tsv.gz.gzi", "wb"
     ) as f:
         f.write(b"\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00")
 
@@ -501,7 +501,7 @@ def generate_fake_assembly_pipeline_results(
 
     # Create filtered_contigs.fasta.gz with content from sample_fasta_records
     with gzip.open(
-            f"{qc_dir}/{assembly_accession}_filtered_contigs.fasta.gz", "wt"
+        f"{qc_dir}/{assembly_accession}_filtered_contigs.fasta.gz", "wt"
     ) as f:
         for header, seq in sample_fasta_records:
             f.write(f">{header}\n{seq}\n")
@@ -602,7 +602,7 @@ def generate_fake_assembly_pipeline_results(
 
     # Create annotation_summary.gff.gz with content from sample_gff_records
     with gzip.open(
-            f"{annotation_summary_dir}/{assembly_accession}_annotation_summary.gff.gz", "wt"
+        f"{annotation_summary_dir}/{assembly_accession}_annotation_summary.gff.gz", "wt"
     ) as f:
         f.write(
             "\n".join(
@@ -623,7 +623,8 @@ def generate_fake_assembly_pipeline_results(
     with open(f"{downstream_samplesheets_dir}/virify_samplesheet.csv", "w") as f:
         f.write("id,assembly,fastq_1,fastq_2,proteins\n")
         f.write(
-            f"{assembly_accession},{assembly_dir}/qc/{assembly_accession}_filtered_contigs.fasta.gz,,,{cds_dir}/{assembly_accession}_predicted_cds.faa.gz\n")
+            f"{assembly_accession},{assembly_dir}/qc/{assembly_accession}_filtered_contigs.fasta.gz,,,{cds_dir}/{assembly_accession}_predicted_cds.faa.gz\n"
+        )
 
     # Create virify results directory with the specific path mentioned in the issue description
     virify_dir = "/tmp/PRJEB25958_virify/xyz_flowrun_id_virify/001"
@@ -632,11 +633,15 @@ def generate_fake_assembly_pipeline_results(
 
     # Create a mock GFF file
     with open(f"{gff_dir}/viral_contigs.gff", "w") as f:
-        f.write("\n".join([
-            "##gff-version 3",
-            "contig_1\tVIRify\tviral_sequence\t1\t1000\t.\t+\t.\tID=viral_1;Name=Viral contig 1",
-            "contig_2\tVIRify\tviral_sequence\t1\t1500\t.\t-\t.\tID=viral_2;Name=Viral contig 2"
-        ]))
+        f.write(
+            "\n".join(
+                [
+                    "##gff-version 3",
+                    "contig_1\tVIRify\tviral_sequence\t1\t1000\t.\t+\t.\tID=viral_1;Name=Viral contig 1",
+                    "contig_2\tVIRify\tviral_sequence\t1\t1500\t.\t-\t.\tID=viral_2;Name=Viral contig 2",
+                ]
+            )
+        )
 
 
 @pytest.mark.httpx_mock(should_mock=should_not_mock_httpx_requests_to_prefect_server)
@@ -655,21 +660,21 @@ def generate_fake_assembly_pipeline_results(
     "mock_suspend_flow_run", ["workflows.flows.analysis_assembly_study"], indirect=True
 )
 def test_prefect_analyse_assembly_flow(
-        mock_queryset_hash_for_assembly,
-        mock_flow_run_context_assembly,
-        mock_flow_run_context_virify,
-        mock_next_enumerated_subdir,
-        httpx_mock,
-        prefect_harness,
-        mock_cluster_can_accept_jobs_yes,
-        mock_start_cluster_job,
-        mock_check_cluster_job_all_completed,
-        assembly_ena_study,
-        mock_suspend_flow_run,
-        admin_user,
-        top_level_biomes,
-        sample_fasta_records,
-        sample_gff_records,
+    mock_queryset_hash_for_assembly,
+    mock_flow_run_context_assembly,
+    mock_flow_run_context_virify,
+    mock_next_enumerated_subdir,
+    httpx_mock,
+    prefect_harness,
+    mock_cluster_can_accept_jobs_yes,
+    mock_start_cluster_job,
+    mock_check_cluster_job_all_completed,
+    assembly_ena_study,
+    mock_suspend_flow_run,
+    admin_user,
+    top_level_biomes,
+    sample_fasta_records,
+    sample_gff_records,
 ):
     """
     Test should create/get ENA and MGnify study into DB.
@@ -699,12 +704,12 @@ def test_prefect_analyse_assembly_flow(
     # mock ENA response for assemblies
     httpx_mock.add_response(
         url=f"{EMG_CONFIG.ena.portal_search_api}?"
-            f"result=analysis"
-            f"&query=%22%28study_accession={study_accession}+OR+secondary_study_accession={study_accession}%29%22"
-            f"&limit=10000"
-            f"&format=json"
-            f"&fields=sample_accession%2Csample_title%2Csecondary_sample_accession%2Crun_accession%2Canalysis_accession%2Ccompleteness_score%2Ccontamination_score%2Cscientific_name%2Clocation%2Clat%2Clon%2Cgenerated_ftp"
-            f"&dataPortal=metagenome",
+        f"result=analysis"
+        f"&query=%22%28study_accession={study_accession}+OR+secondary_study_accession={study_accession}%29%22"
+        f"&limit=10000"
+        f"&format=json"
+        f"&fields=sample_accession%2Csample_title%2Csecondary_sample_accession%2Crun_accession%2Canalysis_accession%2Ccompleteness_score%2Ccontamination_score%2Cscientific_name%2Clocation%2Clat%2Clon%2Cgenerated_ftp"
+        f"&dataPortal=metagenome",
         json=[
             {
                 "sample_accession": "SAMN08514017",
@@ -741,12 +746,12 @@ def test_prefect_analyse_assembly_flow(
     # mock ENA response for runs
     httpx_mock.add_response(
         url=f"{EMG_CONFIG.ena.portal_search_api}?"
-            f"result=read_run"
-            f"&query=%22%28study_accession={study_accession}+OR+secondary_study_accession={study_accession}%29%22"
-            f"&limit=10000"
-            f"&format=json"
-            f"&fields=run_accession%2Csample_accession%2Csample_title%2Csecondary_sample_accession%2Cfastq_md5%2Cfastq_ftp%2Clibrary_layout%2Clibrary_strategy%2Clibrary_source%2Cscientific_name%2Chost_tax_id%2Chost_scientific_name%2Cinstrument_platform%2Cinstrument_model%2Clocation%2Clat%2Clon"
-            f"&dataPortal=metagenome",
+        f"result=read_run"
+        f"&query=%22%28study_accession={study_accession}+OR+secondary_study_accession={study_accession}%29%22"
+        f"&limit=10000"
+        f"&format=json"
+        f"&fields=run_accession%2Csample_accession%2Csample_title%2Csecondary_sample_accession%2Cfastq_md5%2Cfastq_ftp%2Clibrary_layout%2Clibrary_strategy%2Clibrary_source%2Cscientific_name%2Chost_tax_id%2Chost_scientific_name%2Cinstrument_platform%2Cinstrument_model%2Clocation%2Clat%2Clon"
+        f"&dataPortal=metagenome",
         json=[
             {
                 "sample_accession": "SAMN08514017",
@@ -797,14 +802,14 @@ def test_prefect_analyse_assembly_flow(
 
     # Create CSV files for completed and failed assemblies
     with open(
-            f"{study_folder}/{EMG_CONFIG.assembly_analysis_pipeline.completed_assemblies_csv}",
-            "w",
+        f"{study_folder}/{EMG_CONFIG.assembly_analysis_pipeline.completed_assemblies_csv}",
+        "w",
     ) as file:
         file.write(f"{assembly_all_results},success" + "\n")
 
     with open(
-            f"{study_folder}/{EMG_CONFIG.assembly_analysis_pipeline.qc_failed_assemblies}",
-            "w",
+        f"{study_folder}/{EMG_CONFIG.assembly_analysis_pipeline.qc_failed_assemblies}",
+        "w",
     ) as file:
         file.write(
             f"{assembly_failed},insufficient_contigs_after_length_filtering" + "\n"
@@ -851,10 +856,10 @@ def test_prefect_analyse_assembly_flow(
 
     study = analyses.models.Study.objects.get_or_create_for_ena_study(study_accession)
     assert (
-            study.analyses.filter(
-                assembly__ena_accessions__contains=[assembly_all_results]
-            ).count()
-            == 1
+        study.analyses.filter(
+            assembly__ena_accessions__contains=[assembly_all_results]
+        ).count()
+        == 1
     )
 
     # check biome and watchers where set correctly
@@ -869,7 +874,7 @@ def test_prefect_analyse_assembly_flow(
     # assert study.analyses.filter(status__analysis_qc_failed=True).count() == 1
 
     assert (
-            study.analyses.filter(status__analysis_completed_reason="success").count() == 1
+        study.analyses.filter(status__analysis_completed_reason="success").count() == 1
     )
 
     # Check that the study has v6 analyses
@@ -883,22 +888,22 @@ def test_prefect_analyse_assembly_flow(
         )
     )
     assert (
-            analyses.models.Analysis.TAXONOMIES
-            in analysis_which_should_have_taxonomies_imported.annotations
+        analyses.models.Analysis.TAXONOMIES
+        in analysis_which_should_have_taxonomies_imported.annotations
     )
     assert (
-            analyses.models.Analysis.TaxonomySources.UNIREF.value
-            in analysis_which_should_have_taxonomies_imported.annotations[
-                analyses.models.Analysis.TAXONOMIES
-            ]
+        analyses.models.Analysis.TaxonomySources.UNIREF.value
+        in analysis_which_should_have_taxonomies_imported.annotations[
+            analyses.models.Analysis.TAXONOMIES
+        ]
     )
     contig_taxa = analysis_which_should_have_taxonomies_imported.annotations[
         analyses.models.Analysis.TAXONOMIES
     ][analyses.models.Analysis.TaxonomySources.UNIREF.value]
     assert len(contig_taxa) == 10
     assert (
-            contig_taxa[0]["organism"]
-            == "sk__Archaea;k__Thermoproteati;p__Nitrososphaerota;c__Nitrososphaeria;o__Nitrosopumilales;f__Nitrosopumilaceae;g__Nitrosopumilus;s__Candidatus Nitrosopumilus koreensis"
+        contig_taxa[0]["organism"]
+        == "sk__Archaea;k__Thermoproteati;p__Nitrososphaerota;c__Nitrososphaeria;o__Nitrosopumilales;f__Nitrosopumilaceae;g__Nitrosopumilus;s__Candidatus Nitrosopumilus koreensis"
     )
 
     # Check functions were imported
@@ -909,9 +914,9 @@ def test_prefect_analyse_assembly_flow(
     logging.warning(analysis_which_should_have_taxonomies_imported.annotations)
 
     assert len(go_slims) == 4
-    assert go_slims[0]['go'] == "GO:0003824"
-    assert go_slims[0]['category'] == 'molecular_function'
-    assert go_slims[0]['count'] == 2145
+    assert go_slims[0]["go"] == "GO:0003824"
+    assert go_slims[0]["category"] == "molecular_function"
+    assert go_slims[0]["count"] == 2145
 
     # Check files
     workdir = Path(f"{EMG_CONFIG.slurm.default_workdir}/{study_accession}_v6")

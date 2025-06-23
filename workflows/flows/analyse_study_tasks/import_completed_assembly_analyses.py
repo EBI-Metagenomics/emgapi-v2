@@ -15,7 +15,7 @@ from workflows.prefect_utils.analyses_models_helpers import task_mark_analysis_s
 def import_completed_assembly_analysis(analysis: analyses.models.Analysis):
     """
     Import results for a completed assembly analysis using the unified schema.
-    
+
     :param analysis: The analysis to import results for
     """
     analysis.refresh_from_db()
@@ -23,16 +23,16 @@ def import_completed_assembly_analysis(analysis: analyses.models.Analysis):
 
     # Use the unified schema for both validation and import
     schema = create_assembly_v6_schema()
-    
+
     # First validate the directory structure (optional but recommended)
     try:
-        validated_directory = schema.validate_directory_structure(
+        schema.validate_directory_structure(
             dir_for_analysis.parent,  # Parent because results_dir includes assembly_id
             analysis.assembly.first_accession,
         )
     except Exception as e:
         print(f"Validation warning for {analysis}: {e}. Proceeding with import anyway.")
-    
+
     # Import all results using the unified schema
     schema.import_analysis_results(analysis, dir_for_analysis.parent)
 

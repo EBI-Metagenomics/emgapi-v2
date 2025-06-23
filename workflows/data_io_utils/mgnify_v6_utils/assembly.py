@@ -27,14 +27,20 @@ from workflows.data_io_utils.csv.csv_comment_handler import (
     move_file_pointer_past_comment_lines,
     CSVDelimiter,
 )
-from workflows.data_io_utils.file_rules.base_rules import FileRule, DirectoryRule, GlobRule
+from workflows.data_io_utils.file_rules.base_rules import (
+    FileRule,
+    DirectoryRule,
+    GlobRule,
+)
 from workflows.data_io_utils.file_rules.common_rules import (
     DirectoryExistsRule,
     FileExistsRule,
     FileIsNotEmptyRule,
     FileIfExistsIsNotEmptyRule,
 )
-from workflows.data_io_utils.file_rules.mgnify_v6_result_rules import GlobOfTaxonomyFolderHasHtmlAndKronaTxtRule
+from workflows.data_io_utils.file_rules.mgnify_v6_result_rules import (
+    GlobOfTaxonomyFolderHasHtmlAndKronaTxtRule,
+)
 from workflows.data_io_utils.file_rules.nodes import Directory, create_directory
 from mgnify_pipelines_toolkit.analysis.assembly.study_summary_generator import (
     TAXONOMY_COLUMN_NAMES,
@@ -44,33 +50,42 @@ from mgnify_pipelines_toolkit.analysis.assembly.study_summary_generator import (
 class AssemblyFileSchema(BaseModel):
     """Schema for individual files within an assembly analysis directory."""
 
-    filename_template: str = Field(..., description="Template for filename with {assembly_id} placeholder")
-    file_type: DownloadFileType = Field(..., description="Type of file for download system")
+    filename_template: str = Field(
+        ..., description="Template for filename with {assembly_id} placeholder"
+    )
+    file_type: DownloadFileType = Field(
+        ..., description="Type of file for download system"
+    )
     download_type: DownloadType = Field(..., description="Category of download")
     download_group: str = Field(..., description="Group identifier for downloads")
     short_description: str = Field(..., description="Short description of file")
     long_description: str = Field(..., description="Long description of file")
-    validation_rules: List[Union[FileRule, DirectoryRule]] = Field(default_factory=list, description="List of validation rule names")
+    validation_rules: List[Union[FileRule, DirectoryRule]] = Field(
+        default_factory=list, description="List of validation rule names"
+    )
     required: bool = Field(True, description="Whether file is required to exist")
-    import_to_annotations_key: Optional[str] = Field(None, description="Key for importing to annotations")
+    import_to_annotations_key: Optional[str] = Field(
+        None, description="Key for importing to annotations"
+    )
     import_from_column: Optional[str] = Field(None, description="Column to import from")
 
     def get_filename(self, assembly_id: str) -> str:
         """Get the actual filename for a given assembly ID."""
         return self.filename_template.format(assembly_id=assembly_id)
 
-    def import_annotations(self, analysis: 'analyses.models.Analysis', file_path: Path) -> None:
+    def import_annotations(
+        self, analysis: "analyses.models.Analysis", file_path: Path
+    ) -> None:
         """Import annotations from this file into the analysis."""
-        # if not self.import_to_annotations_key or not self.import_from_column:
-        #     return
-
         if not self.import_to_annotations_key:
             return
 
         try:
             df = pd.read_csv(file_path, sep=CSVDelimiter.TAB)
             # Store the entire dataframe as a list of dictionaries
-            analysis.annotations[self.import_to_annotations_key] = df.to_dict(orient="records")
+            analysis.annotations[self.import_to_annotations_key] = df.to_dict(
+                orient="records"
+            )
             analysis.save()
         except pd.errors.EmptyDataError:
             logging.error(f"Found empty annotation TSV at {file_path}")
@@ -82,10 +97,18 @@ class AssemblyDirectorySchema(BaseModel):
     """Schema for a directory within an assembly analysis output."""
 
     folder_name: str = Field(..., description="Name of the folder")
-    files: List[AssemblyFileSchema] = Field(default_factory=list, description="Files in this directory")
-    subdirectories: List['AssemblyDirectorySchema'] = Field(default_factory=list, description="Subdirectories")
-    validation_rules: List[Union[FileRule, DirectoryRule]] = Field(default_factory=list, description="Directory validation rules")
-    glob_rules: List[GlobRule] = Field(default_factory=list, description="Glob validation rules")
+    files: List[AssemblyFileSchema] = Field(
+        default_factory=list, description="Files in this directory"
+    )
+    subdirectories: List["AssemblyDirectorySchema"] = Field(
+        default_factory=list, description="Subdirectories"
+    )
+    validation_rules: List[Union[FileRule, DirectoryRule]] = Field(
+        default_factory=list, description="Directory validation rules"
+    )
+    glob_rules: List[GlobRule] = Field(
+        default_factory=list, description="Glob validation rules"
+    )
     required: bool = Field(True, description="Whether directory is required to exist")
 
 
@@ -96,20 +119,30 @@ class AssemblyAnnotationTableSchema(BaseModel):
     tsv_suffix: str = Field(..., description="Suffix for the TSV file")
     expect_index: bool = Field(True, description="Whether to expect a .gzi index file")
     download_subgroup: str = Field(..., description="Subgroup for downloads")
-    import_to_annotations_key: Optional[str] = Field(None, description="Key for importing to annotations")
+    import_to_annotations_key: Optional[str] = Field(
+        None, description="Key for importing to annotations"
+    )
     import_from_column: Optional[str] = Field(None, description="Column to import from")
     short_description: str = Field(..., description="Short description")
     long_description: str = Field(..., description="Long description")
-    validation_rules: List[Union[FileRule, DirectoryRule]] = Field(default_factory=list, description="File validation rules")
+    validation_rules: List[Union[FileRule, DirectoryRule]] = Field(
+        default_factory=list, description="File validation rules"
+    )
     required: bool = Field(True, description="Whether table is required")
 
     def get_filename(self, assembly_id: str) -> str:
         """Get the TSV filename for a given assembly ID."""
         return f"{assembly_id}{self.tsv_suffix}"
 
-    def create_download_file(self, analysis: 'analyses.models.Analysis', base_path: Path) -> DownloadFile:
+    def create_download_file(
+        self, analysis: "analyses.models.Analysis", base_path: Path
+    ) -> DownloadFile:
         """Create a DownloadFile object for this annotation table."""
-        tsv_path = base_path / self.folder_name / self.get_filename(analysis.assembly.first_accession)
+        tsv_path = (
+            base_path
+            / self.folder_name
+            / self.get_filename(analysis.assembly.first_accession)
+        )
 
         index_file = None
         if self.expect_index:
@@ -130,16 +163,24 @@ class AssemblyAnnotationTableSchema(BaseModel):
             index_file=index_file,
         )
 
-    def import_annotations(self, analysis: 'analyses.models.Analysis', base_path: Path) -> None:
+    def import_annotations(
+        self, analysis: "analyses.models.Analysis", base_path: Path
+    ) -> None:
         """Import annotations from this table into the analysis."""
         if not self.import_to_annotations_key or not self.import_from_column:
             return
 
-        tsv_path = base_path / self.folder_name / self.get_filename(analysis.assembly.first_accession)
+        tsv_path = (
+            base_path
+            / self.folder_name
+            / self.get_filename(analysis.assembly.first_accession)
+        )
 
         try:
             df = pd.read_csv(tsv_path, sep=CSVDelimiter.TAB)
-            analysis.annotations[self.import_to_annotations_key] = df[self.import_from_column].to_list()
+            analysis.annotations[self.import_to_annotations_key] = df[
+                self.import_from_column
+            ].to_list()
             analysis.save()
         except pd.errors.EmptyDataError:
             logging.error(f"Found empty annotation TSV at {tsv_path}")
@@ -157,7 +198,9 @@ class AssemblyAnalysisDirectorySchema(BaseModel):
     pathways_systems_directory: AssemblyDirectorySchema
     annotation_summary_directory: AssemblyDirectorySchema
 
-    def validate_directory_structure(self, base_path: Path, assembly_id: str) -> Directory:
+    def validate_directory_structure(
+        self, base_path: Path, assembly_id: str
+    ) -> Directory:
         """Validate the complete directory structure and return the validated Directory object."""
         # Create the main directory
         main_dir = create_directory(base_path / assembly_id)
@@ -171,12 +214,16 @@ class AssemblyAnalysisDirectorySchema(BaseModel):
             self.pathways_systems_directory,
             self.annotation_summary_directory,
         ]:
-            validated_subdir = self._validate_subdirectory(main_dir.path, dir_schema, assembly_id)
+            validated_subdir = self._validate_subdirectory(
+                main_dir.path, dir_schema, assembly_id
+            )
             main_dir.files.append(validated_subdir)
 
         return main_dir
 
-    def _validate_subdirectory(self, base_path: Path, dir_schema: AssemblyDirectorySchema, assembly_id: str) -> Directory:
+    def _validate_subdirectory(
+        self, base_path: Path, dir_schema: AssemblyDirectorySchema, assembly_id: str
+    ) -> Directory:
         """Validate a single subdirectory based on its schema."""
         subdir_path = base_path / dir_schema.folder_name
 
@@ -185,8 +232,6 @@ class AssemblyAnalysisDirectorySchema(BaseModel):
         for file_schema in dir_schema.files:
             filename = file_schema.get_filename(assembly_id)
             if file_schema.required:
-                files_to_validate.append((filename, file_schema.validation_rules))
-            else:
                 files_to_validate.append((filename, file_schema.validation_rules))
 
         # Create the directory with validation
@@ -199,12 +244,16 @@ class AssemblyAnalysisDirectorySchema(BaseModel):
 
         # Handle subdirectories recursively
         for subdir_schema in dir_schema.subdirectories:
-            sub_validated_dir = self._validate_subdirectory(subdir_path, subdir_schema, assembly_id)
+            sub_validated_dir = self._validate_subdirectory(
+                subdir_path, subdir_schema, assembly_id
+            )
             validated_dir.files.append(sub_validated_dir)
 
         return validated_dir
 
-    def import_analysis_results(self, analysis: 'analyses.models.Analysis', base_path: Path) -> None:
+    def import_analysis_results(
+        self, analysis: "analyses.models.Analysis", base_path: Path
+    ) -> None:
         """Import all analysis results from the validated directory structure."""
 
         logger = get_run_logger()
@@ -212,28 +261,29 @@ class AssemblyAnalysisDirectorySchema(BaseModel):
         logger.info(f"Importing results from {base_path}")
 
         logger.info("Importing QC results...")
-        # Import QC results
         self._import_qc_results(analysis, base_path)
 
         logger.info("Importing CDS results...")
-        # Import CDS results
         self._import_cds_results(analysis, base_path)
 
         logger.info("Importing Taxonomy results...")
-        # Import taxonomy results
         self._import_taxonomy_results(analysis, base_path)
 
         logger.info("Importing Functional annotation results...")
-        # Import functional annotation results
         self._import_functional_results(analysis, base_path)
 
         logger.info("Importing Pathways and systems results...")
-        # Import pathways and systems results
         self._import_pathways_results(analysis, base_path)
 
-    def _import_qc_results(self, analysis: 'analyses.models.Analysis', base_path: Path) -> None:
+    def _import_qc_results(
+        self, analysis: "analyses.models.Analysis", base_path: Path
+    ) -> None:
         """Import QC results."""
-        qc_path = base_path / analysis.assembly.first_accession / self.qc_directory.folder_name
+        qc_path = (
+            base_path
+            / analysis.assembly.first_accession
+            / self.qc_directory.folder_name
+        )
 
         if not qc_path.exists():
             logging.info(f"No QC directory at {qc_path}")
@@ -243,7 +293,10 @@ class AssemblyAnalysisDirectorySchema(BaseModel):
         for file_schema in self.qc_directory.files:
             if "multiqc_report.html" in file_schema.filename_template:
                 download_file = DownloadFile(
-                    path=Path(qc_path / file_schema.get_filename(analysis.assembly.first_accession)).relative_to(analysis.results_dir),
+                    path=Path(
+                        qc_path
+                        / file_schema.get_filename(analysis.assembly.first_accession)
+                    ).relative_to(analysis.results_dir),
                     file_type=file_schema.file_type,
                     alias=file_schema.get_filename(analysis.assembly.first_accession),
                     download_type=file_schema.download_type,
@@ -256,9 +309,15 @@ class AssemblyAnalysisDirectorySchema(BaseModel):
 
         analysis.save()
 
-    def _import_cds_results(self, analysis: 'analyses.models.Analysis', base_path: Path) -> None:
+    def _import_cds_results(
+        self, analysis: "analyses.models.Analysis", base_path: Path
+    ) -> None:
         """Import CDS results."""
-        cds_path = base_path / analysis.assembly.first_accession / self.cds_directory.folder_name
+        cds_path = (
+            base_path
+            / analysis.assembly.first_accession
+            / self.cds_directory.folder_name
+        )
 
         if not cds_path.exists():
             logging.info(f"No CDS directory at {cds_path}")
@@ -266,7 +325,10 @@ class AssemblyAnalysisDirectorySchema(BaseModel):
 
         for file_schema in self.cds_directory.files:
             download_file = DownloadFile(
-                path=Path(cds_path / file_schema.get_filename(analysis.assembly.first_accession)).relative_to(analysis.results_dir),
+                path=Path(
+                    cds_path
+                    / file_schema.get_filename(analysis.assembly.first_accession)
+                ).relative_to(analysis.results_dir),
                 file_type=file_schema.file_type,
                 alias=file_schema.get_filename(analysis.assembly.first_accession),
                 download_type=file_schema.download_type,
@@ -279,9 +341,15 @@ class AssemblyAnalysisDirectorySchema(BaseModel):
 
         analysis.save()
 
-    def _import_taxonomy_results(self, analysis: 'analyses.models.Analysis', base_path: Path) -> None:
+    def _import_taxonomy_results(
+        self, analysis: "analyses.models.Analysis", base_path: Path
+    ) -> None:
         """Import taxonomy results."""
-        tax_path = base_path / analysis.assembly.first_accession / self.taxonomy_directory.folder_name
+        tax_path = (
+            base_path
+            / analysis.assembly.first_accession
+            / self.taxonomy_directory.folder_name
+        )
 
         if not tax_path.exists():
             logging.info(f"No taxonomy directory at {tax_path}")
@@ -290,7 +358,9 @@ class AssemblyAnalysisDirectorySchema(BaseModel):
         # Import Krona file and parse taxonomies
         krona_file = tax_path / f"{analysis.assembly.first_accession}.krona.txt.gz"
         if krona_file.exists():
-            taxonomies_to_import, total_read_count = self._get_annotations_from_tax_table(krona_file)
+            taxonomies_to_import, total_read_count = (
+                self._get_annotations_from_tax_table(krona_file)
+            )
             analysis_taxonomies = analysis.annotations.get(analysis.TAXONOMIES, {})
             if not analysis_taxonomies:
                 analysis_taxonomies = {}
@@ -312,9 +382,15 @@ class AssemblyAnalysisDirectorySchema(BaseModel):
 
         analysis.save()
 
-    def _import_functional_results(self, analysis: 'analyses.models.Analysis', base_path: Path) -> None:
+    def _import_functional_results(
+        self, analysis: "analyses.models.Analysis", base_path: Path
+    ) -> None:
         """Import functional annotation results using the annotation table schemas."""
-        func_path = base_path / analysis.assembly.first_accession / self.functional_annotation_directory.folder_name
+        func_path = (
+            base_path
+            / analysis.assembly.first_accession
+            / self.functional_annotation_directory.folder_name
+        )
 
         if not func_path.exists():
             raise ValueError(f"No functional annotation directory at {func_path}")
@@ -330,7 +406,9 @@ class AssemblyAnalysisDirectorySchema(BaseModel):
 
             # Import files in this subdirectory
             for file_schema in subdir_schema.files:
-                file_path = subdir_path / file_schema.get_filename(analysis.assembly.first_accession)
+                file_path = subdir_path / file_schema.get_filename(
+                    analysis.assembly.first_accession
+                )
                 if file_path.exists():
                     download_file = DownloadFile(
                         path=file_path.relative_to(analysis.results_dir),
@@ -347,14 +425,20 @@ class AssemblyAnalysisDirectorySchema(BaseModel):
                     logging.info(f"{file_path.name}")
 
                     # Import annotations if the schema has import_to_annotations_key and import_from_column
-                    if hasattr(file_schema, 'import_to_annotations_key') and file_schema.import_to_annotations_key:
+                    if file_schema.import_to_annotations_key:
                         file_schema.import_annotations(analysis, file_path)
 
         analysis.save()
 
-    def _import_pathways_results(self, analysis: 'analyses.models.Analysis', base_path: Path) -> None:
+    def _import_pathways_results(
+        self, analysis: "analyses.models.Analysis", base_path: Path
+    ) -> None:
         """Import pathways and systems results."""
-        pathways_path = base_path / analysis.assembly.first_accession / self.pathways_systems_directory.folder_name
+        pathways_path = (
+            base_path
+            / analysis.assembly.first_accession
+            / self.pathways_systems_directory.folder_name
+        )
 
         if not pathways_path.exists():
             logging.info(f"No pathways directory at {pathways_path}")
@@ -368,7 +452,9 @@ class AssemblyAnalysisDirectorySchema(BaseModel):
 
             # Import files in this subdirectory
             for file_schema in subdir_schema.files:
-                file_path = subdir_path / file_schema.get_filename(analysis.assembly.first_accession)
+                file_path = subdir_path / file_schema.get_filename(
+                    analysis.assembly.first_accession
+                )
                 if file_path.exists():
                     download_file = DownloadFile(
                         path=file_path.relative_to(analysis.results_dir),
@@ -383,12 +469,17 @@ class AssemblyAnalysisDirectorySchema(BaseModel):
                     analysis.add_download(download_file)
 
                     # Import annotations if the schema has import_to_annotations_key and import_from_column
-                    if hasattr(file_schema, 'import_to_annotations_key') and file_schema.import_to_annotations_key:
+                    if (
+                        hasattr(file_schema, "import_to_annotations_key")
+                        and file_schema.import_to_annotations_key
+                    ):
                         file_schema.import_annotations(analysis, file_path)
 
         analysis.save()
 
-    def _get_annotations_from_tax_table(self, tax_table_path: Path) -> tuple[list[dict], int]:
+    def _get_annotations_from_tax_table(
+        self, tax_table_path: Path
+    ) -> tuple[list[dict], int]:
         """Parse taxonomy table and return annotations."""
         try:
             with gzip.open(tax_table_path, "rt") as tax_tsv:
@@ -557,7 +648,6 @@ def create_assembly_v6_schema() -> AssemblyAnalysisDirectorySchema:
                         long_description="Table with counts for each InterPro identifier found",
                         validation_rules=[FileExistsRule, FileIsNotEmptyRule],
                         import_to_annotations_key=analyses.models.Analysis.INTERPRO_IDENTIFIERS,
-                        import_from_column=None,  # Will use to_dict(orient="records")
                     ),
                     AssemblyFileSchema(
                         filename_template="{assembly_id}_interpro_summary.tsv.gz.gzi",
@@ -584,7 +674,6 @@ def create_assembly_v6_schema() -> AssemblyAnalysisDirectorySchema:
                         long_description="Table with counts for each Pfam accession found",
                         validation_rules=[FileExistsRule, FileIsNotEmptyRule],
                         import_to_annotations_key=analyses.models.Analysis.PFAMS,
-                        import_from_column=None,  # Will use to_dict(orient="records")
                     ),
                     AssemblyFileSchema(
                         filename_template="{assembly_id}_pfam_summary.tsv.gz.gzi",
@@ -611,7 +700,6 @@ def create_assembly_v6_schema() -> AssemblyAnalysisDirectorySchema:
                         long_description="Table with counts for each Gene Ontology (GO) Term found",
                         validation_rules=[FileExistsRule, FileIsNotEmptyRule],
                         import_to_annotations_key=analyses.models.Analysis.GO_TERMS,
-                        import_from_column=None,  # Will use to_dict(orient="records")
                     ),
                     AssemblyFileSchema(
                         filename_template="{assembly_id}_go_summary.tsv.gz.gzi",
@@ -631,7 +719,6 @@ def create_assembly_v6_schema() -> AssemblyAnalysisDirectorySchema:
                         long_description="Table with counts for each Gene Ontology (GO)-Slim Term found",
                         validation_rules=[FileExistsRule, FileIsNotEmptyRule],
                         import_to_annotations_key=analyses.models.Analysis.GO_SLIMS,
-                        import_from_column=None,  # Will use to_dict(orient="records")
                     ),
                     AssemblyFileSchema(
                         filename_template="{assembly_id}_goslim_summary.tsv.gz.gzi",
@@ -708,7 +795,6 @@ def create_assembly_v6_schema() -> AssemblyAnalysisDirectorySchema:
                         long_description="Table with counts of each Rhea reaction found",
                         validation_rules=[FileExistsRule, FileIsNotEmptyRule],
                         import_to_annotations_key=analyses.models.Analysis.RHEA_REACTIONS,
-                        import_from_column=None,  # Will use to_dict(orient="records")
                     ),
                     AssemblyFileSchema(
                         filename_template="{assembly_id}_proteins2rhea.tsv.gz.gzi",
@@ -813,7 +899,6 @@ def create_assembly_v6_schema() -> AssemblyAnalysisDirectorySchema:
                         long_description="Table with counts for each BGC found",
                         validation_rules=[FileExistsRule, FileIsNotEmptyRule],
                         import_to_annotations_key=analyses.models.Analysis.ANTISMASH_GENE_CLUSTERS,
-                        import_from_column=None,  # Will use to_dict(orient="records")
                     ),
                     AssemblyFileSchema(
                         filename_template="{assembly_id}_antismash_summary.tsv.gz.gzi",
@@ -851,7 +936,6 @@ def create_assembly_v6_schema() -> AssemblyAnalysisDirectorySchema:
                         validation_rules=[FileIfExistsIsNotEmptyRule],
                         required=False,
                         import_to_annotations_key=analyses.models.Analysis.SANNTIS_GENE_CLUSTERS,
-                        import_from_column=None,  # Will use to_dict(orient="records")
                     ),
                     AssemblyFileSchema(
                         filename_template="{assembly_id}_sanntis_summary.tsv.gz.gzi",
@@ -888,7 +972,6 @@ def create_assembly_v6_schema() -> AssemblyAnalysisDirectorySchema:
                         long_description="Table with counts for each Genome Property found",
                         validation_rules=[FileExistsRule, FileIsNotEmptyRule],
                         import_to_annotations_key=analyses.models.Analysis.GENOME_PROPERTIES,
-                        import_from_column=None,  # Will use to_dict(orient="records")
                     ),
                     AssemblyFileSchema(
                         filename_template="{assembly_id}_gp.txt.gz",
@@ -933,7 +1016,6 @@ def create_assembly_v6_schema() -> AssemblyAnalysisDirectorySchema:
                         long_description="Table with counts for each KEGG Module found",
                         validation_rules=[FileExistsRule, FileIsNotEmptyRule],
                         import_to_annotations_key=analyses.models.Analysis.KEGG_MODULES,
-                        import_from_column=None,  # Will use to_dict(orient="records")
                     ),
                     AssemblyFileSchema(
                         filename_template="{assembly_id}_kegg_modules_summary.tsv.gz.gzi",

@@ -26,8 +26,8 @@ from workflows.views import encode_samplesheet_path
     log_prints=True,
 )
 def make_samplesheet_assembly(
-        mgnify_study: analyses.models.Study,
-        assembly_analyses: QuerySet,
+    mgnify_study: analyses.models.Study,
+    assembly_analyses: QuerySet,
 ) -> (Path, str):
     """
     Makes a samplesheet CSV file for a set of assembly analyses, suitable for the assembly analysis pipeline.
@@ -45,7 +45,7 @@ def make_samplesheet_assembly(
     sample_sheet_csv = queryset_to_samplesheet(
         queryset=assemblies,
         filename=Path(EMG_CONFIG.slurm.default_workdir)
-                 / Path(
+        / Path(
             f"{mgnify_study.ena_study.accession}_samplesheet_assembly-v6_{ss_hash}.csv"
         ),
         column_map={
@@ -57,8 +57,8 @@ def make_samplesheet_assembly(
                 lookup_string=f"metadata__{ENAAnalysisFields.GENERATED_FTP}",
                 renderer=lambda ftp_path: (
                     # convert_ena_ftp_to_fire_fastq(ftp_path) if ftp_path else ""  # TODO: once ASA supports FIRE
-                        "http://"
-                        + ftp_path
+                    "http://"
+                    + ftp_path
                 ),
             ),
         },
@@ -89,8 +89,8 @@ def make_samplesheet_assembly(
     log_prints=True,
 )
 def make_samplesheet_for_map(
-        mgnify_study: analyses.models.Study,
-        assembly_analyses: List[analyses.models.Analysis],
+    mgnify_study: analyses.models.Study,
+    assembly_analyses: List[analyses.models.Analysis],
 ) -> (Path, str):
     """
     Makes a samplesheet CSV file for a set of assembly analyses, suitable for the MAP pipeline.
@@ -124,7 +124,9 @@ def make_samplesheet_for_map(
 
         for assembly in assemblies:
             # Get the assembly analysis for this assembly
-            analysis = next((a for a in assembly_analyses if a.assembly_id == assembly.id), None)
+            analysis = next(
+                (a for a in assembly_analyses if a.assembly_id == assembly.id), None
+            )
             if not analysis:
                 print(f"No analysis found for assembly {assembly.id}. Skipping.")
                 continue
@@ -143,13 +145,14 @@ def make_samplesheet_for_map(
                 print(download.file_type)
                 print(download.download_group)
                 if (
-                        download.file_type == DownloadFileType.GFF
-                        and download.download_group == analyses.models.Analysis.CODING_SEQUENCES
+                    download.file_type == DownloadFileType.GFF
+                    and download.download_group
+                    == analyses.models.Analysis.CODING_SEQUENCES
                 ):
                     user_proteins_gff = download.path
                 if (
-                        download.file_type == DownloadFileType.GFF
-                        and download.download_group == analyses.models.Analysis.VIRIFY
+                    download.file_type == DownloadFileType.GFF
+                    and download.download_group == analyses.models.Analysis.VIRIFY
                 ):
                     virify_gff = download.path
 

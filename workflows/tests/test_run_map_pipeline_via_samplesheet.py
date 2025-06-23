@@ -356,4 +356,3 @@ def test_add_map_gff_to_analysis_downloads_logs_warnings(mock_get_logger, tmp_pa
     add_map_gff_to_analysis_downloads(analysis, tmp_path)
     mock_logger.warning.assert_called_once()
     assert "No GFF files found" in mock_logger.warning.call_args[0][0]
-
