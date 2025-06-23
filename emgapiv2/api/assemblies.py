@@ -8,7 +8,6 @@ from analyses.schemas import (
     AssemblyDetail,
 )
 from emgapiv2.api.schema_utils import make_links_section, make_related_detail_link
-from genomes.models import GenomeAssemblyLink
 
 router = RouterPaginated()
 
@@ -46,9 +45,7 @@ def get_assembly(request, accession: str):
     assembly = get_object_or_404(
         analyses.models.Assembly.public_objects.select_related(
             "run", "sample", "reads_study", "assembly_study", "assembler"
-        ).prefetch_related(
-            "genome_links__genome"
-        ),
+        ).prefetch_related("genome_links__genome"),
         ena_accessions__contains=[accession],
     )
     return assembly

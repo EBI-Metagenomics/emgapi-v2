@@ -8,7 +8,6 @@ This flow accepts a path to a TSV file with the following columns:
 """
 
 from pathlib import Path
-import csv
 from typing import Dict, List, Optional, Tuple
 
 from prefect import flow, task, get_run_logger
@@ -16,10 +15,12 @@ from django.db import transaction
 from django.core.exceptions import ObjectDoesNotExist
 
 # Import Django models
-from activate_django_first import EMG_CONFIG  # Required before any Django model imports
 from analyses.models import Assembly
 from genomes.models import Genome, GenomeAssemblyLink
-from workflows.data_io_utils.csv.csv_comment_handler import CommentAwareDictReader, CSVDelimiter
+from workflows.data_io_utils.csv.csv_comment_handler import (
+    CommentAwareDictReader,
+    CSVDelimiter,
+)
 
 
 @task(name="Validate TSV file")
@@ -65,20 +66,24 @@ def read_tsv_file(tsv_path: str) -> List[Dict[str, str]]:
     logger = get_run_logger()
     records = []
 
-    with open(tsv_path, 'r') as f:
+    with open(tsv_path, "r") as f:
         reader = CommentAwareDictReader(
-            f, 
-            delimiter=CSVDelimiter.TAB,
-            none_values=["", "NA", "N/A", "null", "NULL"]
+            f, delimiter=CSVDelimiter.TAB, none_values=["", "NA", "N/A", "null", "NULL"]
         )
 
         # Check if required columns are present
         required_columns = ["primary_assembly", "genome"]
-        missing_columns = [col for col in required_columns if col not in reader.fieldnames]
+        missing_columns = [
+            col for col in required_columns if col not in reader.fieldnames
+        ]
 
         if missing_columns:
-            logger.error(f"Missing required columns in TSV: {', '.join(missing_columns)}")
-            raise ValueError(f"Missing required columns in TSV: {', '.join(missing_columns)}")
+            logger.error(
+                f"Missing required columns in TSV: {', '.join(missing_columns)}"
+            )
+            raise ValueError(
+                f"Missing required columns in TSV: {', '.join(missing_columns)}"
+            )
 
         for row in reader:
             records.append(row)
@@ -115,8 +120,16 @@ def process_tsv_records(records: List[Dict[str, str]]) -> List[Dict[str, str]]:
         cleaned_record = {
             "primary_assembly": record["primary_assembly"].strip(),
             "genome": record["genome"].strip(),
-            "mag_accession": record.get("mag_accession", "").strip() if record.get("mag_accession") else None,
-            "species_rep": record.get("species_rep", "").strip() if record.get("species_rep") else None
+            "mag_accession": (
+                record.get("mag_accession", "").strip()
+                if record.get("mag_accession")
+                else None
+            ),
+            "species_rep": (
+                record.get("species_rep", "").strip()
+                if record.get("species_rep")
+                else None
+            ),
         }
 
         validated_records.append(cleaned_record)
@@ -126,7 +139,9 @@ def process_tsv_records(records: List[Dict[str, str]]) -> List[Dict[str, str]]:
 
 
 @task(name="Find Genome and Assembly objects")
-def find_objects(records: List[Dict[str, str]]) -> List[Tuple[Dict[str, str], Optional[Genome], Optional[Assembly]]]:
+def find_objects(
+    records: List[Dict[str, str]]
+) -> List[Tuple[Dict[str, str], Optional[Genome], Optional[Assembly]]]:
     """
     Finds the Genome and Assembly objects for each record.
 
@@ -153,7 +168,9 @@ def find_objects(records: List[Dict[str, str]]) -> List[Tuple[Dict[str, str], Op
         try:
             assembly = Assembly.objects.get_by_accession(record["primary_assembly"])
         except (ObjectDoesNotExist, Assembly.MultipleObjectsReturned):
-            logger.warning(f"Assembly not found or multiple found: {record['primary_assembly']}")
+            logger.warning(
+                f"Assembly not found or multiple found: {record['primary_assembly']}"
+            )
 
         results.append((record, genome, assembly))
 
@@ -162,7 +179,9 @@ def find_objects(records: List[Dict[str, str]]) -> List[Tuple[Dict[str, str], Op
 
 
 @task(name="Create GenomeAssemblyLink objects")
-def create_links(objects: List[Tuple[Dict[str, str], Optional[Genome], Optional[Assembly]]]) -> int:
+def create_links(
+    objects: List[Tuple[Dict[str, str], Optional[Genome], Optional[Assembly]]]
+) -> int:
     """
     Creates GenomeAssemblyLink objects for each valid record.
 
@@ -189,13 +208,15 @@ def create_links(objects: List[Tuple[Dict[str, str], Optional[Genome], Optional[
                 assembly=assembly,
                 defaults={
                     "species_rep": record["species_rep"],
-                    "mag_accession": record["mag_accession"]
-                }
+                    "mag_accession": record["mag_accession"],
+                },
             )
 
             if created:
                 created_count += 1
-                logger.info(f"Created link between {genome.accession} and {assembly.id}")
+                logger.info(
+                    f"Created link between {genome.accession} and {assembly.id}"
+                )
             else:
                 # Update the link if it already exists
                 updated = False
@@ -203,18 +224,25 @@ def create_links(objects: List[Tuple[Dict[str, str], Optional[Genome], Optional[
                     link.species_rep = record["species_rep"]
                     updated = True
 
-                if record["mag_accession"] and record["mag_accession"] != link.mag_accession:
+                if (
+                    record["mag_accession"]
+                    and record["mag_accession"] != link.mag_accession
+                ):
                     link.mag_accession = record["mag_accession"]
                     updated = True
 
                 if updated:
                     link.save()
                     updated_count += 1
-                    logger.info(f"Updated link between {genome.accession} and {assembly.id}")
+                    logger.info(
+                        f"Updated link between {genome.accession} and {assembly.id}"
+                    )
                 else:
                     skipped_count += 1
 
-    logger.info(f"Created {created_count} links, updated {updated_count} links, skipped {skipped_count} links")
+    logger.info(
+        f"Created {created_count} links, updated {updated_count} links, skipped {skipped_count} links"
+    )
     return created_count + updated_count
 
 
@@ -247,12 +275,14 @@ def import_genome_assembly_links(tsv_path: str) -> Dict[str, int]:
     # Create the GenomeAssemblyLink objects
     links_count = create_links(objects)
 
-    logger.info(f"Import completed. Processed {len(records)} records, created/updated {links_count} links")
+    logger.info(
+        f"Import completed. Processed {len(records)} records, created/updated {links_count} links"
+    )
 
     return {
         "total_records": len(records),
         "validated_records": len(validated_records),
-        "links_created_or_updated": links_count
+        "links_created_or_updated": links_count,
     }
 
 

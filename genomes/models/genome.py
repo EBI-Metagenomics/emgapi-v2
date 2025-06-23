@@ -204,27 +204,21 @@ class GenomeAssemblyLink(models.Model):
     A many-to-many relationship model between Genome and Assembly.
     Stores additional information about the relationship.
     """
+
     genome = models.ForeignKey(
-        Genome,
-        on_delete=models.CASCADE,
-        related_name="assembly_links"
+        Genome, on_delete=models.CASCADE, related_name="assembly_links"
     )
     assembly = models.ForeignKey(
-        Assembly,
-        on_delete=models.CASCADE,
-        related_name="genome_links"
+        Assembly, on_delete=models.CASCADE, related_name="genome_links"
     )
     species_rep = models.CharField(
         max_length=100,
         null=True,
         blank=True,
-        help_text="Arbitrary genome accession for species representative"
+        help_text="Arbitrary genome accession for species representative",
     )
     mag_accession = models.CharField(
-        max_length=100,
-        null=True,
-        blank=True,
-        help_text="Arbitrary accession for MAG"
+        max_length=100, null=True, blank=True, help_text="Arbitrary accession for MAG"
     )
 
     class Meta:

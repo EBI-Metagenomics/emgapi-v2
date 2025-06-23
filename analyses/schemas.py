@@ -18,7 +18,6 @@ from analyses.base_models.with_downloads_models import (
     DownloadFileIndexFile,
 )
 from emgapiv2.enum_utils import FutureStrEnum
-from genomes.models import GenomeAssemblyLink
 from workflows.data_io_utils.filenames import trailing_slash_ensured_dir
 
 EMG_CONFIG = settings.EMG_CONFIG
@@ -196,7 +195,9 @@ class AnalysedRun(ModelSchema):
 
 
 class Assembly(ModelSchema):
-    accession: Optional[str] = Field(None, alias="first_accession", examples=["ERZ000001"])
+    accession: Optional[str] = Field(
+        None, alias="first_accession", examples=["ERZ000001"]
+    )
 
     class Meta:
         model = analyses.models.Assembly
@@ -205,6 +206,7 @@ class Assembly(ModelSchema):
 
 class GenomeSchema(Schema):
     """Simple schema for Genome model."""
+
     accession: str = Field(..., examples=["MGYG000000001"])
 
     class Config:
@@ -213,16 +215,15 @@ class GenomeSchema(Schema):
 
 class GenomeAssemblyLinkSchema(Schema):
     """Schema for GenomeAssemblyLink model."""
+
     genome: GenomeSchema
     species_rep: Optional[str] = Field(
         None,
         description="Arbitrary genome accession for species representative",
-        examples=["GCA_123456789.1"]
+        examples=["GCA_123456789.1"],
     )
     mag_accession: Optional[str] = Field(
-        None,
-        description="Arbitrary accession for MAG",
-        examples=["MAGS12345"]
+        None, description="Arbitrary accession for MAG", examples=["MAGS12345"]
     )
 
     class Config:
@@ -249,7 +250,15 @@ class AssemblyDetail(Assembly):
     genome_links: Optional[List[GenomeAssemblyLinkSchema]] = Field(
         None,
         description="Links to genomes associated with this assembly",
-        examples=[[{"genome": {"accession": "MGYG000000001"}, "species_rep": "GCA_123456789.1", "mag_accession": "MAGS12345"}]]
+        examples=[
+            [
+                {
+                    "genome": {"accession": "MGYG000000001"},
+                    "species_rep": "GCA_123456789.1",
+                    "mag_accession": "MAGS12345",
+                }
+            ]
+        ],
     )
 
     @staticmethod
@@ -258,14 +267,20 @@ class AssemblyDetail(Assembly):
 
     @staticmethod
     def resolve_sample_accession(obj: analyses.models.Assembly) -> Optional[str]:
-        return obj.sample.ena_sample.accession if obj.sample and obj.sample.ena_sample else None
+        return (
+            obj.sample.ena_sample.accession
+            if obj.sample and obj.sample.ena_sample
+            else None
+        )
 
     @staticmethod
     def resolve_reads_study_accession(obj: analyses.models.Assembly) -> Optional[str]:
         return obj.reads_study.accession if obj.reads_study else None
 
     @staticmethod
-    def resolve_assembly_study_accession(obj: analyses.models.Assembly) -> Optional[str]:
+    def resolve_assembly_study_accession(
+        obj: analyses.models.Assembly,
+    ) -> Optional[str]:
         return obj.assembly_study.accession if obj.assembly_study else None
 
     @staticmethod

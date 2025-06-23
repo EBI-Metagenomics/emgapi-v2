@@ -4,7 +4,7 @@ Tests for the import_genome_assembly_links flow.
 
 import os
 import tempfile
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 import pytest
 from django.core.exceptions import ObjectDoesNotExist
@@ -38,8 +38,12 @@ def mock_tsv_file():
     temp_file.write("ERZ123456\tMGYG000000001\tMAGS12345\tGCA_123456789.1\n")
     temp_file.write("ERZ789012\tMGYG000000002\tMAGS67890\tGCA_987654321.1\n")
     temp_file.write("ERZ111111\tMGYG000000003\t\t\n")  # Missing optional fields
-    temp_file.write("\tMGYG000000004\tMAGS11111\tGCA_111111111.1\n")  # Missing required field
-    temp_file.write("ERZ222222\t\tMAGS22222\tGCA_222222222.1\n")  # Missing required field
+    temp_file.write(
+        "\tMGYG000000004\tMAGS11111\tGCA_111111111.1\n"
+    )  # Missing required field
+    temp_file.write(
+        "ERZ222222\t\tMAGS22222\tGCA_222222222.1\n"
+    )  # Missing required field
 
     temp_file.close()
 
@@ -52,6 +56,7 @@ def mock_tsv_file():
 @pytest.mark.django_db
 def test_validate_tsv_file(mock_tsv_file):
     """Test the validate_tsv_file task."""
+
     # Create a test flow that calls the validate_tsv_file task
     @flow(name="Test Validate TSV File")
     def test_flow(file_path):
@@ -77,6 +82,7 @@ def test_validate_tsv_file(mock_tsv_file):
 @pytest.mark.django_db
 def test_read_tsv_file(mock_tsv_file):
     """Test the read_tsv_file task."""
+
     # Create a test flow that calls the read_tsv_file task
     @flow(name="Test Read TSV File")
     def test_flow(file_path):
@@ -161,8 +167,7 @@ def test_find_objects():
     """Test the find_objects task."""
     # Create test biome
     biome = Biome.objects.create(
-        biome_name="Ocean", 
-        path="root.environmental.aquatic.marine.ocean"
+        biome_name="Ocean", path="root.environmental.aquatic.marine.ocean"
     )
 
     # Create test catalogue
@@ -261,7 +266,10 @@ def test_find_objects():
     ]
 
     # Mock the get_by_accession method
-    with patch("analyses.models.Assembly.objects.get_by_accession") as mock_get_by_accession:
+    with patch(
+        "analyses.models.Assembly.objects.get_by_accession"
+    ) as mock_get_by_accession:
+
         def mock_get_by_accession_side_effect(accession):
             if accession == "ERZ123456":
                 return assembly1
@@ -299,8 +307,7 @@ def test_create_links():
     """Test the create_links task."""
     # Create test biome
     biome = Biome.objects.create(
-        biome_name="Ocean", 
-        path="root.environmental.aquatic.marine.ocean"
+        biome_name="Ocean", path="root.environmental.aquatic.marine.ocean"
     )
 
     # Create test catalogue
@@ -482,8 +489,7 @@ def test_import_genome_assembly_links_flow(mock_tsv_file):
     """Test the import_genome_assembly_links flow end-to-end."""
     # Create test biome
     biome = Biome.objects.create(
-        biome_name="Ocean", 
-        path="root.environmental.aquatic.marine.ocean"
+        biome_name="Ocean", path="root.environmental.aquatic.marine.ocean"
     )
 
     # Create test catalogue
@@ -588,11 +594,16 @@ def test_import_genome_assembly_links_flow(mock_tsv_file):
     assembly2.save()
 
     # Mock the get_by_accession method
-    with patch("analyses.models.Assembly.objects.get_by_accession") as mock_get_by_accession:
-        mock_get_by_accession.side_effect = lambda accession: {
-            "ERZ123456": assembly1,
-            "ERZ789012": assembly2,
-        }.get(accession, None) or ObjectDoesNotExist()
+    with patch(
+        "analyses.models.Assembly.objects.get_by_accession"
+    ) as mock_get_by_accession:
+        mock_get_by_accession.side_effect = (
+            lambda accession: {
+                "ERZ123456": assembly1,
+                "ERZ789012": assembly2,
+            }.get(accession, None)
+            or ObjectDoesNotExist()
+        )
 
         # Run the flow
         logged_flow_run = run_flow_and_capture_logs(

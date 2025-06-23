@@ -10,7 +10,7 @@ from analyses.base_models.with_downloads_models import (
     DownloadType,
     DownloadFileIndexFile,
 )
-from analyses.models import Analysis, Assembly
+from analyses.models import Analysis
 
 R = TypeVar("R")
 
@@ -216,7 +216,9 @@ def test_api_assembly_detail(mgnify_assemblies, ninja_api_client):
     assembly = mgnify_assemblies[0]
 
     assembly_detail = call_endpoint_and_get_data(
-        ninja_api_client, f"/analyses/assemblies/{assembly.ena_accessions[0]}", getter=_whole_object
+        ninja_api_client,
+        f"/analyses/assemblies/{assembly.ena_accessions[0]}",
+        getter=_whole_object,
     )
     assert assembly_detail["accession"] == assembly.first_accession
     assert assembly_detail["run_accession"] == assembly.run.first_accession

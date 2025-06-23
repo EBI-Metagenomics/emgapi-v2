@@ -114,5 +114,3 @@ def list_mgnify_analyses(request):
         "study", "sample", "run", "assembly"
     )
     return qs
-
-
