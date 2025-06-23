@@ -21,7 +21,7 @@ class SecureStorage:
         signature = hmac.new(
             secret.encode(), message.encode(), hashlib.sha256
         ).hexdigest()
-        query = urlencode({"e": expires, "st": signature})
+        query = urlencode({"expires": expires, "token": signature})
         return urljoin(self.base_url, _path) + "?" + query
 
 

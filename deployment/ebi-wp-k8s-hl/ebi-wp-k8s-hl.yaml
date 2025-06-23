@@ -575,8 +575,8 @@ items:
         				local unsigned_uri = string.sub(uri, string.len("/private-data/") + 1)
 
                         local args = ngx.req.get_uri_args()
-                        local expires = args.e
-                        local sig = args.st
+                        local expires = args.expires
+                        local sig = args.token
 
                         if not (expires and sig) then
                             return ngx.exit(ngx.HTTP_FORBIDDEN)
