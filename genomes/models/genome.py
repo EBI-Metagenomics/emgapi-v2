@@ -1,7 +1,7 @@
 from django.db import models
 
 from analyses.base_models.with_downloads_models import WithDownloadsModel
-from analyses.models import Biome
+from analyses.models import Assembly, Biome
 
 # Annotation field constants
 COG_CATEGORIES = "cog_categories"
@@ -197,3 +197,39 @@ class Genome(WithDownloadsModel):
 
     def __str__(self):
         return self.accession
+
+
+class GenomeAssemblyLink(models.Model):
+    """
+    A many-to-many relationship model between Genome and Assembly.
+    Stores additional information about the relationship.
+    """
+    genome = models.ForeignKey(
+        Genome,
+        on_delete=models.CASCADE,
+        related_name="assembly_links"
+    )
+    assembly = models.ForeignKey(
+        Assembly,
+        on_delete=models.CASCADE,
+        related_name="genome_links"
+    )
+    species_rep = models.CharField(
+        max_length=100,
+        null=True,
+        blank=True,
+        help_text="Arbitrary genome accession for species representative"
+    )
+    mag_accession = models.CharField(
+        max_length=100,
+        null=True,
+        blank=True,
+        help_text="Arbitrary accession for MAG"
+    )
+
+    class Meta:
+        db_table = "genome_assembly_link"
+        unique_together = ("genome", "assembly")
+
+    def __str__(self):
+        return f"Link between {self.genome.accession} and {self.assembly.id}"

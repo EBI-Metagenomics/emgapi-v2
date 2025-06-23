@@ -10,7 +10,7 @@ from analyses.base_models.with_downloads_models import (
     DownloadType,
     DownloadFileIndexFile,
 )
-from analyses.models import Analysis
+from analyses.models import Analysis, Assembly
 
 R = TypeVar("R")
 
@@ -190,3 +190,36 @@ def test_api_sample_detail(raw_reads_mgnify_sample, ninja_api_client):
     assert sample["ena_accessions"] == db_sample.ena_accessions
     assert len(sample["studies"]) == 1
     assert sample["studies"][0]["accession"] == db_sample.studies.first().accession
+
+
+@pytest.mark.django_db
+def test_api_assemblies_list(mgnify_assemblies, ninja_api_client):
+    # Set accessions for the assemblies
+    for i, assembly in enumerate(mgnify_assemblies):
+        assembly.ena_accessions = [f"ERZ{i+1}"]
+        assembly.save()
+
+    items = call_endpoint_and_get_data(
+        ninja_api_client, "/analyses/assemblies/", count=len(mgnify_assemblies)
+    )
+    assert items[0]["accession"] in [a.first_accession for a in mgnify_assemblies]
+
+
+@pytest.mark.django_db
+def test_api_assembly_detail(mgnify_assemblies, ninja_api_client):
+    # Set accessions for the assemblies
+    for i, assembly in enumerate(mgnify_assemblies):
+        assembly.ena_accessions = [f"ERZ{i+1}"]
+        assembly.save()
+
+    # Use the first assembly
+    assembly = mgnify_assemblies[0]
+
+    assembly_detail = call_endpoint_and_get_data(
+        ninja_api_client, f"/analyses/assemblies/{assembly.ena_accessions[0]}", getter=_whole_object
+    )
+    assert assembly_detail["accession"] == assembly.first_accession
+    assert assembly_detail["run_accession"] == assembly.run.first_accession
+    assert assembly_detail["sample_accession"] == assembly.sample.ena_sample.accession
+    assert assembly_detail["reads_study_accession"] == assembly.reads_study.accession
+    assert assembly_detail["assembler_name"] == assembly.assembler.name

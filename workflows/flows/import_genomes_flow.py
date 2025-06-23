@@ -1,7 +1,11 @@
 import os
 import re
 from pathlib import Path
+
+import django
 from prefect import task, flow, get_run_logger
+
+django.setup()
 
 from analyses.models import Biome
 from genomes.management.lib.genome_util import (
