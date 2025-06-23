@@ -17,7 +17,7 @@ def sanity_check_assembly_analysis_results(
 ):
     """
     Validate assembly analysis results using the unified schema.
-    
+
     :param assembly_analysis_current_outdir: Path to the directory containing the pipeline output
     :param analysis: The analysis to validate results for
     """
@@ -29,14 +29,12 @@ def sanity_check_assembly_analysis_results(
     return validated_directory
 
 
-def create_assembly_analysis_schema(
-    assembly_current_outdir: Path, assembly_id: str
-):
+def create_assembly_analysis_schema(assembly_current_outdir: Path, assembly_id: str):
     """
     Legacy function for backwards compatibility.
-    
+
     Create a schema for the assembly pipeline output using the unified schema approach.
-    
+
     :param assembly_current_outdir: Path to the directory containing the pipeline output
     :param assembly_id: Assembly ID (e.g. ERZ123456)
     :return: Directory object representing the assembly analysis schema
