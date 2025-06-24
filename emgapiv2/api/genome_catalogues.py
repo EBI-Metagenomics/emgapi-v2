@@ -4,14 +4,15 @@ from ninja.pagination import RouterPaginated
 
 from emgapiv2.api import ApiSections
 from genomes.models import GenomeCatalogue
-from genomes.schemas import GenomeCatalogueDetail, GenomeCatalogueBase
+from genomes.schemas import GenomeCatalogueDetail
+from genomes.schemas.GenomeCatalogue import GenomeCatalogueList
 
 router = RouterPaginated(tags=[ApiSections.GENOMES])
 
 
 @router.get(
     "/",
-    response=List[GenomeCatalogueBase],
+    response=List[GenomeCatalogueList],
     summary="List all genome catalogues",
     operation_id="list_genome_catalogues",
 )
