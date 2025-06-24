@@ -79,6 +79,7 @@ INSTALLED_APPS = [
     "corsheaders",
     "ena",
     "analyses",
+    "genomes",
     "workflows",
 ]
 
@@ -367,3 +368,7 @@ LOGGING = {
 }
 
 NINJA_PAGINATION_CLASS = "ninja.pagination.PageNumberPagination"
+
+MAGS_FTP_SITE = "http://ftp.ebi.ac.uk/pub/databases/metagenomics/mgnify_genomes/"
+
+LATEST_MAGS_PIPELINE_TAG = "v1.2.1"
