@@ -1,6 +1,8 @@
 from ninja import Schema
 from typing import Optional
 
+from analyses.schemas import Biome
+
 
 class GenomeBase(Schema):
     accession: str
@@ -9,7 +11,7 @@ class GenomeBase(Schema):
     ncbi_genome_accession: Optional[str]
     img_genome_accession: Optional[str]
     patric_genome_accession: Optional[str]
-    biome_id: int
+    biome: Biome
     length: int
     num_contigs: int
     n_50: int
