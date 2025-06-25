@@ -13,7 +13,7 @@ nextflowpy==0.11.0
 django-unfold==0.59.0
 django-json-widget==2.0.1
 tzdata
-pandas==2.2.3
+pandas==2.3.0
 django-ltree-2==0.1.12
 django-ninja-jwt~=5.3.7
 
