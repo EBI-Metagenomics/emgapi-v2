@@ -2,6 +2,8 @@ import logging
 
 from django.conf import settings
 
+logger = logging.getLogger(__name__)
+
 EMG_CONFIG = settings.EMG_CONFIG
 
 
@@ -16,7 +18,7 @@ def convert_ena_ftp_to_fire_fastq(
         if raise_if_not_convertible:
             raise Exception(f"{ftp_url} is not convertible to FIRE.")
         else:
-            logging.warning(
+            logger.warning(
                 f"Expected {ftp_url} to start with '{EMG_CONFIG.ena.ftp_prefix}'. Not converting to FIRE."
             )
             return ftp_url

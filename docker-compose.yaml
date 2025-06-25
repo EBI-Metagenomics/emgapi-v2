@@ -6,6 +6,7 @@ include:
 
 services:
   prefect-database:
+    # Postgres for prefect server
     image: postgres:16
     restart: always
     container_name: prefect-database
@@ -23,6 +24,7 @@ services:
     networks: [emg]
 
   app-database:
+    # Postgres for django app
     image: postgres:17
     restart: always
     container_name: app-database
@@ -40,6 +42,7 @@ services:
     networks: [emg]
 
   prefect-server:
+    # Continuously running prefect server
     image: prefecthq/prefect:3.4.4-python3.12
     restart: always
     container_name: prefect-server
@@ -70,6 +73,7 @@ services:
     networks: [emg]
 
   prefect-agent:
+    # A prefect agent deployed in a separate node to the app
     build:
       context: .
       target: agent
@@ -83,6 +87,7 @@ services:
       - DATABASE_URL=postgres://postgres:postgres@app-database:5432/emg
       - HTTP_PROXY=http://localhost:8080
       - http_proxy=http://localhost:8080
+      - DJANGO_DEBUG=1
     profiles: ["prefect", "all"]
     env_file:
       - path: ./secrets-local.env
@@ -104,16 +109,21 @@ services:
       - "./slurm-dev-environment/fs/hps:/hps"
 
   app:
+    # Django app
     build:
       context: .
       target: django
     container_name: app
     profiles: ["app", "all"]
-    command: "runserver 0:8000"
+    command: "python manage.py runserver 0:8000"
     environment:
       - PREFECT_API_URL=http://prefect-server:4200/api
       - PREFECT_UI_URL=http://localhost:4200
       - DATABASE_URL=postgres://postgres:postgres@app-database:5432/emg
+      - EMG_WEBIN__JWT_SECRET_KEY=dummy-key
+      - EMG_WEBIN__AUTH_ENDPOINT=http://httpbin/status/200
+      - PRIVATE_DATA_SECURE_LINK_SECRET_KEY=dummy-key
+      - DJANGO_DEBUG=1
     volumes:
       - ".:/app"
       - "./slurm-dev-environment/fs/nfs/public:/app/data"  # similar to the k8s volume mount in production
@@ -122,11 +132,14 @@ services:
         condition: service_started
         # prefect-server:
         # condition: service_healthy
+      httpbin:
+        condition: service_started
     ports:
       - "8000:8000"
     networks: [emg]
 
   transfer-services:
+    # For mocking the "FTP" / transfer services area of EBI
     image: httpd:latest  # apache web server
     container_name: transfer-services
     ports:
@@ -136,7 +149,34 @@ services:
       - "./slurm-dev-environment/configs/apache-override.conf:/usr/local/apache2/conf/httpd.conf:ro"
     restart: unless-stopped
     networks: [emg]
-    profiles: ["all"]
+    profiles: ["all", "app"]
+
+  private-data-server:
+    # For serving private data with pre-signed links
+    image: openresty/openresty:1.25.3.2-5-alpine-fat
+    container_name: private-data-server
+    ports:
+      - "8081:80"
+    volumes:
+      - "./slurm-dev-environment/fs/nfs/public/services/private-data:/var/www/private-data/"
+      - "./slurm-dev-environment/configs/private-data-nginx.conf:/usr/local/openresty/nginx/conf/nginx.conf"
+    restart: unless-stopped
+    networks: [emg]
+    profiles: ["all", "app"]
+    command: /bin/sh -c "opm get jkeys089/lua-resty-hmac && openresty -g 'daemon off;'"
+    environment:
+      - SECURE_LINK_SECRET=dummy-key
+
+  httpbin:
+    # For mocking APIs like ENA auth
+    image: ghcr.io/psf/httpbin:0.10.2
+    container_name: httpbin
+    profiles: ["app", "all"]
+    environment:
+      - HTTPBIN_PORT=80
+    ports:
+      - "8088:80"
+    networks: ["emg"]
 
 volumes:
   prefectdb:

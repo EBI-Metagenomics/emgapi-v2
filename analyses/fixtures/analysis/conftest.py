@@ -3,6 +3,11 @@ from pathlib import Path
 import django
 import pytest
 
+from analyses.base_models.with_downloads_models import (
+    DownloadFile,
+    DownloadType,
+    DownloadFileType,
+)
 from workflows.data_io_utils.mgnify_v6_utils.amplicon import import_qc, import_taxonomy
 
 django.setup()
@@ -59,3 +64,35 @@ def raw_read_analyses(raw_read_run):
     s.save()
 
     return mgyas
+
+
+@pytest.fixture
+def private_analysis_with_download(webin_private_study, private_run):
+    run = private_run
+    run.sample.studies.add(webin_private_study)
+
+    private_analysis = mg_models.Analysis.objects.create(
+        accession="MGYA00000888",
+        study=webin_private_study,
+        sample=run.sample,
+        run=run,
+        is_private=True,
+        webin_submitter=webin_private_study.webin_submitter,
+        ena_study=webin_private_study.ena_study,
+    )
+
+    private_analysis.external_results_dir = "MGYS/00/000/999/analyses/MGYA00000888"
+    private_analysis.save()
+
+    private_analysis.add_download(
+        DownloadFile(
+            download_type=DownloadType.SEQUENCE_DATA,
+            file_type=DownloadFileType.FASTA,
+            alias=f"{private_analysis.accession}_sequences.fasta",
+            short_description="Private analysis sequences",
+            long_description="Sequence data for private analysis",
+            path="private_analysis_sequences.fasta",
+            download_group="all.sequence_data.private",
+        )
+    )
+    return private_analysis

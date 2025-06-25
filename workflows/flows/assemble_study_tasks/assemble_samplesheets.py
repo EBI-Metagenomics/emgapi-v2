@@ -17,7 +17,7 @@ from workflows.data_io_utils.filenames import (
     accession_prefix_separated_dir_path,
     file_path_shortener,
 )
-from workflows.prefect_utils.analyses_models_helpers import task_mark_assembly_status
+from workflows.prefect_utils.analyses_models_helpers import mark_assembly_status
 from workflows.prefect_utils.slurm_flow import (
     ClusterJobFailedException,
     run_cluster_job,
@@ -196,7 +196,7 @@ def run_assembler_for_samplesheet(
 
     for assembly in assemblies:
         # Mark assembly as started
-        task_mark_assembly_status(
+        mark_assembly_status(
             assembly,
             status=assembly.AssemblyStates.ASSEMBLY_STARTED,
             unset_statuses=[
@@ -245,7 +245,7 @@ def run_assembler_for_samplesheet(
         )
     except ClusterJobFailedException:
         for assembly in assemblies:
-            task_mark_assembly_status(
+            mark_assembly_status(
                 assembly, status=analyses.models.Assembly.AssemblyStates.ASSEMBLY_FAILED
             )
     else:
@@ -270,7 +270,7 @@ def run_assembler_for_samplesheet(
 
         if not assembled_runs_csv.is_file():
             for assembly in assemblies:
-                task_mark_assembly_status(
+                mark_assembly_status(
                     assembly,
                     status=analyses.models.Assembly.AssemblyStates.ASSEMBLY_FAILED,
                     reason=f"The miassembler output is missing the {assembled_runs_csv} file.",
@@ -286,22 +286,20 @@ def run_assembler_for_samplesheet(
 
         for assembly in assemblies:
             if assembly.run.first_accession in qc_failed_runs:
-                task_mark_assembly_status(
+                mark_assembly_status(
                     assembly,
                     status=analyses.models.Assembly.AssemblyStates.PRE_ASSEMBLY_QC_FAILED,
                     reason=qc_failed_runs[assembly.run.first_accession],
                 )
             elif assembly.run.first_accession in assembled_runs:
-                task_mark_assembly_status(
+                mark_assembly_status(
                     assembly,
                     status=analyses.models.Assembly.AssemblyStates.ASSEMBLY_COMPLETED,
-                    unset_statuses=[
-                        analyses.models.Assembly.AssemblyStates.ASSEMBLY_FAILED
-                    ],
+                    unset_statuses=[assembly.AssemblyStates.ASSEMBLY_FAILED],
                 )
                 update_assembly_metadata(miassembler_outdir, assembly)
             else:
-                task_mark_assembly_status(
+                mark_assembly_status(
                     assembly,
                     status=analyses.models.Assembly.AssemblyStates.ASSEMBLY_FAILED,
                     reason="The assembly is missing from the pipeline end-of-run reports",

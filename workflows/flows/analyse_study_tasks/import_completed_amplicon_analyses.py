@@ -13,7 +13,7 @@ from workflows.flows.analyse_study_tasks.analysis_states import AnalysisStates
 from workflows.flows.analyse_study_tasks.copy_v6_pipeline_results import (
     copy_v6_pipeline_results,
 )
-from workflows.prefect_utils.analyses_models_helpers import task_mark_analysis_status
+from workflows.prefect_utils.analyses_models_helpers import mark_analysis_status
 
 
 @task
@@ -36,7 +36,7 @@ def import_completed_analysis(analysis: analyses.models.Analysis):
         import_taxonomy(analysis, dir_for_analysis, source=source, allow_non_exist=True)
     import_asv(analysis, dir_for_analysis)
     copy_v6_pipeline_results(analysis.accession)
-    task_mark_analysis_status(
+    mark_analysis_status(
         analysis,
         analysis.AnalysisStates.ANALYSIS_ANNOTATIONS_IMPORTED,
         unset_statuses=[

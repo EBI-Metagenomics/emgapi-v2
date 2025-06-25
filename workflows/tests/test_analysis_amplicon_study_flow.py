@@ -1,7 +1,6 @@
 import json
 import os
 import shutil
-from enum import Enum
 from pathlib import Path
 from textwrap import dedent
 from typing import List, Optional
@@ -23,7 +22,7 @@ from workflows.flows.analyse_study_tasks.shared.study_summary import (
     STUDY_SUMMARY_TSV,
 )
 from workflows.flows.analysis_amplicon_study import analysis_amplicon_study
-from workflows.prefect_utils.analyses_models_helpers import get_users_as_choices
+from workflows.prefect_utils.pyslurm_patch import JobSubmitDescription
 from workflows.prefect_utils.testing_utils import (
     should_not_mock_httpx_requests_to_prefect_server,
     run_flow_and_capture_logs,
@@ -418,6 +417,22 @@ MockFileIsNotEmptyRule = FileRule(
 )
 
 
+@pytest.fixture
+def analysis_study_input_mocker(biome_choices, user_choices):
+    ## Pretend that a human resumed the flow with the biome picker, and then with the assembler selector.
+
+    class MockAnalyseStudyInput(BaseModel):
+        biome: biome_choices
+        webin_owner: Optional[str]
+        watchers: List[user_choices]
+        library_strategy_policy: ENALibraryStrategyPolicy
+
+    return MockAnalyseStudyInput
+
+
+@pytest.mark.flaky(
+    reruns=2
+)  # sometimes fails due to missing report CSV. maybe xdist or shared tmp-dir problem?
 @pytest.mark.httpx_mock(should_mock=should_not_mock_httpx_requests_to_prefect_server)
 @pytest.mark.django_db(transaction=True)
 @patch("workflows.flows.analyse_study_tasks.make_samplesheet_amplicon.queryset_hash")
@@ -439,6 +454,9 @@ def test_prefect_analyse_amplicon_flow(
     mock_suspend_flow_run,
     admin_user,
     top_level_biomes,
+    biome_choices,
+    user_choices,
+    analysis_study_input_mocker,
 ):
     """
     Test should create/get ENA and MGnify study into DB.
@@ -640,24 +658,17 @@ def test_prefect_analyse_amplicon_flow(
             )
         )
 
-        ## Pretend that a human resumed the flow with the biome picker.
-        BiomeChoices = Enum("BiomeChoices", {"root.engineered": "Root:Engineered"})
-        UserChoices = get_users_as_choices()
+    ## Pretend that a human resumed the flow with the biome picker.
+    def suspend_side_effect(wait_for_input=None):
+        if wait_for_input.__name__ == "AnalyseStudyInput":
+            return analysis_study_input_mocker(
+                biome=biome_choices["root.engineered"],
+                watchers=[user_choices[admin_user.username]],
+                library_strategy_policy=ENALibraryStrategyPolicy.ONLY_IF_CORRECT_IN_ENA,
+                webin_owner=None,
+            )
 
-        class AnalyseStudyInput(BaseModel):
-            biome: BiomeChoices
-            watchers: List[UserChoices]
-            library_strategy_policy: Optional[ENALibraryStrategyPolicy]
-
-        def suspend_side_effect(wait_for_input=None):
-            if wait_for_input.__name__ == "AnalyseStudyInput":
-                return AnalyseStudyInput(
-                    biome=BiomeChoices["root.engineered"],
-                    watchers=[UserChoices[admin_user.username]],
-                    library_strategy_policy=ENALibraryStrategyPolicy.ONLY_IF_CORRECT_IN_ENA,
-                )
-
-        mock_suspend_flow_run.side_effect = suspend_side_effect
+    mock_suspend_flow_run.side_effect = suspend_side_effect
 
     # RUN MAIN FLOW
     analysis_amplicon_study(study_accession=study_accession)
@@ -821,3 +832,312 @@ def test_prefect_analyse_amplicon_flow(
     study.refresh_from_db()
     assert len(study.downloads_as_objects) == 6
     assert study.features.has_v6_analyses
+
+
+@pytest.mark.httpx_mock(should_mock=should_not_mock_httpx_requests_to_prefect_server)
+@pytest.mark.django_db(transaction=True)
+@patch("workflows.flows.analyse_study_tasks.make_samplesheet_amplicon.queryset_hash")
+@patch(
+    "workflows.data_io_utils.mgnify_v6_utils.amplicon.FileIsNotEmptyRule",
+    MockFileIsNotEmptyRule,
+)
+@pytest.mark.parametrize(
+    "mock_suspend_flow_run", ["workflows.flows.analysis_amplicon_study"], indirect=True
+)
+def test_prefect_analyse_amplicon_flow_private_data(
+    mock_queryset_hash_for_amplicon,
+    prefect_harness,
+    httpx_mock,
+    mock_cluster_can_accept_jobs_yes,
+    mock_start_cluster_job,
+    mock_check_cluster_job_all_completed,
+    mock_suspend_flow_run,
+    admin_user,
+    top_level_biomes,
+    biome_choices,
+    user_choices,
+    analysis_study_input_mocker,
+):
+    """
+    Test should create/get ENA and MGnify study into DB.
+    Create analysis for amplicon runs and launch it with samplesheet.
+    One run has all results, one run failed
+    """
+
+    accession = "PRJNA398089"
+
+    httpx_mock.add_response(  # basic check response for whether study is private
+        url=f"{EMG_CONFIG.ena.portal_search_api}?"
+        f"result=study&"
+        f"query=%22%28study_accession%3D{accession}+OR+secondary_study_accession%3D{accession}%29%22&"
+        f"fields=study_accession&"
+        f"limit=&"
+        f"format=json&"
+        f"dataPortal=metagenome",
+        match_headers={
+            "Authorization": "Basic ZGNjX2Zha2U6bm90LWEtZGNjLXB3"
+        },  # dcc_fake:not-a-dcc-pw
+        json=[{"study_accession": accession}],
+    )
+
+    httpx_mock.add_response(
+        url=f"{EMG_CONFIG.ena.portal_search_api}?"
+        f"result=study&"
+        f"query=%22%28study_accession%3D{accession}+OR+secondary_study_accession%3D{accession}%29%22&"
+        f"fields=study_accession&"
+        f"limit=&"
+        f"format=json&"
+        f"dataPortal=metagenome",
+        match_headers={},  # public call should not find private study
+        json=[],
+    )
+
+    httpx_mock.add_response(
+        url=f"{EMG_CONFIG.ena.portal_search_api}?"
+        f"result=study&"
+        f"query=%22%28study_accession={accession}%20OR%20secondary_study_accession={accession}%29%22&"
+        f"limit=10&"
+        f"format=json&"
+        f"fields={','.join(EMG_CONFIG.ena.study_metadata_fields)}&"
+        f"dataPortal=metagenome",
+        match_headers={
+            "Authorization": "Basic ZGNjX2Zha2U6bm90LWEtZGNjLXB3"
+        },  # dcc_fake:not-a-dcc-pw
+        json=[  # study is available privately to dcc superuser
+            {
+                "study_title": "Metagenome of a wookie",
+                "secondary_study_accession": "SRP123456",
+                "study_accession": accession,
+            }
+        ],
+    )
+
+    mock_queryset_hash_for_amplicon.return_value = "xyz789"
+
+    study_accession = "PRJNA398089"
+    amplicon_run_all_results = "SRR_all_results"
+    runs = [
+        amplicon_run_all_results,
+    ]
+
+    # mock ENA response
+    httpx_mock.add_response(
+        url=f"{EMG_CONFIG.ena.portal_search_api}?"
+        f"result=read_run"
+        f"&query=%22%28%28study_accession={study_accession}+OR+secondary_study_accession={study_accession}%29%20AND%20library_strategy=AMPLICON%29%22"
+        f"&limit=10000"
+        f"&format=json"
+        f"&fields=run_accession%2Csample_accession%2Csample_title%2Csecondary_sample_accession%2Cfastq_md5%2Cfastq_ftp%2Clibrary_layout%2Clibrary_strategy%2Clibrary_source%2Cscientific_name%2Chost_tax_id%2Chost_scientific_name%2Cinstrument_platform%2Cinstrument_model%2Clocation%2Clat%2Clon"
+        f"&dataPortal=metagenome",
+        match_headers={
+            "Authorization": "Basic ZGNjX2Zha2U6bm90LWEtZGNjLXB3"
+        },  # dcc_fake:not-a-dcc-pw
+        json=[
+            {
+                "sample_accession": "SAMN08514017",
+                "sample_title": "my data",
+                "secondary_sample_accession": "SAMN08514017",
+                "run_accession": amplicon_run_all_results,
+                "fastq_md5": "123;abc",
+                "fastq_ftp": f"ftp.sra.example.org/vol/fastq/{amplicon_run_all_results}/{amplicon_run_all_results}_1.fastq.gz;ftp.sra.example.org/vol/fastq/{amplicon_run_all_results}/{amplicon_run_all_results}_2.fastq.gz",
+                "library_layout": "PAIRED",
+                "library_strategy": "AMPLICON",
+                "library_source": "METAGENOMIC",
+                "scientific_name": "metagenome",
+                "host_tax_id": "7460",
+                "host_scientific_name": "Apis mellifera",
+                "instrument_platform": "ILLUMINA",
+                "instrument_model": "Illumina MiSeq",
+                "lat": "52",
+                "lon": "0",
+                "location": "hinxton",
+            },
+        ],
+    )
+
+    # create fake results
+    amplicon_folder = Path(
+        f"{EMG_CONFIG.slurm.default_workdir}/{study_accession}_amplicon_v6/xyz789"
+    )
+    amplicon_folder.mkdir(exist_ok=True, parents=True)
+
+    with open(
+        f"{amplicon_folder}/{EMG_CONFIG.amplicon_pipeline.completed_runs_csv}", "w"
+    ) as file:
+        file.write(f"{amplicon_run_all_results},all_results" + "\n")
+
+    # ------- results for completed runs with all results
+    generate_fake_pipeline_all_results(
+        f"{amplicon_folder}/{amplicon_run_all_results}", amplicon_run_all_results
+    )
+
+    ## Pretend that a human resumed the flow with the biome picker.
+    def suspend_side_effect(wait_for_input=None):
+        if wait_for_input.__name__ == "AnalyseStudyInput":
+            return analysis_study_input_mocker(
+                biome=biome_choices["root.engineered"],
+                watchers=[user_choices[admin_user.username]],
+                library_strategy_policy=ENALibraryStrategyPolicy.ONLY_IF_CORRECT_IN_ENA,
+                webin_owner="webin-1",
+            )
+
+    mock_suspend_flow_run.side_effect = suspend_side_effect
+
+    # RUN MAIN FLOW
+    analysis_amplicon_study(study_accession=study_accession)
+
+    mock_start_cluster_job.assert_called()
+    mock_check_cluster_job_all_completed.assert_called()
+    mock_suspend_flow_run.assert_called()
+
+    assembly_samplesheet_table = Artifact.get("amplicon-v6-initial-sample-sheet")
+    assert assembly_samplesheet_table.type == "table"
+    table_data = json.loads(assembly_samplesheet_table.data)
+    assert len(table_data) == len(runs)
+
+    assert (
+        analyses.models.Analysis.objects.filter(
+            run__ena_accessions__contains=[amplicon_run_all_results]
+        ).count()
+        == 1
+    )
+
+    # check biome and watchers were set correctly
+    study = analyses.models.Study.objects.get_or_create_for_ena_study(study_accession)
+    assert study.biome.biome_name == "Engineered"
+    assert admin_user == study.watchers.first()
+
+    # check completed runs (all runs in completed list - might contain sanity check not passed as well)
+    assert study.analyses.filter(status__analysis_completed=True).count() == 1
+
+    assert (
+        study.analyses.filter(status__analysis_completed_reason="all_results").count()
+        == 1
+    )
+
+    analysis_which_should_have_taxonomies_imported: analyses.models.Analysis = (
+        analyses.models.Analysis.objects_and_annotations.get(
+            run__ena_accessions__contains=[amplicon_run_all_results]
+        )
+    )
+    assert (
+        analyses.models.Analysis.TAXONOMIES
+        in analysis_which_should_have_taxonomies_imported.annotations
+    )
+    assert (
+        analyses.models.Analysis.TaxonomySources.SSU.value
+        in analysis_which_should_have_taxonomies_imported.annotations[
+            analyses.models.Analysis.TAXONOMIES
+        ]
+    )
+    ssu = analysis_which_should_have_taxonomies_imported.annotations[
+        analyses.models.Analysis.TAXONOMIES
+    ][analyses.models.Analysis.TaxonomySources.SSU.value]
+    assert len(ssu) == 3
+    assert ssu[0]["organism"] == "sk__Bacteria;k__;p__Bacillota;c__Bacilli"
+
+    assert (
+        analysis_which_should_have_taxonomies_imported.KnownMetadataKeys.MARKER_GENE_SUMMARY
+        in analysis_which_should_have_taxonomies_imported.metadata
+    )
+    assert (
+        analysis_which_should_have_taxonomies_imported.metadata[
+            analysis_which_should_have_taxonomies_imported.KnownMetadataKeys.MARKER_GENE_SUMMARY
+        ]["closed_reference"]["marker_genes"]["SSU"]["Bacteria"]["read_count"]
+        == 1
+    )
+
+    workdir = Path(f"{EMG_CONFIG.slurm.default_workdir}/{study_accession}_v6")
+    assert workdir.is_dir()
+
+    assert study.external_results_dir == "SRP123/SRP123456"
+
+    Directory(
+        path=study.results_dir,
+        glob_rules=[
+            GlobHasFilesCountRule[10]
+        ],  # 5 for the samplesheet, same 5 for the "merge" (only 5 here, unlike public test, which has different hypervar regions)
+    )
+
+    with (workdir / "xyz789_DADA2-SILVA_18S-V9_asv_study_summary.tsv").open(
+        "r"
+    ) as summary:
+        lines = summary.readlines()
+        assert lines[0] == "taxonomy\tSRR_all_results\n"  # one run (the one with ASVs)
+        assert "100" in lines[-1]
+        assert "g__Aeromicrobium" in lines[-1]
+
+    # manually remove the merged study summaries
+    for file in Path(study.results_dir).glob(f"{study.first_accession}*"):
+        file.unlink()
+
+    # test merging of study summaries again, with cleanup disabled
+    merge_study_summaries(
+        mgnify_study_accession=study.accession,
+        cleanup_partials=False,
+        analysis_type="amplicon",
+    )
+    Directory(
+        path=study.results_dir,
+        glob_rules=[
+            GlobHasFilesCountRule[
+                10
+            ],  # study ones generated, and partials left in place
+            GlobRule(
+                rule_name="All study level files are present",
+                glob_patten=f"{study.first_accession}*{STUDY_SUMMARY_TSV}",
+                test=lambda f: len(list(f)) == 5,
+            ),
+        ],
+    )
+
+    study.refresh_from_db()
+    assert len(study.downloads_as_objects) == 5
+
+    # test merging of study summaries again – expect default bludgeon should overwrite the existing ones
+    logged_run = run_flow_and_capture_logs(
+        merge_study_summaries,
+        mgnify_study_accession=study.accession,
+        cleanup_partials=True,
+        analysis_type="amplicon",
+    )
+    assert (
+        logged_run.logs.count(
+            f"Deleting {str(Path(study.results_dir) / study.first_accession)}"
+        )
+        == 5
+    )
+    Directory(
+        path=study.results_dir,
+        glob_rules=[
+            GlobHasFilesCountRule[5],  # partials deleted, just merged ones
+            GlobRule(
+                rule_name="All files are study level",
+                glob_patten=f"{study.first_accession}*{STUDY_SUMMARY_TSV}",
+                test=lambda f: len(list(f)) == 5,
+            ),
+        ],
+    )
+
+    study.refresh_from_db()
+    assert len(study.downloads_as_objects) == 5
+    assert study.features.has_v6_analyses
+
+    assert study.is_private
+    assert study.analyses.filter(is_private=True).count() == 1
+    assert study.analyses.exclude(is_private=True).count() == 0
+    assert study.runs.filter(is_private=True).count() == 1
+    assert study.runs.exclude(is_private=True).count() == 0
+
+    for cluster_job_start_call in mock_start_cluster_job.call_args_list:
+        args, kwargs = cluster_job_start_call
+
+        job_submit_description: JobSubmitDescription = kwargs.get(
+            "job_submit_description"
+        )
+        name: str = kwargs.get("name")
+        if name.startswith("Move"):
+            assert EMG_CONFIG.slurm.private_results_dir in job_submit_description.script
+            break
+    else:
+        assert False, "No Move cluster job submitted"

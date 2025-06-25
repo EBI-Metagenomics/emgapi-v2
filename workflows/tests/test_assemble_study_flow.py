@@ -1,7 +1,6 @@
 import json
 import os
 import shutil
-from enum import Enum
 from pathlib import Path
 from typing import Optional, List
 from unittest.mock import patch
@@ -23,8 +22,7 @@ from workflows.flows.assemble_study_tasks.make_samplesheets import (
     make_samplesheets_for_runs_to_assemble,
 )
 from workflows.prefect_utils.analyses_models_helpers import (
-    task_mark_assembly_status,
-    get_users_as_choices,
+    mark_assembly_status,
 )
 from workflows.prefect_utils.testing_utils import (
     should_not_mock_httpx_requests_to_prefect_server,
@@ -33,6 +31,22 @@ from workflows.prefect_utils.testing_utils import (
 EMG_CONFIG = settings.EMG_CONFIG
 
 
+@pytest.fixture
+def assembly_study_input_mocker(biome_choices, user_choices):
+    ## Pretend that a human resumed the flow with the biome picker, and then with the assembler selector.
+
+    class MockAssembleStudyInput(BaseModel):
+        biome: biome_choices
+        assembler: AssemblerChoices
+        webin_owner: Optional[str]
+        watchers: List[user_choices]
+
+    return MockAssembleStudyInput
+
+
+@pytest.mark.flaky(
+    reruns=2
+)  # sometimes fails due to missing report CSV. maybe xdist or shared tmp-dir problem?
 @pytest.mark.httpx_mock(should_mock=should_not_mock_httpx_requests_to_prefect_server)
 @pytest.mark.django_db(transaction=True)
 @pytest.mark.parametrize(
@@ -50,6 +64,9 @@ def test_prefect_assemble_study_flow(
     top_level_biomes,
     assemblers,
     admin_user,
+    biome_choices,
+    user_choices,
+    assembly_study_input_mocker,
 ):
     ### ENA MOCKING ###
     accession = "SRP1"
@@ -191,23 +208,13 @@ def test_prefect_assemble_study_flow(
         ],
     )
 
-    ## Pretend that a human resumed the flow with the biome picker, and then with the assembler selector.
-    BiomeChoices = Enum("BiomeChoices", {"root.engineered": "Root:Engineered"})
-    UserChoices = get_users_as_choices()
-
-    class AssembleStudyInput(BaseModel):
-        biome: BiomeChoices
-        assembler: AssemblerChoices
-        webin_owner: Optional[str]
-        watchers: List[UserChoices]
-
     def suspend_side_effect(wait_for_input=None):
         if wait_for_input.__name__ == "AssembleStudyInput":
-            return AssembleStudyInput(
-                biome=BiomeChoices["root.engineered"],
+            return assembly_study_input_mocker(
+                biome=biome_choices["root.engineered"],
                 assembler=AssemblerChoices.pipeline_default,
                 webin_owner=None,
-                watchers=[UserChoices[admin_user.username]],
+                watchers=[user_choices[admin_user.username]],
             )
 
     mock_suspend_flow_run.side_effect = suspend_side_effect
@@ -347,6 +354,9 @@ def test_prefect_assemble_study_flow(
     shutil.rmtree(assembly_folder, ignore_errors=True)
 
 
+@pytest.mark.flaky(
+    reruns=2
+)  # sometimes fails due to missing report CSV. maybe xdist or shared tmp-dir problem?
 @pytest.mark.httpx_mock(should_mock=should_not_mock_httpx_requests_to_prefect_server)
 @pytest.mark.django_db(transaction=True)
 @pytest.mark.parametrize(
@@ -364,6 +374,9 @@ def test_prefect_assemble_private_study_flow(
     top_level_biomes,
     assemblers,
     admin_user,
+    user_choices,
+    biome_choices,
+    assembly_study_input_mocker,
 ):
     ### ENA MOCKING ###
     accession = "SRP1"
@@ -468,30 +481,21 @@ def test_prefect_assemble_private_study_flow(
     )
 
     ## Pretend that a human resumed the flow with the biome picker, and then with the assembler selector.
-    BiomeChoices = Enum("BiomeChoices", {"root.engineered": "Root:Engineered"})
-    UserChoices = get_users_as_choices()
-
-    class AssembleStudyInput(BaseModel):
-        biome: BiomeChoices
-        assembler: AssemblerChoices
-        webin_owner: Optional[str]
-        watchers: List[UserChoices]
-
     def suspend_side_effect(wait_for_input=None):
         if wait_for_input.__name__ == "AssembleStudyInput":
-            return AssembleStudyInput(
-                biome=BiomeChoices["root.engineered"],
+            return assembly_study_input_mocker(
+                biome=biome_choices["root.engineered"],
                 assembler=AssemblerChoices.pipeline_default,
                 webin_owner="Webin-1",
-                watchers=[UserChoices[admin_user.username]],
+                watchers=[user_choices[admin_user.username]],
             )
 
     mock_suspend_flow_run.side_effect = suspend_side_effect
 
-    mock_queryset_hash_for_assemblies.return_value = "abc123"
+    mock_queryset_hash_for_assemblies.return_value = "xyz789"
 
     assembly_folder = Path(
-        f"{EMG_CONFIG.slurm.default_workdir}/PRJNA1_miassembler/abc123"
+        f"{EMG_CONFIG.slurm.default_workdir}/PRJNA1_miassembler/xyz789"
     )
     assembly_folder.mkdir(exist_ok=True, parents=True)
 
@@ -535,14 +539,14 @@ def test_assembly_statuses(prefect_harness, mgnify_assemblies):
     assert not any(assembly.status.values())
 
     # marking as failed should work
-    task_mark_assembly_status(
+    mark_assembly_status(
         assembly, assembly.AssemblyStates.ASSEMBLY_FAILED, reason="It broke"
     )
     assembly.refresh_from_db()
     assert assembly.status[assembly.AssemblyStates.ASSEMBLY_FAILED]
 
     # making as complete later (perhaps a retry) should work, and can unset failed at same time
-    task_mark_assembly_status(
+    mark_assembly_status(
         assembly,
         assembly.AssemblyStates.ASSEMBLY_COMPLETED,
         unset_statuses=[

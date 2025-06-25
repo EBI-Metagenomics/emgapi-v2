@@ -7,7 +7,7 @@ from prefect.tasks import task_input_hash
 
 from workflows.flows.analyse_study_tasks.analysis_states import AnalysisStates
 
-from workflows.prefect_utils.analyses_models_helpers import task_mark_analysis_status
+from workflows.prefect_utils.analyses_models_helpers import mark_analysis_status
 
 
 @task(
@@ -47,13 +47,13 @@ def set_post_assembly_analysis_states(
 
     for analysis in assembly_analyses:
         if analysis.assembly.first_accession in qc_failed_assemblies:
-            task_mark_analysis_status(
+            mark_analysis_status(
                 analysis,
                 status=AnalysisStates.ANALYSIS_QC_FAILED,
                 reason=qc_failed_assemblies[analysis.assembly.first_accession],
             )
         elif analysis.assembly.first_accession in qc_completed_assemblies:
-            task_mark_analysis_status(
+            mark_analysis_status(
                 analysis,
                 status=AnalysisStates.ANALYSIS_COMPLETED,
                 reason=qc_completed_assemblies[analysis.assembly.first_accession],
@@ -63,7 +63,7 @@ def set_post_assembly_analysis_states(
                 ],
             )
         else:
-            task_mark_analysis_status(
+            mark_analysis_status(
                 analysis,
                 status=AnalysisStates.ANALYSIS_FAILED,
                 reason="Missing assembly in execution",

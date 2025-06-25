@@ -1,10 +1,10 @@
 django==5.2.1
 django-cors-headers==4.7.0
-django-ninja~=1.4.2
+django-ninja~=1.4.0
 prefect==3.4.4
 prefect-shell==0.3.1
 prefect-slack==0.3.1
-dj-database-url==2.3.0
+dj-database-url==3.0.0
 psycopg2-binary
 cython<3.0
 pydantic~=2.11.5
@@ -15,6 +15,7 @@ django-json-widget==2.0.1
 tzdata
 pandas==2.2.3
 django-ltree-2==0.1.12
+django-ninja-jwt~=5.3.7
 
 whitenoise==6.9.0
 gunicorn==23.0.0
@@ -33,3 +34,4 @@ httpx~=0.28.1
 typing_extensions~=4.13.2
 asgiref~=3.8.1
 case-converter~=1.2.0
+aenum~=3.1.16
