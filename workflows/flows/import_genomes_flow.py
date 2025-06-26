@@ -25,7 +25,6 @@ from genomes.management.lib.genome_util import (
 from genomes.models import GenomeCatalogue, Genome, GeographicLocation
 
 
-@task
 def validate_pipeline_version(version: str) -> int:
     match = re.match(r"^v?([1-3])(?:\..*)?(?:[a-zA-Z0-9\-]*)?$", version)
     if not match:
@@ -33,7 +32,6 @@ def validate_pipeline_version(version: str) -> int:
     return int(match.group(1))
 
 
-@task
 def parse_options(options):
     options["results_directory"] = os.path.realpath(
         options["results_directory"].strip()
@@ -54,20 +52,18 @@ def parse_options(options):
     options["catalogue_biome_label"] = (
         options.get("catalogue_biome_label", "").strip() or options["catalogue_name"]
     )
-    options["database"] = options.get("database", "default")
 
     return options
 
 
-@task
 def get_catalogue(options):
     path = Biome.lineage_to_path(options["gold_biome"])
-    biome = Biome.objects.using(options["database"]).filter(path=path).first()
+    biome = Biome.objects.filter(path=path).first()
     if not biome:
         raise Biome.DoesNotExist()
 
     catalogue_id = f"{options['catalogue_name'].replace(' ', '-')}-v{options['catalogue_version'].replace('.', '-')}".lower()
-    catalogue, _ = GenomeCatalogue.objects.using(options["database"]).get_or_create(
+    catalogue, _ = GenomeCatalogue.objects.get_or_create(
         catalogue_id=catalogue_id,
         defaults={
             "version": options["catalogue_version"],
@@ -83,7 +79,6 @@ def get_catalogue(options):
     return catalogue
 
 
-@task
 def gather_genome_dirs(catalogue_dir, catalogue_type):
     genome_dirs = find_genome_results(catalogue_dir)
 
@@ -152,14 +147,34 @@ def clean_genome_data(genome_data):
     return genome_data
 
 
-@task
 def finalize_catalogue(catalogue):
     catalogue.calculate_genome_count()
     catalogue.save()
 
 
 @flow(name="import_genomes_flow")
-def import_genomes_flow(options: dict):
+def import_genomes_flow(
+    results_directory: str,
+    catalogue_directory: str,
+    catalogue_name: str,
+    catalogue_version: str,
+    gold_biome: str,
+    pipeline_version: str,
+    catalogue_type: str,
+    catalogue_biome_label: str = None,
+):
+    # Reconstruct options dictionary for backward compatibility with existing functions
+    options = {
+        "results_directory": results_directory,
+        "catalogue_directory": catalogue_directory,
+        "catalogue_name": catalogue_name,
+        "catalogue_version": catalogue_version,
+        "gold_biome": gold_biome,
+        "pipeline_version": pipeline_version,
+        "catalogue_type": catalogue_type,
+        "catalogue_biome_label": catalogue_biome_label,
+    }
+
     options = parse_options(options)
     catalogue = get_catalogue(options)
     finalize_catalogue(catalogue)
@@ -322,7 +337,6 @@ def upload_catalogue_files(catalogue, catalogue_dir):
         logger.warning("No phylogenetic tree file found in catalogue directory.")
 
 
-@task
 def validate_import_summary(catalogue):
     logger = get_run_logger()
     genomes = Genome.objects.filter(catalogue=catalogue)
@@ -333,6 +347,6 @@ def validate_import_summary(catalogue):
         f"Final Report: {total} genomes imported. {with_annot} with annotations, {with_files} with downloads."
     )
     if total != with_annot:
-        logger.warning("Some genomes are missing annotations!")
+        logger.error("Some genomes are missing annotations!")
     if total != with_files:
-        logger.warning("Some genomes are missing downloads!")
+        logger.error("Some genomes are missing downloads!")

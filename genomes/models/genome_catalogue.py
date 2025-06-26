@@ -9,7 +9,9 @@ from emgapiv2 import settings
 class GenomeCatalogue(WithDownloadsModel):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    catalogue_id = models.SlugField(db_column="catalogue_id", max_length=100)
+    catalogue_id = models.SlugField(
+        db_column="catalogue_id", max_length=100, primary_key=True
+    )
     version = models.CharField(db_column="version", max_length=20)
     name = models.CharField(db_column="name", max_length=100, unique=True)
     description = models.TextField(
@@ -32,7 +34,7 @@ class GenomeCatalogue(WithDownloadsModel):
         db_column="result_directory", max_length=100, null=True, blank=True
     )
     biome = models.ForeignKey(
-        Biome, db_column="biome_id", on_delete=models.CASCADE, null=True, blank=True
+        Biome, db_column="biome_id", on_delete=models.PROTECT, null=True, blank=True
     )
     genome_count = models.IntegerField(
         db_column="genome_count",
@@ -77,7 +79,7 @@ class GenomeCatalogue(WithDownloadsModel):
 
     class Meta:
         unique_together = ("catalogue_biome_label", "version", "catalogue_type")
-        db_table = "genome_catalogue"
+        # db_table = "genome_catalogue"
 
     def __str__(self):
         return self.name
