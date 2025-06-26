@@ -62,7 +62,7 @@ api = NinjaAPI(
 )
 
 api.add_router("/analyses", analyses_router, tags=[ApiSections.ANALYSES])
-api.add_router("/analyses/assemblies", assemblies_router, tags=[ApiSections.ANALYSES])
+api.add_router("/assemblies", assemblies_router, tags=[ApiSections.ANALYSES])
 api.add_router("/samples", samples_router, tags=[ApiSections.SAMPLES])
 api.add_router("/studies", studies_router, tags=[ApiSections.STUDIES])
 api.add_router("/my-data", my_data_router, tags=[ApiSections.PRIVATE_DATA])

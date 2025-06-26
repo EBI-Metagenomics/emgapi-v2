@@ -205,9 +205,10 @@ class Assembly(ModelSchema):
 
 
 class GenomeSchema(Schema):
-    """Simple schema for Genome model."""
+    """Simple schema for a Genome model."""
 
     accession: str = Field(..., examples=["MGYG000000001"])
+    catalogue_id: Optional[str] = Field()
 
     class Config:
         from_attributes = True

@@ -30,7 +30,7 @@ def list_assemblies(request):
     response=AssemblyDetail,
     summary="Get assembly by accession",
     description="Get detailed information about a specific assembly. "
-    "This endpoint is accessible at `/analyses/assemblies/{accession}`.",
+    "This endpoint is accessible at `/assemblies/{accession}`.",
     operation_id="get_assembly",
     openapi_extra=make_links_section(
         make_related_detail_link(

@@ -10,7 +10,11 @@ This flow accepts a path to a TSV file with the following columns:
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
+import django
 from prefect import flow, task, get_run_logger
+
+django.setup()
+
 from django.db import transaction
 from django.core.exceptions import ObjectDoesNotExist
 
