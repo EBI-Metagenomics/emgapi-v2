@@ -147,11 +147,6 @@ def clean_genome_data(genome_data):
     return genome_data
 
 
-def finalize_catalogue(catalogue):
-    catalogue.calculate_genome_count()
-    catalogue.save()
-
-
 @flow(name="import_genomes_flow")
 def import_genomes_flow(
     results_directory: str,
@@ -177,7 +172,6 @@ def import_genomes_flow(
 
     options = parse_options(options)
     catalogue = get_catalogue(options)
-    finalize_catalogue(catalogue)
     upload_catalogue_summary(catalogue, options["catalogue_dir"])
     upload_catalogue_files(catalogue, options["catalogue_dir"])
     genome_dirs = gather_genome_dirs(

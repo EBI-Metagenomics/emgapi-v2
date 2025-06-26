@@ -164,8 +164,4 @@ def genomes(top_level_biomes, genome_catalogues, geographic_locations):
 
         genomes_objects.append(genome)
 
-    # Update genome counts in catalogues
-    for catalogue in genome_catalogues:
-        catalogue.calculate_genome_count()
-
     return genomes_objects

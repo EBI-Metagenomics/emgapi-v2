@@ -36,12 +36,6 @@ class GenomeCatalogue(WithDownloadsModel):
     biome = models.ForeignKey(
         Biome, db_column="biome_id", on_delete=models.PROTECT, null=True, blank=True
     )
-    genome_count = models.IntegerField(
-        db_column="genome_count",
-        null=True,
-        blank=True,
-        help_text="Number of genomes available in the web database (species-level cluster reps only)",
-    )
     unclustered_genome_count = models.IntegerField(
         db_column="unclustered_genome_count",
         null=True,
@@ -84,6 +78,6 @@ class GenomeCatalogue(WithDownloadsModel):
     def __str__(self):
         return self.name
 
+    @property
     def calculate_genome_count(self):
-        self.genome_count = self.genomes.count()
-        self.save()
+        return self.genomes.count()
