@@ -15,6 +15,7 @@ class ApiSections(FutureStrEnum):
     REQUESTS = "Requests"
     PRIVATE_DATA = "Private Data"
     GENOMES = "Genomes"
+    ASSEMBLIES = "Assemblies"
 
 
 class OpenApiKeywords(FutureStrEnum):
