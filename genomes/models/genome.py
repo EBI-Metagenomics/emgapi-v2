@@ -96,7 +96,7 @@ class Genome(WithDownloadsModel):
         null=True,
     )
 
-    biome = models.ForeignKey(Biome, db_column="biome_id", on_delete=models.CASCADE)
+    biome = models.ForeignKey(Biome, db_column="biome_id", on_delete=models.PROTECT)
 
     length = models.IntegerField(db_column="length")
     num_contigs = models.IntegerField(db_column="n_contigs")
@@ -121,7 +121,7 @@ class Genome(WithDownloadsModel):
     rna_18s = models.FloatField(db_column="rna_18s", null=True, blank=True)
     rna_28s = models.FloatField(db_column="rna_28s", null=True, blank=True)
 
-    trnas = models.FloatField(db_column="T_RNA")
+    trnas = models.FloatField(db_column="t_rna")
     nc_rnas = models.IntegerField(db_column="nc_rna")
     num_proteins = models.IntegerField(db_column="num_proteins")
     eggnog_coverage = models.FloatField(db_column="eggnog_coverage")
@@ -152,7 +152,7 @@ class Genome(WithDownloadsModel):
         db_column="geographic_origin",
         null=True,
         blank=True,
-        on_delete=models.CASCADE,
+        on_delete=models.PROTECT,
     )
 
     pangenome_geographic_range = models.ManyToManyField(
@@ -168,7 +168,7 @@ class Genome(WithDownloadsModel):
     catalogue = models.ForeignKey(
         "GenomeCatalogue",
         db_column="genome_catalogue",
-        on_delete=models.CASCADE,
+        on_delete=models.PROTECT,
         related_name="genomes",
     )
 
@@ -191,9 +191,6 @@ class Genome(WithDownloadsModel):
     @property
     def first_created_iso(self):
         return self.first_created.isoformat() if self.first_created else None
-
-    class Meta:
-        db_table = "genome_genomes"
 
     def __str__(self):
         return self.accession
