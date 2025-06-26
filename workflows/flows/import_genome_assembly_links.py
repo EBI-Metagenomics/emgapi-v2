@@ -246,7 +246,7 @@ def create_links(
     return created_count + updated_count
 
 
-@flow(name="Import Genome Assembly Links")
+@flow(name="import_genome_assembly_links")
 def import_genome_assembly_links(tsv_path: str) -> Dict[str, int]:
     """
     Imports data from a TSV file into the GenomeAssemblyLink model.
