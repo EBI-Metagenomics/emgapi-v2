@@ -47,10 +47,8 @@ def test_genome_catalogue():
     # Test string representation
     assert str(catalogue) == "Ocean Prokaryotes"
 
-    # Test calculate_genome_count method
-    assert catalogue.genome_count is None
-    catalogue.calculate_genome_count()
-    assert catalogue.genome_count == 0
+    # Test calculate_genome_count property
+    assert catalogue.calculate_genome_count == 0
 
 
 @pytest.mark.django_db(transaction=True)
@@ -121,5 +119,4 @@ def test_genome():
     assert genome.first_created_iso is not None
 
     # Test that the genome is counted in the catalogue
-    catalogue.calculate_genome_count()
-    assert catalogue.genome_count == 1
+    assert catalogue.calculate_genome_count == 1
