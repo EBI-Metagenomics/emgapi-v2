@@ -52,19 +52,18 @@ def parse_options(options):
     options["catalogue_biome_label"] = (
         options.get("catalogue_biome_label", "").strip() or options["catalogue_name"]
     )
-    options["database"] = options.get("database", "default")
 
     return options
 
 
 def get_catalogue(options):
     path = Biome.lineage_to_path(options["gold_biome"])
-    biome = Biome.objects.using(options["database"]).filter(path=path).first()
+    biome = Biome.objects.filter(path=path).first()
     if not biome:
         raise Biome.DoesNotExist()
 
     catalogue_id = f"{options['catalogue_name'].replace(' ', '-')}-v{options['catalogue_version'].replace('.', '-')}".lower()
-    catalogue, _ = GenomeCatalogue.objects.using(options["database"]).get_or_create(
+    catalogue, _ = GenomeCatalogue.objects.get_or_create(
         catalogue_id=catalogue_id,
         defaults={
             "version": options["catalogue_version"],
@@ -163,7 +162,6 @@ def import_genomes_flow(
     pipeline_version: str,
     catalogue_type: str,
     catalogue_biome_label: str = None,
-    database: str = "default",
 ):
     # Reconstruct options dictionary for backward compatibility with existing functions
     options = {
@@ -175,7 +173,6 @@ def import_genomes_flow(
         "pipeline_version": pipeline_version,
         "catalogue_type": catalogue_type,
         "catalogue_biome_label": catalogue_biome_label,
-        "database": database,
     }
 
     options = parse_options(options)

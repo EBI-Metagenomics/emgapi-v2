@@ -116,7 +116,6 @@ def test_parse_options():
         assert parsed_options["pipeline_version"] == "v3.0.0dev"
         assert parsed_options["catalogue_type"] == "prokaryotes"
         assert parsed_options["catalogue_biome_label"] == "Sheep Rumen"
-        assert parsed_options["database"] == "default"
 
     with patch("os.path.exists", return_value=False):
         options = get_default_options()
@@ -190,8 +189,6 @@ def test_import_genomes_flow_with_mock_directory(
     This test creates a temporary directory with the required structure and files,
     and then runs the flow with this directory as the results directory.
 
-    We mock only the necessary functions to avoid database interactions and to focus
-    on testing the flow's interaction with the file system.
     """
     # Create a biome for the test
     biome = Biome.objects.create(
@@ -214,7 +211,6 @@ def test_import_genomes_flow_with_mock_directory(
         pipeline_version=options["pipeline_version"],
         catalogue_type=options["catalogue_type"],
         catalogue_biome_label=options["catalogue_biome_label"],
-        database=options["database"],
     )
     catalogue = GenomeCatalogue.objects.get(catalogue_id="sheep-rumen-v1-0")
     assert catalogue.version == "1.0"
@@ -238,7 +234,6 @@ def get_default_options(
     pipeline_version: str = "v3.0.0dev",
     catalogue_type: str = "prokaryotes",
     catalogue_biome_label: str = "Sheep Rumen",
-    database: str = "default",
 ):
     return {
         "results_directory": results_directory,
@@ -250,5 +245,4 @@ def get_default_options(
         "pipeline_version": pipeline_version,
         "catalogue_type": catalogue_type,
         "catalogue_biome_label": catalogue_biome_label,
-        "database": database,
     }
