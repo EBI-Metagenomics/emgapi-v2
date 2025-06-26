@@ -1,6 +1,8 @@
 from ninja import Schema
-from typing import Optional, Dict
+from typing import Optional, Dict, Literal
 from datetime import datetime
+
+CatalogueType = Literal["prokaryotes", "eukaryotes", "viruses"]
 
 
 class GenomeCatalogueBase(Schema):
@@ -17,7 +19,7 @@ class GenomeCatalogueBase(Schema):
     ftp_url: str
     pipeline_version_tag: str
     catalogue_biome_label: str
-    catalogue_type: str
+    catalogue_type: CatalogueType
     other_stats: Optional[Dict]
 
 
