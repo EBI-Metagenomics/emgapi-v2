@@ -347,6 +347,6 @@ def validate_import_summary(catalogue):
         f"Final Report: {total} genomes imported. {with_annot} with annotations, {with_files} with downloads."
     )
     if total != with_annot:
-        logger.warning("Some genomes are missing annotations!")
+        logger.error("Some genomes are missing annotations!")
     if total != with_files:
-        logger.warning("Some genomes are missing downloads!")
+        logger.error("Some genomes are missing downloads!")
