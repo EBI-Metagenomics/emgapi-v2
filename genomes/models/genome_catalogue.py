@@ -9,7 +9,9 @@ from emgapiv2 import settings
 class GenomeCatalogue(WithDownloadsModel):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    catalogue_id = models.SlugField(db_column="catalogue_id", max_length=100)
+    catalogue_id = models.SlugField(
+        db_column="catalogue_id", max_length=100, primary_key=True
+    )
     version = models.CharField(db_column="version", max_length=20)
     name = models.CharField(db_column="name", max_length=100, unique=True)
     description = models.TextField(
