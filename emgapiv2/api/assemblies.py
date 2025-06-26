@@ -33,12 +33,21 @@ def list_assemblies(request):
     "This endpoint is accessible at `/assemblies/{accession}`.",
     operation_id="get_assembly",
     openapi_extra=make_links_section(
-        make_related_detail_link(
-            related_detail_operation_id="get_mgnify_study",
-            related_object_name="study",
-            self_object_name="assembly",
-            related_id_in_response="reads_study_accession",
-        )
+        {
+            **make_related_detail_link(
+                related_detail_operation_id="get_mgnify_study",
+                related_object_name="study",
+                self_object_name="assembly",
+                related_id_in_response="reads_study_accession",
+            ),
+            **make_related_detail_link(
+                related_detail_operation_id="get_mgnify_sample",
+                related_object_name="study",
+                self_object_name="analysis",
+                related_id_in_response="study_accession",
+            ),
+        }
+
     ),
 )
 def get_assembly(request, accession: str):
