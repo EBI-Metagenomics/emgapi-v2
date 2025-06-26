@@ -47,7 +47,6 @@ def list_assemblies(request):
                 related_id_in_response="study_accession",
             ),
         }
-
     ),
 )
 def get_assembly(request, accession: str):
