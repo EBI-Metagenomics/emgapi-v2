@@ -80,7 +80,7 @@ services:
     restart: always
     container_name: prefect-agent
     hostname: prefect_agent
-    command: "prefectcli worker start --pool \"slurm\""
+    command: "prefectcli worker start --pool \"slurm\" --type slurm"
     environment:
       - PREFECT_API_URL=http://prefect-server:4200/api
       - PREFECT_LOCAL_STORAGE_PATH=/root/.prefect/storage

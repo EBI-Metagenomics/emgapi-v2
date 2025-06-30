@@ -15,6 +15,17 @@ class SlurmConfig(BaseModel):
     private_results_dir: str = "/nfs/public/services/private-data"
     user: str = "root"
 
+    # Slurm REST API configuration
+    # slurm_submit_url: str = "http://slurm-controller:6820/slurm/v0.0.36/job/submit"
+    slurm_submit_url: str = (
+        "http://httpbin/anything?job_id=1234&job_state=PENDING&job_submit_user=mgnify"
+    )
+    slurm_poll_url: str = (
+        "http://httpbin/anything?job_id=1234&job_state=RUNNING&job_submit_user=mgnify"
+    )
+    slurm_user_name: str = "your-username"
+    slurm_user_token: str = "your-jwt-token"
+
     incomplete_job_limit: int = 100
     # if this many jobs are RUNNING or PENDING, no more are submitted
 

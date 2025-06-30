@@ -17,6 +17,7 @@ COPY requirements* .
 RUN pip install --ignore-installed --use-pep517 -r requirements-dev.txt
 RUN pip install --ignore-installed --use-pep517 -r requirements-tools.txt
 COPY . .
+RUN pip install -e .
 RUN python manage.py collectstatic --noinput
 
 FROM django AS agent
@@ -41,7 +42,7 @@ RUN if [ "$(uname -m)" = "x86_64" ]; then \
 ENV SLURM_LIB_DIR=/slurm/lib
 ENV SLURM_INCLUDE_DIR=/usr/include
 RUN pip install --upgrade pip setuptools wheel
-RUN pip install --ignore-installed --upgrade --use-pep517 --no-build-isolation https://github.com/PySlurm/pyslurm/archive/refs/tags/v21.8.1.tar.gz
+#RUN pip install --ignore-installed --upgrade --use-pep517 --no-build-isolation https://github.com/PySlurm/pyslurm/archive/refs/tags/v21.8.1.tar.gz
 ENV TZ="Etc/UTC"
 
 ENTRYPOINT ["/usr/local/bin/submitter-entrypoint.sh", "python", "manage.py"]
