@@ -17,7 +17,7 @@ tasks:
     cmds:
       - docker compose exec -e PREFECT_CLIENT_RETRY_EXTRA_CODES=0 app python manage.py prefectcli work-pool create --type {{.TYPE}} {{.CLI_ARGS}} {{.NAME}}
     vars:
-      TYPE: "process"
+      TYPE: "slurm"
       NAME: "slurm"
 
   deploy-flow:

@@ -1,3 +1,24 @@
+[build-system]
+requires = ["setuptools>=42", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "emgapiv2"
+version = "2.0.0"
+description = "MGnify API v2 - EMBL-EBI's metagenomics service"
+authors = [
+    {name = "MGnify Team", email = "metagenomics-help@ebi.ac.uk"}
+]
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "Apache-2.0"}
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: OS Independent",
+    "Framework :: Django",
+]
+
 [tool.pytest.ini_options]
 DJANGO_SETTINGS_MODULE = "emgapiv2.settings_test"
 python_files = ["tests.py", "test_*.py", "*_tests.py"]
@@ -22,9 +43,6 @@ omit = ["*/tests/*", "*/migrations/*", "*settings*", "*asgi.py", "*wsgi.py", "*m
 ignore = ["E402"]  # allow imports after django.setup()
 exclude = ["emgapiv2/settings_test.py"]
 
-[tool.setuptools]
-python_requires = ">=3.10"
-
 [tool.prefect]
 logging.level = "INFO"
 # debug_mode = true
@@ -39,3 +57,9 @@ server.api.keepalive_timeout = 60 # seconds
 #section-order = ["future", "standard-library", "third-party", "activate_django_first", "first-party", "local-folder"]
 #[tool.ruff.isort.sections]
 #django = ["activate_django_first"]
+
+[project.entry-points."prefect.collections"]
+slurm_worker = "workflows.prefect_utils.slurm_worker"
+
+[tool.setuptools]
+packages = ["emgapiv2", "workflows", "analyses", "ena"]
