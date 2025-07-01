@@ -34,8 +34,8 @@ class ENAAPIRequest(BaseModel):
     ]
     limit: Optional[int] = Field(None, description="Max number of results to return")
     format: Literal["tsv", "json"] = Field("json")
-    data_portal: ENAPortalDataPortal = Field(
-        ENAPortalDataPortal.ENA,
+    data_portals: list[ENAPortalDataPortal] = Field(
+        [ENAPortalDataPortal.METAGENOME, ENAPortalDataPortal.ENA],
         description="The ENA Portal API data portal to query.",
         serialization_alias="dataPortal",
     )
@@ -91,10 +91,6 @@ class ENAAPIRequest(BaseModel):
     def serialize_result_type(self, result: ENAPortalResultType):
         return result.value
 
-    @field_serializer("data_portal")
-    def serialize_data_portal(self, result: ENAPortalDataPortal):
-        return result.value
-
     def _parse_response(self, response: httpx.Response, raise_on_empty: bool = True):
         if self.format == "json":
             try:
@@ -113,14 +109,20 @@ class ENAAPIRequest(BaseModel):
     ) -> Union[List[Dict[str, Any]], str]:
         url = EMG_CONFIG.ena.portal_search_api
         params = self.model_dump(by_alias=True)
-        r = httpx.get(
-            url=url,
-            params=params,
-            auth=auth,
-        )
-        if httpx.codes.is_error(r.status_code):
-            raise ENAAccessException(r.text)
-        return self._parse_response(r, raise_on_empty=raise_on_empty)
+        for portal in self.data_portals:
+            try:
+                params["dataPortal"] = portal.value
+                r = httpx.get(
+                    url=url,
+                    params=params,
+                    auth=auth,
+                )
+                if httpx.codes.is_error(r.status_code):
+                    raise ENAAccessException(r.text)
+                return self._parse_response(r, raise_on_empty=True)
+            except (ENAAvailabilityException, ENAAccessException) as e:
+                if portal == self.data_portals[-1] and raise_on_empty:
+                    raise e
 
 
 class ENAAccessException(Exception): ...
