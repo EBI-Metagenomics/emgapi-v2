@@ -147,3 +147,43 @@ tasks:
       - docker compose run --entrypoint /bin/bash app -c "python workflows/ena_utils/generate_ena_model.py {{.CLI_ARGS}}" >> workflows/ena_utils/{{.CLI_ARGS}}.py
       - echo "See ./workflows/ena_utils/{{.CLI_ARGS}}.py"
       - echo "You may also need to update workflows/ena_utils/requestors.py:ENAAPIRequest"
+
+  make:model:
+    desc: "Generate a new model. E.g. task make:model -- SampleMetadata genomes"
+    cmds:
+      - docker compose run app python manage.py make_model {{.CLI_ARGS}}
+
+  make:admin:
+    desc: "Generate a new admin class. E.g. task make:admin -- SampleMetadata genomes"
+    cmds:
+      - docker compose run app python manage.py make_admin {{.CLI_ARGS}}
+
+  make:api:
+    desc: "Generate a new API endpoint. E.g. task make:api -- SampleMetadata genomes"
+    cmds:
+      - docker compose run app python manage.py make_api {{.CLI_ARGS}}
+
+  make:workflow:
+    desc: "Generate a new Prefect workflow. E.g. task make:workflow -- import_sample_metadata"
+    cmds:
+      - docker compose run app python manage.py make_workflow {{.CLI_ARGS}}
+
+  make:all:
+    desc: "Generate model, admin, and API for a new entity. E.g. task make:all -- SampleMetadata genomes"
+    cmds:
+      - task: make:model
+        vars: {CLI_ARGS: "{{.CLI_ARGS}}"}
+      - task: make:admin
+        vars: {CLI_ARGS: "{{.CLI_ARGS}}"}
+      - task: make:api
+        vars: {CLI_ARGS: "{{.CLI_ARGS}}"}
+
+  make:migration:
+    desc: "Generate migrations for an app. E.g. task make:migration -- genomes"
+    cmds:
+      - docker compose run app python manage.py makemigrations {{.CLI_ARGS}}
+
+  migrate:
+    desc: "Apply migrations. E.g. task migrate -- genomes"
+    cmds:
+      - docker compose run app python manage.py migrate {{.CLI_ARGS}}

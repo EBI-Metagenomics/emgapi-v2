@@ -41,7 +41,6 @@ class AssemblyAdmin(ENABrowserLinkMixin, JSONFieldWidgetOverridesMixin, ModelAdm
         "created_at",
         AssemblyStatusListFilter,
     ]
-    list_filter_submit = True
     search_fields = [
         "id",
         "run__ena_accessions",
