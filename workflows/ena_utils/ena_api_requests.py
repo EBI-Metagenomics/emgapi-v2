@@ -89,7 +89,6 @@ def get_study_from_ena(accession: str, limit: int = 10) -> ena.models.Study:
         limit=limit,
         query=ENAStudyQuery(study_accession=accession)
         | ENAStudyQuery(secondary_study_accession=accession),
-        data_portal=[ENAPortalDataPortal.METAGENOME, ENAPortalDataPortal.ENA],
     ).get(auth=ena_auth)
 
     s = portal[0]
@@ -326,7 +325,6 @@ def get_study_readruns_from_ena(
         ],
         limit=limit,
         query=query,
-        data_portal=[ENAPortalDataPortal.METAGENOME, ENAPortalDataPortal.ENA],
     ).get(auth=ena_auth, raise_on_empty=raise_on_empty)
 
     run_accessions = []
@@ -391,7 +389,6 @@ def is_study_available(accession: str, auth: Optional[Type[Auth]] = None) -> boo
             ),
             format="json",
             fields=[ENAStudyFields.STUDY_ACCESSION],
-            data_portal=[ENAPortalDataPortal.METAGENOME, ENAPortalDataPortal.ENA],
         ).get(auth=auth)
     except ENAAvailabilityException as e:
         logger.info(f"Looks like an error-free empty response from ENA: {e}")
@@ -511,7 +508,6 @@ def get_study_assemblies_from_ena(accession: str, limit: int = 10) -> list[str]:
         limit=limit,
         query=ENAAnalysisQuery(study_accession=accession)
         | ENAAnalysisQuery(secondary_study_accession=accession),
-        data_portal=[ENAPortalDataPortal.METAGENOME, ENAPortalDataPortal.ENA],
     ).get(auth=ena_auth)
 
     # read-runs may exist in same study as the assemblies

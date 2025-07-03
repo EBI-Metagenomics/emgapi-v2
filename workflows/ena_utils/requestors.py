@@ -35,7 +35,7 @@ class ENAAPIRequest(BaseModel):
     limit: Optional[int] = Field(None, description="Max number of results to return")
     format: Literal["tsv", "json"] = Field("json")
     data_portals: list[ENAPortalDataPortal] = Field(
-        [ENAPortalDataPortal.METAGENOME, ENAPortalDataPortal.ENA],
+        EMG_CONFIG.ena.portal_search_api_default_data_portals,
         description="The ENA Portal API data portal to query.",
         serialization_alias="dataPortal",
     )
