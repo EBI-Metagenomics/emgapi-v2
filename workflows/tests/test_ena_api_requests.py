@@ -152,7 +152,7 @@ def test_get_study_only_available_in_ena_portal(httpx_mock, prefect_harness):
         ],
         data_portals=[ENAPortalDataPortal.METAGENOME, ENAPortalDataPortal.ENA],
     ).get()
-    assert "I wanted to be normal" in request.json()["study_title"]
+    assert "I wanted to be normal" in request[0]["study_title"]
 
 
 @pytest.mark.httpx_mock(should_mock=should_not_mock_httpx_requests_to_prefect_server)
@@ -781,7 +781,7 @@ def test_ena_api_query_maker(httpx_mock):
             ENAStudyFields.SECONDARY_STUDY_ACCESSION,
         ],
         limit=10,
-        data_portal=ENAPortalDataPortal.METAGENOME,
+        data_portals=[ENAPortalDataPortal.METAGENOME],
     )
 
     assert request.model_dump(by_alias=True) == {

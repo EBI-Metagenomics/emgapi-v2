@@ -92,7 +92,7 @@ class ENAAPIRequest(BaseModel):
         return result.value
 
     @field_serializer("data_portals")
-    def serialize_data_portal(self, data_portals: list[ENAPortalDataPortal]):
+    def serialize_data_portals(self, data_portals: list[ENAPortalDataPortal]):
         return " or ".join([portal.value for portal in data_portals])
 
     def _parse_response(self, response: httpx.Response, raise_on_empty: bool = True):
