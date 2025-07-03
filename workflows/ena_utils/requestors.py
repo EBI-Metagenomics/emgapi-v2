@@ -95,7 +95,7 @@ class ENAAPIRequest(BaseModel):
     def serialize_data_portals(self, data_portals: list[ENAPortalDataPortal]):
         return " or ".join([portal.value for portal in data_portals])
 
-    def _parse_response(self, response: httpx.Response, raise_on_empty: bool = True):
+    def _parse_response(self, response: httpx.Response):
         if self.format == "json":
             try:
                 j = response.json()
@@ -103,8 +103,6 @@ class ENAAPIRequest(BaseModel):
                 raise ENAAccessException("Bad JSON response.")
             if isinstance(j, dict) and "message" in j:
                 raise ENAAccessException(f"Error response: {j['message']}")
-            elif isinstance(j, list) and len(j) == 0 and raise_on_empty:
-                raise ENAAvailabilityException("Empty response.")
             return j
         return response.text  # TODO: tsv
 
@@ -114,19 +112,21 @@ class ENAAPIRequest(BaseModel):
         url = EMG_CONFIG.ena.portal_search_api
         params = self.model_dump(by_alias=True)
         for portal in self.data_portals:
-            try:
-                params["dataPortal"] = portal.value
-                r = httpx.get(
-                    url=url,
-                    params=params,
-                    auth=auth,
-                )
-                if httpx.codes.is_error(r.status_code):
-                    raise ENAAccessException(r.text)
-                return self._parse_response(r, raise_on_empty=True)
-            except (ENAAvailabilityException, ENAAccessException) as e:
-                if portal == self.data_portals[-1] and raise_on_empty:
-                    raise e
+            params["dataPortal"] = portal.value
+            r = httpx.get(
+                url=url,
+                params=params,
+                auth=auth,
+            )
+            if httpx.codes.is_error(r.status_code):
+                raise ENAAccessException(r.text)
+            response = self._parse_response(r)
+            if isinstance(response, list) and len(response) == 0:
+                if portal != self.data_portals[-1]:
+                    continue
+                elif raise_on_empty:
+                    raise ENAAvailabilityException("Empty response.")
+            return response
 
 
 class ENAAccessException(Exception): ...
