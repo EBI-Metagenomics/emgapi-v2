@@ -130,11 +130,11 @@ def test_get_study_only_available_in_ena_portal(httpx_mock, prefect_harness):
     """
     sec_study_accession = "SRP0009034"
     httpx_mock.add_response(
-        url=f"{EMG_CONFIG.ena.portal_search_api}?result=study&query=%22%28study_accession={sec_study_accession}%20OR%20secondary_study_accession={sec_study_accession}%29%22&limit=10&format=json&fields={','.join(EMG_CONFIG.ena.study_metadata_fields)}&dataPortal=metagenome",
+        url=f"{EMG_CONFIG.ena.portal_search_api}?result=study&query=%22secondary_study_accession={sec_study_accession}%22&limit=10&format=json&fields={','.join(EMG_CONFIG.ena.study_metadata_fields)}&dataPortal=metagenome",
         json=[],
     )
     httpx_mock.add_response(
-        url=f"{EMG_CONFIG.ena.portal_search_api}?result=study&query=%22%28study_accession={sec_study_accession}%20OR%20secondary_study_accession={sec_study_accession}%29%22&limit=10&format=json&fields={','.join(EMG_CONFIG.ena.study_metadata_fields)}&dataPortal=ena",
+        url=f"{EMG_CONFIG.ena.portal_search_api}?result=study&query=%22secondary_study_accession={sec_study_accession}%22&limit=10&format=json&fields={','.join(EMG_CONFIG.ena.study_metadata_fields)}&dataPortal=ena",
         json=[
             {
                 "study_title": "I wanted to be normal, but they put me in ena portal",
@@ -145,7 +145,7 @@ def test_get_study_only_available_in_ena_portal(httpx_mock, prefect_harness):
     )
     request = ENAAPIRequest(
         result=ENAPortalResultType.STUDY,
-        query=ENAStudyQuery(study_accession=sec_study_accession),
+        query=ENAStudyQuery(secondary_study_accession=sec_study_accession),
         fields=EMG_CONFIG.ena.study_metadata_fields,
         data_portals=[ENAPortalDataPortal.METAGENOME, ENAPortalDataPortal.ENA],
     ).get()
