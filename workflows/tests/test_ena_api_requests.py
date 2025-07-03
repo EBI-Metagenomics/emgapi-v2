@@ -124,6 +124,34 @@ def test_get_study_from_ena_use_secondary_as_primary(httpx_mock, prefect_harness
 
 @pytest.mark.httpx_mock(should_mock=should_not_mock_httpx_requests_to_prefect_server)
 @pytest.mark.django_db(transaction=True)
+def test_get_study_only_available_in_ena_portal(httpx_mock, prefect_harness):
+    """
+    Required study is in ena portal, but not in metagenome portal
+    """
+    sec_study_accession = "SRP0009034"
+    httpx_mock.add_response(
+        url=f"{EMG_CONFIG.ena.portal_search_api}?result=study&query=%22%28study_accession={sec_study_accession}%20OR%20secondary_study_accession={sec_study_accession}%29%22&limit=10&format=json&fields={','.join(EMG_CONFIG.ena.study_metadata_fields)}&dataPortal=metagenome",
+        json=[],
+    )
+    httpx_mock.add_response(
+        url=f"{EMG_CONFIG.ena.portal_search_api}?result=study&query=%22%28study_accession={sec_study_accession}%20OR%20secondary_study_accession={sec_study_accession}%29%22&limit=10&format=json&fields={','.join(EMG_CONFIG.ena.study_metadata_fields)}&dataPortal=ena",
+        json=[
+            {
+                "study_title": "I wanted to be normal, but they put me in ena portal",
+                "study_accession": "PRJNA109315",
+                "secondary_study_accession": f"{sec_study_accession}",
+            },
+        ],
+    )
+    request = ENAAPIRequest(
+        query=ENAStudyQuery(study_accession=sec_study_accession),
+        data_portals= [ENAPortalDataPortal.METAGENOME, ENAPortalDataPortal.ENA],
+    ).get()
+    assert "I wanted to be normal" in request.json()["study_title"]
+
+
+@pytest.mark.httpx_mock(should_mock=should_not_mock_httpx_requests_to_prefect_server)
+@pytest.mark.django_db(transaction=True)
 def test_get_study_from_ena_no_secondary_accession(httpx_mock, prefect_harness):
     """
     Study has no secondary accessions
