@@ -790,6 +790,7 @@ def test_ena_api_query_maker(httpx_mock):
         "limit": 10,
         "format": "json",
         "result": "study",
+        "dataPortal": "metagenome",
     }
 
     # calling API
