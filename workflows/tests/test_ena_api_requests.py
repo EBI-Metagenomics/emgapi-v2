@@ -144,7 +144,9 @@ def test_get_study_only_available_in_ena_portal(httpx_mock, prefect_harness):
         ],
     )
     request = ENAAPIRequest(
+        result=ENAPortalResultType.STUDY,
         query=ENAStudyQuery(study_accession=sec_study_accession),
+        fields=EMG_CONFIG.ena.study_metadata_fields,
         data_portals=[ENAPortalDataPortal.METAGENOME, ENAPortalDataPortal.ENA],
     ).get()
     assert "I wanted to be normal" in request.json()["study_title"]
