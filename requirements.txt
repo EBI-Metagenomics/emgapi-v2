@@ -28,7 +28,7 @@ mysql-connector-python
 SQLAlchemy
 
 numpy~=2.2.6
-requests~=2.32.3
+requests~=2.32.4
 httpx~=0.28.1
 typing_extensions~=4.13.2
 asgiref~=3.8.1
