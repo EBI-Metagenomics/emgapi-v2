@@ -35,6 +35,10 @@ RETRY_DELAY = EMG_CONFIG.ena.portal_search_api_retry_delay_seconds
 
 
 class ENALibraryStrategyPolicy(FutureStrEnum):
+    """
+    Each policy determines a trust vs. override level for the library strategy metadata in ENA.
+    """
+
     ONLY_IF_CORRECT_IN_ENA = "only_if_correct_in_ena"
     ASSUME_OTHER_ALSO_MATCHES = "assume_other_also_matches"
     OVERRIDE_ALL = "override_all"

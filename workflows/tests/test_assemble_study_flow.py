@@ -13,6 +13,7 @@ from pydantic import BaseModel
 
 import analyses.models
 import ena.models
+from workflows.ena_utils.ena_api_requests import ENALibraryStrategyPolicy
 from workflows.flows.assemble_study import AssemblerChoices, assemble_study
 from workflows.flows.assemble_study_tasks.assemble_samplesheets import (
     get_reference_genome,
@@ -41,6 +42,7 @@ def assembly_study_input_mocker(biome_choices, user_choices):
         webin_owner: Optional[str]
         watchers: List[user_choices]
         wait_for_samplesheet_editing: bool
+        library_strategy_policy: ENALibraryStrategyPolicy
 
     return MockAssembleStudyInput
 
@@ -305,6 +307,7 @@ def test_prefect_assemble_study_flow(
                 webin_owner=None,
                 watchers=[user_choices[admin_user.username]],
                 wait_for_samplesheet_editing=False,
+                library_strategy_policy=ENALibraryStrategyPolicy.ONLY_IF_CORRECT_IN_ENA,
             )
 
     mock_suspend_flow_run.side_effect = suspend_side_effect
@@ -586,6 +589,7 @@ def test_prefect_assemble_private_study_flow(
                 webin_owner="Webin-1",
                 watchers=[user_choices[admin_user.username]],
                 wait_for_samplesheet_editing=False,
+                library_strategy_policy=ENALibraryStrategyPolicy.ONLY_IF_CORRECT_IN_ENA,
             )
 
     mock_suspend_flow_run.side_effect = suspend_side_effect

@@ -21,6 +21,7 @@ import ena.models
 from workflows.ena_utils.ena_api_requests import (
     get_study_from_ena,
     get_study_readruns_from_ena,
+    ENALibraryStrategyPolicy,
 )
 from workflows.ena_utils.webin_owner_utils import validate_and_set_webin_owner
 from workflows.flows.assemble_study_tasks.assemble_samplesheets import (
@@ -123,6 +124,10 @@ def assemble_study(
             ),
             description="Webin ID of study owner, if data is private. Can be left as None, if public.",
         )
+        library_strategy_policy: ENALibraryStrategyPolicy = Field(
+            ENALibraryStrategyPolicy.ONLY_IF_CORRECT_IN_ENA,
+            description="Optionally treat read-runs with incorrect library strategy metadata as assemblable.",
+        )
         wait_for_samplesheet_editing: bool = Field(
             False,
             description="If True, the execution will be suspended after the samplesheets are created, to allow editing.",
@@ -178,7 +183,11 @@ def assemble_study(
     )
     # assumes latest version...
 
-    get_or_create_assemblies_for_runs(mgnify_study.accession, read_runs)
+    get_or_create_assemblies_for_runs(
+        mgnify_study.accession,
+        read_runs,
+        library_strategy_policy=assemble_study_input.library_strategy_policy,
+    )
     samplesheets = make_samplesheets_for_runs_to_assemble(
         mgnify_study.accession, assembler
     )

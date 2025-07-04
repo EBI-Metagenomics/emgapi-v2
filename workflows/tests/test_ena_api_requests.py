@@ -911,3 +911,38 @@ def test_ena_accession_parsing_from_study_title():
         )
         is None
     )
+
+
+def test_library_strategy_policy_to_filter():
+    # Test ONLY_IF_CORRECT_IN_ENA policy
+    assert library_strategy_policy_to_filter(
+        primary_library_strategy="WGS",
+        policy=ENALibraryStrategyPolicy.ONLY_IF_CORRECT_IN_ENA,
+    ) == ["WGS"]
+
+    assert library_strategy_policy_to_filter(
+        primary_library_strategy="WGS",
+        other_library_strategies=["RNA-Seq"],
+        policy=ENALibraryStrategyPolicy.ONLY_IF_CORRECT_IN_ENA,
+    ) == ["WGS", "RNA-Seq"]
+
+    # Test ASSUME_OTHER_ALSO_MATCHES policy
+    assert library_strategy_policy_to_filter(
+        primary_library_strategy="WGS",
+        policy=ENALibraryStrategyPolicy.ASSUME_OTHER_ALSO_MATCHES,
+    ) == ["WGS", "OTHER"]
+
+    assert library_strategy_policy_to_filter(
+        primary_library_strategy="WGS",
+        other_library_strategies=["RNA-Seq"],
+        policy=ENALibraryStrategyPolicy.ASSUME_OTHER_ALSO_MATCHES,
+    ) == ["WGS", "RNA-Seq", "OTHER"]
+
+    # Test OVERRIDE_ALL policy
+    assert (
+        library_strategy_policy_to_filter(
+            primary_library_strategy="WGS",
+            policy=ENALibraryStrategyPolicy.OVERRIDE_ALL,
+        )
+        == []
+    )

@@ -207,6 +207,40 @@ def test_queryset_to_samplesheet(raw_reads_mgnify_study):
         assert first_line["contaminant_genome"] == "chicken.fna"
     samplesheet_ret.unlink(missing_ok=True)
 
+    # should be able to pass constants
+    samplesheet_ret = queryset_to_samplesheet(
+        queryset=run_qs,
+        filename=samplesheet,
+        column_map={
+            "fastq1": SamplesheetColumnSource(
+                lookup_string="metadata__fastq_ftps", renderer=lambda f: f[0]
+            ),
+            "contaminant_genome": "chicken.fna",
+        },
+    )
+    with open(samplesheet_ret) as f:
+        csv_reader = csv.DictReader(f, delimiter=",")
+        first_line = next(csv_reader)
+        assert first_line["contaminant_genome"] == "chicken.fna"
+    samplesheet_ret.unlink(missing_ok=True)
+
+    # should be able to pass whole objects instead of lookup strings
+    samplesheet_ret = queryset_to_samplesheet(
+        queryset=run_qs,
+        filename=samplesheet,
+        column_map={
+            "fastq1": SamplesheetColumnSource(
+                pass_whole_object=True,
+                renderer=lambda run: run.metadata["fastq_ftps"][0],
+            ),
+        },
+    )
+    with open(samplesheet_ret) as f:
+        csv_reader = csv.DictReader(f, delimiter=",")
+        first_line = next(csv_reader)
+        assert first_line["fastq1"] == "/path/to/fastq_1.fastq.gz"
+    samplesheet_ret.unlink(missing_ok=True)
+
 
 @pytest.mark.django_db(transaction=True)
 def test_queryset_hash(raw_reads_mgnify_study):

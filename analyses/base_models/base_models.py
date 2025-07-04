@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import Any, Protocol
 
 from django.conf import settings
 from django.contrib.postgres.fields import ArrayField
@@ -204,3 +204,31 @@ class PrivacyFilterManagerMixin(SuppressionFilterManagerMixin):
         Returns only private studies
         """
         return self.get_queryset(private_only=True)
+
+
+class HasMetadata(Protocol):
+    metadata: dict
+
+
+class InferredMetadataMixin:
+    INFERRED = "INFERRED"
+
+    class _MetadataDictPreferringInferred(dict):
+        def get(self, __key):
+            for potential_key in [
+                f"{InferredMetadataMixin.INFERRED}_{__key}",
+                f"{InferredMetadataMixin.INFERRED.lower()}_{__key}",
+            ]:
+                if potential_key in self:
+                    logging.debug(
+                        f"Using inferred value of {__key}, because {potential_key} found in {self}"
+                    )
+                    return super().get(potential_key)
+            return super().get(__key)
+
+        def __getitem__(self, item):
+            return self.get(item)
+
+    @property
+    def inferred_metadata(self: HasMetadata):
+        return InferredMetadataMixin._MetadataDictPreferringInferred(self.metadata)
