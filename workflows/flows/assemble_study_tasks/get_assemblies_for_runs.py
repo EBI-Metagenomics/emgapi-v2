@@ -4,6 +4,7 @@ from prefect import task, get_run_logger
 from prefect.cache_policies import DEFAULT
 
 import analyses.models
+from workflows.ena_utils.ena_api_requests import ENALibraryStrategyPolicy
 
 
 @task(
@@ -12,7 +13,9 @@ import analyses.models
     cache_policy=DEFAULT,
 )
 def get_or_create_assemblies_for_runs(
-    study_accession: str, read_runs: List[str]
+    study_accession: str,
+    read_runs: List[str],
+    library_strategy_policy: ENALibraryStrategyPolicy = ENALibraryStrategyPolicy.ONLY_IF_CORRECT_IN_ENA,
 ) -> List[str]:
     logger = get_run_logger()
     study = analyses.models.Study.objects.get(accession=study_accession)
@@ -26,9 +29,25 @@ def get_or_create_assemblies_for_runs(
             run.ExperimentTypes.METATRANSCRIPTOMIC,
         ]:
             logger.warning(
-                f"Not creating assembly for run {run.first_accession} because it is a {run.experiment_type}"
+                f"Run {run.first_accession} is a {run.experiment_type} experiment type, not metagenomic/metatranscriptomic."
             )
-            continue
+            if (
+                library_strategy_policy
+                == ENALibraryStrategyPolicy.ASSUME_OTHER_ALSO_MATCHES
+                and run.experiment_type == run.ExperimentTypes.UNKNOWN
+            ):
+                logger.warning(
+                    f"But, creating assembly anyway since {run.first_accession} is of unknown experiment type."
+                )
+            elif library_strategy_policy == ENALibraryStrategyPolicy.OVERRIDE_ALL:
+                logger.warning(
+                    "But, creating assembly anyway since library strategy is overridden by policy."
+                )
+            else:
+                logger.warning(
+                    f"So, not creating assembly for run {run.first_accession}."
+                )
+                continue
 
         assembly, created = analyses.models.Assembly.objects.get_or_create(
             run=run,

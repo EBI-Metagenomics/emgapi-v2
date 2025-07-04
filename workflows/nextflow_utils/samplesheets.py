@@ -3,50 +3,63 @@ from __future__ import annotations
 import csv
 import hashlib
 import logging
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Optional, Union
 
 from django.conf import settings
-from django.db.models import QuerySet
+from django.db.models import QuerySet, Model
 from prefect.client.schemas import FlowRun
 from prefect.deployments import run_deployment
+from pydantic import BaseModel, Field
 
 EMG_CONFIG = settings.EMG_CONFIG
 
 logger = logging.getLogger(__name__)
 
 
-# TODO: consider replacing this with a dataclass with a default renderer
-# e.g. instead of using
-#
-# ```python
-# class SamplesheetColumnSource(BaseModel):
-#     lookup_string: str | list[str] = Field(default="id")
-#     renderer: Callable[[Any], str] = Field(lambda x: x)
-#     const: Any | None = Field(None)
-# ```
-#
-# because it is a bit more readable to do
-#
-# ```python
-#             "assembly_memory": SamplesheetColumnSource(
-#                 const=memory
-#             ),
-#             "human_reference": SamplesheetColumnSource(
-#                 const=""
-#             ),
-# ```
-@dataclass
-class SamplesheetColumnSource:
-    lookup_string: str | list[str]
-    renderer: Callable[[Any], str] = lambda x: x
+class SamplesheetColumnSource(BaseModel):
+    lookup_string: str | list[str] | None = Field(
+        None,
+        description="One or more Django lookup strings on the model or its relations",
+        examples=[
+            "accession",
+            "study__accession",
+            ["ena_study", "metadata__fastq_ftps"],
+        ],
+    )
+    pass_whole_object: bool | None = Field(
+        False,
+        description="If True, will give the whole object to the renderer function, rather than any lookup string",
+    )
+    renderer: Callable[[Any], str] = Field(
+        lambda x: x,
+        description="A function to transform the value from the lookup/const into a string for the samplesheet.",
+        examples=["lambda x: x[:4]", "str"],
+    )
+
+
+def __render(
+    source_definition: str | SamplesheetColumnSource, object: Model, values: dict
+) -> str:
+    if isinstance(source_definition, str):
+        # render constant value to ss column
+        return source_definition
+    if source_definition.pass_whole_object:
+        # render whole model object into a ss column
+        return source_definition.renderer(object)
+    if isinstance(source_definition.lookup_string, list):
+        # render multiple lookup strings into a single ss column
+        return source_definition.renderer(
+            *[values[lookup] for lookup in source_definition.lookup_string]
+        )
+    # render single lookup string into a single ss column
+    return source_definition.renderer(values[source_definition.lookup_string])
 
 
 def queryset_to_samplesheet(
     queryset: QuerySet,
     filename: Union[Path, str],
-    column_map: dict[str, SamplesheetColumnSource] = None,
+    column_map: dict[str, SamplesheetColumnSource | str] = None,
     bludgeon: bool = False,
 ) -> Path:
     """
@@ -58,6 +71,7 @@ def queryset_to_samplesheet(
         {
             "sample_id": SamplesheetColumnSource(lookup_string='id'),
             "start_time": SamplesheetColumnSource(lookup_string='my_other_model__created_at', renderer=lambda date: date[:4])
+            "memory": "8GB",
         }
     :param bludgeon: Boolean which if True will allow an existing sheet to be overwritten.
     :return: Path to the written samplesheet file.
@@ -103,22 +117,22 @@ def queryset_to_samplesheet(
         writer.writeheader()
         all_lookups_requested = []
         for source in _column_map.values():
+            if isinstance(source, str):
+                continue
+            if source.pass_whole_object:
+                continue
             if isinstance(source.lookup_string, list):
                 all_lookups_requested.extend(source.lookup_string)
             else:
                 all_lookups_requested.append(source.lookup_string)
 
-        values_qs = queryset.values(*all_lookups_requested)
-        for obj in values_qs:
+        values = zip(
+            queryset.all(), queryset.values(*all_lookups_requested)
+        )  # slightly wasteful duplicate query in the edge case where the column sources are NOT a mix of whole object / lookup strings
+        for obj, lookup_values in values:
             writer.writerow(
                 {
-                    col: (
-                        source.renderer(
-                            *[obj[lookup] for lookup in source.lookup_string]
-                        )
-                        if isinstance(source.lookup_string, list)
-                        else source.renderer(obj[source.lookup_string])
-                    )
+                    col: __render(source, obj, lookup_values)
                     for col, source in _column_map.items()
                 }
             )

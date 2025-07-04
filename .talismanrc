@@ -148,3 +148,4 @@ allowed_patterns:
 - key2=val2
 - KnownMetadataKeys
 - primary_key
+- pass_whole_object

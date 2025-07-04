@@ -23,6 +23,7 @@ from analyses.base_models.base_models import (
     PrivacyFilterManagerMixin,
     TimeStampedModel,
     VisibilityControlledModel,
+    InferredMetadataMixin,
 )
 from analyses.base_models.mgnify_accessioned_models import MGnifyAccessionField
 from analyses.base_models.with_downloads_models import WithDownloadsModel
@@ -212,7 +213,9 @@ class WithExperimentTypeModel(models.Model):
 class PublicRunManager(PrivacyFilterManagerMixin, models.Manager): ...
 
 
-class Run(TimeStampedModel, ENADerivedModel, WithExperimentTypeModel):
+class Run(
+    InferredMetadataMixin, TimeStampedModel, ENADerivedModel, WithExperimentTypeModel
+):
     CommonMetadataKeys = ENAReadRunFields
     extend_enum(
         CommonMetadataKeys, "FASTQ_FTPS", "fastq_ftps"
@@ -322,7 +325,7 @@ class AssemblyManager(SelectByStatusManagerMixin, ENADerivedManager):
 class PublicAssemblyManager(PrivacyFilterManagerMixin, AssemblyManager): ...
 
 
-class Assembly(TimeStampedModel, ENADerivedModel):
+class Assembly(InferredMetadataMixin, TimeStampedModel, ENADerivedModel):
     objects = AssemblyManager()
     public_objects = PublicAssemblyManager()
 
@@ -558,6 +561,7 @@ class PublicAnalysisManagerIncludingAnnotations(
 
 
 class Analysis(
+    InferredMetadataMixin,
     TimeStampedModel,
     VisibilityControlledModel,
     WithDownloadsModel,
