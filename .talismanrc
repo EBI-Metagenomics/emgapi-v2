@@ -149,3 +149,4 @@ allowed_patterns:
 - KnownMetadataKeys
 - primary_key
 - pass_whole_object
+- dictionary key
