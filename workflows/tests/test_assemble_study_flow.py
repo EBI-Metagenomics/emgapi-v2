@@ -13,6 +13,7 @@ from pydantic import BaseModel
 
 import analyses.models
 import ena.models
+from workflows.ena_utils.ena_api_requests import ENALibraryStrategyPolicy
 from workflows.flows.assemble_study import AssemblerChoices, assemble_study
 from workflows.flows.assemble_study_tasks.assemble_samplesheets import (
     get_reference_genome,
@@ -41,6 +42,7 @@ def assembly_study_input_mocker(biome_choices, user_choices):
         webin_owner: Optional[str]
         watchers: List[user_choices]
         wait_for_samplesheet_editing: bool
+        library_strategy_policy: ENALibraryStrategyPolicy
 
     return MockAssembleStudyInput
 
@@ -71,7 +73,7 @@ def test_prefect_assemble_study_flow(
 ):
     ### ENA MOCKING ###
     accession = "SRP1"
-    number_of_runs = 5
+    number_of_runs = 9
     number_not_assembled_runs = 1
 
     httpx_mock.add_response(
@@ -102,6 +104,18 @@ def test_prefect_assemble_study_flow(
         ],
     )
 
+    """
+    Runs description:
+    SRR1: correct PE, WGS MetaG - metaspades
+    SRR2: correct PE, WGS MetaG - metaspades (with failure)
+    SRR3: correct SE, WGS MetaG - megahit
+    SRR4: correct SE, WGS MetaG, LR - Flye
+    SRR5: correct SE, WGS MetaG, ION_TORRENT - spades
+    SRR6: correct PE, WGA MetaG - metaspades
+    SRR7: correct PE, WGA MetaT - metaspades
+    SRR8: incorrect SE, WGS MetaG - metaspades
+    SRR9: incorrect PE, WGA MetaG - megahit
+    """
     httpx_mock.add_response(
         url=f"{EMG_CONFIG.ena.portal_search_api}?"
         f"result=read_run"
@@ -206,6 +220,82 @@ def test_prefect_assemble_study_flow(
                 "lon": "0",
                 "location": "hinxton",
             },
+            {
+                "sample_accession": "SAMN06",
+                "sample_title": "Wookie hair 6 (PE labeled as WGA and METAGENOMIC)",
+                "secondary_sample_accession": "SRS6",
+                "run_accession": "SRR6",
+                "fastq_md5": "123;abc",
+                "fastq_ftp": "ftp.sra.example.org/vol/fastq/SRR6/SRR6_1.fastq.gz;ftp.sra.example.org/vol/fastq/SRR6/SRR6_2.fastq.gz",
+                "library_layout": "PAIRED",
+                "library_strategy": "WGA",
+                "library_source": "METAGENOMIC",
+                "scientific_name": "metagenome",
+                "host_tax_id": "7460",
+                "host_scientific_name": "Apis mellifera",
+                "instrument_platform": "ILLUMINA",
+                "instrument_model": "Illumina MiSeq",
+                "lat": "52",
+                "lon": "0",
+                "location": "hinxton",
+            },
+            {
+                "sample_accession": "SAMN07",
+                "sample_title": "Wookie hair 7 (PE labeled as WGA and METATRANSCRIPTOMIC)",
+                "secondary_sample_accession": "SRS7",
+                "run_accession": "SRR7",
+                "fastq_md5": "123;abc",
+                "fastq_ftp": "ftp.sra.example.org/vol/fastq/SRR7/SRR7_1.fastq.gz;ftp.sra.example.org/vol/fastq/SRR7/SRR7_2.fastq.gz",
+                "library_layout": "PAIRED",
+                "library_strategy": "WGA",
+                "library_source": "METATRANSCRIPTOMIC",
+                "scientific_name": "metagenome",
+                "host_tax_id": "7460",
+                "host_scientific_name": "Apis mellifera",
+                "instrument_platform": "ILLUMINA",
+                "instrument_model": "Illumina MiSeq",
+                "lat": "52",
+                "lon": "0",
+                "location": "hinxton",
+            },
+            {
+                "sample_accession": "SAMN08",
+                "sample_title": "Wookie hair 8 (PE labeled as SE, should use changed LL)",
+                "secondary_sample_accession": "SRS8",
+                "run_accession": "SRR8",
+                "fastq_md5": "123;abc",
+                "fastq_ftp": "ftp.sra.example.org/vol/fastq/SRR8/SRR8_1.fastq.gz;ftp.sra.example.org/vol/fastq/SRR8/SRR8_2.fastq.gz",
+                "library_layout": "SINGLE",
+                "library_strategy": "WGS",
+                "library_source": "METAGENOMIC",
+                "scientific_name": "metagenome",
+                "host_tax_id": "7460",
+                "host_scientific_name": "Apis mellifera",
+                "instrument_platform": "ILLUMINA",
+                "instrument_model": "Illumina MiSeq",
+                "lat": "52",
+                "lon": "0",
+                "location": "hinxton",
+            },
+            {
+                "sample_accession": "SAMN09",
+                "sample_title": "Wookie hair 9 (SE labeled as PE, should use changed LL)",
+                "secondary_sample_accession": "SRS9",
+                "run_accession": "SRR9",
+                "fastq_md5": "123;abc",
+                "fastq_ftp": "ftp.sra.example.org/vol/fastq/SRR9/SRR9.fastq.gz",
+                "library_layout": "PAIRED",
+                "library_strategy": "WGA",
+                "library_source": "METAGENOMIC",
+                "scientific_name": "metagenome",
+                "host_tax_id": "7460",
+                "host_scientific_name": "Apis mellifera",
+                "instrument_platform": "ILLUMINA",
+                "instrument_model": "Illumina MiSeq",
+                "lat": "52",
+                "lon": "0",
+                "location": "hinxton",
+            },
         ],
     )
 
@@ -217,6 +307,7 @@ def test_prefect_assemble_study_flow(
                 webin_owner=None,
                 watchers=[user_choices[admin_user.username]],
                 wait_for_samplesheet_editing=False,
+                library_strategy_policy=ENALibraryStrategyPolicy.ONLY_IF_CORRECT_IN_ENA,
             )
 
     mock_suspend_flow_run.side_effect = suspend_side_effect
@@ -232,49 +323,54 @@ def test_prefect_assemble_study_flow(
         file.write("SRR1,metaspades,3.15.5\n")
         file.write("SRR3,megahit,1.2.9\n")
         file.write("SRR4,flye,2.9.5\n")
-        file.write("SRR5,spades,3.15.5")
+        file.write("SRR5,spades,3.15.5\n")
+        file.write("SRR6,metaspades,3.15.5\n")
+        file.write("SRR7,metaspades,3.15.5\n")
+        file.write("SRR8,metaspades,3.15.5\n")
+        file.write("SRR9,megahit,1.2.9")
 
     with open(f"{assembly_folder}/qc_failed_runs.csv", "w") as file:
         file.write("SRR2,filter_ratio_threshold_exceeded")
 
     # create fake results folders
-    os.makedirs(
+    created_coverage_folders = [
         f"{assembly_folder}/PRJNA1/PRJNA1/SRR1/SRR1/assembly/metaspades/3.15.5/coverage/",
-        exist_ok=True,
-    )
-    os.makedirs(
         f"{assembly_folder}/PRJNA1/PRJNA1/SRR3/SRR3/assembly/megahit/1.2.9/coverage/",
-        exist_ok=True,
-    )
-    os.makedirs(
+        f"{assembly_folder}/PRJNA1/PRJNA1/SRR3/SRR3/assembly/megahit/1.2.9/coverage/",
         f"{assembly_folder}/PRJNA1/PRJNA1/SRR4/SRR4/assembly/flye/2.9.5/coverage/",
-        exist_ok=True,
-    )
-    os.makedirs(
         f"{assembly_folder}/PRJNA1/PRJNA1/SRR5/SRR5/assembly/spades/3.15.5/coverage/",
-        exist_ok=True,
-    )
+        f"{assembly_folder}/PRJNA1/PRJNA1/SRR6/SRR6/assembly/metaspades/3.15.5/coverage/",
+        f"{assembly_folder}/PRJNA1/PRJNA1/SRR7/SRR7/assembly/metaspades/3.15.5/coverage/",
+        f"{assembly_folder}/PRJNA1/PRJNA1/SRR8/SRR8/assembly/metaspades/3.15.5/coverage/",
+        f"{assembly_folder}/PRJNA1/PRJNA1/SRR9/SRR9/assembly/megahit/1.2.9/coverage/",
+    ]
+
+    for folder in created_coverage_folders:
+        os.makedirs(
+            folder,
+            exist_ok=True,
+        )
+
     # create fake coverage files
-    with open(
+    created_coverage_files = [
         f"{assembly_folder}/PRJNA1/PRJNA1/SRR1/SRR1/assembly/metaspades/3.15.5/coverage/SRR1_coverage.json",
-        "w",
-    ) as file:
-        json.dump({"coverage": 0.04760503915318373, "coverage_depth": 273.694}, file)
-    with open(
         f"{assembly_folder}/PRJNA1/PRJNA1/SRR3/SRR3/assembly/megahit/1.2.9/coverage/SRR3_coverage.json",
-        "w",
-    ) as file:
-        json.dump({"coverage": 0.04960503915318373, "coverage_depth": 273.694}, file)
-    with open(
         f"{assembly_folder}/PRJNA1/PRJNA1/SRR4/SRR4/assembly/flye/2.9.5/coverage/SRR4_coverage.json",
-        "w",
-    ) as file:
-        json.dump({"coverage": 0.049, "coverage_depth": 276.694}, file)
-    with open(
         f"{assembly_folder}/PRJNA1/PRJNA1/SRR5/SRR5/assembly/spades/3.15.5/coverage/SRR5_coverage.json",
-        "w",
-    ) as file:
-        json.dump({"coverage": 0.049, "coverage_depth": 276.694}, file)
+        f"{assembly_folder}/PRJNA1/PRJNA1/SRR6/SRR6/assembly/metaspades/3.15.5/coverage/SRR6_coverage.json",
+        f"{assembly_folder}/PRJNA1/PRJNA1/SRR7/SRR7/assembly/metaspades/3.15.5/coverage/SRR7_coverage.json",
+        f"{assembly_folder}/PRJNA1/PRJNA1/SRR8/SRR8/assembly/metaspades/3.15.5/coverage/SRR8_coverage.json",
+        f"{assembly_folder}/PRJNA1/PRJNA1/SRR9/SRR9/assembly/megahit/1.2.9/coverage/SRR9_coverage.json",
+    ]
+
+    for cov_file in created_coverage_files:
+        with open(
+            cov_file,
+            "w",
+        ) as file:
+            json.dump(
+                {"coverage": 0.04760503915318373, "coverage_depth": 273.694}, file
+            )
 
     ### RUN WORKFLOW ###
     assemble_study(accession, upload=False)
@@ -324,7 +420,7 @@ def test_prefect_assemble_study_flow(
         analyses.models.Assembly.objects.filter(
             assembler__name__iexact="megahit"
         ).count()
-        == 1
+        == 2
     )
     # but platform ION_TORRENT SE should be assembled with spades
     assert (
@@ -338,7 +434,7 @@ def test_prefect_assemble_study_flow(
         analyses.models.Assembly.objects.filter(
             assembler__name__iexact="metaspades"
         ).count()
-        == 2
+        == 5
     )
     # platform OXFORD_NANOPORE should be assembled with Flye as LR
     assert (
@@ -493,6 +589,7 @@ def test_prefect_assemble_private_study_flow(
                 webin_owner="Webin-1",
                 watchers=[user_choices[admin_user.username]],
                 wait_for_samplesheet_editing=False,
+                library_strategy_policy=ENALibraryStrategyPolicy.ONLY_IF_CORRECT_IN_ENA,
             )
 
     mock_suspend_flow_run.side_effect = suspend_side_effect

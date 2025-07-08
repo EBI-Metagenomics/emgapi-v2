@@ -107,51 +107,50 @@ def make_samplesheet(
                 }.get(platform, str(platform).lower()),
             ),
             "assembler": SamplesheetColumnSource(
-                lookup_string=[
-                    f"run__metadata__{analyses.models.Run.CommonMetadataKeys.LIBRARY_LAYOUT}",
-                    f"run__metadata__{analyses.models.Run.CommonMetadataKeys.INSTRUMENT_PLATFORM}",
-                ],
                 # PACBIO_SMRT and OXFORD_NANOPORE - flye
                 # SE platform ION_TORRENT         - spades
                 # other SE                        - megahit
                 # all the rest (mostly illumina)  - metaspades
-                renderer=lambda layout, platform: (
+                pass_whole_object=True,
+                renderer=lambda assembly: (
                     analyses.models.Assembler.FLYE
-                    if platform
+                    if assembly.run.metadata_preferring_inferred.get(
+                        analyses.models.Run.CommonMetadataKeys.INSTRUMENT_PLATFORM
+                    )
                     in {
                         analyses.models.Run.InstrumentPlatformKeys.PACBIO_SMRT,
                         analyses.models.Run.InstrumentPlatformKeys.OXFORD_NANOPORE,
                     }
                     else (
                         analyses.models.Assembler.SPADES
-                        if layout == SINGLE_END_LIBRARY_LAYOUT
-                        and platform
+                        if assembly.run.metadata_preferring_inferred.get(
+                            analyses.models.Run.CommonMetadataKeys.LIBRARY_LAYOUT
+                        )
+                        == SINGLE_END_LIBRARY_LAYOUT
+                        and assembly.run.metadata_preferring_inferred.get(
+                            analyses.models.Run.CommonMetadataKeys.INSTRUMENT_PLATFORM
+                        )
                         == analyses.models.Run.InstrumentPlatformKeys.ION_TORRENT
                         else (
                             analyses.models.Assembler.MEGAHIT
-                            if layout == SINGLE_END_LIBRARY_LAYOUT
+                            if assembly.run.metadata_preferring_inferred.get(
+                                analyses.models.Run.CommonMetadataKeys.LIBRARY_LAYOUT
+                            )
+                            == SINGLE_END_LIBRARY_LAYOUT
                             else assembler.name.lower()
                         )
                     )
                 ),
             ),
-            "assembly_memory": SamplesheetColumnSource(
-                lookup_string="id", renderer=lambda _: memory
-            ),
-            "contaminant_reference": SamplesheetColumnSource(
-                lookup_string="id", renderer=lambda _: contaminant_reference or ""
-            ),
+            "assembly_memory": str(memory),
+            "contaminant_reference": contaminant_reference or "",
             # The following 2 fields are needed in the sampleshseet, but the production setup of the pipeline
             # sets these for the whole samplesheet. Also, if the human_reference global parameter and human_reference
             # in the samplesheet are empty, the pipeline will fail (the user needs to provide a
             # skip_human_decontamination flag).
             # Reference doc -> https://github.com/EBI-Metagenomics/miassembler?tab=readme-ov-file#usage
-            "human_reference": SamplesheetColumnSource(
-                lookup_string="id", renderer=lambda _: ""
-            ),
-            "phix_reference": SamplesheetColumnSource(
-                lookup_string="id", renderer=lambda _: ""
-            ),
+            "human_reference": "",
+            "phix_reference": "",
         },
         bludgeon=True,
     )

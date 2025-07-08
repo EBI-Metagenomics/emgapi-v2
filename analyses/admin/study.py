@@ -23,8 +23,6 @@ from emgapiv2.widgets import StatusPathwayWidget
 
 class StudyRunsInline(TabularInlinePaginatedWithTabSupport):
     model = Run
-    pagination_key = "study_runs_page"
-    per_page = 10
 
     show_change_link = True
     fields = [
@@ -64,8 +62,6 @@ class StudyAssembliesInline(TabularInlinePaginatedWithTabSupport):
     readonly_fields = ["run"]
     max_num = 0
     fk_name = "assembly_study"
-    pagination_key = "study_assemblies_page"
-    per_page = 10
     formfield_overrides = {
         models.JSONField: {
             "widget": StatusPathwayWidget(
@@ -92,8 +88,6 @@ class StudyReadsInline(TabularInlinePaginatedWithTabSupport):
     readonly_fields = ["run"]
     max_num = 0
     fk_name = "reads_study"
-    pagination_key = "study_assemblies_reads_page"
-    per_page = 10
     formfield_overrides = {
         models.JSONField: {
             "widget": StatusPathwayWidget(
@@ -116,6 +110,7 @@ class StudyAdmin(ENABrowserLinkMixin, JSONFieldWidgetOverridesMixin, ModelAdmin)
     inlines = [StudyRunsInline, StudyAssembliesInline, StudyReadsInline]
     list_display = ["accession", "updated_at", "title", "display_accessions"]
     list_filter = ["updated_at", "created_at", "is_private", "watchers"]
+    filter_horizontal = ("watchers",)
     search_fields = [
         "accession",
         "title",

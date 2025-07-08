@@ -122,6 +122,39 @@ def test_get_study_from_ena_use_secondary_as_primary(httpx_mock, prefect_harness
     assert len(created_study.additional_accessions) == 1
 
 
+@pytest.mark.httpx_mock
+@pytest.mark.django_db(transaction=True)
+def test_get_study_only_available_in_ena_portal(httpx_mock, prefect_harness):
+    """
+    Required study is in ena portal, but not in metagenome portal
+    """
+    sec_study_accession = "SRP0009034"
+    httpx_mock.add_response(
+        url=f"{EMG_CONFIG.ena.portal_search_api}?result=study&query=%22secondary_study_accession={sec_study_accession}%22&limit=10&format=json&fields={','.join(EMG_CONFIG.ena.study_metadata_fields)}&dataPortal=metagenome",
+        json=[],
+    )
+    httpx_mock.add_response(
+        url=f"{EMG_CONFIG.ena.portal_search_api}?result=study&query=%22secondary_study_accession={sec_study_accession}%22&limit=10&format=json&fields={','.join(EMG_CONFIG.ena.study_metadata_fields)}&dataPortal=ena",
+        json=[
+            {
+                "study_title": "I wanted to be normal, but they put me in ena portal",
+                "study_accession": "PRJNA109315",
+                "secondary_study_accession": f"{sec_study_accession}",
+            },
+        ],
+    )
+    request = ENAAPIRequest(
+        result=ENAPortalResultType.STUDY,
+        limit=10,
+        query=ENAStudyQuery(secondary_study_accession=sec_study_accession),
+        fields=[
+            ENAStudyFields[f.upper()] for f in EMG_CONFIG.ena.study_metadata_fields
+        ],
+        data_portals=[ENAPortalDataPortal.METAGENOME, ENAPortalDataPortal.ENA],
+    ).get()
+    assert "I wanted to be normal" in request[0]["study_title"]
+
+
 @pytest.mark.httpx_mock(should_mock=should_not_mock_httpx_requests_to_prefect_server)
 @pytest.mark.django_db(transaction=True)
 def test_get_study_from_ena_no_secondary_accession(httpx_mock, prefect_harness):
@@ -748,7 +781,7 @@ def test_ena_api_query_maker(httpx_mock):
             ENAStudyFields.SECONDARY_STUDY_ACCESSION,
         ],
         limit=10,
-        data_portal=ENAPortalDataPortal.METAGENOME,
+        data_portals=[ENAPortalDataPortal.METAGENOME],
     )
 
     assert request.model_dump(by_alias=True) == {
@@ -877,4 +910,39 @@ def test_ena_accession_parsing_from_study_title():
             "Metagenomics assembly of PRJNA000001 and PRJNA000002"
         )
         is None
+    )
+
+
+def test_library_strategy_policy_to_filter():
+    # Test ONLY_IF_CORRECT_IN_ENA policy
+    assert library_strategy_policy_to_filter(
+        primary_library_strategy="WGS",
+        policy=ENALibraryStrategyPolicy.ONLY_IF_CORRECT_IN_ENA,
+    ) == ["WGS"]
+
+    assert library_strategy_policy_to_filter(
+        primary_library_strategy="WGS",
+        other_library_strategies=["RNA-Seq"],
+        policy=ENALibraryStrategyPolicy.ONLY_IF_CORRECT_IN_ENA,
+    ) == ["WGS", "RNA-Seq"]
+
+    # Test ASSUME_OTHER_ALSO_MATCHES policy
+    assert library_strategy_policy_to_filter(
+        primary_library_strategy="WGS",
+        policy=ENALibraryStrategyPolicy.ASSUME_OTHER_ALSO_MATCHES,
+    ) == ["WGS", "OTHER"]
+
+    assert library_strategy_policy_to_filter(
+        primary_library_strategy="WGS",
+        other_library_strategies=["RNA-Seq"],
+        policy=ENALibraryStrategyPolicy.ASSUME_OTHER_ALSO_MATCHES,
+    ) == ["WGS", "RNA-Seq", "OTHER"]
+
+    # Test OVERRIDE_ALL policy
+    assert (
+        library_strategy_policy_to_filter(
+            primary_library_strategy="WGS",
+            policy=ENALibraryStrategyPolicy.OVERRIDE_ALL,
+        )
+        == []
     )

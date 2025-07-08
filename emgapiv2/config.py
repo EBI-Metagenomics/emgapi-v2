@@ -6,6 +6,8 @@ from pydantic import AnyHttpUrl, BaseModel, Field
 from pydantic.networks import MongoDsn, MySQLDsn
 from pydantic_settings import BaseSettings
 
+from workflows.ena_utils.abstract import ENAPortalDataPortal
+
 
 class SlurmConfig(BaseModel):
     default_job_status_checks_limit: int = 10
@@ -131,6 +133,10 @@ class WebinConfig(BaseModel):
 
 class ENAConfig(BaseModel):
     portal_search_api: AnyHttpUrl = "https://www.ebi.ac.uk/ena/portal/api/search"
+    portal_search_api_default_data_portals: list[ENAPortalDataPortal] = [
+        ENAPortalDataPortal.METAGENOME,
+        ENAPortalDataPortal.ENA,
+    ]
     portal_search_api_max_retries: int = 4
     portal_search_api_retry_delay_seconds: int = 15
     browser_view_url_prefix: AnyHttpUrl = "https://www.ebi.ac.uk/ena/browser/view"

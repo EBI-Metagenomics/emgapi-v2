@@ -7,7 +7,6 @@ from django.db.models import JSONField, Q
 from django.forms import Field
 from django.http import HttpRequest
 from django.shortcuts import redirect
-from django_admin_inline_paginator_plus.admin import InlinePaginated
 from unfold.admin import ModelAdmin, TabularInline
 from unfold.contrib.filters.admin import TextFilter
 from unfold.contrib.forms.widgets import ArrayWidget
@@ -17,14 +16,14 @@ from analyses.admin.widgets import ENAAccessionsListWidget, JSONTreeWidget
 from analyses.base_models.base_models import ENADerivedModel
 
 
-class TabularInlinePaginatedWithTabSupport(InlinePaginated, TabularInline):
+class TabularInlinePaginatedWithTabSupport(TabularInline):
     """
     Unfold tabular inline, plus support for paginating the inline.
     Tab = true gives the inline a whole tab of its own in unfold admin page.
     """
 
-    template = "admin/tabular_inline_paginated_tabbed.html"
     tab = True
+    per_page = 10
 
 
 class StudyFilter(TextFilter):

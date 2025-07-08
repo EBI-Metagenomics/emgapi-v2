@@ -23,6 +23,7 @@ from analyses.base_models.base_models import (
     PrivacyFilterManagerMixin,
     TimeStampedModel,
     VisibilityControlledModel,
+    InferredMetadataMixin,
 )
 from analyses.base_models.mgnify_accessioned_models import MGnifyAccessionField
 from analyses.base_models.with_downloads_models import WithDownloadsModel
@@ -212,7 +213,9 @@ class WithExperimentTypeModel(models.Model):
 class PublicRunManager(PrivacyFilterManagerMixin, models.Manager): ...
 
 
-class Run(TimeStampedModel, ENADerivedModel, WithExperimentTypeModel):
+class Run(
+    InferredMetadataMixin, TimeStampedModel, ENADerivedModel, WithExperimentTypeModel
+):
     CommonMetadataKeys = ENAReadRunFields
     extend_enum(
         CommonMetadataKeys, "FASTQ_FTPS", "fastq_ftps"
@@ -257,23 +260,26 @@ class Run(TimeStampedModel, ENADerivedModel, WithExperimentTypeModel):
     def set_experiment_type_by_metadata(
         self, ena_library_strategy: str, ena_library_source: str
     ):
+        ALLOWED_WHOLE_GENOME_LIBRARY_STRATEGIES = ["wgs", "wga"]
+        ALLOWED_AMPLICON_LIBRARY_STRATEGIES = ["amplicon"]
+
         if ena_library_strategy.lower() == "rna-seq" and (
             ena_library_source.lower() == "metagenomic"
             or ena_library_source.lower() == "metatranscriptomic"
         ):
             self.experiment_type = Run.ExperimentTypes.METATRANSCRIPTOMIC
         elif (
-            ena_library_strategy.lower() == "wgs"
+            ena_library_strategy.lower() in ALLOWED_WHOLE_GENOME_LIBRARY_STRATEGIES
             and ena_library_source.lower() == "metatranscriptomic"
         ):
             self.experiment_type = Run.ExperimentTypes.METATRANSCRIPTOMIC
         elif (
-            ena_library_strategy.lower() == "wgs"
+            ena_library_strategy.lower() in ALLOWED_WHOLE_GENOME_LIBRARY_STRATEGIES
             and ena_library_source.lower() == "metagenomic"
         ):
             self.experiment_type = Run.ExperimentTypes.METAGENOMIC
         elif (
-            ena_library_strategy.lower() == "amplicon"
+            ena_library_strategy.lower() in ALLOWED_AMPLICON_LIBRARY_STRATEGIES
             and ena_library_source.lower() == "metagenomic"
         ):
             self.experiment_type = Run.ExperimentTypes.AMPLICON
@@ -319,7 +325,7 @@ class AssemblyManager(SelectByStatusManagerMixin, ENADerivedManager):
 class PublicAssemblyManager(PrivacyFilterManagerMixin, AssemblyManager): ...
 
 
-class Assembly(TimeStampedModel, ENADerivedModel):
+class Assembly(InferredMetadataMixin, TimeStampedModel, ENADerivedModel):
     objects = AssemblyManager()
     public_objects = PublicAssemblyManager()
 
@@ -555,6 +561,7 @@ class PublicAnalysisManagerIncludingAnnotations(
 
 
 class Analysis(
+    InferredMetadataMixin,
     TimeStampedModel,
     VisibilityControlledModel,
     WithDownloadsModel,

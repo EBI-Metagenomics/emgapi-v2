@@ -12,7 +12,7 @@ import analyses.models
 import ena.models
 from emgapiv2.dict_utils import some
 from emgapiv2.enum_utils import FutureStrEnum
-from workflows.ena_utils.abstract import ENAPortalResultType, ENAPortalDataPortal
+from workflows.ena_utils.abstract import ENAPortalResultType
 from workflows.ena_utils.analysis import ENAAnalysisFields, ENAAnalysisQuery
 from workflows.ena_utils.ena_accession_matching import (
     extract_all_accessions,
@@ -35,6 +35,10 @@ RETRY_DELAY = EMG_CONFIG.ena.portal_search_api_retry_delay_seconds
 
 
 class ENALibraryStrategyPolicy(FutureStrEnum):
+    """
+    Each policy determines a trust vs. override level for the library strategy metadata in ENA.
+    """
+
     ONLY_IF_CORRECT_IN_ENA = "only_if_correct_in_ena"
     ASSUME_OTHER_ALSO_MATCHES = "assume_other_also_matches"
     OVERRIDE_ALL = "override_all"
@@ -89,7 +93,6 @@ def get_study_from_ena(accession: str, limit: int = 10) -> ena.models.Study:
         limit=limit,
         query=ENAStudyQuery(study_accession=accession)
         | ENAStudyQuery(secondary_study_accession=accession),
-        data_portal=ENAPortalDataPortal.METAGENOME,
     ).get(auth=ena_auth)
 
     s = portal[0]
@@ -326,7 +329,6 @@ def get_study_readruns_from_ena(
         ],
         limit=limit,
         query=query,
-        data_portal=ENAPortalDataPortal.METAGENOME,
     ).get(auth=ena_auth, raise_on_empty=raise_on_empty)
 
     run_accessions = []
@@ -391,7 +393,6 @@ def is_study_available(accession: str, auth: Optional[Type[Auth]] = None) -> boo
             ),
             format="json",
             fields=[ENAStudyFields.STUDY_ACCESSION],
-            data_portal=ENAPortalDataPortal.METAGENOME,
         ).get(auth=auth)
     except ENAAvailabilityException as e:
         logger.info(f"Looks like an error-free empty response from ENA: {e}")
@@ -511,7 +512,6 @@ def get_study_assemblies_from_ena(accession: str, limit: int = 10) -> list[str]:
         limit=limit,
         query=ENAAnalysisQuery(study_accession=accession)
         | ENAAnalysisQuery(secondary_study_accession=accession),
-        data_portal=ENAPortalDataPortal.METAGENOME,
     ).get(auth=ena_auth)
 
     # read-runs may exist in same study as the assemblies

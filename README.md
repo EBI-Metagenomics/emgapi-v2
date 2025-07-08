@@ -163,8 +163,62 @@ This is bidi: it creates a `manage.py prefectcli` command to run Prefect, and it
 
 The API is implemented with `ninja` (`emgapiv2/api.py`), and uses Open API spec with Swagger.
 
+#### Model Helpers and Utilities
+
+The `analyses/base_models/base_models.py` file contains several useful mixins and base classes:
+
+- `GetByENAAccessionManagerMixin`: Since many MGnify models share or relate to ENA objects with multiple accessions (e.g. primary/secondary), this provides a method to get objects by any of their ENA accessions.
+- `UpdateOrCreateByAccessionManagerMixin`: A more useful way to get/create objects by accession whilst merging/setting metadata.
+- `InferredMetadataMixin`: A mixin for models with a `metadata={}` field that may contain an original dictionary key (e.g. `library_strategy`) which we know has incorrect metadata, so we also include an `inferred_library_strategy` dictionary key. This mixin provides a `metadata_preferring_inferred` property.
+- `ENADerivedModel`: A base model for objects derived from ENA objects – especially those which should follow ENA accessions/visibility/privacy/suppression etc. Look for Django signals based on this.
+
 ### Writing flows
 See [the workflows/README.md](workflows/README.md) for details. In short: add Python/Prefect code to a file in `workflows/flows/` and then `FLOW=my_flow task deploy-flow`.
+
+### Handling data files
+The key things to look for here are `DownloadFile` and `WithDownloadsModel` – these are how data files are attached to objects in the DB.
+
+The `workflows/data_io_utils/file_rules/` directory contains utilities for validating files and directories:
+
+- `FileExistsRule`, `FileIsNotEmptyRule`, `DirectoryExistsRule`: Simple rules for checking file/directory existence and content.
+- `GlobHasFilesCountRule`: A rule that uses Python's slice notation to specify constraints on the number of files matching a glob pattern. For example:
+  ```python
+  GlobHasFilesCountRule[2]     # Exactly 2 files
+  GlobHasFilesCountRule[:10]   # At most 10 files
+  GlobHasFilesCountRule[3:]    # At least 3 files
+  GlobHasFilesCountRule[2:4]   # Between 2 and 4 files
+  ```
+
+### Getting data from ENA
+ENA metadata is fetched from the ENA APIs, usually the portal API.
+See `workflows/ena_utils/` for an implementation of the ENA API.
+For example:
+```python
+request = ENAAPIRequest(
+    result=ENAPortalResultType.STUDY,
+    query=(
+        ENAStudyQuery(study_accession="ERP1")
+        | ENAStudyQuery(secondary_study_accession="ERP1")
+    )
+    & ENAStudyQuery(tax_id="408170"),
+    fields=[
+        ENAStudyFields.STUDY_NAME,
+        ENAStudyFields.STUDY_ACCESSION,
+        ENAStudyFields.TAX_ID,
+        ENAStudyFields.SECONDARY_STUDY_ACCESSION,
+    ],
+    limit=10,
+    data_portals=[ENAPortalDataPortal.METAGENOME],
+)
+request.get(auth=dcc_auth)
+```
+
+ENA sequence data is usually fetched using FIRE/S3, by nextflow pipelines.
+See `convert_ena_ftp_to_fire_fastq()` for an implementation of converting datafile URLs from the API into FIRE paths for the pipelines.
+
+The pipelines usually run on a **samplesheet** of multiple samples/runs/assemblies etc.
+This helps with parallelisation since nextflow handles the dispatching of work across multiple runs.
+See `workflows/nextflow_utils/samplesheets.py` for an implementation of helpers that write samplesheets (CSV files) based on Django querysets.
 
 ### Testing
 The project uses the [pytest](https://docs.pytest.org) framework.
@@ -179,6 +233,12 @@ task test
 task test -- -k study
 ```
 
+#### Testing Utilities
+
+The `workflows/prefect_utils/testing_utils.py` file contains utilities for testing Prefect flows:
+
+- `run_flow_and_capture_logs` and `run_async_flow_and_capture_logs`: Run Prefect flows and capture their logs, working around issues with pytest's caplog.
+- `should_not_mock_httpx_requests_to_prefect_server`: A function used with httpx mocking to prevent mocking of requests to the Prefect server during tests.
 
 ### Interacting with the Slurm development environment
 See [the slurm-dev-environment/README.md](slurm-dev-environment/README.md) for details. In short: `task slurm` and you're on a slurm node
