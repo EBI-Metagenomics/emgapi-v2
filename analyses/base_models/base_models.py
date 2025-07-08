@@ -230,5 +230,5 @@ class InferredMetadataMixin:
             return self.get(item)
 
     @property
-    def inferred_metadata(self: HasMetadata):
+    def metadata_preferring_inferred(self: HasMetadata):
         return InferredMetadataMixin._MetadataDictPreferringInferred(self.metadata)

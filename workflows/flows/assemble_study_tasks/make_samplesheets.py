@@ -114,7 +114,7 @@ def make_samplesheet(
                 pass_whole_object=True,
                 renderer=lambda assembly: (
                     analyses.models.Assembler.FLYE
-                    if assembly.run.inferred_metadata.get(
+                    if assembly.run.metadata_preferring_inferred.get(
                         analyses.models.Run.CommonMetadataKeys.INSTRUMENT_PLATFORM
                     )
                     in {
@@ -123,17 +123,17 @@ def make_samplesheet(
                     }
                     else (
                         analyses.models.Assembler.SPADES
-                        if assembly.run.inferred_metadata.get(
+                        if assembly.run.metadata_preferring_inferred.get(
                             analyses.models.Run.CommonMetadataKeys.LIBRARY_LAYOUT
                         )
                         == SINGLE_END_LIBRARY_LAYOUT
-                        and assembly.run.inferred_metadata.get(
+                        and assembly.run.metadata_preferring_inferred.get(
                             analyses.models.Run.CommonMetadataKeys.INSTRUMENT_PLATFORM
                         )
                         == analyses.models.Run.InstrumentPlatformKeys.ION_TORRENT
                         else (
                             analyses.models.Assembler.MEGAHIT
-                            if assembly.run.inferred_metadata.get(
+                            if assembly.run.metadata_preferring_inferred.get(
                                 analyses.models.Run.CommonMetadataKeys.LIBRARY_LAYOUT
                             )
                             == SINGLE_END_LIBRARY_LAYOUT

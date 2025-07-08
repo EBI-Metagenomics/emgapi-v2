@@ -453,17 +453,17 @@ def test_inferred_metadata_mixin(raw_read_run):
     run.save()
 
     assert run.metadata == {}
-    assert run.inferred_metadata == {}
+    assert run.metadata_preferring_inferred == {}
 
     run.metadata = {"kessel_run": 20, "falcon": "millenium"}
     run.save()
-    assert run.inferred_metadata["kessel_run"] == 20
-    assert run.inferred_metadata["falcon"] == "millenium"
+    assert run.metadata_preferring_inferred["kessel_run"] == 20
+    assert run.metadata_preferring_inferred["falcon"] == "millenium"
     run.metadata["inferred_kessel_run"] = "20 parsecs"
     run.save()
     run.refresh_from_db()
     # some process has "inferred" an override value for kessel_run. that should be used instead of the original value,
-    # when metadata is fetched via inferred_metadata
-    assert run.inferred_metadata["kessel_run"] == "20 parsecs"
+    # when metadata is fetched via metadata_preferring_inferred
+    assert run.metadata_preferring_inferred["kessel_run"] == "20 parsecs"
     assert run.metadata["kessel_run"] == 20
-    assert run.inferred_metadata["falcon"] == "millenium"
+    assert run.metadata_preferring_inferred["falcon"] == "millenium"
