@@ -4,6 +4,7 @@ from django.utils import timezone
 from analyses.base_models.with_downloads_models import WithDownloadsModel
 from analyses.models import Biome
 from emgapiv2 import settings
+from emgapiv2.config import GenomeConfig
 
 
 class GenomeCatalogue(WithDownloadsModel):
@@ -43,12 +44,12 @@ class GenomeCatalogue(WithDownloadsModel):
         help_text="Total number of genomes in the catalogue (including cluster reps and members)",
     )
     ftp_url = models.CharField(
-        db_column="ftp_url", max_length=200, default=settings.MAGS_FTP_SITE
+        db_column="ftp_url", max_length=200, default=GenomeConfig.MAGS_FTP_SITE
     )
     pipeline_version_tag = models.CharField(
         db_column="pipeline_version_tag",
         max_length=20,
-        default=settings.LATEST_MAGS_PIPELINE_TAG,
+        default=GenomeConfig.LATEST_MAGS_PIPELINE_TAG,
     )
     catalogue_biome_label = models.CharField(
         db_column="catalogue_biome_label",
