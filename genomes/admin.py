@@ -9,6 +9,7 @@ from genomes.models import GenomeCatalogue, Genome
 class GenomeCatalogueAdmin(JSONFieldWidgetOverridesMixin, ModelAdmin):
     search_fields = ["name", "catalogue_id", "description"]
 
+
 @admin.register(Genome)
 class GenomeAdmin(JSONFieldWidgetOverridesMixin, ModelAdmin):
     search_fields = ["accession"]
