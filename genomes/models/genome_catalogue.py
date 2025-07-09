@@ -3,7 +3,6 @@ from django.utils import timezone
 
 from analyses.base_models.with_downloads_models import WithDownloadsModel
 from analyses.models import Biome
-from emgapiv2 import settings
 from emgapiv2.config import GenomeConfig
 
 
