@@ -191,3 +191,7 @@ class EMGConfig(BaseSettings):
         "env_prefix": "emg_",
         "env_nested_delimiter": "__",
     }
+
+class GenomeConfig:
+    MAGS_FTP_SITE: str = "http://ftp.ebi.ac.uk/pub/databases/metagenomics/mgnify_genomes/"
+    LATEST_MAGS_PIPELINE_TAG: str = "v1.2.1"
