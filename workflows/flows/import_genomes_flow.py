@@ -3,6 +3,7 @@ import re
 from pathlib import Path
 
 import django
+from django.db import close_old_connections
 from prefect import task, flow, get_run_logger
 
 django.setup()
@@ -112,10 +113,11 @@ def process_genome_dir(catalogue, genome_dir):
 
     genome_data = clean_genome_data(genome_data)
 
+    close_old_connections()
     genome, _ = Genome.objects.update_or_create(
         accession=accession, defaults=genome_data
     )
-    genome.save()
+
 
     logger.info(f"Uploaded genome and metadata for {accession}")
 
@@ -179,6 +181,7 @@ def import_genomes_flow(
     )
     genome_accessions = []
     for genome_dir in genome_dirs:
+        close_old_connections()
         genome_accession = process_genome_dir(catalogue, genome_dir)
         genome_accessions.append(genome_accession)
     logger = get_run_logger()
