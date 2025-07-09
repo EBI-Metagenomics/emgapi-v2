@@ -118,7 +118,6 @@ def process_genome_dir(catalogue, genome_dir):
         accession=accession, defaults=genome_data
     )
 
-
     logger.info(f"Uploaded genome and metadata for {accession}")
 
     upload_cog_results(genome, genome_dir)
