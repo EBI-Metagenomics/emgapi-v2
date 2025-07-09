@@ -70,7 +70,6 @@ def run_amplicon_pipeline_via_samplesheet(
             ("--input", samplesheet),
             ("--outdir", amplicon_current_outdir),
             EMG_CONFIG.slurm.use_nextflow_tower and "-with-tower",
-            ("-name", f"ampl-v6-sheet-{slugify(samplesheet)[-10:]}"),
             ("-ansi-log", "false"),
         ]
     )

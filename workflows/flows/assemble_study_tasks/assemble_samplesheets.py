@@ -230,10 +230,6 @@ def run_assembler_for_samplesheet(
             mgnify_study.is_private and "--private_study",
             ("--outdir", miassembler_outdir),
             EMG_CONFIG.slurm.use_nextflow_tower and "-with-tower",
-            (
-                "-name",
-                f"miassembler-samplesheet-{file_path_shortener(samplesheet_csv, 1, 15, True)}",
-            ),
         ]
     )
 
