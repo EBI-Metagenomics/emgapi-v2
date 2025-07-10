@@ -229,6 +229,7 @@ def run_assembler_for_samplesheet(
             ("--samplesheet", samplesheet_csv),
             mgnify_study.is_private and "--private_study",
             ("--outdir", miassembler_outdir),
+            ("--workdir", miassembler_outdir),
             EMG_CONFIG.slurm.use_nextflow_tower and "-with-tower",
         ]
     )
