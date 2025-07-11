@@ -1,0 +1,23 @@
+Assembly	ERZ857107_renamed	ERZ857107_filtered
+# contigs (>= 0 bp)	376	376
+# contigs (>= 1000 bp)	220	220
+# contigs (>= 5000 bp)	47	47
+# contigs (>= 10000 bp)	34	34
+# contigs (>= 25000 bp)	10	10
+# contigs (>= 50000 bp)	2	2
+Total length (>= 0 bp)	1328565	1328565
+Total length (>= 1000 bp)	1213551	1213551
+Total length (>= 5000 bp)	848199	848199
+Total length (>= 10000 bp)	755531	755531
+Total length (>= 25000 bp)	380147	380147
+Total length (>= 50000 bp)	110427	110427
+# contigs	376	376
+Largest contig	60363	60363
+Total length	1328565	1328565
+GC (%)	50.44	50.44
+N50	13873	13873
+N90	1108	1108
+auN	17722.2	17722.2
+L50	26	26
+L90	203	203
+# N's per 100 kbp	0.00	0.00

@@ -5,7 +5,10 @@ from django.core.management import call_command
 
 from analyses.models import Biome, Run, Analysis
 from workflows.flows.analyse_study_tasks.import_completed_amplicon_analyses import (
-    import_completed_analysis,
+    import_completed_analysis as import_completed_amplicon_analysis,
+)
+from workflows.flows.analyse_study_tasks.import_completed_assembly_analyses import (
+    import_completed_assembly_analysis,
 )
 
 
@@ -66,7 +69,31 @@ def amplicon_analysis_with_downloads(
         },
     }
     analysis.save()
-    import_completed_analysis(analysis)
+    import_completed_amplicon_analysis(analysis)
+
+
+@pytest.fixture
+@patch("workflows.flows.analyse_study_tasks.copy_v6_pipeline_results.move_data")
+def assembly_analysis_with_downloads(mock_copy_flow, mgnify_assemblies_completed):
+    assem = mgnify_assemblies_completed[0]
+    assem.add_erz_accession(
+        "ERZ857107"
+    )  # n.b. does not correspond to this run in real ena
+
+    study = assem.reads_study
+    sample = assem.sample
+
+    analysis = Analysis.objects.create(
+        ena_study=study.ena_study,
+        study=study,
+        experiment_type=Run.ExperimentTypes.ASSEMBLY,
+        sample=sample,
+        assembly=assem,
+    )
+    analysis.mark_status(analysis.AnalysisStates.ANALYSIS_COMPLETED)
+    analysis.results_dir = "/app/data/tests/assembly_v6_output/ERZ857107/ERZ857107"
+    analysis.save()
+    import_completed_assembly_analysis(analysis)
 
 
 @pytest.mark.dev_data_maker
@@ -78,12 +105,13 @@ def test_make_dev_data(
     study_downloads,
     mgnify_assemblies_completed,
     amplicon_analysis_with_downloads,
+    assembly_analysis_with_downloads,
     prefect_harness,
     private_analysis_with_download,
     private_study_with_download,
 ):
     """
-    Dummy test that just sets up fixtures and dumps them to JSON for using as dev data.
+    Stub test that just sets up fixtures and dumps them to JSON for using as dev data.
     """
 
     assert Biome.objects.count() == 4
