@@ -1,3 +1,0 @@
-study_accession,reads_accession,library_strategy,library_layout,fastq_1,fastq_2,assembler,assembly_memory
-PRJEB49622,ERR7783797,metagenomic,paired,s3://era-public/fastq/ERR778/007/ERR7783797/ERR7783797_1.fastq.gz,s3://era-public/fastq/ERR778/007/ERR7783797/ERR7783797_2.fastq.gz,metaspades,80.0
-PRJEB49622,ERR7783799,metagenomic,paired,s3://era-public/fastq/ERR778/009/ERR7783799/ERR7783799_1.fastq.gz,s3://era-public/fastq/ERR778/009/ERR7783799/ERR7783799_2.fastq.gz,metaspades,80.0

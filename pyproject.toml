@@ -1,3 +1,8 @@
+[project]
+version = "2025.6.13"
+name = "emgapi-v2"
+requires-python = ">= 3.11"
+
 [tool.pytest.ini_options]
 DJANGO_SETTINGS_MODULE = "emgapiv2.settings_test"
 python_files = ["tests.py", "test_*.py", "*_tests.py"]
@@ -22,9 +27,6 @@ omit = ["*/tests/*", "*/migrations/*", "*settings*", "*asgi.py", "*wsgi.py", "*m
 ignore = ["E402"]  # allow imports after django.setup()
 exclude = ["emgapiv2/settings_test.py"]
 
-[tool.setuptools]
-python_requires = ">=3.10"
-
 [tool.prefect]
 logging.level = "INFO"
 # debug_mode = true
@@ -33,6 +35,7 @@ client.max_retries = 60 # 1 hour elapsed from first to last try, since delay inc
 client.retry_extra_codes = [404]  # for times when some traffic management between worker and prefect server breaks
 api.request_timeout = 120 # 2 mins
 server.api.keepalive_timeout = 60 # seconds
+
 
 #TODO, when ruff supports custom section-ordering
 #[tool.ruff.isort]

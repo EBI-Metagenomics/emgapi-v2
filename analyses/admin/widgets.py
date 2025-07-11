@@ -8,7 +8,7 @@ class ENAAccessionsListWidget(JSONEditorWidget):
             height="100px",
             width="30em",
             *args,
-            **kwargs
+            **kwargs,
         )
 
 

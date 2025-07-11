@@ -24,6 +24,37 @@ FileConformsToTaxonomyTSVSchemaRule = generate_csv_schema_file_rule(
     TaxonomyTSVRow, delimiter=CSVDelimiter.TAB, none_values=[""]
 )
 
+
+class RawReadsTaxonomyTSVRow(BaseModel):
+    read_count: Union[float, int] = Field(alias="Count")
+    sk_taxonomy: Optional[str] = Field(default=None, alias="Superkingdom")
+    k_taxonomy: Optional[str] = Field(default=None, alias="Kingdom")
+    p_taxonomy: Optional[str] = Field(default=None, alias="Phylum")
+    c_taxonomy: Optional[str] = Field(default=None, alias="Class")
+    o_taxonomy: Optional[str] = Field(default=None, alias="Order")
+    f_taxonomy: Optional[str] = Field(default=None, alias="Family")
+    g_taxonomy: Optional[str] = Field(default=None, alias="Genus")
+    s_taxonomy: Optional[str] = Field(default=None, alias="Species")
+
+
+FileConformsToRawReadsTaxonomyTSVSchemaRule = generate_csv_schema_file_rule(
+    RawReadsTaxonomyTSVRow, delimiter=CSVDelimiter.TAB, none_values=[""]
+)
+
+
+class FunctionalTSVRow(BaseModel):
+    function: str
+    read_count: Union[float, int]
+    coverage_depth: float
+    coverage_breadth: float
+
+    model_config = ConfigDict(extra="allow")
+
+
+FileConformsToFunctionalTSVSchemaRule = generate_csv_schema_file_rule(
+    FunctionalTSVRow, delimiter=CSVDelimiter.TAB, none_values=[""]
+)
+
 GlobOfTaxonomyFolderHasHtmlAndMseqRule = GlobRule(
     rule_name="Folder should contain html and mseq files",
     glob_patten="*",
@@ -32,7 +63,7 @@ GlobOfTaxonomyFolderHasHtmlAndMseqRule = GlobRule(
 
 GlobOfTaxonomyFolderHasHtmlAndKronaTxtRule = GlobRule(
     rule_name="Folder should contain html and krona txt files",
-    glob_patten="*",
+    glob_patten="**",
     test=lambda files: sum(f.suffix in [".html", ".txt"] for f in files) == 2,
 )
 
@@ -44,6 +75,24 @@ GlobOfQcFolderHasFastpAndMultiqc = GlobRule(
         for f in files
     )
     == 2,
+)
+
+GlobOfMultiqcFolderHasMultiqc = GlobRule(
+    rule_name="Folder should contain multiQC report file",
+    glob_patten="*",
+    test=lambda files: sum(f.name.endswith("multiqc_report.html") for f in files) == 1,
+)
+
+GlobOfQcFolderHasFastp = GlobRule(
+    rule_name="Folder should contain fastp file",
+    glob_patten="*/*",
+    test=lambda files: sum(f.name.endswith("fastp.json") for f in files) == 1,
+)
+
+GlobOfDecontamFolderHasSummaryStats = GlobRule(
+    rule_name="Folder should contain at least one summary stats file",
+    glob_patten="*/*",
+    test=lambda files: sum(f.name.endswith("summary_stats.txt") for f in files) > 0,
 )
 
 GlobOfAsvFolderHasRegionFolders = GlobRule(

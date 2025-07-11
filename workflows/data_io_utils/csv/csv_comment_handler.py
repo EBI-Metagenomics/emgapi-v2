@@ -72,7 +72,7 @@ class CommentAwareDictReader(csv.DictReader):
         delimiter: CSVDelimiter = CSVDelimiter.COMMA,
         comment_char: str = "#",
         none_values: Iterable[Hashable] = None,
-        **kwargs
+        **kwargs,
     ):
         """
         Initialize the CommentAwareDictReader.

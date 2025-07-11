@@ -97,6 +97,33 @@ class AmpliconPipelineConfig(BaseModel):
     keep_study_summary_partials: bool = False
 
 
+class RawReadsPipelineConfig(BaseModel):
+    rawreads_pipeline_repo: str = "ebi-metagenomics/raw-reads-analysis-pipeline"
+    rawreads_pipeline_git_revision: str = (
+        "master"  # branch or commit of ebi-metagenomics/raw-reads-analysis-pipeline
+    )
+    rawreads_pipeline_nf_profile: str = "codon"
+    samplesheet_chunk_size: int = 50
+    # results stats
+    completed_runs_csv: str = "qc_passed_runs.csv"
+    failed_runs_csv: str = "qc_failed_runs.csv"
+    # results folders
+    qc_folder: str = "qc-stats"
+    decontam_folder: str = "decontam-stats"
+    multiqc_folder: str = "multiqc"
+    study_multiqc_folder: str = "multiqc"
+    taxonomy_summary_folder: str = "taxonomy-summary"
+    function_summary_folder: str = "function-summary"
+    taxonomy_analysis_sources: set = {"SILVA-SSU", "SILVA-LSU", "mOTUs"}
+    function_analysis_sources: set = {"Pfam-A"}
+
+    rawreads_nextflow_master_job_memory_gb: int = 1
+    rawreads_pipeline_time_limit_days: int = 5
+
+    allow_non_insdc_run_names: bool = False
+    keep_study_summary_partials: bool = False
+
+
 class AssemblyAnalysisPipelineConfig(BaseModel):
     pipeline_repo: str = "ebi-metagenomics/assembly-analysis-pipeline"
     pipeline_git_revision: str = "dev"
@@ -187,6 +214,7 @@ class LogMaskingConfig(BaseModel):
 
 class EMGConfig(BaseSettings):
     amplicon_pipeline: AmpliconPipelineConfig = AmpliconPipelineConfig()
+    rawreads_pipeline: RawReadsPipelineConfig = RawReadsPipelineConfig()
     assembly_analysis_pipeline: AssemblyAnalysisPipelineConfig = (
         AssemblyAnalysisPipelineConfig()
     )
