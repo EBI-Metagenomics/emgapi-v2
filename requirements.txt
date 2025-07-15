@@ -23,7 +23,7 @@ django-debug-toolbar==5.2.0
 
 biopython==1.85
 
-pymongo==4.13.0
+pymongo==4.13.2
 mysql-connector-python
 SQLAlchemy
 
