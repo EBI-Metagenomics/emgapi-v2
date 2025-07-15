@@ -11,16 +11,7 @@ class GenomeDetail(GenomeBase):
     )
     geographic_origin: Optional[str]
     geographic_range: List[str]
-    last_update: str = None
-    first_created: str = None
+    created_at: str = None
+    updated_at: str = None
     biome: Optional[Biome] = None
     catalogue: Optional[GenomeCatalogueBase] = None
-
-    class Config:
-        from_attributes = True
-
-        @staticmethod
-        def alias_generator(field_name):
-            if field_name in ["last_update", "first_created"]:
-                return field_name + "_iso"
-            return field_name
