@@ -35,13 +35,9 @@ def list_genomes(request):
         )
     ),
 )
-
-
 def get_genome(request, accession: str):
     genome = get_object_or_404(
-        Genome.objects.select_related(
-            "biome", "catalogue"
-        ),
+        Genome.objects.select_related("biome", "catalogue"),
         accession=accession,
     )
     return genome

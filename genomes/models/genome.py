@@ -20,8 +20,6 @@ def default_annotations():
     }
 
 
-
-
 class GenomeManagerDeferringAnnotations(models.Manager):
     """
     The annotations field is a potentially large JSONB field.
@@ -52,9 +50,7 @@ class Genome(WithDownloadsModel):
     objects_and_annotations = GenomeManagerIncludingAnnotations()
 
     genome_id = models.AutoField(primary_key=True)
-    accession = models.CharField(
-        max_length=40, unique=True
-    )
+    accession = models.CharField(max_length=40, unique=True)
 
     ena_genome_accession = models.CharField(
         max_length=20,
@@ -62,12 +58,8 @@ class Genome(WithDownloadsModel):
         null=True,
         blank=True,
     )
-    ena_sample_accession = models.CharField(
-        max_length=20, null=True, blank=True
-    )
-    ena_study_accession = models.CharField(
-        max_length=20, null=True
-    )
+    ena_sample_accession = models.CharField(max_length=20, null=True, blank=True)
+    ena_study_accession = models.CharField(max_length=20, null=True)
 
     ncbi_genome_accession = models.CharField(
         max_length=20,
@@ -75,12 +67,8 @@ class Genome(WithDownloadsModel):
         null=True,
         blank=True,
     )
-    ncbi_sample_accession = models.CharField(
-        max_length=20, null=True, blank=True
-    )
-    ncbi_study_accession = models.CharField(
-        max_length=20, null=True, blank=True
-    )
+    ncbi_sample_accession = models.CharField(max_length=20, null=True, blank=True)
+    ncbi_study_accession = models.CharField(max_length=20, null=True, blank=True)
 
     img_genome_accession = models.CharField(
         max_length=20,
@@ -106,9 +94,7 @@ class Genome(WithDownloadsModel):
     contamination = models.FloatField()
 
     # EUKS:
-    busco_completeness = models.FloatField(
-        null=True, blank=True
-    )
+    busco_completeness = models.FloatField(null=True, blank=True)
 
     # EUKS + PROKS:
     rna_5s = models.FloatField(null=True, blank=True)
@@ -127,18 +113,10 @@ class Genome(WithDownloadsModel):
     ipr_coverage = models.FloatField()
     taxon_lineage = models.CharField(max_length=400)
 
-    num_genomes_total = models.IntegerField(
-        null=True, blank=True
-    )
-    pangenome_size = models.IntegerField(
-        null=True, blank=True
-    )
-    pangenome_core_size = models.IntegerField(
-        null=True, blank=True
-    )
-    pangenome_accessory_size = models.IntegerField(
-        null=True, blank=True
-    )
+    num_genomes_total = models.IntegerField(null=True, blank=True)
+    pangenome_size = models.IntegerField(null=True, blank=True)
+    pangenome_core_size = models.IntegerField(null=True, blank=True)
+    pangenome_accessory_size = models.IntegerField(null=True, blank=True)
 
     annotations = models.JSONField(default=default_annotations)
     default_annotations = staticmethod(default_annotations)
@@ -146,9 +124,7 @@ class Genome(WithDownloadsModel):
     last_update = models.DateTimeField(auto_now=True)
     first_created = models.DateTimeField(auto_now_add=True)
 
-    result_directory = models.CharField(
-        max_length=100, blank=True, null=True
-    )
+    result_directory = models.CharField(max_length=100, blank=True, null=True)
 
     catalogue = models.ForeignKey(
         "GenomeCatalogue",
@@ -171,7 +147,6 @@ class Genome(WithDownloadsModel):
         help_text="Geographic origin of this genome",
     )
 
-
     @property
     def last_update_iso(self):
         return self.last_update.isoformat() if self.last_update else None
@@ -192,8 +167,6 @@ class Genome(WithDownloadsModel):
         genome_data.pop("pangenome", None)
 
         return genome_data
-
-
 
     def __str__(self):
         return self.accession
