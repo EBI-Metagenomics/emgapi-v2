@@ -131,7 +131,6 @@ def process_genome_dir(catalogue, genome_dir):
     return accession
 
 
-
 @flow(name="import_genomes_flow")
 def import_genomes_flow(
     results_directory: str,

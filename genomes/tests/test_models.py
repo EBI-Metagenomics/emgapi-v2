@@ -4,6 +4,7 @@ from analyses.models import Biome
 from genomes.models.genome import Genome
 from genomes.models.genome_catalogue import GenomeCatalogue
 
+
 @pytest.mark.django_db(transaction=True)
 def test_genome_catalogue():
     # Create a biome for the catalogue

@@ -7,6 +7,7 @@ from analyses.models import Biome
 from genomes.models.genome import Genome
 from genomes.models.genome_catalogue import GenomeCatalogue
 
+
 @pytest.fixture
 def genome_catalogues(top_level_biomes):
     root_biome = Biome.objects.get(path="root")
@@ -54,9 +55,15 @@ def genome_catalogues(top_level_biomes):
 @pytest.fixture
 def geographic_locations():
     return [
-        "Europe", "North America", "South America",
-        "Asia", "Africa", "Oceania", "Antarctica"
+        "Europe",
+        "North America",
+        "South America",
+        "Asia",
+        "Africa",
+        "Oceania",
+        "Antarctica",
     ]
+
 
 @pytest.fixture
 def genomes(top_level_biomes, genome_catalogues, geographic_locations):
