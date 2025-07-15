@@ -10,8 +10,6 @@ class GenomeDetail(GenomeBase):
         ..., alias="downloads_as_objects"
     )
     geographic_origin: Optional[str]
-    geographic_range: List[str]
-    created_at: str = None
-    updated_at: str = None
+    geographic_range: Optional[List[str]] = []
     biome: Optional[Biome] = None
     catalogue: Optional[GenomeCatalogueBase] = None

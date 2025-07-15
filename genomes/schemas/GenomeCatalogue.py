@@ -1,4 +1,4 @@
-from ninja import Schema
+from ninja import Schema, Field
 from typing import Optional, Dict, Literal
 from datetime import datetime
 
@@ -14,7 +14,7 @@ class GenomeCatalogueBase(Schema):
     protein_catalogue_description: Optional[str]
     updated_at: datetime
     result_directory: Optional[str]
-    genome_count: Optional[int]
+    genome_count: Optional[int] = Field(None, alias="calculate_genome_count")
     unclustered_genome_count: Optional[int]
     ftp_url: str
     pipeline_version_tag: str
