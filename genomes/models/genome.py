@@ -37,6 +37,7 @@ class GenomeManagerIncludingAnnotations(models.Manager):
 
 
 class Genome(WithDownloadsModel, TimeStampedModel):
+    DOWNLOAD_PARENT_IDENTIFIER_ATTR = "accession"
     ISOLATE = "isolate"
     MAG = "mag"
     TYPE_CHOICES = (
