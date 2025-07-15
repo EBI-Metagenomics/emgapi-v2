@@ -177,7 +177,7 @@ def test_gather_genome_dirs(
         mock_sanity_check_catalogue.assert_called_once_with("/path/to/catalogue")
 
 
-@pytest.mark.django_db
+@pytest.mark.django_db(transaction=True)
 @patch("analyses.models.Biome.lineage_to_path")
 def test_import_genomes_flow_with_mock_directory(
     mock_lineage_to_path,
@@ -190,7 +190,6 @@ def test_import_genomes_flow_with_mock_directory(
     and then runs the flow with this directory as the results directory.
 
     """
-    # Create a biome for the test
     biome = Biome.objects.create(
         id=1,
         biome_name="Rumen",
