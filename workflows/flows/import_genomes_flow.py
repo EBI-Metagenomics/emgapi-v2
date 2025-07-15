@@ -6,6 +6,8 @@ import django
 from django.db import close_old_connections
 from prefect import task, flow, get_run_logger
 
+from emgapiv2.config import GenomeConfig
+
 django.setup()
 
 from analyses.models import Biome
@@ -23,7 +25,7 @@ from genomes.management.lib.genome_util import (
     upload_antismash_geneclusters,
     upload_genome_files,
 )
-from genomes.models import GenomeCatalogue, Genome, GeographicLocation
+from genomes.models import GenomeCatalogue, Genome
 
 
 def validate_pipeline_version(version: str) -> int:
@@ -71,7 +73,7 @@ def get_catalogue(options):
             "name": f"{options['catalogue_name']} v{options['catalogue_version']}",
             "biome": biome,
             "result_directory": options["catalogue_dir"],
-            "ftp_url": "http://ftp.ebi.ac.uk/pub/databases/metagenomics/mgnify_genomes/",
+            "ftp_url": GenomeConfig.MAGS_FTP_SITE,
             "pipeline_version_tag": options["pipeline_version"],
             "catalogue_biome_label": options["catalogue_biome_label"],
             "catalogue_type": options["catalogue_type"],
@@ -111,7 +113,7 @@ def process_genome_dir(catalogue, genome_dir):
     genome_data["result_directory"] = get_genome_result_path(genome_dir)
     genome_data["biome"] = Biome.objects.filter(path=path).first()
 
-    genome_data = clean_genome_data(genome_data)
+    genome_data = Genome.clean_data(genome_data)
 
     close_old_connections()
     genome, _ = Genome.objects.update_or_create(
@@ -128,24 +130,6 @@ def process_genome_dir(catalogue, genome_dir):
 
     return accession
 
-
-def clean_genome_data(genome_data):
-    """
-    Clean genome data by removing unnecessary fields and ensuring required fields are present.
-    """
-    genome_data.pop("gold_biome", None)
-    if "annotations" not in genome_data:
-        genome_data["annotations"] = Genome.default_annotations()
-
-    geo_origin = genome_data.pop("geographic_origin", None)
-    if geo_origin:
-        genome_data["geo_origin"] = GeographicLocation.objects.get_or_create(
-            name=geo_origin
-        )[0]
-    genome_data.pop("genome_accession", None)
-    genome_data.pop("pangenome", None)
-
-    return genome_data
 
 
 @flow(name="import_genomes_flow")
@@ -199,7 +183,7 @@ def upload_catalogue_summary(catalogue, catalogue_dir):
         logger.info(f"Uploaded catalogue summary from {summary_file}")
     else:
         catalogue.other_stats = {}
-        logger.warning(f"No catalogue summary found at {summary_file}")
+        logger.error(f"No catalogue summary found at {summary_file}")
     catalogue.save()
 
 

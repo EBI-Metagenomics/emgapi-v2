@@ -35,11 +35,13 @@ def list_genomes(request):
         )
     ),
 )
+
+
 def get_genome(request, accession: str):
     genome = get_object_or_404(
         Genome.objects.select_related(
-            "biome", "geo_origin", "catalogue"
-        ).prefetch_related("pangenome_geographic_range"),
+            "biome", "catalogue"
+        ),
         accession=accession,
     )
     return genome
