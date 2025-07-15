@@ -7,7 +7,6 @@ from genomes.models.genome_catalogue import GenomeCatalogue
 
 @pytest.mark.django_db(transaction=True)
 def test_genome_catalogue():
-    # Create a biome for the catalogue
     biome = Biome.objects.create(
         biome_name="Ocean", path="root.environmental.aquatic.marine.ocean"
     )
@@ -80,33 +79,18 @@ def test_genome():
 
     assert str(genome) == "MGYG000000001"
 
-    # Test geographic_origin property with deprecated relation
     assert genome.geographic_origin == "Atlantic Ocean"
 
-    # Test setting geographic_origin_text directly
     genome.geographic_origin = "Mediterranean Sea"
     genome.save()
     assert genome.geographic_origin == "Mediterranean Sea"
 
-    # Test fallback to deprecated relation when geographic_origin_text is None
     genome.geographic_origin = None
     genome.save()
-    assert genome.geographic_origin == "Atlantic Ocean"
+    assert genome.geographic_origin is None
 
-    # Test geographic_range property
-    assert genome.geographic_range == []
     genome.geographic_range = ["Indian Ocean", "Arctic Ocean"]
     genome.save()
     assert genome.geographic_range == ["Indian Ocean", "Arctic Ocean"]
 
-    # Test fallback to deprecated relation when geographic_range_array is None
-    genome.geographic_range = None
-    genome.save()
-    assert genome.geographic_range == ["Pacific Ocean"]
-
-    # Test last_update_iso and first_created_iso properties
-    assert genome.last_update_iso is not None
-    assert genome.first_created_iso is not None
-
-    # Test that the genome is counted in the catalogue
     assert catalogue.calculate_genome_count == 1

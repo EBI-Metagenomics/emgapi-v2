@@ -12,7 +12,7 @@ class GenomeCatalogueBase(Schema):
     description: Optional[str]
     protein_catalogue_name: Optional[str]
     protein_catalogue_description: Optional[str]
-    last_update: datetime
+    updated_at: datetime
     result_directory: Optional[str]
     genome_count: Optional[int]
     unclustered_genome_count: Optional[int]

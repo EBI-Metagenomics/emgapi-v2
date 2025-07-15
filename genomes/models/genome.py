@@ -1,6 +1,7 @@
 from django.db import models
 from django.contrib.postgres.fields import ArrayField
 
+from analyses.base_models.base_models import TimeStampedModel
 from analyses.base_models.with_downloads_models import WithDownloadsModel
 from analyses.models import Biome
 
@@ -35,10 +36,7 @@ class GenomeManagerIncludingAnnotations(models.Manager):
         return super().get_queryset()
 
 
-class Genome(WithDownloadsModel):
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
+class Genome(WithDownloadsModel, TimeStampedModel):
     ISOLATE = "isolate"
     MAG = "mag"
     TYPE_CHOICES = (
@@ -121,9 +119,6 @@ class Genome(WithDownloadsModel):
     annotations = models.JSONField(default=default_annotations)
     default_annotations = staticmethod(default_annotations)
 
-    last_update = models.DateTimeField(auto_now=True)
-    first_created = models.DateTimeField(auto_now_add=True)
-
     result_directory = models.CharField(max_length=100, blank=True, null=True)
 
     catalogue = models.ForeignKey(
@@ -146,14 +141,6 @@ class Genome(WithDownloadsModel):
         null=True,
         help_text="Geographic origin of this genome",
     )
-
-    @property
-    def last_update_iso(self):
-        return self.last_update.isoformat() if self.last_update else None
-
-    @property
-    def first_created_iso(self):
-        return self.first_created.isoformat() if self.first_created else None
 
     @classmethod
     def clean_data(cls, genome_data):

@@ -16,9 +16,7 @@ router = RouterPaginated(tags=["Genomes"])
     operation_id="list_genomes",
 )
 def list_genomes(request):
-    return Genome.objects.select_related("biome", "catalogue").prefetch_related(
-        "pangenome_geographic_range"
-    )
+    return Genome.objects.select_related("biome", "catalogue")
 
 
 @router.get(

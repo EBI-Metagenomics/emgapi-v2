@@ -1,14 +1,12 @@
 from django.db import models
-from django.utils import timezone
 
+from analyses.base_models.base_models import TimeStampedModel
 from analyses.base_models.with_downloads_models import WithDownloadsModel
 from analyses.models import Biome
 from emgapiv2.config import GenomeConfig
 
 
-class GenomeCatalogue(WithDownloadsModel):
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
+class GenomeCatalogue(WithDownloadsModel, TimeStampedModel):
     catalogue_id = models.SlugField(
         db_column="catalogue_id", max_length=100, primary_key=True
     )
@@ -29,7 +27,6 @@ class GenomeCatalogue(WithDownloadsModel):
         blank=True,
         help_text="Description of the protein catalogue, if applicable.",
     )
-    last_update = models.DateTimeField(db_column="LAST_UPDATE", default=timezone.now)
     result_directory = models.CharField(
         db_column="result_directory", max_length=100, null=True, blank=True
     )

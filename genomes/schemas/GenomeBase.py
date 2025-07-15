@@ -21,7 +21,7 @@ class GenomeBase(Schema):
     type: str
     completeness: float
     contamination: float
-    catalogue_id: int
+    catalogue_id: str
 
     class Config:
         from_attributes = True
