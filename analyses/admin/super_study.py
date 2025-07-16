@@ -18,7 +18,7 @@ class SuperStudyStudyInlineForm(forms.ModelForm):
         fields = "__all__"
 
 
-class SuperStudyStudyInline(TabularInlinePaginatedWithTabSupport):  # No custom class
+class SuperStudyStudyInline(TabularInlinePaginatedWithTabSupport):
     model = SuperStudyStudy
     form = SuperStudyStudyInlineForm
     autocomplete_fields = ["study"]
