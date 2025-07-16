@@ -4,8 +4,12 @@ from django.core.management import call_command
 from django.db import connection
 
 import ena.models
-from analyses.models import Biome, Study
-from workflows.data_io_utils.legacy_emg_dbs import LegacyStudy
+from analyses.models import Biome, Study, SuperStudy, SuperStudyStudy
+from workflows.data_io_utils.legacy_emg_dbs import (
+    LegacyStudy,
+    LegacySuperStudy,
+    LegacySuperStudyStudy,
+)
 from workflows.prefect_utils.testing_utils import (
     should_not_mock_httpx_requests_to_prefect_server,
 )
@@ -122,3 +126,92 @@ def test_import_legacy_studies(
 
     mg_study: Study = Study.objects.get_or_create_for_ena_study(ena_study)
     assert mg_study.accession == "MGYS00005002"
+
+
+@pytest.mark.django_db(transaction=True)
+def test_import_legacy_super_studies(
+    mock_legacy_emg_db_session, ninja_api_client, caplog, biome_for_legacy
+):
+    # First, we need to import a study to associate with the super study
+    study = LegacyStudy(
+        id=5003,
+        centre_name="MARS",
+        study_name="Bugs on mars",
+        ext_study_id="ERP4",
+        is_private=False,
+        project_id="PRJ4",
+        is_suppressed=False,
+        biome_id=1,
+    )
+    with mock_legacy_emg_db_session() as session:
+        session.add(study)
+
+    # Import the study
+    with caplog.at_level("INFO"):
+        call_command("import_studies_from_legacy_db")
+        assert "Imported" in caplog.text
+        assert "studies" in caplog.text
+
+    assert Study.objects.filter(id=5003).exists()
+    caplog.clear()
+
+    # Create a super study in the legacy DB
+    super_study = LegacySuperStudy(
+        study_id=1,
+        title="Test Super Study",
+        description="This is a test super study",
+        url_slug="test-super-study",
+        logo=None,
+    )
+
+    # Create a super study study association
+    super_study_study = LegacySuperStudyStudy(
+        id=1,
+        study_id=5003,
+        super_study_id=1,
+        is_flagship=True,
+    )
+
+    with mock_legacy_emg_db_session() as session:
+        session.add(super_study)
+        session.add(super_study_study)
+
+    # Test dry run
+    with caplog.at_level("INFO"):
+        call_command("import_super_studies_from_legacy_db", "--dry_run")
+        assert "Would have Imported 1 super studies" in caplog.text
+        assert "Would make super study for ID 1 / Test Super Study" in caplog.text
+        assert "Would associate study" in caplog.text
+
+    # Verify nothing was imported
+    assert SuperStudy.objects.count() == 0
+    caplog.clear()
+
+    # Test actual import
+    with caplog.at_level("INFO"):
+        call_command("import_super_studies_from_legacy_db")
+        assert "Imported 1 super studies" in caplog.text
+        assert "Created new super study object" in caplog.text
+        assert "Associated study" in caplog.text
+
+    # Verify super study was imported
+    assert SuperStudy.objects.count() == 1
+    super_study = SuperStudy.objects.first()
+    assert super_study.slug == "test-super-study"
+    assert super_study.title == "Test Super Study"
+    assert super_study.description == "This is a test super study"
+
+    # Verify study association
+    assert SuperStudyStudy.objects.count() == 1
+    super_study_study = SuperStudyStudy.objects.first()
+    assert super_study_study.super_study == super_study
+    assert super_study_study.study.id == 5003
+    assert super_study_study.is_flagship is True
+
+    caplog.clear()
+
+    # Test that trying to import the same super study again raises an error
+    with pytest.raises(ValidationError) as e:
+        call_command("import_super_studies_from_legacy_db")
+
+    assert "Super Study with slug test-super-study already exists" in e.value.message

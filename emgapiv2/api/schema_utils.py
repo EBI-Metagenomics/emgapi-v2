@@ -1,5 +1,6 @@
 from typing import Optional
 
+from caseconverter import pascalcase, titlecase
 from django.db.models import Q
 from ninja import FilterSchema
 from pydantic import Field
@@ -36,10 +37,10 @@ def make_related_detail_link(
     from_list_at_path: str = "items/",
 ) -> dict:
     if from_list_to_detail:
-        link_name = f"Get{related_object_name.capitalize()}From{self_object_name.capitalize()}List"
+        link_name = f"Get{pascalcase(related_object_name)}From{pascalcase(self_object_name)}List"
     else:
         link_name = (
-            f"Get{related_object_name.capitalize()}For{self_object_name.capitalize()}"
+            f"Get{pascalcase(related_object_name)}For{pascalcase(self_object_name)}"
         )
     from_list_at_path = from_list_at_path.rstrip("/") + "/"
     return {
@@ -48,7 +49,7 @@ def make_related_detail_link(
             OpenApiKeywords.PARAMETERS.value: {
                 related_lookup_param: f"$response.body#/{from_list_at_path if from_list_to_detail else ''}{'0/' if from_list_to_detail else ''}{related_id_in_response}"
             },
-            OpenApiKeywords.DESCRIPTION.value: f"The {related_id_in_response} is an identifier that can be used to access the {related_object_name} detail",
+            OpenApiKeywords.DESCRIPTION.value: f"The {related_id_in_response} is an identifier that can be used to access the {titlecase(related_object_name)} detail",
         }
     }
 

@@ -232,3 +232,12 @@ class InferredMetadataMixin:
     @property
     def metadata_preferring_inferred(self: HasMetadata):
         return InferredMetadataMixin._MetadataDictPreferringInferred(self.metadata)
+
+
+class DbStoredFileField(models.Model):
+    bytes = models.BinaryField()
+    filename = models.CharField(max_length=255)
+    mimetype = models.CharField(max_length=50)
+
+    class Meta:
+        abstract = True

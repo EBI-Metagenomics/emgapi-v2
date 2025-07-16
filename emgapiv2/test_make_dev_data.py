@@ -144,6 +144,7 @@ def test_make_dev_data(
     prefect_harness,
     private_analysis_with_download,
     private_study_with_download,
+    super_study,
 ):
     """
     Dummy test that just sets up fixtures and dumps them to JSON for using as dev data.

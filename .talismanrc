@@ -55,7 +55,7 @@ fileignoreconfig:
   checksum: 3afe465b36e4e141124bd84c8459c5aa81332eedf49b691eff22c74df63a0f18
 
 - filename: emgapiv2/settings.py
-  checksum: 17b75d30af9b321c63b885231533b7f8957bf7001d004c5d74a144d15383c9ce
+  checksum: 77b72bbe1f9003226068fcbc625fda59178fecb125bd96a5df07f0b0a40895c4
 
 - filename: emgapiv2/settings_test.py
   checksum: ded898400b4eda7e3cf75694af1b66235975a85eb5b8f49f3a2c708163a7aad4
@@ -154,3 +154,4 @@ allowed_patterns:
 - primary_key
 - pass_whole_object
 - dictionary key
+- OpenApiKeywords
