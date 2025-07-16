@@ -94,6 +94,36 @@ class LegacyRun(LegacyEMGBase):
     experiment_type_id: Mapped[int] = mapped_column("EXPERIMENT_TYPE_ID", Integer)
 
 
+class LegacySuperStudy(LegacyEMGBase):
+    __tablename__ = "SUPER_STUDY"
+
+    study_id: Mapped[int] = mapped_column("STUDY_ID", Integer, primary_key=True)
+    title: Mapped[str] = mapped_column("TITLE", String)
+    description: Mapped[str] = mapped_column("DESCRIPTION", String, nullable=True)
+    url_slug: Mapped[str] = mapped_column("URL_SLUG", String)
+    logo: Mapped[str] = mapped_column("LOGO", String, nullable=True)
+
+    studies: Mapped[list["LegacySuperStudyStudy"]] = relationship(
+        "LegacySuperStudyStudy", back_populates="super_study"
+    )
+
+
+class LegacySuperStudyStudy(LegacyEMGBase):
+    __tablename__ = "SUPER_STUDY_STUDY"
+
+    id: Mapped[int] = mapped_column("id", Integer, primary_key=True)
+    study_id: Mapped[int] = mapped_column("STUDY_ID", ForeignKey("STUDY.STUDY_ID"))
+    super_study_id: Mapped[int] = mapped_column(
+        "SUPER_STUDY_ID", ForeignKey("SUPER_STUDY.STUDY_ID")
+    )
+    is_flagship: Mapped[bool] = mapped_column("is_flagship", Boolean)
+
+    study: Mapped["LegacyStudy"] = relationship("LegacyStudy")
+    super_study: Mapped["LegacySuperStudy"] = relationship(
+        "LegacySuperStudy", back_populates="studies"
+    )
+
+
 class LegacyAnalysisJob(LegacyEMGBase):
     __tablename__ = "ANALYSIS_JOB"
 

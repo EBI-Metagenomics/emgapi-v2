@@ -17,10 +17,8 @@ EMG_CONFIG.amplicon_pipeline.allow_non_insdc_run_names = True
 EMG_CONFIG.amplicon_pipeline.keep_study_summary_partials = True
 EMG_CONFIG.slurm.default_seconds_between_job_checks = 1
 
-STORAGES = {
-    "staticfiles": {
-        "BACKEND": "whitenoise.storage.CompressedStaticFilesStorage",
-    },
+STORAGES["staticfiles"] = {
+    "BACKEND": "whitenoise.storage.CompressedStaticFilesStorage",
 }
 
 LOGGING["loggers"]["prefect.events.clients"] = {"level": "WARNING"}

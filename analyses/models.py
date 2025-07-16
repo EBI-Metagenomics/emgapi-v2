@@ -7,8 +7,10 @@ from pathlib import Path
 from typing import ClassVar, Union
 
 from aenum import extend_enum
+from db_file_storage.model_utils import delete_file, delete_file_if_needed
 from django.contrib.postgres.indexes import GinIndex
 from django.core.exceptions import MultipleObjectsReturned, ObjectDoesNotExist
+from django.core.files.storage import storages
 from django.db import models
 from django.db.models import JSONField, Q, Func, Value
 from django.db.models.signals import post_save
@@ -24,6 +26,7 @@ from analyses.base_models.base_models import (
     TimeStampedModel,
     VisibilityControlledModel,
     InferredMetadataMixin,
+    DbStoredFileField,
 )
 from analyses.base_models.mgnify_accessioned_models import MGnifyAccessionField
 from analyses.base_models.with_downloads_models import WithDownloadsModel
@@ -812,3 +815,44 @@ class AnalysedContig(TimeStampedModel):
         }
 
     annotations = models.JSONField(default=default_annotations.__func__)
+
+
+class SuperStudyImage(DbStoredFileField): ...
+
+
+class SuperStudy(TimeStampedModel):
+    slug = models.SlugField(unique=True, primary_key=True)
+    title = models.CharField(max_length=255)
+    description = models.TextField(blank=True)
+    studies = models.ManyToManyField(
+        Study, related_name="super_studies", through="SuperStudyStudy"
+    )
+    # genome_catalogues #TODO
+    logo = models.ImageField(
+        upload_to="analyses.SuperStudyImage/bytes/filename/mimetype",
+        blank=True,
+        null=True,
+        storage=storages["fieldfiles"],
+    )
+
+    class Meta:
+        verbose_name_plural = "super studies"
+
+    def save(self, *args, **kwargs):
+        delete_file_if_needed(self, "logo")
+        super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        super().delete(*args, **kwargs)
+        delete_file(self, "logo")
+
+
+class SuperStudyStudy(TimeStampedModel):
+    study = models.ForeignKey(Study, on_delete=models.CASCADE)
+    super_study = models.ForeignKey(SuperStudy, on_delete=models.CASCADE)
+    is_flagship = models.BooleanField(default=True)
+
+    class Meta:
+        verbose_name = "Study in Super Study"
+        verbose_name_plural = "Studies in Super Study"
+        unique_together = (("study", "super_study"),)

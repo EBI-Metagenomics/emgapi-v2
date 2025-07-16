@@ -1,36 +1,50 @@
+# General
+aenum~=3.1.16  # extendable enums
+case-converter~=1.2.0
+cython<3.0
+Pillow~=11.3.0  # imagefield requirement
+typing_extensions~=4.14.1
+tzdata
+
+# Django and plugins
 django==5.2.1
 django-cors-headers==4.7.0
-django-ninja~=1.4.3
+dj-database-url==3.0.0
+django-debug-toolbar==5.2.0
+django-json-widget==2.0.1  # for jsonfields in admin panel
+django-ltree-2==0.1.12  # biome hierarchies
+django-ninja~=1.4.3  # api
+django-ninja-jwt~=5.3.7  # api auth
+django-db-file-storage~=0.5.6.1  # logo storage in db
+django-unfold==0.60.0  # admin panel
+
+# Serving
+asgiref~=3.8.1
+gunicorn==23.0.0
+whitenoise==6.9.0
+
+# DB
+psycopg2-binary
+
+# Prefect workflows
 prefect==3.4.4
 prefect-shell==0.3.1
 prefect-slack==0.3.1
-dj-database-url==3.0.0
-psycopg2-binary
-cython<3.0
+
+# Pydantic
 pydantic~=2.11.7
 pydantic-settings~=2.10.1
-nextflowpy==0.11.0
-django-unfold==0.60.0
-django-json-widget==2.0.1
-tzdata
+
+# Data handling
 pandas==2.3.0
-django-ltree-2==0.1.12
-django-ninja-jwt~=5.3.7
-
-whitenoise==6.9.0
-gunicorn==23.0.0
-django-debug-toolbar==5.2.0
-
 biopython==1.85
+numpy~=2.2.6
 
+# Legacy DB connectors (remove at some point)
 pymongo==4.13.2
 mysql-connector-python
 SQLAlchemy
 
-numpy~=2.2.6
+# Outbound network
 requests~=2.32.4
 httpx~=0.28.1
-typing_extensions~=4.14.1
-asgiref~=3.8.1
-case-converter~=1.2.0
-aenum~=3.1.16

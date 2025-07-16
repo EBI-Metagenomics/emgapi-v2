@@ -360,3 +360,30 @@ class MGnifyFunctionalAnalysisAnnotationType(FutureStrEnum):
 
 class StudyAnalysisIntent(Schema):
     study_accession: str
+
+
+class SuperStudy(ModelSchema):
+    slug: str = Field(..., examples=["atlanteco"])
+    title: str = Field(..., examples=["AtlantECO"])
+    description: Optional[str] = Field(
+        None, examples=["The Atlantic Ocean and its ecosystem services"]
+    )
+    logo_url: Optional[str] = Field(None, examples=["https://example.com/logo.png"])
+
+    @staticmethod
+    def resolve_logo_url(obj: analyses.models.SuperStudy) -> Optional[str]:
+        if obj.logo:
+            return obj.logo.url
+        return None
+
+    class Meta:
+        model = analyses.models.SuperStudy
+        fields = ["slug", "title", "description"]
+
+
+class SuperStudyDetail(SuperStudy):
+    studies: List[MGnifyStudy] = Field(...)
+
+    class Meta:
+        model = analyses.models.SuperStudy
+        fields = ["slug", "title", "description"]

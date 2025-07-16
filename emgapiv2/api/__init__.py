@@ -7,6 +7,7 @@ from .analyses import AnalysisController
 from .private import MyDataController
 from .samples import SampleController
 from .studies import StudyController
+from .super_studies import SuperStudyController
 from .genomes import GenomeController
 from .token_controller import WebinJwtController
 
@@ -78,6 +79,7 @@ api = NinjaExtraAPI(
 api.register_controllers(AnalysisController)
 api.register_controllers(SampleController)
 api.register_controllers(StudyController)
+api.register_controllers(SuperStudyController)
 api.register_controllers(GenomeController)
 api.register_controllers(MyDataController)
 
