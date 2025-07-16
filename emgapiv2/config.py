@@ -102,6 +102,7 @@ class RawReadsPipelineConfig(BaseModel):
     rawreads_pipeline_git_revision: str = (
         "master"  # branch or commit of ebi-metagenomics/raw-reads-analysis-pipeline
     )
+    rawreads_pipeline_config_file = "/hps/software/users/rdf/metagenomics/service-team/configs/pipelines-nextflow-configs/pipelines/raw-reads-analysis-pipeline/codon.conf"
     rawreads_pipeline_nf_profile: str = "codon"
     samplesheet_chunk_size: int = 50
     # results stats
