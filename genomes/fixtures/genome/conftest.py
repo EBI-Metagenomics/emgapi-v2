@@ -113,6 +113,7 @@ def genomes(top_level_biomes, genome_catalogues, geographic_locations):
             "num_contigs": 300,
             "n_50": 30000,
             "gc_content": 0.7,
+            "type": Genome.GenomeType.ISOLATE,
             "completeness": 98.0,
             "contamination": 1.0,
             "trnas": 30.0,
