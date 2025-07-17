@@ -52,7 +52,7 @@ def test_genome():
         num_contigs=100,
         n_50=10000,
         gc_content=0.5,
-        type=Genome.MAG,
+        type=Genome.GenomeType.MAG,
         completeness=95.0,
         contamination=2.0,
         trnas=20.0,
@@ -71,7 +71,7 @@ def test_genome():
     assert genome.num_contigs == 100
     assert genome.n_50 == 10000
     assert genome.gc_content == 0.5
-    assert genome.type == Genome.MAG
+    assert genome.type == Genome.GenomeType.MAG
     assert genome.completeness == 95.0
     assert genome.contamination == 2.0
     assert genome.catalogue == catalogue

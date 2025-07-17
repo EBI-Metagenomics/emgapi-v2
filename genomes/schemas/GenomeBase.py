@@ -1,9 +1,10 @@
-from ninja import Schema
 from typing import Optional
 
+from ninja import Schema
 from pydantic import Field
 
 from analyses.schemas import Biome
+from genomes.models import Genome
 
 
 class GenomeBase(Schema):
@@ -18,10 +19,13 @@ class GenomeBase(Schema):
     num_contigs: int
     n_50: int
     gc_content: float
-    type: str
+    type: Genome.GenomeType
     completeness: float
     contamination: float
     catalogue_id: str
+    geographic_origin: Optional[str]
+    geographic_range: Optional[list[str]] = []
+    biome: Optional[Biome] = None
 
     class Config:
         from_attributes = True

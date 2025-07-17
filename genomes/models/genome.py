@@ -4,6 +4,7 @@ from django.contrib.postgres.fields import ArrayField
 from analyses.base_models.base_models import TimeStampedModel
 from analyses.base_models.with_downloads_models import WithDownloadsModel
 from analyses.models import Biome
+from emgapiv2.enum_utils import DjangoChoicesCompatibleStrEnum
 
 # Annotation field constants
 COG_CATEGORIES = "cog_categories"
@@ -38,12 +39,10 @@ class GenomeManagerIncludingAnnotations(models.Manager):
 
 class Genome(WithDownloadsModel, TimeStampedModel):
     DOWNLOAD_PARENT_IDENTIFIER_ATTR = "accession"
-    ISOLATE = "isolate"
-    MAG = "mag"
-    TYPE_CHOICES = (
-        (MAG, "MAG"),
-        (ISOLATE, "Isolate"),
-    )
+
+    class GenomeType(DjangoChoicesCompatibleStrEnum):
+        MAG = "MAG"
+        ISOLATE = "Isolate"
 
     objects = GenomeManagerDeferringAnnotations()
     objects_and_annotations = GenomeManagerIncludingAnnotations()
@@ -88,7 +87,7 @@ class Genome(WithDownloadsModel, TimeStampedModel):
     num_contigs = models.IntegerField()
     n_50 = models.IntegerField()
     gc_content = models.FloatField()
-    type = models.CharField(choices=TYPE_CHOICES, max_length=80)
+    type = models.CharField(choices=GenomeType.as_choices(), max_length=80)
     completeness = models.FloatField()
     contamination = models.FloatField()
 

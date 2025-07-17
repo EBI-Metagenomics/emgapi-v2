@@ -1,15 +1,12 @@
-from typing import Optional, List
+from typing import Optional
 from genomes.schemas.GenomeBase import GenomeBase
-from analyses.schemas import Biome, MGnifyAnalysisDownloadFile
+from analyses.schemas import MGnifyAnalysisDownloadFile
 from genomes.schemas.GenomeCatalogue import GenomeCatalogueBase
 from ninja import Field
 
 
 class GenomeDetail(GenomeBase):
-    downloads: List[MGnifyAnalysisDownloadFile] = Field(
+    downloads: list[MGnifyAnalysisDownloadFile] = Field(
         ..., alias="downloads_as_objects"
     )
-    geographic_origin: Optional[str]
-    geographic_range: Optional[List[str]] = []
-    biome: Optional[Biome] = None
     catalogue: Optional[GenomeCatalogueBase] = None
