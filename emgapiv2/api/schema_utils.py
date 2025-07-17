@@ -13,6 +13,7 @@ class ApiSections(FutureStrEnum):
     STUDIES = "Studies"
     SAMPLES = "Samples"
     ANALYSES = "Analyses"
+    PUBLICATIONS = "Publications"
     REQUESTS = "Requests"
     PRIVATE_DATA = "Private Data"
     AUTH = "Authentication"
