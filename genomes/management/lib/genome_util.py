@@ -741,7 +741,11 @@ def prepare_downloadable_file(
         short_description=desc_label,
         download_group=group_type or "catalogue",
     )
-    is_fasta = file_type == DownloadFileType.FASTA or file_format == "fna" or file_format == "faa"
+    is_fasta = (
+        file_type == DownloadFileType.FASTA
+        or file_format == "fna"
+        or file_format == "faa"
+    )
 
     if file_format == DownloadFileType.FASTA or file_format == DownloadFileType.OTHER:
         if not relative_path.endswith((".fasta", ".fna", ".gff", ".faa")):
@@ -754,7 +758,6 @@ def prepare_downloadable_file(
         )
 
     return download_file
-
 
     # return DownloadFile(
     #     path=relative_path,
