@@ -142,6 +142,9 @@ def test_make_dev_data(
     mgnify_assemblies_completed,
     amplicon_analysis_with_downloads,
     prefect_harness,
+    geographic_locations,
+    genome_catalogues,
+    genomes,
     private_analysis_with_download,
     private_study_with_download,
 ):
