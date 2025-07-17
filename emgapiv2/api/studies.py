@@ -11,6 +11,7 @@ from analyses.schemas import (
     MGnifyStudyDetail,
     MGnifyStudy,
     MGnifyAnalysis,
+    MGnifyPublication,
     OrderByFilter,
 )
 from emgapiv2.api import perms
@@ -88,6 +89,7 @@ class StudyController(UnauthorisedIsUnfoundController):
         description="MGnify analyses correspond to an individual Run or Assembly within this study,"
         "analysed by a MGnify Pipelione. ",
         operation_id="list_mgnify_study_analyses",
+        tags=[ApiSections.STUDIES, ApiSections.ANALYSES],
         openapi_extra=make_links_section(
             make_related_detail_link(
                 related_detail_operation_id="get_mgnify_analysis",
@@ -107,3 +109,31 @@ class StudyController(UnauthorisedIsUnfoundController):
         return self.get_object_or_exception(
             analyses.models.Study.objects, accession=accession
         ).analyses.all()
+
+    @http_get(
+        "/{accession}/publications/",
+        response=NinjaPaginationResponseSchema[MGnifyPublication],
+        summary="List Publications associated with this Study",
+        description="List all publications associated with this study.",
+        operation_id="list_mgnify_study_publications",
+        tags=[ApiSections.STUDIES, ApiSections.PUBLICATIONS],
+        openapi_extra=make_links_section(
+            make_related_detail_link(
+                related_detail_operation_id="get_mgnify_publication",
+                self_object_name="study",
+                related_object_name="publication",
+                related_id_in_response="pubmed_id",
+                from_list_to_detail=True,
+                related_lookup_param="pubmed_id",
+            )
+        ),
+        auth=[WebinJWTAuth(), DjangoSuperUserAuth(), NoAuth()],
+        permissions=[
+            perms.IsPublic | perms.IsWebinOwner | perms.IsAdminUserWithObjectPerms
+        ],
+    )
+    @paginate()
+    def list_mgnify_study_publications(self, accession: str):
+        return self.get_object_or_exception(
+            analyses.models.Study.objects, accession=accession
+        ).publications.all()

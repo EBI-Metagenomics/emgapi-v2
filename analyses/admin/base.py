@@ -1,12 +1,14 @@
 from typing import Iterable, Optional
 
-from django.contrib import admin
+from django import forms
+from django.contrib import admin, messages
 from django.contrib.postgres.fields import ArrayField
 from django.core.validators import EMPTY_VALUES
 from django.db.models import JSONField, Q
 from django.forms import Field
 from django.http import HttpRequest
 from django.shortcuts import redirect
+from django.urls import reverse
 from unfold.admin import ModelAdmin, TabularInline
 from unfold.contrib.filters.admin import TextFilter
 from unfold.contrib.forms.widgets import ArrayWidget
@@ -90,3 +92,27 @@ class JSONFieldWidgetOverridesMixin(ModelAdmin):
         if isinstance(db_field, ArrayField):
             kwargs["widget"] = ArrayWidget
         return super().formfield_for_dbfield(db_field, request, **kwargs)
+
+
+class AutoCompleteInlineForm(forms.ModelForm):
+    """This is a workaround for a (probable?) bug in django unfold where the wrong field name is sent with autocomplete ajax requests"""
+
+    autocomplete_fields: list[str] = []
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if not self.autocomplete_fields:
+            raise NotImplementedError("No autocomplete fields defined")
+        for field_name in self.autocomplete_fields:
+            field = self.fields.get(field_name)
+            field.widget.attrs["field-name"] = field_name
+
+
+def detail_action_error(request, message: str = "Something went wrong"):
+    """
+    Handle an error in an unfold detail action.
+    Just posts a message to the admin user and handles the default redirect.
+    """
+    messages.add_message(request, messages.WARNING, message)
+    referer = request.META.get("HTTP_REFERER", reverse("admin:index"))
+    return redirect(referer)
