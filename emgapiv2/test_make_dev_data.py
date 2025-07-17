@@ -174,6 +174,7 @@ def test_make_dev_data(
     private_analysis_with_download,
     private_study_with_download,
     super_study,
+    publication,
 ):
     """
     Stub test that just sets up fixtures and dumps them to JSON for using as dev data.

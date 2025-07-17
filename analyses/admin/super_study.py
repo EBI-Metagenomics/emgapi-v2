@@ -1,17 +1,15 @@
 from django.contrib import admin
 from unfold.admin import ModelAdmin
-from analyses.admin.base import TabularInlinePaginatedWithTabSupport
 
-from django import forms
-
+from analyses.admin.base import (
+    TabularInlinePaginatedWithTabSupport,
+    AutoCompleteInlineForm,
+)
 from analyses.models import SuperStudy, SuperStudyStudy
 
 
-class SuperStudyStudyInlineForm(forms.ModelForm):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        study_field = self.fields.get("study")
-        study_field.widget.attrs["field-name"] = "study"
+class SuperStudyStudyInlineForm(AutoCompleteInlineForm):
+    autocomplete_fields = ["study"]
 
     class Meta:
         model = SuperStudyStudy

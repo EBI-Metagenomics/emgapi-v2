@@ -5,6 +5,7 @@ from ninja_extra import NinjaExtraAPI
 from emgapiv2.api.schema_utils import OpenApiKeywords, ApiSections
 from .analyses import AnalysisController
 from .private import MyDataController
+from .publications import PublicationController
 from .samples import SampleController
 from .studies import StudyController
 from .super_studies import SuperStudyController
@@ -47,6 +48,15 @@ api = NinjaExtraAPI(
                 ),
             },
             {
+                OpenApiKeywords.NAME: ApiSections.PUBLICATIONS,
+                OpenApiKeywords.DESCRIPTION: dedent(
+                    """
+                    Publications (e.g. journal articles) may describe or analyse the content of MGnify Studies
+                    or their corresponding datasets in ENA.
+                    """
+                ),
+            },
+            {
                 OpenApiKeywords.NAME: ApiSections.PRIVATE_DATA,
                 OpenApiKeywords.DESCRIPTION: dedent(
                     """
@@ -77,6 +87,7 @@ api = NinjaExtraAPI(
 )
 
 api.register_controllers(AnalysisController)
+api.register_controllers(PublicationController)
 api.register_controllers(SampleController)
 api.register_controllers(StudyController)
 api.register_controllers(SuperStudyController)

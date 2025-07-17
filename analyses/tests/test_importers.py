@@ -4,11 +4,13 @@ from django.core.management import call_command
 from django.db import connection
 
 import ena.models
-from analyses.models import Biome, Study, SuperStudy, SuperStudyStudy
+from analyses.models import Biome, Study, SuperStudy, SuperStudyStudy, Publication
 from workflows.data_io_utils.legacy_emg_dbs import (
     LegacyStudy,
     LegacySuperStudy,
     LegacySuperStudyStudy,
+    LegacyPublication,
+    LegacyStudyPublication,
 )
 from workflows.prefect_utils.testing_utils import (
     should_not_mock_httpx_requests_to_prefect_server,
@@ -215,3 +217,104 @@ def test_import_legacy_super_studies(
         call_command("import_super_studies_from_legacy_db")
 
     assert "Super Study with slug test-super-study already exists" in e.value.message
+
+
+@pytest.mark.django_db(transaction=True)
+def test_import_legacy_publications(
+    mock_legacy_emg_db_session, ninja_api_client, caplog, biome_for_legacy
+):
+    # First, we need to import a study to associate with the publications
+    study = LegacyStudy(
+        id=5004,
+        centre_name="JUPITER",
+        study_name="Bugs on Jupiter",
+        ext_study_id="ERP5",
+        is_private=False,
+        project_id="PRJ5",
+        is_suppressed=False,
+        biome_id=1,
+    )
+    with mock_legacy_emg_db_session() as session:
+        session.add(study)
+
+    # Import the study
+    with caplog.at_level("INFO"):
+        call_command("import_studies_from_legacy_db")
+        assert "Imported" in caplog.text
+        assert "studies" in caplog.text
+
+    assert Study.objects.filter(id=5004).exists()
+    caplog.clear()
+
+    # Create a publication in the legacy DB
+    publication = LegacyPublication(
+        pub_id=1,
+        authors="Test Author, Another Author",
+        doi="10.1234/test.12345",
+        isbn="978-1-234-56789-0",
+        iso_journal="Test J. Metagenomics",
+        medline_journal="Test Journal of Metagenomics",
+        pubmed_id=12345678,
+        pub_title="Test Publication for MGnify",
+        raw_pages="123-456",
+        volume="10",
+        published_year=2023,
+        pub_type="Journal Article",
+    )
+
+    # Create a publication-study association
+    pub_study = LegacyStudyPublication(
+        id=1,
+        study_id=5004,
+        pub_id=1,
+    )
+
+    with mock_legacy_emg_db_session() as session:
+        session.add(publication)
+        session.add(pub_study)
+
+    # Test dry run
+    with caplog.at_level("INFO"):
+        call_command("import_publications_from_legacy_db", "--dry_run")
+        assert "Would have Imported 1 publications" in caplog.text
+        assert (
+            "Would make publication for ID 1 / Test Publication for MGnify"
+            in caplog.text
+        )
+        assert "Would associate study" in caplog.text
+
+    # Verify nothing was imported
+    assert Publication.objects.count() == 0
+    caplog.clear()
+
+    # Test actual import
+    with caplog.at_level("INFO"):
+        call_command("import_publications_from_legacy_db")
+        assert "Imported 1 publications" in caplog.text
+        assert "Created new publication object" in caplog.text
+        assert "Associated study" in caplog.text
+
+    # Verify publication was imported
+    assert Publication.objects.count() == 1
+    pub = Publication.objects.first()
+    assert pub.pubmed_id == 12345678
+    assert pub.title == "Test Publication for MGnify"
+    assert pub.published_year == 2023
+    assert pub.metadata.authors == "Test Author, Another Author"
+    assert pub.metadata.doi == "10.1234/test.12345"
+    assert pub.metadata.isbn == "978-1-234-56789-0"
+
+    # Verify study association
+    assert pub.studies.count() == 1
+    study = pub.studies.first()
+    assert study.id == 5004
+
+    caplog.clear()
+
+    # Test that trying to import the same publication again skips it
+    with caplog.at_level("INFO"):
+        call_command("import_publications_from_legacy_db")
+        assert (
+            "Publication with PubMed ID 12345678 already exists, skipping"
+            in caplog.text
+        )
