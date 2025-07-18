@@ -57,6 +57,15 @@ api = NinjaExtraAPI(
                 ),
             },
             {
+                OpenApiKeywords.NAME: ApiSections.GENOMES,
+                OpenApiKeywords.DESCRIPTION: dedent(
+                    """
+                    MGnify Genomes are annotated draft genomes based on either isolates, or metagenome-assembled genomes (MAGs).
+                    They are arranged in biome-specific catalogues.
+                    """
+                ),
+            },
+            {
                 OpenApiKeywords.NAME: ApiSections.PRIVATE_DATA,
                 OpenApiKeywords.DESCRIPTION: dedent(
                     """
