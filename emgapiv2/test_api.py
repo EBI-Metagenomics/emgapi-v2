@@ -190,3 +190,30 @@ def test_api_sample_detail(raw_reads_mgnify_sample, ninja_api_client):
     assert sample["ena_accessions"] == db_sample.ena_accessions
     assert len(sample["studies"]) == 1
     assert sample["studies"][0]["accession"] == db_sample.studies.first().accession
+
+
+@pytest.mark.django_db
+def test_api_genome_list(ninja_api_client, genomes):
+    all_genomes = call_endpoint_and_get_data(ninja_api_client, "/genomes/", count=3)
+    assert all_genomes[0]["accession"].startswith("MGYG")
+
+
+@pytest.mark.django_db
+def test_api_genome_catalogues(ninja_api_client, genomes, genome_catalogues):
+    catalogues = call_endpoint_and_get_data(
+        ninja_api_client, "/genomes/catalogues/", count=2
+    )
+    assert catalogues[0]["catalogue_id"] in [
+        cat.catalogue_id for cat in genome_catalogues
+    ]
+
+    cat_id = "human-gut-prokaryotes"
+    catalogue = call_endpoint_and_get_data(
+        ninja_api_client, f"/genomes/catalogues/{cat_id}", getter=_whole_object
+    )
+    assert catalogue["catalogue_id"] in [cat.catalogue_id for cat in genome_catalogues]
+
+    catalogue_genomes = call_endpoint_and_get_data(
+        ninja_api_client, f"/genomes/catalogues/{cat_id}/genomes/", count=2
+    )
+    assert catalogue_genomes[0]["accession"] == genomes[0].accession

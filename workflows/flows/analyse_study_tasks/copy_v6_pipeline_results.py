@@ -23,13 +23,12 @@ from analyses.models import Analysis, Study
 def copy_v6_pipeline_results(analysis_accession: str):
     analysis = Analysis.objects.get(accession=analysis_accession)
     study = analysis.study
-    run = analysis.run
     source = trailing_slash_ensured_dir(analysis.results_dir)
     experiment_type_label = Analysis.ExperimentTypes(
         analysis.experiment_type
     ).label.lower()
     assert (
-        analysis.is_private == study.is_private == run.is_private
+        analysis.is_private == study.is_private == analysis.assembly_or_run.is_private
     )  # Shouldn't ever be untrue, just a helper for the future
 
     target_root = (
@@ -38,7 +37,7 @@ def copy_v6_pipeline_results(analysis_accession: str):
         else EMG_CONFIG.slurm.ftp_results_dir
     )
 
-    target = f"{target_root}/{accession_prefix_separated_dir_path(study.first_accession, -3)}/{accession_prefix_separated_dir_path(run.first_accession, -3)}/{analysis.pipeline_version}/{experiment_type_label}"
+    target = f"{target_root}/{accession_prefix_separated_dir_path(study.first_accession, -3)}/{accession_prefix_separated_dir_path(analysis.assembly_or_run.first_accession, -3)}/{analysis.pipeline_version}/{experiment_type_label}"
     print(
         f"Will copy results for {analysis_accession} from {analysis.results_dir} to {target}"
     )

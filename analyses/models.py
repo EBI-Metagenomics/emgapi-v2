@@ -627,6 +627,7 @@ class Analysis(
     class TaxonomySources(FutureStrEnum):
         SSU: str = "ssu"
         LSU: str = "lsu"
+        MOTUS: str = "motus"
         ITS_ONE_DB: str = "its_one_db"
         UNITE: str = "unite"
         PR2: str = "pr2"
@@ -652,6 +653,11 @@ class Analysis(
         "asv",
         FUNCTIONAL_ANNOTATION,
     ]
+
+    class FunctionalSources(FutureStrEnum):
+        PFAM: str = "pfam"
+
+    FUNCTIONAL_PFAM = f"{FUNCTIONAL_ANNOTATION}__{FunctionalSources.PFAM.value}"
 
     @staticmethod
     def default_annotations():
