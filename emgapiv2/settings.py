@@ -69,6 +69,7 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    "db_file_storage",  ## for storing images as blobs in the db
     "django_ltree",  ## for hierarchical models like Biome
     "debug_toolbar",
     "django_json_widget",
@@ -204,6 +205,12 @@ STATIC_ROOT = os.path.join(BASE_DIR, "staticfiles")
 STORAGES = {
     "staticfiles": {
         "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+    },
+    "fieldfiles": {
+        "BACKEND": "db_file_storage.storage.DatabaseFileStorage",
+        "OPTIONS": {
+            "base_url": BASE_URL + "fieldfiles/",
+        },
     },
 }
 

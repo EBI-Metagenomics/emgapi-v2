@@ -360,3 +360,61 @@ class MGnifyFunctionalAnalysisAnnotationType(FutureStrEnum):
 
 class StudyAnalysisIntent(Schema):
     study_accession: str
+
+
+class SuperStudy(ModelSchema):
+    slug: str = Field(..., examples=["atlanteco"])
+    title: str = Field(..., examples=["AtlantECO"])
+    description: Optional[str] = Field(
+        None, examples=["The Atlantic Ocean and its ecosystem services"]
+    )
+    logo_url: Optional[str] = Field(None, examples=["https://example.com/logo.png"])
+
+    @staticmethod
+    def resolve_logo_url(obj: analyses.models.SuperStudy) -> Optional[str]:
+        if obj.logo:
+            return obj.logo.url
+        return None
+
+    class Meta:
+        model = analyses.models.SuperStudy
+        fields = ["slug", "title", "description"]
+
+
+class SuperStudyDetail(SuperStudy):
+    studies: List[MGnifyStudy] = Field(...)
+
+    class Meta:
+        model = analyses.models.SuperStudy
+        fields = ["slug", "title", "description"]
+
+
+class MGnifyPublication(ModelSchema):
+    pubmed_id: int = Field(None, examples=[12345678])
+    title: str = Field(..., examples=["The Origin of Species"])
+    published_year: Optional[int] = Field(None, examples=[1859])
+    metadata: Dict[str, Any] = Field(
+        ...,
+        examples=[
+            {
+                "authors": "Darwin C",
+                "doi": "10.1017/CBO9780511694295",
+            }
+        ],
+    )
+
+    @staticmethod
+    def resolve_metadata(obj: analyses.models.Publication) -> dict:
+        return obj.metadata.model_dump()
+
+    class Meta:
+        model = analyses.models.Publication
+        fields = ["pubmed_id", "title", "published_year", "metadata"]
+
+
+class MGnifyPublicationDetail(MGnifyPublication):
+    studies: List[MGnifyStudy] = Field(...)
+
+    class Meta:
+        model = analyses.models.Publication
+        fields = ["pubmed_id", "title", "published_year", "metadata"]

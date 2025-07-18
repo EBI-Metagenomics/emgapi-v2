@@ -4,15 +4,18 @@ import logging
 import os
 import re
 from pathlib import Path
-from typing import ClassVar, Union
+from typing import ClassVar, Union, Optional
 
 from aenum import extend_enum
+from db_file_storage.model_utils import delete_file, delete_file_if_needed
 from django.contrib.postgres.indexes import GinIndex
 from django.core.exceptions import MultipleObjectsReturned, ObjectDoesNotExist
+from django.core.files.storage import storages
 from django.db import models
 from django.db.models import JSONField, Q, Func, Value
 from django.db.models.signals import post_save
 from django.dispatch import receiver
+from django.utils.text import Truncator
 from django_ltree.models import TreeModel
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -24,6 +27,7 @@ from analyses.base_models.base_models import (
     TimeStampedModel,
     VisibilityControlledModel,
     InferredMetadataMixin,
+    DbStoredFileField,
 )
 from analyses.base_models.mgnify_accessioned_models import MGnifyAccessionField
 from analyses.base_models.with_downloads_models import WithDownloadsModel
@@ -812,3 +816,85 @@ class AnalysedContig(TimeStampedModel):
         }
 
     annotations = models.JSONField(default=default_annotations.__func__)
+
+
+class SuperStudyImage(DbStoredFileField): ...
+
+
+class SuperStudy(TimeStampedModel):
+    slug = models.SlugField(unique=True, primary_key=True)
+    title = models.CharField(max_length=255)
+    description = models.TextField(blank=True)
+    studies = models.ManyToManyField(
+        Study, related_name="super_studies", through="SuperStudyStudy"
+    )
+    # genome_catalogues #TODO
+    logo = models.ImageField(
+        upload_to="analyses.SuperStudyImage/bytes/filename/mimetype",
+        blank=True,
+        null=True,
+        storage=storages["fieldfiles"],
+    )
+
+    class Meta:
+        verbose_name_plural = "super studies"
+
+    def save(self, *args, **kwargs):
+        delete_file_if_needed(self, "logo")
+        super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        super().delete(*args, **kwargs)
+        delete_file(self, "logo")
+
+
+class SuperStudyStudy(TimeStampedModel):
+    study = models.ForeignKey(Study, on_delete=models.CASCADE)
+    super_study = models.ForeignKey(SuperStudy, on_delete=models.CASCADE)
+    is_flagship = models.BooleanField(default=True)
+
+    class Meta:
+        verbose_name = "Study in Super Study"
+        verbose_name_plural = "Studies in Super Study"
+        unique_together = (("study", "super_study"),)
+
+
+class StudyPublication(TimeStampedModel):
+    study = models.ForeignKey(Study, on_delete=models.CASCADE)
+    publication = models.ForeignKey("Publication", on_delete=models.CASCADE)
+
+
+class Publication(TimeStampedModel):
+    """
+    Model for scientific publications related to studies.
+    """
+
+    pubmed_id = models.IntegerField(primary_key=True)
+    title = models.CharField(max_length=740)
+    published_year = models.SmallIntegerField(null=True, blank=True)
+
+    class PublicationMetadata(BaseModel):
+        """
+        Pydantic schema for storing additional publication metadata in JSON.
+        """
+
+        authors: Optional[str] = Field(None)
+        doi: Optional[str] = Field(None)
+        isbn: Optional[str] = Field(None)
+        iso_journal: Optional[str] = Field(None)
+        pubmed_central_id: Optional[int] = Field(None)
+        volume: Optional[str] = Field(None)
+        pub_type: Optional[str] = Field(None)
+
+    metadata = JSONFieldWithSchema(schema=PublicationMetadata)
+
+    studies = models.ManyToManyField(
+        Study, related_name="publications", through=StudyPublication
+    )
+
+    class Meta:
+        verbose_name = "Publication"
+        verbose_name_plural = "Publications"
+
+    def __str__(self):
+        return f"Publication {self.pk}: {Truncator(self.title).words(5)}"

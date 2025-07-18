@@ -94,6 +94,62 @@ class LegacyRun(LegacyEMGBase):
     experiment_type_id: Mapped[int] = mapped_column("EXPERIMENT_TYPE_ID", Integer)
 
 
+class LegacySuperStudy(LegacyEMGBase):
+    __tablename__ = "SUPER_STUDY"
+
+    study_id: Mapped[int] = mapped_column("STUDY_ID", Integer, primary_key=True)
+    title: Mapped[str] = mapped_column("TITLE", String)
+    description: Mapped[str] = mapped_column("DESCRIPTION", String, nullable=True)
+    url_slug: Mapped[str] = mapped_column("URL_SLUG", String)
+    logo: Mapped[str] = mapped_column("LOGO", String, nullable=True)
+
+    studies: Mapped[list["LegacySuperStudyStudy"]] = relationship(
+        "LegacySuperStudyStudy", back_populates="super_study"
+    )
+
+
+class LegacySuperStudyStudy(LegacyEMGBase):
+    __tablename__ = "SUPER_STUDY_STUDY"
+
+    id: Mapped[int] = mapped_column("id", Integer, primary_key=True)
+    study_id: Mapped[int] = mapped_column("STUDY_ID", ForeignKey("STUDY.STUDY_ID"))
+    super_study_id: Mapped[int] = mapped_column(
+        "SUPER_STUDY_ID", ForeignKey("SUPER_STUDY.STUDY_ID")
+    )
+    is_flagship: Mapped[bool] = mapped_column("is_flagship", Boolean)
+
+    study: Mapped["LegacyStudy"] = relationship("LegacyStudy")
+    super_study: Mapped["LegacySuperStudy"] = relationship(
+        "LegacySuperStudy", back_populates="studies"
+    )
+
+
+class LegacyPublication(LegacyEMGBase):
+    __tablename__ = "PUBLICATION"
+
+    pub_id: Mapped[int] = mapped_column("PUB_ID", primary_key=True)
+    authors: Mapped[str] = mapped_column("AUTHORS", nullable=True)
+    doi: Mapped[str] = mapped_column("DOI", nullable=True)
+    isbn: Mapped[str] = mapped_column("ISBN", nullable=True)
+    iso_journal: Mapped[str] = mapped_column("ISO_JOURNAL", nullable=True)
+    medline_journal: Mapped[str] = mapped_column("MEDLINE_JOURNAL", nullable=True)
+    pubmed_central_id: Mapped[int] = mapped_column("PUBMED_CENTRAL_ID", nullable=True)
+    pubmed_id: Mapped[int] = mapped_column("PUBMED_ID")
+    pub_title: Mapped[str] = mapped_column("PUB_TITLE")
+    raw_pages: Mapped[str] = mapped_column("RAW_PAGES", nullable=True)
+    volume: Mapped[str] = mapped_column("VOLUME", nullable=True)
+    published_year: Mapped[int] = mapped_column("PUBLISHED_YEAR", nullable=True)
+    pub_type: Mapped[str] = mapped_column("PUB_TYPE", nullable=True)
+
+
+class LegacyStudyPublication(LegacyEMGBase):
+    __tablename__ = "STUDY_PUBLICATION"
+
+    id: Mapped[int] = mapped_column("id", primary_key=True)
+    study_id: Mapped[int] = mapped_column("STUDY_ID")
+    pub_id: Mapped[int] = mapped_column("PUB_ID")
+
+
 class LegacyAnalysisJob(LegacyEMGBase):
     __tablename__ = "ANALYSIS_JOB"
 
