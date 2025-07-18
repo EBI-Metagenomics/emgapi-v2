@@ -225,7 +225,7 @@ FUNCTIONAL_TABLE_SCHEMAS = [
         expect_index=True,
         download_subgroup=analyses.models.Analysis.INTERPRO_IDENTIFIERS,
         import_to_annotations_key=analyses.models.Analysis.INTERPRO_IDENTIFIERS,
-        import_from_column="interpro_identifier",
+        import_from_column="interpro_accession",
         short_description="InterPro Identifier counts",
         long_description="Table with counts for each InterPro identifier found",
     ),
