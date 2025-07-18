@@ -2,6 +2,10 @@ fileignoreconfig:
 - filename: .github/workflows/release_k8s.yml
   checksum: 0e93196d244417801fd40ad6bfa01f53a6bf04257371378a1dc3e14cbc7a04d8
 
+fileignoreconfig:
+- filename: workflows/tests/test_analysis_rawreads_study_flow.py
+  checksum: 0f7255bdd7303269337a7d9be17d5246bfc32980697ba4135f54be201d13180a
+
 - filename: analyses/base_models/base_models.py
   allowed_patterns: [key]
 
@@ -80,8 +84,26 @@ fileignoreconfig:
 - filename: slurm-dev-environment/fs/nfs/public/tests/amplicon_v6_output/SRR6180434/taxonomy-summary/SILVA-SSU/SRR6180434.html
   checksum: be322a6ac4686d8fa31b271a862510603403c2da8dbdce60dbb7ad3877aa7b47
 
+- filename: slurm-dev-environment/fs/nfs/public/tests/assembly_v6_output/ERZ857107/ERZ857107/pathways-and-systems/antismash/ERZ857107_merged.json
+  checksum: ece068d6588a0eb485afe5f33e4a07fb38ba4f4818886d04e602a55a277f08a3
+
+- filename: slurm-dev-environment/fs/nfs/public/tests/assembly_v6_output/ERZ857107/ERZ857107/taxonomy/ERZ857107.html
+  checksum: af7245c07908173f79c9ed103d6c6359ee21098d74144b481fd260c35541413a
+
+- filename: slurm-dev-environment/fs/nfs/public/tests/assembly_v6_output/ERZ857107/multiqc/multiqc_report.html
+  checksum: b5eb08be7ebabc3ea66bd9386fc470ce1bc1a4e134f76e46008db6494390bcaf
+
+- filename: slurm-dev-environment/fs/nfs/public/tests/assembly_v6_output/ERZ857107/ERZ857107/qc/multiqc_report.html
+  checksum: 207ad16d2d80fa615924376559f7dccd2276e153702ffcf8abc0c700795c1124
+
+- filename: slurm-dev-environment/fs/nfs/public/tests/assembly_v6_output/ERZ857107/ERZ857107/functional-annotation/interpro/ERZ857107_interpro_summary_2.tsv
+  checksum: df6cacb1d2d940499067d40d00ae6ccf6b380667722afce4f1526f39d74d90e1
+
+- filename: slurm-dev-environment/fs/nfs/public/tests/assembly_v6_output/ERZ857107/dram-distill/samplesheet_dram_input.tsv
+  checksum: 17031e40bdc3447b7c6f98bf3c8cebf22e39c3e78ec129469ce83af6ca9609ed
+
 - filename: Taskfile.yaml
-  allowed_patterns: [a password in]
+  allowed_patterns: [a password in, slurm-dev-environment/fs/nfs/public/tests/assembly_v6_output/ERZ857107/ERZ857107, slurm-dev-environment/fs/nfs/ftp/public/databases/metagenomics/mgnify_results/PRJNA398/PRJNA398089/ERZ857/ERZ857107/V6/assembly]
 
 - filename: workflows/data_io_utils/csv/csv_comment_handler.py
   allowed_patterns: [keys()]

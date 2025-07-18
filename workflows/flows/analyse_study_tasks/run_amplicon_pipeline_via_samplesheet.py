@@ -70,7 +70,6 @@ def run_amplicon_pipeline_via_samplesheet(
             ("--input", samplesheet),
             ("--outdir", amplicon_current_outdir),
             EMG_CONFIG.slurm.use_nextflow_tower and "-with-tower",
-            ("-name", f"ampl-v6-sheet-{slugify(samplesheet)[-10:]}"),
             ("-ansi-log", "false"),
         ]
     )
@@ -99,6 +98,13 @@ def run_amplicon_pipeline_via_samplesheet(
         # assume that if job finished, all finished... set statuses
         set_post_analysis_states(amplicon_current_outdir, amplicon_analyses)
         import_completed_analyses(amplicon_current_outdir, amplicon_analyses)
+        for analysis in amplicon_analyses:
+            analysis.refresh_from_db()
+            if analysis.status[analysis.AnalysisStates.ANALYSIS_COMPLETED]:
+                break
+        else:
+            print("Not creating summaries because ALL analyses of samplesheet failed")
+            return
         generate_markergene_summary_for_pipeline_run(
             mgnify_study_accession=mgnify_study.accession,
             pipeline_outdir=amplicon_current_outdir,

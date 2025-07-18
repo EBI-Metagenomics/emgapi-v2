@@ -129,7 +129,6 @@ def realistic_example(accession: str):
                 command=(
                     f"nextflow run {EMG_CONFIG.slurm.pipelines_root_dir}/download_read_runs.nf "
                     f"-resume "
-                    f"-name fetch-read-runs-{study.accession}-{sample_accession} "
                     f"--sample {sample_accession} "
                     f"-ansi-log false "  # otherwise the logs in prefect/django are full of control characters
                     f"-with-trace trace-{sample_accession}.txt"

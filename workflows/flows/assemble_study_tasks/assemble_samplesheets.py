@@ -23,7 +23,7 @@ from workflows.prefect_utils.slurm_flow import (
     run_cluster_job,
 )
 from workflows.prefect_utils.slurm_policies import (
-    ResubmitWithCleanedNextflowIfFailedPolicy,
+    ResubmitIfFailedPolicy,
 )
 
 # TODO: move to a constants file
@@ -229,11 +229,8 @@ def run_assembler_for_samplesheet(
             ("--samplesheet", samplesheet_csv),
             mgnify_study.is_private and "--private_study",
             ("--outdir", miassembler_outdir),
+            ("-w", miassembler_outdir),
             EMG_CONFIG.slurm.use_nextflow_tower and "-with-tower",
-            (
-                "-name",
-                f"miassembler-samplesheet-{file_path_shortener(samplesheet_csv, 1, 15, True)}",
-            ),
         ]
     )
 
@@ -247,7 +244,7 @@ def run_assembler_for_samplesheet(
             memory=f"{EMG_CONFIG.assembler.assembly_nextflow_master_job_memory_gb}G",
             environment="ALL,TOWER_ACCESS_TOKEN,TOWER_WORKSPACE_ID",
             input_files_to_hash=[samplesheet_csv],
-            resubmit_policy=ResubmitWithCleanedNextflowIfFailedPolicy,
+            resubmit_policy=ResubmitIfFailedPolicy,
             working_dir=miassembler_outdir,
         )
     except ClusterJobFailedException:

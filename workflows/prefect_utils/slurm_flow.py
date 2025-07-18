@@ -16,7 +16,7 @@ from prefect.runtime import flow_run
 
 from emgapiv2.log_utils import mask_sensitive_data as safe
 from workflows.models import OrchestratedClusterJob
-from workflows.nextflow_utils.tower import maybe_get_nextflow_tower_browse_url
+from workflows.nextflow_utils.tower import get_nextflow_tower_url
 from workflows.nextflow_utils.trace import maybe_get_nextflow_trace_df
 from workflows.prefect_utils.slurm_limits import delay_until_cluster_has_space
 from workflows.prefect_utils.slurm_policies import (
@@ -270,7 +270,7 @@ def start_or_attach_cluster_job(
         job_submit_description=job_submit_description,
     )
 
-    nf_link = maybe_get_nextflow_tower_browse_url(command)
+    nf_link = get_nextflow_tower_url()
     nf_link_markdown = f"[Watch Nextflow Workflow]({nf_link})" if nf_link else ""
 
     ocj = OrchestratedClusterJob.objects.create(
