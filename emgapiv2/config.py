@@ -102,6 +102,7 @@ class RawReadsPipelineConfig(BaseModel):
     rawreads_pipeline_git_revision: str = (
         "master"  # branch or commit of ebi-metagenomics/raw-reads-analysis-pipeline
     )
+    rawreads_pipeline_config_file: str = "/nfs/production/nextflow-configs/codon.config"
     rawreads_pipeline_nf_profile: str = "codon"
     samplesheet_chunk_size: int = 50
     # results stats
@@ -231,3 +232,10 @@ class EMGConfig(BaseSettings):
         "env_prefix": "emg_",
         "env_nested_delimiter": "__",
     }
+
+
+class GenomeConfig:
+    MAGS_FTP_SITE: str = (
+        "http://ftp.ebi.ac.uk/pub/databases/metagenomics/mgnify_genomes/"
+    )
+    LATEST_MAGS_PIPELINE_TAG: str = "v1.2.1"
