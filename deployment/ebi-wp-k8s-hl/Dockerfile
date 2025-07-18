@@ -25,6 +25,7 @@ ADD emgapiv2 ./emgapiv2
 ADD ena ./ena
 ADD static ./static
 ADD templates ./templates
+ADD genomes ./genomes
 ADD --chown=7123:1347 workflows ./workflows
 ADD manage.py ./manage.py
 
