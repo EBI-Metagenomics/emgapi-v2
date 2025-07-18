@@ -62,6 +62,7 @@ def run_rawreads_pipeline_via_samplesheet(
             ("nextflow", "run", EMG_CONFIG.rawreads_pipeline.rawreads_pipeline_repo),
             ("-r", EMG_CONFIG.rawreads_pipeline.rawreads_pipeline_git_revision),
             "-latest",  # Pull changes from GitHub
+            ("-config", EMG_CONFIG.rawreads_pipeline.rawreads_pipeline_config_file),
             ("-profile", EMG_CONFIG.rawreads_pipeline.rawreads_pipeline_nf_profile),
             "-resume",
             ("--samplesheet", samplesheet),

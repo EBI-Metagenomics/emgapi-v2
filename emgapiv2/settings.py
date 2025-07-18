@@ -78,6 +78,7 @@ INSTALLED_APPS = [
     "ena",
     "analyses",
     "workflows",
+    "genomes",
 ]
 
 MIDDLEWARE = [
