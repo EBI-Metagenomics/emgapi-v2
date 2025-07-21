@@ -828,6 +828,11 @@ class SuperStudy(TimeStampedModel):
     studies = models.ManyToManyField(
         Study, related_name="super_studies", through="SuperStudyStudy"
     )
+    genome_catalogues = models.ManyToManyField(
+        "genomes.GenomeCatalogue",
+        related_name="super_studies",
+        through="SuperStudyGenomeCatalogue",
+    )
     # genome_catalogues #TODO
     logo = models.ImageField(
         upload_to="analyses.SuperStudyImage/bytes/filename/mimetype",
@@ -847,6 +852,9 @@ class SuperStudy(TimeStampedModel):
         super().delete(*args, **kwargs)
         delete_file(self, "logo")
 
+    def __str__(self):
+        return self.pk
+
 
 class SuperStudyStudy(TimeStampedModel):
     study = models.ForeignKey(Study, on_delete=models.CASCADE)
@@ -857,6 +865,24 @@ class SuperStudyStudy(TimeStampedModel):
         verbose_name = "Study in Super Study"
         verbose_name_plural = "Studies in Super Study"
         unique_together = (("study", "super_study"),)
+
+    def __str__(self):
+        return f"SuperStudyStudy {self.pk}: {self.study} in {self.super_study}"
+
+
+class SuperStudyGenomeCatalogue(TimeStampedModel):
+    genome_catalogue = models.ForeignKey(
+        "genomes.GenomeCatalogue", on_delete=models.CASCADE
+    )
+    super_study = models.ForeignKey(SuperStudy, on_delete=models.CASCADE)
+
+    class Meta:
+        verbose_name = "Genome Catalogue in Super Study"
+        verbose_name_plural = "Genome Catalogues in Super Study"
+        unique_together = (("genome_catalogue", "super_study"),)
+
+    def __str__(self):
+        return f"SuperStudyGenomeCatalogue {self.pk}: {self.genome_catalogue} in {self.super_study}"
 
 
 class StudyPublication(TimeStampedModel):

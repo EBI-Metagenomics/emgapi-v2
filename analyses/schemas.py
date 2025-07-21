@@ -19,6 +19,7 @@ from analyses.base_models.with_downloads_models import (
 )
 from emgapiv2.api.storage import private_storage
 from emgapiv2.enum_utils import FutureStrEnum
+from genomes.schemas.GenomeCatalogue import GenomeCatalogueList
 from workflows.data_io_utils.filenames import trailing_slash_ensured_dir
 
 
@@ -383,6 +384,7 @@ class SuperStudy(ModelSchema):
 
 class SuperStudyDetail(SuperStudy):
     studies: List[MGnifyStudy] = Field(...)
+    genome_catalogues: List[GenomeCatalogueList] = Field(...)
 
     class Meta:
         model = analyses.models.SuperStudy
