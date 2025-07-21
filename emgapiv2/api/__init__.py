@@ -12,6 +12,20 @@ from .super_studies import SuperStudyController
 from .genomes import GenomeController
 from .token_controller import WebinJwtController
 
+# Avoid circular imports between analyses and genomes apps' schemas by resolving forward references here
+from analyses.schemas import Biome, MGnifyAnalysisDownloadFile  # noqa
+from genomes.schemas import (
+    GenomeDetail,
+    GenomeList,
+    GenomeCatalogueDetail,
+    GenomeCatalogueList,
+)
+
+GenomeList.model_rebuild()
+GenomeDetail.model_rebuild()
+GenomeCatalogueList.model_rebuild()
+GenomeCatalogueDetail.model_rebuild()
+
 api = NinjaExtraAPI(
     title="MGnify API",
     description="The API for [MGnify](https://www.ebi.ac.uk/metagenomics), "
