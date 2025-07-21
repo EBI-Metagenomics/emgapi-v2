@@ -1,10 +1,12 @@
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 
 from ninja import Schema
 from pydantic import Field
 
-from analyses.schemas import Biome
 from genomes.models import Genome
+
+if TYPE_CHECKING:
+    from analyses.schemas import Biome
 
 
 class GenomeBase(Schema):
@@ -14,7 +16,6 @@ class GenomeBase(Schema):
     ncbi_genome_accession: Optional[str]
     img_genome_accession: Optional[str]
     patric_genome_accession: Optional[str]
-    biome: Biome
     length: int
     num_contigs: int
     n_50: int
@@ -25,7 +26,7 @@ class GenomeBase(Schema):
     catalogue_id: str
     geographic_origin: Optional[str]
     geographic_range: Optional[list[str]] = []
-    biome: Optional[Biome] = None
+    biome: Optional["Biome"] = None
 
     class Config:
         from_attributes = True
