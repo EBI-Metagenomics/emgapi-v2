@@ -198,6 +198,7 @@ def run_assembler_for_samplesheet(
             run__ena_accessions__0__in=samplesheet_df["reads_accession"]
         )
     )
+    logger = get_run_logger()
 
     update_assemblers_and_contaminant_ref_of_assemblies_from_samplesheet(samplesheet_df)
 
@@ -308,3 +309,12 @@ def run_assembler_for_samplesheet(
                     status=analyses.models.Assembly.AssemblyStates.ASSEMBLY_FAILED,
                     reason="The assembly is missing from the pipeline end-of-run reports",
                 )
+    finally:
+        # output list of assembled runs
+        assembled_runs = []
+        if assembled_runs_csv.is_file():
+            with assembled_runs_csv.open(mode="r") as file_handle:
+                for row in csv.reader(file_handle, delimiter=","):
+                    run_accession, assembler_software, assembler_version = row
+                    assembled_runs.append(run_accession)
+        logger.info("Assembled runs: " + ",".join(assembled_runs))
