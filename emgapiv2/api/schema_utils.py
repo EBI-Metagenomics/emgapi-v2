@@ -39,7 +39,7 @@ def make_related_detail_link(
     from_list_at_path: str = "items/",
 ) -> dict:
     if from_list_to_detail:
-        link_name = f"Get{pascalcase(related_object_name)}From{pascalcase(self_object_name)}List"
+        link_name = f"Get{pascalcase(related_object_name)}From{pascalcase(self_object_name)}{pascalcase(from_list_at_path).strip('/')}List"
     else:
         link_name = (
             f"Get{pascalcase(related_object_name)}For{pascalcase(self_object_name)}"
