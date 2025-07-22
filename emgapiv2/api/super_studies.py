@@ -16,17 +16,38 @@ class SuperStudyController(ControllerBase):
         "/{slug}",
         response=SuperStudyDetail,
         summary="Get the detail of a single Super Study",
-        description="A Super Study is a collection of MGnify Studies all related to a single large initiative.",
+        description="A Super Study is a collection of MGnify Studies all related to a single large initiative. "
+        "They may also reference Genome Catalogues that were assembled from the Studies "
+        "or as part of the Super Study initiative.",
         operation_id="get_super_study",
         openapi_extra=make_links_section(
-            make_related_detail_link(
-                related_detail_operation_id="get_mgnify_study",
-                self_object_name="super_study",
-                related_object_name="study",
-                related_id_in_response="accession",
-                from_list_to_detail=True,
-                from_list_at_path="studies/",
-            )
+            {
+                **make_related_detail_link(
+                    related_detail_operation_id="get_mgnify_study",
+                    self_object_name="super_study",
+                    related_object_name="study",
+                    related_id_in_response="accession",
+                    from_list_to_detail=True,
+                    from_list_at_path="flagship_studies/",
+                ),
+                **make_related_detail_link(
+                    related_detail_operation_id="get_mgnify_study",
+                    self_object_name="super_study",
+                    related_object_name="study",
+                    related_id_in_response="accession",
+                    from_list_to_detail=True,
+                    from_list_at_path="related_studies/",
+                ),
+                **make_related_detail_link(
+                    related_detail_operation_id="get_genome_catalogue",
+                    self_object_name="super_study",
+                    related_object_name="genome_catalogue",
+                    related_id_in_response="catalogue_id",
+                    from_list_to_detail=True,
+                    from_list_at_path="genome_catalogues/",
+                    related_lookup_param="catalogue_id",
+                ),
+            }
         ),
     )
     def get_super_study(self, slug: str):

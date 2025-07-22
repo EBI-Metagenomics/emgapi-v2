@@ -202,7 +202,7 @@ def test_api_super_studies_list(super_study, ninja_api_client):
 
 @pytest.mark.django_db
 def test_api_super_study_detail(
-    super_study, raw_reads_mgnify_study, ninja_api_client, client
+    super_study, raw_reads_mgnify_study, ninja_api_client, client, genome_catalogues
 ):
     super_study_detail = call_endpoint_and_get_data(
         ninja_api_client, f"/super-studies/{super_study.slug}", getter=_whole_object
@@ -210,10 +210,15 @@ def test_api_super_study_detail(
     assert super_study_detail["slug"] == super_study.slug
     assert super_study_detail["title"] == super_study.title
     assert super_study_detail["description"] == super_study.description
-    assert len(super_study_detail["studies"]) == 1
+    assert len(super_study_detail["flagship_studies"]) == 1
     assert (
-        super_study_detail["studies"][0]["accession"]
+        super_study_detail["flagship_studies"][0]["accession"]
         == raw_reads_mgnify_study.accession
+    )
+    assert len(super_study_detail["related_studies"]) == 0
+    assert (
+        super_study_detail["genome_catalogues"][0]["catalogue_id"]
+        == genome_catalogues[0].catalogue_id
     )
     assert super_study_detail["logo_url"].startswith("/fieldfiles/download")
 
