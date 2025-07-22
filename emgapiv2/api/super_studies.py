@@ -28,7 +28,15 @@ class SuperStudyController(ControllerBase):
                     related_object_name="study",
                     related_id_in_response="accession",
                     from_list_to_detail=True,
-                    from_list_at_path="studies/",
+                    from_list_at_path="flagship_studies/",
+                ),
+                **make_related_detail_link(
+                    related_detail_operation_id="get_mgnify_study",
+                    self_object_name="super_study",
+                    related_object_name="study",
+                    related_id_in_response="accession",
+                    from_list_to_detail=True,
+                    from_list_at_path="related_studies/",
                 ),
                 **make_related_detail_link(
                     related_detail_operation_id="get_genome_catalogue",

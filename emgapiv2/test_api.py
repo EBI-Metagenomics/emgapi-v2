@@ -210,11 +210,12 @@ def test_api_super_study_detail(
     assert super_study_detail["slug"] == super_study.slug
     assert super_study_detail["title"] == super_study.title
     assert super_study_detail["description"] == super_study.description
-    assert len(super_study_detail["studies"]) == 1
+    assert len(super_study_detail["flagship_studies"]) == 1
     assert (
-        super_study_detail["studies"][0]["accession"]
+        super_study_detail["flagship_studies"][0]["accession"]
         == raw_reads_mgnify_study.accession
     )
+    assert len(super_study_detail["related_studies"]) == 0
     assert (
         super_study_detail["genome_catalogues"][0]["catalogue_id"]
         == genome_catalogues[0].catalogue_id
