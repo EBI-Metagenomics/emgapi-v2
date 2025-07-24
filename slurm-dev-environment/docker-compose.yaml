@@ -93,7 +93,7 @@ services:
     healthcheck:
       test: ["CMD", "nc", "-z", "localhost", "6817"]
       interval: 30s
-      start_period: 2s
+      start_interval: 2s
       timeout: 2s
       retries: 10
     networks: [slurm]
