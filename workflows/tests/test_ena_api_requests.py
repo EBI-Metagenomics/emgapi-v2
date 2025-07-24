@@ -93,7 +93,7 @@ def test_get_study_from_ena_two_secondary_accessions(httpx_mock, prefect_harness
 @pytest.mark.django_db(transaction=True)
 def test_get_study_from_ena_uses_primary_as_accession(httpx_mock, prefect_harness):
     """
-    Study is normal but input is secondary accession
+    Study is normal but input is secondary accession. Primary accession should be added to db as accession key.
     """
     sec_study_accession = "SRP0009034"
     study_accession = "PRJNA109315"
@@ -116,13 +116,10 @@ def test_get_study_from_ena_uses_primary_as_accession(httpx_mock, prefect_harnes
 
     get_study_from_ena(sec_study_accession, limit=10)
     assert ena.models.Study.objects.filter(accession=study_accession).count() == 1
+    assert ena.models.Study.objects.filter(accession=sec_study_accession).count() == 0
     created_study = ena.models.Study.objects.get_ena_study(study_accession)
     assert created_study.accession == study_accession
     assert len(created_study.additional_accessions) == 1
-
-    assert ena.models.Study.objects.filter(accession=sec_study_accession).count() == 0
-    with pytest.raises(ena.models.Study.DoesNotExist):
-        ena.models.Study.objects.get_ena_study(sec_study_accession)
 
 
 @pytest.mark.httpx_mock(should_mock=should_not_mock_httpx_requests_to_prefect_server)
