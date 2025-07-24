@@ -1,6 +1,8 @@
 import pytest
 from django.core.management import call_command
 from django.db.models import Count
+from django.contrib.postgres.aggregates import ArrayAgg
+
 import logging
 
 from analyses.models import Study as MGnifyStudy
@@ -14,18 +16,30 @@ def setup_duplicate_studies():
 
     ena_dup_a = ENAStudy.objects.create(
         accession="PRJEB11111",
+        additional_accessions=["ERP11111"],
         is_private=False,
         is_suppressed=False,
         webin_submitter="Webin-460",
     )
+
+    ena_dup_a_reversed = ENAStudy.objects.create(
+        accession="ERP11111",
+        additional_accessions=["PRJEB11111"],
+        is_private=False,
+        is_suppressed=False,
+        webin_submitter="Webin-460",
+    )
+
     ena_dup_b = ENAStudy.objects.create(
         accession="PRJEB22222",
+        additional_accessions=["ERP22222"],
         is_private=False,
         is_suppressed=False,
         webin_submitter="Webin-460",
     )
     ena_single = ENAStudy.objects.create(
         accession="PRJEB33333",
+        additional_accessions=["ERP33333"],
         is_private=False,
         is_suppressed=False,
         webin_submitter="Webin-460",
@@ -36,7 +50,7 @@ def setup_duplicate_studies():
         id=10001, ena_study=ena_dup_a, title="Test Study 1 new"
     )
     mg_dup_a_old = MGnifyStudy.objects.create(
-        id=6001, ena_study=ena_dup_a, title="Test Study 1 old"
+        id=6001, ena_study=ena_dup_a_reversed, title="Test Study 1 old"
     )
     mg_dup_b_new = MGnifyStudy.objects.create(
         id=10002, ena_study=ena_dup_b, title="Test Study 2 new"
@@ -49,6 +63,9 @@ def setup_duplicate_studies():
     mg_single = MGnifyStudy.objects.create(
         id=10003, ena_study=ena_single, title="Test Study single"
     )
+
+    for study in MGnifyStudy.objects.all():
+        study.inherit_accessions_from_related_ena_object("ena_study")
 
     # ena sample --> ena study --> run
     ena_sample_a = ENASample.objects.create(
@@ -105,37 +122,39 @@ def test_deduplicate_mgys_studies(setup_duplicate_studies, caplog):
     dup_studies = setup_duplicate_studies
 
     duplicates = (
-        MGnifyStudy.objects.values("ena_study")
-        .annotate(study_count=Count("accession"))
-        .filter(study_count=2)
-        .values_list("ena_study", flat=True)
+        MGnifyStudy.objects.values("ena_accessions")
+        .annotate(studies_with_these_accessions=Count("accession"), all_mgnify_accessions=ArrayAgg("accession"))
+        .filter(studies_with_these_accessions=2)
     )
 
     assert len(duplicates) == 2
-    assert dup_studies["ena_dup_a"].accession in duplicates
-    assert dup_studies["ena_dup_b"].accession in duplicates
-    assert dup_studies["ena_single"].accession not in duplicates
+
+    # Check if the ENA study accessions are in any of the ena_accessions arrays in the duplicates result
+    duplicate_accessions = [acc for dup in duplicates for acc in dup['ena_accessions']]
+    assert dup_studies["ena_dup_a"].accession in duplicate_accessions
+    assert dup_studies["ena_dup_b"].accession in duplicate_accessions
+    assert dup_studies["ena_single"].accession not in duplicate_accessions
 
     with caplog.at_level(logging.INFO):
         call_command("merge_mgys_duplicates")
 
         assert (
-            f"ENA accession {dup_studies['ena_dup_a'].accession} is linked to multiple MGnify Studies:"
+            f"ENA accession ['ERP11111', 'PRJEB11111'] is linked to multiple MGnify Studies"
             in caplog.text
         )
         assert (
-            f"ENA accession {dup_studies['ena_dup_b'].accession} is linked to multiple MGnify Studies:"
+            f"ENA accession ['ERP22222', 'PRJEB22222'] is linked to multiple MGnify Studies"
             in caplog.text
         )
         assert (
-            f"ENA accession {dup_studies['ena_single']} is linked to multiple MGnify Studies:"
+            f"ENA accession ['ERP33333', 'PRJEB33333'] is linked to multiple MGnify Studies:"
             not in caplog.text
         )
 
 
 @pytest.mark.django_db(transaction=True)
 def test_reassign_runs_and_assemblies(setup_duplicate_studies, caplog):
-    setup_duplicate_studies
+    dup_studies = setup_duplicate_studies
 
     start_count = MGnifyStudy.objects.count()
 
@@ -172,12 +191,22 @@ def test_clashing_runs_gives_warning(setup_duplicate_studies, caplog):
         ena_study=dup_studies["ena_dup_a"],
         sample=dup_studies["sample_a"],
     )
-    with caplog.at_level(logging.WARNING):
+    with caplog.at_level(logging.INFO):
         call_command("merge_mgys_duplicates")
 
         assert (
-            "DUPLICATE RUNS FOUND IN BOTH STUDIES: old MGYS00006001 and new MGYS00010001. No further action performed."
+            "DUPLICATE RUNS FOUND IN BOTH STUDIES: old MGYS00006001 and new MGYS00010001"
+            in caplog.text
+        )
+
+        assert (
+            "Deleted 1 duplicate runs from old study MGYS00006001"
+            in caplog.text
+        )
+
+        assert (
+            "Deleting ENA study PRJEB11111 as it is no longer linked to any MGnify studies."
             in caplog.text
         )
         # this time MGYS00010001 is skipped and not deleted
-        assert MGnifyStudy.objects.count() == start_count - 1
+        assert MGnifyStudy.objects.count() == start_count - 2
