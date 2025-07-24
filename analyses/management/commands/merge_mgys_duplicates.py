@@ -25,7 +25,10 @@ class Command(BaseCommand):
     def deduplicate_mgys_studies(self):
         dup_ena_study_ids = (
             MGStudy.objects.values("ena_accessions")
-            .annotate(studies_with_these_accessions=Count("accession"), all_mgnify_accessions=ArrayAgg("accession"))
+            .annotate(
+                studies_with_these_accessions=Count("accession"),
+                all_mgnify_accessions=ArrayAgg("accession"),
+            )
             .filter(studies_with_these_accessions=2)
         )
 
@@ -33,9 +36,9 @@ class Command(BaseCommand):
             logging.info(
                 f"ENA accession {sorted(ena_id['ena_accessions'])} is linked to multiple MGnify Studies"
             )
-            mgnify_studies = MGStudy.objects.filter(ena_accessions__overlap=ena_id['ena_accessions']).order_by(
-                "accession"
-            )
+            mgnify_studies = MGStudy.objects.filter(
+                ena_accessions__overlap=ena_id["ena_accessions"]
+            ).order_by("accession")
 
             for mgys in mgnify_studies:
                 logging.info(f"{mgys.accession}")
@@ -61,15 +64,19 @@ class Command(BaseCommand):
                 f"DUPLICATE RUNS FOUND IN BOTH STUDIES: old {old_study.accession} and new {new_study.accession}"
             )
             if self.dry_run:
-                logging.info("Dry run. Real would delete duplicate runs from old study. Exiting")
+                logging.info(
+                    "Dry run. Real would delete duplicate runs from old study. Exiting"
+                )
                 return
             # Convert set to list for database query
             overlapping_accessions_list = list(overlapping_accessions)
-            old_study.runs.filter(ena_accessions__overlap=overlapping_accessions_list).delete()
+            old_study.runs.filter(
+                ena_accessions__overlap=overlapping_accessions_list
+            ).delete()
             logging.info(
                 f"Deleted {len(overlapping_accessions)} duplicate runs from old study {old_study.accession}"
             )
-            
+
         new_assemblies = MGAssembly.objects.filter(assembly_study=new_study)
         if self.dry_run:
             logging.info(

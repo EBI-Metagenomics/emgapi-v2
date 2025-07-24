@@ -123,14 +123,17 @@ def test_deduplicate_mgys_studies(setup_duplicate_studies, caplog):
 
     duplicates = (
         MGnifyStudy.objects.values("ena_accessions")
-        .annotate(studies_with_these_accessions=Count("accession"), all_mgnify_accessions=ArrayAgg("accession"))
+        .annotate(
+            studies_with_these_accessions=Count("accession"),
+            all_mgnify_accessions=ArrayAgg("accession"),
+        )
         .filter(studies_with_these_accessions=2)
     )
 
     assert len(duplicates) == 2
 
     # Check if the ENA study accessions are in any of the ena_accessions arrays in the duplicates result
-    duplicate_accessions = [acc for dup in duplicates for acc in dup['ena_accessions']]
+    duplicate_accessions = [acc for dup in duplicates for acc in dup["ena_accessions"]]
     assert dup_studies["ena_dup_a"].accession in duplicate_accessions
     assert dup_studies["ena_dup_b"].accession in duplicate_accessions
     assert dup_studies["ena_single"].accession not in duplicate_accessions
@@ -139,22 +142,21 @@ def test_deduplicate_mgys_studies(setup_duplicate_studies, caplog):
         call_command("merge_mgys_duplicates")
 
         assert (
-            f"ENA accession ['ERP11111', 'PRJEB11111'] is linked to multiple MGnify Studies"
+            "ENA accession ['ERP11111', 'PRJEB11111'] is linked to multiple MGnify Studies"
             in caplog.text
         )
         assert (
-            f"ENA accession ['ERP22222', 'PRJEB22222'] is linked to multiple MGnify Studies"
+            "ENA accession ['ERP22222', 'PRJEB22222'] is linked to multiple MGnify Studies"
             in caplog.text
         )
         assert (
-            f"ENA accession ['ERP33333', 'PRJEB33333'] is linked to multiple MGnify Studies:"
+            "ENA accession ['ERP33333', 'PRJEB33333'] is linked to multiple MGnify Studies:"
             not in caplog.text
         )
 
 
 @pytest.mark.django_db(transaction=True)
 def test_reassign_runs_and_assemblies(setup_duplicate_studies, caplog):
-    dup_studies = setup_duplicate_studies
 
     start_count = MGnifyStudy.objects.count()
 
@@ -199,10 +201,7 @@ def test_clashing_runs_gives_warning(setup_duplicate_studies, caplog):
             in caplog.text
         )
 
-        assert (
-            "Deleted 1 duplicate runs from old study MGYS00006001"
-            in caplog.text
-        )
+        assert "Deleted 1 duplicate runs from old study MGYS00006001" in caplog.text
 
         assert (
             "Deleting ENA study PRJEB11111 as it is no longer linked to any MGnify studies."
