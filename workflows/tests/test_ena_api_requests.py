@@ -91,6 +91,42 @@ def test_get_study_from_ena_two_secondary_accessions(httpx_mock, prefect_harness
 
 @pytest.mark.httpx_mock(should_mock=should_not_mock_httpx_requests_to_prefect_server)
 @pytest.mark.django_db(transaction=True)
+def test_get_study_from_ena_uses_primary_as_accession(httpx_mock, prefect_harness):
+    """
+    Study is normal but input is secondary accession
+    """
+    sec_study_accession = "SRP0009034"
+    study_accession = "PRJNA109315"
+
+    httpx_mock.add_response(
+        url=f"{EMG_CONFIG.ena.portal_search_api}?result=study&query=%22%28study_accession={study_accession}%20OR%20secondary_study_accession={study_accession}%29%22&limit=10&format=json&fields={','.join(EMG_CONFIG.ena.study_metadata_fields)}&dataPortal=metagenome",
+        json=[
+            {
+                "study_title": "Normal study",
+                "study_accession": "PRJNA109315",
+                "secondary_study_accession": "SRP0009034",
+            },
+        ],
+    )
+    httpx_mock.add_response(
+        url=f"{EMG_CONFIG.ena.portal_search_api}?result=study&query=%22%28study_accession%3D{study_accession}+OR+secondary_study_accession%3D{study_accession}%29%22&fields=study_accession&limit=&format=json&dataPortal=metagenome",
+        json=[{"study_accession": study_accession}],
+        is_reusable=True,
+    )
+    get_study_from_ena(sec_study_accession, limit=10)
+    assert ena.models.Study.objects.filter(accession=study_accession).count() == 1
+    created_study = ena.models.Study.objects.get_ena_study(study_accession)
+    assert created_study.accession == study_accession
+    assert len(created_study.additional_accessions) == 1
+
+    get_study_from_ena(sec_study_accession, limit=10)
+    assert ena.models.Study.objects.filter(accession=sec_study_accession).count() == 0
+    with pytest.raises(ena.models.Study.DoesNotExist):
+        ena.models.Study.objects.get_ena_study(sec_study_accession)
+
+
+@pytest.mark.httpx_mock(should_mock=should_not_mock_httpx_requests_to_prefect_server)
+@pytest.mark.django_db(transaction=True)
 def test_get_study_from_ena_use_secondary_as_primary(httpx_mock, prefect_harness):
     """
     Study doesn't have primary accession
