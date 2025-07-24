@@ -99,7 +99,7 @@ def test_get_study_from_ena_uses_primary_as_accession(httpx_mock, prefect_harnes
     study_accession = "PRJNA109315"
 
     httpx_mock.add_response(
-        url=f"{EMG_CONFIG.ena.portal_search_api}?result=study&query=%22%28study_accession={study_accession}%20OR%20secondary_study_accession={study_accession}%29%22&limit=10&format=json&fields={','.join(EMG_CONFIG.ena.study_metadata_fields)}&dataPortal=metagenome",
+        url=f"{EMG_CONFIG.ena.portal_search_api}?result=study&query=%22%28study_accession={sec_study_accession}%20OR%20secondary_study_accession={sec_study_accession}%29%22&limit=10&format=json&fields={','.join(EMG_CONFIG.ena.study_metadata_fields)}&dataPortal=metagenome",
         json=[
             {
                 "study_title": "Normal study",
@@ -109,17 +109,17 @@ def test_get_study_from_ena_uses_primary_as_accession(httpx_mock, prefect_harnes
         ],
     )
     httpx_mock.add_response(
-        url=f"{EMG_CONFIG.ena.portal_search_api}?result=study&query=%22%28study_accession%3D{study_accession}+OR+secondary_study_accession%3D{study_accession}%29%22&fields=study_accession&limit=&format=json&dataPortal=metagenome",
+        url=f"{EMG_CONFIG.ena.portal_search_api}?result=study&query=%22%28study_accession%3D{sec_study_accession}+OR+secondary_study_accession%3D{sec_study_accession}%29%22&fields=study_accession&limit=&format=json&dataPortal=metagenome",
         json=[{"study_accession": study_accession}],
         is_reusable=True,
     )
+
     get_study_from_ena(sec_study_accession, limit=10)
     assert ena.models.Study.objects.filter(accession=study_accession).count() == 1
     created_study = ena.models.Study.objects.get_ena_study(study_accession)
     assert created_study.accession == study_accession
     assert len(created_study.additional_accessions) == 1
 
-    get_study_from_ena(sec_study_accession, limit=10)
     assert ena.models.Study.objects.filter(accession=sec_study_accession).count() == 0
     with pytest.raises(ena.models.Study.DoesNotExist):
         ena.models.Study.objects.get_ena_study(sec_study_accession)
