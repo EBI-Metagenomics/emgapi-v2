@@ -213,6 +213,13 @@ class LogMaskingConfig(BaseModel):
     ]
 
 
+class EuropePMCConfig(BaseModel):
+    annotations_endpoint: str = Field(
+        "https://www.ebi.ac.uk/europepmc/annotations_api/annotationsByArticleIds"
+    )
+    annotations_provider: str = Field("Metagenomics")
+
+
 class EMGConfig(BaseSettings):
     amplicon_pipeline: AmpliconPipelineConfig = AmpliconPipelineConfig()
     rawreads_pipeline: RawReadsPipelineConfig = RawReadsPipelineConfig()
@@ -227,6 +234,7 @@ class EMGConfig(BaseSettings):
     slurm: SlurmConfig = SlurmConfig()
     webin: WebinConfig = WebinConfig()
     log_masking: LogMaskingConfig = LogMaskingConfig()
+    europe_pmc: EuropePMCConfig = EuropePMCConfig()
 
     model_config = {
         "env_prefix": "emg_",

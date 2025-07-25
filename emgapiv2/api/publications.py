@@ -10,11 +10,13 @@ from analyses.schemas import (
     MGnifyPublication,
     MGnifyPublicationDetail,
     OrderByFilter,
+    PublicationAnnotations,
 )
 from emgapiv2.api.perms import UnauthorisedIsUnfoundController
 from emgapiv2.api.schema_utils import (
     ApiSections,
 )
+from emgapiv2.api.third_party_metadata import get_epmc_publication_annotations
 
 
 class PublicationListFilters(FilterSchema):
@@ -42,6 +44,19 @@ class PublicationController(UnauthorisedIsUnfoundController):
         return self.get_object_or_exception(
             analyses.models.Publication.objects, pubmed_id=pubmed_id
         )
+
+    @http_get(
+        "/{pubmed_id}/annotations",
+        response=PublicationAnnotations,
+        summary="Get any full-text annotations associated with the publication",
+        description="Full-text annotations are retrieved from Europe PMC, text mined for relevant metagenomic metadata terms",
+        operation_id="get_mgnify_publication_annotations",
+    )
+    def get_mgnify_publication_annotations(self, pubmed_id: int):
+        self.get_object_or_exception(
+            analyses.models.Publication.objects, pubmed_id=pubmed_id
+        )
+        return get_epmc_publication_annotations(pubmed_id)
 
     @http_get(
         "/",
