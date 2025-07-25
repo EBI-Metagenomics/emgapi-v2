@@ -9,7 +9,7 @@ import analyses.models as mg_models
 @pytest.fixture
 def publication(raw_reads_mgnify_study):
     publication = mg_models.Publication.objects.create(
-        pubmed_id=1,
+        pubmed_id=30975860,
         title="The Origin of Species",
         published_year=1859,
         metadata={

@@ -2,6 +2,7 @@ import json
 from typing import Callable, Optional, TypeVar, Union
 
 import pytest
+from django.conf import settings
 from ninja.testing import TestClient
 
 from analyses.base_models.with_downloads_models import (
@@ -13,6 +14,8 @@ from analyses.base_models.with_downloads_models import (
 from analyses.models import Analysis
 
 R = TypeVar("R")
+
+EMG_CONFIG = settings.EMG_CONFIG
 
 
 def _whole_object(j):
@@ -252,3 +255,75 @@ def test_api_genome_catalogues(ninja_api_client, genomes, genome_catalogues):
         ninja_api_client, f"/genomes/catalogues/{cat_id}/genomes/", count=2
     )
     assert catalogue_genomes[0]["accession"] == genomes[0].accession
+
+
+@pytest.mark.django_db
+def test_publication_annotations(ninja_api_client, publication, httpx_mock):
+    httpx_mock.add_response(
+        url=f"{EMG_CONFIG.europe_pmc.annotations_endpoint}?articleIds=MED:{publication.pubmed_id}&provider={EMG_CONFIG.europe_pmc.annotations_provider}",
+        json=[
+            {
+                "annotations": [
+                    {
+                        "exact": "urine",
+                        "frequency": 5,
+                        "provider": "Metagenomics",
+                        "tags": [
+                            {
+                                "name": "urine",
+                                "uri": "https://www.ebi.ac.uk/ols/ontologies/UBERON/terms?iri=http%3A%2F%2Fpurl.obolibrary.org%2Fobo%2FUBERON_0001088",
+                            }
+                        ],
+                        "type": "Sample-Material",
+                    },
+                    {
+                        "exact": "muscle cells",
+                        "frequency": 1,
+                        "provider": "Metagenomics",
+                        "tags": [
+                            {
+                                "name": "muscle cells",
+                                "uri": "https://www.ebi.ac.uk/ols/ontologies/CL/terms?iri=http%3A%2F%2Fpurl.obolibrary.org%2Fobo%2FCL_0000187",
+                            }
+                        ],
+                        "type": "Sample-Material",
+                    },
+                    {
+                        "exact": "plasma",
+                        "frequency": 1,
+                        "provider": "Metagenomics",
+                        "tags": [
+                            {
+                                "name": "plasma",
+                                "uri": "https://www.ebi.ac.uk/ols/ontologies/UBERON/terms?iri=http%3A%2F%2Fpurl.obolibrary.org%2Fobo%2FUBERON_0001969",
+                            }
+                        ],
+                        "type": "Sample-Material",
+                    },
+                    {
+                        "exact": "preflight",
+                        "frequency": 2,
+                        "provider": "Metagenomics",
+                        "tags": [
+                            {
+                                "name": "preflight",
+                                "uri": "https://www.ebi.ac.uk/ols/search?q=preflight",
+                            }
+                        ],
+                        "type": "State",
+                    },
+                ]
+            }
+        ],
+    )
+    annotations = call_endpoint_and_get_data(
+        ninja_api_client,
+        f"/publications/{publication.pubmed_id}/annotations",
+        getter=_whole_object,
+    )
+    assert "sample_processing" in annotations
+    assert len(annotations["sample_processing"]) == 0
+    assert len(annotations["other"]) == 2
+    assert (
+        annotations["other"][1]["annotations"][0]["mentions"][0]["exact"] == "preflight"
+    )
