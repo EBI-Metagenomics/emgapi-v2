@@ -173,3 +173,5 @@ allowed_patterns:
 - pass_whole_object
 - dictionary key
 - OpenApiKeywords
+- KeyError
+- key=lambda
