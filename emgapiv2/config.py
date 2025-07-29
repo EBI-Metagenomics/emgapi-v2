@@ -60,7 +60,7 @@ class AssemblerConfig(BaseModel):
     assembler_default: str = "metaspades"
     assembler_version_default: str = "3.15.5"
     miassemebler_git_revision: str = (
-        "v3.0.1"  # branch or commit of ebi-metagenomics/miassembler
+        "v3.0.3"  # branch or commit of ebi-metagenomics/miassembler
     )
     miassembler_config_file: str = "/nfs/production/nextflow-configs/codon.conf"
     miassembler_nf_profile: str = "codon"
