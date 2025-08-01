@@ -5,7 +5,7 @@ from analyses.admin.base import (
     TabularInlinePaginatedWithTabSupport,
     AutoCompleteInlineForm,
 )
-from analyses.models import SuperStudy, SuperStudyStudy
+from analyses.models import SuperStudy, SuperStudyStudy, SuperStudyGenomeCatalogue
 
 
 class SuperStudyStudyInlineForm(AutoCompleteInlineForm):
@@ -16,6 +16,14 @@ class SuperStudyStudyInlineForm(AutoCompleteInlineForm):
         fields = "__all__"
 
 
+class SuperStudyGenomeCatalogueInlineForm(AutoCompleteInlineForm):
+    autocomplete_fields = ["genome_catalogue"]
+
+    class Meta:
+        model = SuperStudyGenomeCatalogue
+        fields = "__all__"
+
+
 class SuperStudyStudyInline(TabularInlinePaginatedWithTabSupport):
     model = SuperStudyStudy
     form = SuperStudyStudyInlineForm
@@ -23,7 +31,14 @@ class SuperStudyStudyInline(TabularInlinePaginatedWithTabSupport):
     extra = 0
 
 
+class SuperStudyGenomeCatalogueInline(TabularInlinePaginatedWithTabSupport):
+    model = SuperStudyGenomeCatalogue
+    form = SuperStudyGenomeCatalogueInlineForm
+    autocomplete_fields = ["genome_catalogue"]
+    extra = 0
+
+
 @admin.register(SuperStudy)
 class SuperStudyAdmin(ModelAdmin):
-    inlines = [SuperStudyStudyInline]
+    inlines = [SuperStudyStudyInline, SuperStudyGenomeCatalogueInline]
     search_fields = ["title", "slug"]

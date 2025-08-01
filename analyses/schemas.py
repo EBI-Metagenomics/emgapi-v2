@@ -18,9 +18,10 @@ from analyses.base_models.with_downloads_models import (
     DownloadFileIndexFile,
 )
 from emgapiv2.api.storage import private_storage
+from emgapiv2.api.third_party_metadata import EuropePmcAnnotationResponse
 from emgapiv2.enum_utils import FutureStrEnum
+from genomes.schemas.GenomeCatalogue import GenomeCatalogueList
 from workflows.data_io_utils.filenames import trailing_slash_ensured_dir
-
 
 logger = logging.getLogger(__name__)
 
@@ -382,7 +383,27 @@ class SuperStudy(ModelSchema):
 
 
 class SuperStudyDetail(SuperStudy):
-    studies: List[MGnifyStudy] = Field(...)
+    flagship_studies: List[MGnifyStudy] = Field(...)
+    related_studies: List[MGnifyStudy] = Field(...)
+    genome_catalogues: List[GenomeCatalogueList] = Field(...)
+
+    @staticmethod
+    def resolve_flagship_studies(obj: analyses.models.SuperStudy) -> list[MGnifyStudy]:
+        return [
+            MGnifyStudy.model_validate(sss.study)
+            for sss in analyses.models.SuperStudyStudy.objects.select_related(
+                "study"
+            ).filter(super_study=obj, is_flagship=True)
+        ]
+
+    @staticmethod
+    def resolve_related_studies(obj: analyses.models.SuperStudy) -> list[MGnifyStudy]:
+        return [
+            MGnifyStudy.model_validate(sss.study)
+            for sss in analyses.models.SuperStudyStudy.objects.select_related(
+                "study"
+            ).filter(super_study=obj, is_flagship=False)
+        ]
 
     class Meta:
         model = analyses.models.SuperStudy
@@ -418,3 +439,6 @@ class MGnifyPublicationDetail(MGnifyPublication):
     class Meta:
         model = analyses.models.Publication
         fields = ["pubmed_id", "title", "published_year", "metadata"]
+
+
+class PublicationAnnotations(Schema, EuropePmcAnnotationResponse): ...

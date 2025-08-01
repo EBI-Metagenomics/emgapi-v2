@@ -60,7 +60,7 @@ class AssemblerConfig(BaseModel):
     assembler_default: str = "metaspades"
     assembler_version_default: str = "3.15.5"
     miassemebler_git_revision: str = (
-        "v3.0.1"  # branch or commit of ebi-metagenomics/miassembler
+        "v3.0.3"  # branch or commit of ebi-metagenomics/miassembler
     )
     miassembler_config_file: str = "/nfs/production/nextflow-configs/codon.conf"
     miassembler_nf_profile: str = "codon"
@@ -213,6 +213,13 @@ class LogMaskingConfig(BaseModel):
     ]
 
 
+class EuropePMCConfig(BaseModel):
+    annotations_endpoint: str = Field(
+        "https://www.ebi.ac.uk/europepmc/annotations_api/annotationsByArticleIds"
+    )
+    annotations_provider: str = Field("Metagenomics")
+
+
 class EMGConfig(BaseSettings):
     amplicon_pipeline: AmpliconPipelineConfig = AmpliconPipelineConfig()
     rawreads_pipeline: RawReadsPipelineConfig = RawReadsPipelineConfig()
@@ -227,6 +234,7 @@ class EMGConfig(BaseSettings):
     slurm: SlurmConfig = SlurmConfig()
     webin: WebinConfig = WebinConfig()
     log_masking: LogMaskingConfig = LogMaskingConfig()
+    europe_pmc: EuropePMCConfig = EuropePMCConfig()
 
     model_config = {
         "env_prefix": "emg_",
