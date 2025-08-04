@@ -27,6 +27,7 @@ ADD static ./static
 ADD templates ./templates
 ADD genomes ./genomes
 ADD --chown=7123:1347 workflows ./workflows
+ADD activate_django_first.py ./activate_django_first.py
 ADD manage.py ./manage.py
 
 ADD .prefectignore .prefectignore
