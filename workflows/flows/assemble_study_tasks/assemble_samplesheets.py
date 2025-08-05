@@ -317,3 +317,21 @@ def run_assembler_for_samplesheet(
                     run_accession, assembler_software, assembler_version = row
                     assembled_runs.append(run_accession)
         logger.info("Assembled runs: " + ",".join(assembled_runs))
+
+
+@flow(flow_run_name="Assemble {samplesheet_csv} without parent", persist_result=True)
+def run_standalone_assembler_for_samplesheet(
+    mgys_study_accession: str, samplesheet_csv: Path, samplesheet_hash: str
+):
+    """
+    This flow is designed to be deployed as a top-level flow, to run an arbitrary samplesheet.
+    It will assemble the samplesheet and update the DB metadata.
+    It acts as if the samplesheet were being assembled within a parent flow.
+
+    :param mgys_study_accession: E.g. MGYS000001
+    :param samplesheet_csv: E.g. /nfs/my/dir/samplesheet2_abcd1234.csv
+    :param samplesheet_hash: E.g. abcd1234 – this hash is used by other parts of automation e.g. the workdir
+    :return: None
+    """
+    study = analyses.models.Study.objects.get(accession=mgys_study_accession)
+    run_assembler_for_samplesheet(study, samplesheet_csv, samplesheet_hash)
