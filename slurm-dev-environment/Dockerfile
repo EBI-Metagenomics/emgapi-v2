@@ -2,9 +2,9 @@ FROM ubuntu:jammy AS base
 LABEL authors="mgnify team"
 
 RUN groupadd -r slurm
-RUN useradd -rm -d /home/slurm -s /bin/bash -g slurm -G sudo slurm 
+RUN useradd -rm -d /home/slurm -s /bin/bash -g slurm -G sudo slurm
 RUN mkdir -p /home/slurm && chown -R slurm:slurm /home/slurm
-RUN useradd -rms /bin/bash munge 
+RUN useradd -rms /bin/bash munge
 
 RUN apt -y update && apt -y upgrade && apt -y install curl nano wget zip bzip2 rsync build-essential
 
