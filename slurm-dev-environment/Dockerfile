@@ -92,6 +92,7 @@ ENTRYPOINT ["/usr/local/bin/worker-entrypoint.sh"]
 FROM base AS restd
 # Just the rest api daemon
 ENV SLURM_JWT=daemon
+# Disabling security checks for slurmrestd since we're running it locally (otherwise a separate user would be needed)
 ENV SLURMRESTD_SECURITY=disable_unshare_sysv,disable_unshare_files,disable_user_check
 COPY entrypoints/restd-entrypoint.sh /usr/local/bin/restd-entrypoint.sh
 RUN chmod +x /usr/local/bin/restd-entrypoint.sh
@@ -100,6 +101,7 @@ ENTRYPOINT ["/usr/local/bin/restd-entrypoint.sh"]
 FROM worker AS single_node
 # DBD + Ctl + Worker in a single container
 ENV SLURM_JWT=daemon
+# Disabling security checks for slurmrestd since we're running it locally (otherwise a separate user would be needed)
 ENV SLURMRESTD_SECURITY=disable_unshare_sysv,disable_unshare_files,disable_user_check
 COPY entrypoints/single-node-entrypoint.sh /usr/local/bin/worker-entrypoint.sh
 RUN chmod +x /usr/local/bin/worker-entrypoint.sh
