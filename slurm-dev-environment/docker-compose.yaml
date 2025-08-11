@@ -47,6 +47,8 @@ services:
       - "./fs/nfs/ftp:/publicftp"
     expose:
       - "6818"
+    ports:
+      - "6820:6820"
     profiles: ["slurm", "all"]
     networks: [slurm]
 
@@ -116,6 +118,23 @@ services:
       - "./fs/nfs/ftp:/publicftp"
     expose:
       - "6818"
+    depends_on:
+      slurm_controller:
+        condition: service_started
+    profiles: ["slurm_full"]
+    networks: [slurm]
+
+  slurm_rest_daemon:
+    hostname: slurm_rest_daemon
+    container_name: slurm_rest_daemon
+    build:
+      context: .
+      target: restd
+    command: ["slurmrestd", "0.0.0.0:6820"]
+    volumes:
+      - munge:/etc/munge
+    ports:
+      - "6820:6820"
     depends_on:
       slurm_controller:
         condition: service_started
