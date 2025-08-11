@@ -41,7 +41,7 @@ biopython==1.85
 numpy~=2.2.6
 
 # Legacy DB connectors (remove at some point)
-pymongo==4.13.2
+pymongo==4.14.0
 mysql-connector-python
 SQLAlchemy
 
