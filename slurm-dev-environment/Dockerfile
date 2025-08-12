@@ -1,4 +1,4 @@
-FROM ubuntu:jammy AS base
+FROM ubuntu:noble AS base
 LABEL authors="mgnify team"
 
 RUN groupadd -r slurm
@@ -47,26 +47,9 @@ COPY configs/jwt_hs256.key /var/spool/slurmctld/jwt_hs256.key
 RUN chown slurm:slurm /var/spool/slurmctld/jwt_hs256.key
 RUN chmod 0600 /var/spool/slurmctld/jwt_hs256.key
 
-FROM base AS dbd
-# Just the database daemon
-COPY entrypoints/dbd-entrypoint.sh /usr/local/bin/dbd-entrypoint.sh
-RUN chmod +x /usr/local/bin/dbd-entrypoint.sh
-ENTRYPOINT ["/usr/local/bin/dbd-entrypoint.sh"]
-
-FROM base AS ctl
-# Just the controller
-COPY entrypoints/ctl-entrypoint.sh /usr/local/bin/ctl-entrypoint.sh
-RUN chmod +x /usr/local/bin/ctl-entrypoint.sh
-ENTRYPOINT ["/usr/local/bin/ctl-entrypoint.sh"]
-
-FROM base AS worker
-# The slurm worker, and base HPC tools like Nextflow
-COPY entrypoints/worker-entrypoint.sh /usr/local/bin/worker-entrypoint.sh
-RUN chmod +x /usr/local/bin/worker-entrypoint.sh
+# Base HPC tools like Nextflow
 ENV SLURM_INCLUDE_DIR=/usr/include
 ENV SLURM_LIB_DIR=/usr/lib/x86_64-linux-gnu
-#RUN DEBIAN_FRONTEND=noninteractive \
-#    apt -y update && apt install -y default-jre
 
 # Replace the default-jre installation with Java 17
 RUN DEBIAN_FRONTEND=noninteractive \
@@ -87,25 +70,9 @@ RUN wget https://github.com/enasequence/webin-cli/releases/download/7.3.0/webin-
 RUN chmod +x /usr/bin/webin-cli/webin-cli.jar
 ENV PATH="/usr/bin/webin-cli:$PATH"
 
-ENTRYPOINT ["/usr/local/bin/worker-entrypoint.sh"]
 
-FROM base AS restd
-# Just the rest api daemon
-ENV SLURM_JWT=daemon
-# Disabling security checks for slurmrestd since we're running it locally (otherwise a separate user would be needed)
-ENV SLURMRESTD_SECURITY=disable_unshare_sysv,disable_unshare_files,disable_user_check
-COPY entrypoints/restd-entrypoint.sh /usr/local/bin/restd-entrypoint.sh
-RUN chmod +x /usr/local/bin/restd-entrypoint.sh
-ENTRYPOINT ["/usr/local/bin/restd-entrypoint.sh"]
+# DBD + Ctl + Worker + REST in a single container
+COPY entrypoints/entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh
 
-FROM worker AS single_node
-# DBD + Ctl + Worker in a single container
-ENV SLURM_JWT=daemon
-# Disabling security checks for slurmrestd since we're running it locally (otherwise a separate user would be needed)
-ENV SLURMRESTD_SECURITY=disable_unshare_sysv,disable_unshare_files,disable_user_check
-COPY entrypoints/single-node-entrypoint.sh /usr/local/bin/worker-entrypoint.sh
-RUN chmod +x /usr/local/bin/worker-entrypoint.sh
-COPY configs/slurm_single_node.conf /etc/slurm/slurm.conf
-COPY configs/slurmdbd_single_node.conf /etc/slurm/slurmdbd.conf
-RUN chmod 600 /etc/slurm/slurmdbd.conf
-RUN chown -R slurm:slurm /etc/slurm/
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
