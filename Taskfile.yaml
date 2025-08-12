@@ -53,7 +53,16 @@ tasks:
   sbatch:
     desc: "Dispatch a slurm job to the mini slurm cluster. E.g. task sbatch -- --wait -t 0:00:30 --mem=10M --wrap=\"echo 'hello world'\" -o hello-world.out"
     cmds:
-      - docker exec slurm_node "sbatch {{.CLI_ARGS}}"
+      - docker exec slurm_node bash -c "sbatch {{.CLI_ARGS}}"
+
+  token:
+    desc: "Get SLURM token for a user. E.g. task token username=<username> [duration=<seconds|infinite>]"
+    cmds:
+      - docker exec slurm_node bash -c "scontrol token username={{.username}} lifespan={{.duration}}"
+    vars:
+      duration: '{{.duration| default "infinite"}}'
+    requires:
+      vars: [username]
 
   slurm:
     desc: "Connect to the slurm node to run commands there."
