@@ -13,15 +13,12 @@ This `include`s the `docker-compose.yaml` file in this `slurm` dir.
 It starts:
 * `slurm_db`: a Maria DB host for the `slurm` database. Port `3306` is mapped to your host machine, so you can inspect the Slurm Job DB at `mariadb://slurm:slurm@localhost:3306/slurm` (see e.g. `donco_job_table`).
 * `slurm_node`: a container running the slurm database daemon, controller, worker node, and the rest api (see below).
-* The alternative setup (profile `slurm_full`, not started by default) separates these into separate containers for a more realistic setup:
-  * `slurm_db_daemon`: a container running the [Slurm database daemon](https://slurm.schedmd.com/slurmdbd.html). This is the interface between Slurm and the above DB.
-  * `slurm_controller`: a container running the [Slurm controller / central manager daemon](https://slurm.schedmd.com/slurmctld.html). This is the node workers poll for jobs.
-  * `slurm_worker`: a container running the [Slurm compute node daemon](https://slurm.schedmd.com/slurmd.html). This container executes jobs in the queue.
-  * `slurm_rest_daemon`: a container running the [Slurm rest api daemon](https://slurm.schedmd.com/slurmrestd.html). This container listens for requests on port `6820`.
-  * Note the difference in `congigs/` and `entrypoints/` for these single node vs. full setups.
+  * [Slurm database daemon](https://slurm.schedmd.com/slurmdbd.html). This is the interface between Slurm and the above DB.
+  * [Slurm controller / central manager daemon](https://slurm.schedmd.com/slurmctld.html). This is the node workers poll for jobs.
+  * [Slurm compute node daemon](https://slurm.schedmd.com/slurmd.html). Acts as a node that executes jobs in the queue.
+  * [Slurm rest api daemon](https://slurm.schedmd.com/slurmrestd.html). Listens for requests on port `6820`.
 
-Other than the Maria DB container, the others share a common Ubuntu-based image from `Dockerfile`.
-The `*-entrypoint.sh` scripts start the respective daemons in the respective containers.
+The `entrypoint.sh` scripts start the respective daemons.
 
 `submitter-entrypoint.sh` is not used by any of these containers, but can be used to make a "submission node" (AKA "login node").
 That means a node that has a Slurm installation and still runs [munged](https://linux.die.net/man/8/munged) so that the submission node can submit jobs, but it doesn't do work.
@@ -86,5 +83,5 @@ curl --location 'localhost:6820/slurm/v0.0.40/ping' \
 --header 'X-SLURM-USER-TOKEN: <generated-jwt-token>'
 ```
 
-Note: SLURM REST API comes in different flavours, `v0.0.40` is used in this example.
+Note: SLURM REST API comes in different versions, `v0.0.40` is used in this example.
 More info [here](https://slurm.schedmd.com/rest.html).

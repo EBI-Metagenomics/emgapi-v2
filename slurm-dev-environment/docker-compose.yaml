@@ -14,7 +14,7 @@ services:
       - db:/var/lib/mysql
     ports:
       - "3306:3306"
-    profiles: ["slurm", "all", "slurm_full"]
+    profiles: ["slurm", "all"]
     healthcheck:
       test: ['CMD', '/usr/local/bin/healthcheck.sh', '--connect']
       interval: 2s
@@ -23,10 +23,9 @@ services:
     networks: [slurm]
 
   slurm_node:
-    # A single node instance of slurm (dbd, controller, worker)
+    # A single node instance of slurm (dbd, controller, worker, restd)
     build:
       context: .
-      target: single_node
     command: ["slurmd"]
     hostname: slurm_node
     container_name: slurm_node
@@ -40,7 +39,7 @@ services:
       - "..:/app"
       - "./configs/slurm_prolog.sh:/usr/local/bin/slurm_prolog.sh"
       - "./configs/slurm_epilog.sh:/usr/local/bin/slurm_epilog.sh"
-      - "./entrypoints/single-node-entrypoint.sh:/usr/local/bin/worker-entrypoint.sh"
+      - "./entrypoints/entrypoint.sh:/usr/local/bin/entrypoint.sh"
       - "./fs/nfs/production:/nfs/production"
       - "./fs/hps:/hps"
       - "./fs/nfs/public:/publicnfs"
@@ -50,95 +49,6 @@ services:
     ports:
       - "6820:6820"
     profiles: ["slurm", "all"]
-    networks: [slurm]
-
-  slurm_db_daemon:
-    build:
-      context: .
-      target: dbd
-    command: ["slurmdbd"]
-    hostname: slurm_db_daemon
-    container_name: slurm_db_daemon
-    volumes:
-      - munge:/etc/munge
-      - logs:/var/log/slurm
-    expose:
-      - "6819"
-    depends_on:
-      slurm_db:
-        condition: service_healthy
-    profiles: ["slurm_full"]
-    healthcheck:
-      test: ["CMD", "nc", "-z", "localhost", "6819"]
-      interval: 2s
-      timeout: 2s
-      retries: 10
-    networks: [slurm]
-
-  slurm_controller:
-    hostname: slurm_controller
-    container_name: slurm_controller
-    build:
-      context: .
-      target: ctl
-    command: ["slurmctld"]
-    volumes:
-      - munge:/etc/munge
-      - logs:/var/log/slurm
-      - jobdir:/opt/jobs
-    expose:
-      - "6817"
-    depends_on:
-      slurm_db_daemon:
-        condition: service_healthy
-    profiles: ["slurm_full"]
-    healthcheck:
-      test: ["CMD", "nc", "-z", "localhost", "6817"]
-      interval: 30s
-      start_interval: 2s
-      timeout: 2s
-      retries: 10
-    networks: [slurm]
-
-  slurm_worker:
-    hostname: slurm_worker
-    container_name: slurm_worker
-    build:
-      context: .
-      target: worker
-    command: ["slurmd"]
-    volumes:
-      - munge:/etc/munge
-      - logs:/var/log/slurm
-      - jobdir:/opt/jobs
-      - "..:/app"
-      - "./fs/nfs/production:/nfs/production"
-      - "./fs/hps:/hps"
-      - "./fs/nfs/public:/publicnfs"
-      - "./fs/nfs/ftp:/publicftp"
-    expose:
-      - "6818"
-    depends_on:
-      slurm_controller:
-        condition: service_started
-    profiles: ["slurm_full"]
-    networks: [slurm]
-
-  slurm_rest_daemon:
-    hostname: slurm_rest_daemon
-    container_name: slurm_rest_daemon
-    build:
-      context: .
-      target: restd
-    command: ["slurmrestd", "0.0.0.0:6820"]
-    volumes:
-      - munge:/etc/munge
-    ports:
-      - "6820:6820"
-    depends_on:
-      slurm_controller:
-        condition: service_started
-    profiles: ["slurm_full"]
     networks: [slurm]
 
 volumes:
