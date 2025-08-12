@@ -70,9 +70,10 @@ Use e.g. `docker logs slurm_node -f` to see the job execute.
 
 
 ### Via the REST API
-Inside the worker node generate a token
+Generate a token with `task token username=<username> [duration=<seconds>]`
 ```shell
-root@slurm_node:/# scontrol token username=slurm
+user@host:/# task token username=slurm duration=86400
+task: [token] docker exec slurm_node bash -c "scontrol token username=slurm lifespan=86400"
 SLURM_JWT=<generated-jwt-token>
 ```
 
