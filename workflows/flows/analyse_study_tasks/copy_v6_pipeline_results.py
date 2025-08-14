@@ -15,6 +15,9 @@ from activate_django_first import EMG_CONFIG
 from analyses.models import Analysis, Study
 
 
+DWCREADY_CSV = "dwcready.csv"
+
+
 @task(
     name="Copy V6 Pipeline Results",
     task_run_name="Copy V6 Pipeline Results for {analysis_accession}",
@@ -75,6 +78,11 @@ def copy_v6_pipeline_results(analysis_accession: str):
 
 @task(name="Copy V6 Study Summaries", log_prints=True)
 def copy_v6_study_summaries(study_accession: str):
+    """
+    Copies the V6 study summaries for the provided study accession into the appropriate
+    location on the transfer services area.
+    Also includes the darwin-core ready files.
+    """
     study = Study.objects.get(accession=study_accession)
     if not study.results_dir:
         print(f"Study {study} has no results dir, skipping")
@@ -85,6 +93,8 @@ def copy_v6_study_summaries(study_accession: str):
             "-av",
             f"--include=PRJ*{STUDY_SUMMARY_TSV}",
             f"--include=[DES]RP*{STUDY_SUMMARY_TSV}",
+            f"--include=PRJ*{DWCREADY_CSV}",
+            f"--include=[DES]RP*{DWCREADY_CSV}",
             "--exclude=*",
         ]
     )

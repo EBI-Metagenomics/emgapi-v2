@@ -32,6 +32,7 @@ from workflows.ena_utils.webin_owner_utils import validate_and_set_webin_owner
 from workflows.flows.analyse_study_tasks.shared.study_summary import (
     merge_study_summaries,
     add_study_summaries_to_downloads,
+    merge_dwc_ready_summaries,
 )
 from workflows.flows.assemble_study import get_biomes_as_choices
 from workflows.prefect_utils.analyses_models_helpers import (
@@ -192,6 +193,10 @@ def analysis_amplicon_study(study_accession: str):
         mgnify_study.accession,
         cleanup_partials=not EMG_CONFIG.amplicon_pipeline.keep_study_summary_partials,
         analysis_type="amplicon",
+    )
+    merge_dwc_ready_summaries(
+        mgnify_study.accession,
+        cleanup_partials=not EMG_CONFIG.amplicon_pipeline.keep_study_summary_partials,
     )
     add_study_summaries_to_downloads(mgnify_study.accession)
     copy_v6_study_summaries(mgnify_study.accession)

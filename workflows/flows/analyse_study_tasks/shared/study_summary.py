@@ -224,6 +224,30 @@ def merge_study_summaries(
             file.unlink()
 
 
+@flow
+def generate_dwc_ready_summary_for_pipeline_run(
+    mgnify_study_accession: str,
+    pipeline_outdir: Path | str,
+    completed_runs_filename: str = EMG_CONFIG.amplicon_pipeline.completed_runs_csv,
+) -> Union[List[Path], None]:
+    logger = get_run_logger()
+    logger.warning("Not implemented yet")
+    # TODO: implement me :)
+    return []
+
+
+@flow
+def merge_dwc_ready_summaries(
+    mgnify_study_accession: str,
+    cleanup_partials: bool = False,
+    bludgeon: bool = True,
+) -> Union[List[Path], None]:
+    logger = get_run_logger()
+    logger.warning("Not implemented yet")
+    # TODO: implement me :)
+    return []
+
+
 @task
 def add_study_summaries_to_downloads(mgnify_study_accession: str):
     logger = get_run_logger()
