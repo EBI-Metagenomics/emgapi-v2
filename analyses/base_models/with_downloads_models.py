@@ -67,7 +67,9 @@ class DownloadFile(BaseModel):
         None, examples=["taxonomies.closed_reference.ssu"]
     )
     file_size_bytes: Optional[int] = Field(None, examples=[1024])
-    index_file: Optional[DownloadFileIndexFile] = Field(None)
+    index_file: Optional[DownloadFileIndexFile | list[DownloadFileIndexFile]] = Field(
+        None
+    )
 
     parent_identifier: Optional[Union[str, int]] = (
         None  # e.g. the accession of an Analysis this download is for
