@@ -909,7 +909,7 @@ def test_prefect_analyse_amplicon_flow(
     Directory(
         path=study.results_dir,
         glob_rules=[
-            GlobHasFilesCountRule[12 + 0],  # currently only study summaries, no DwCr
+            GlobHasFilesCountRule[6 + 0],  # currently only study summaries, no DwCr
             GlobRule(
                 rule_name="DwC Ready files are present",
                 glob_patten=f"{study.first_accession}*{DWCREADY_CSV}",
