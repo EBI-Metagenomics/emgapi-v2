@@ -137,7 +137,12 @@ class MGnifyDownloadFileIndexFile(Schema, DownloadFileIndexFile):
 class MGnifyAnalysisDownloadFile(Schema, DownloadFile):
     path: Annotated[str, Field(exclude=True)]
     parent_identifier: Annotated[Union[int, str], Field(exclude=True)]
-    index_file: Optional[MGnifyDownloadFileIndexFile] = None
+    index_files: Optional[list[MGnifyDownloadFileIndexFile]] = Field(
+        None, alias="index_file"
+    )  # only show list of indexes
+    index_file: Optional[Any] = Field(
+        ..., exclude=True
+    )  # hide internal implementation which may be singular
 
     url: str = Field(
         None,
@@ -148,10 +153,16 @@ class MGnifyAnalysisDownloadFile(Schema, DownloadFile):
         ],
     )
 
-    @field_validator("index_file", mode="before")
-    def coerce_index_file(cls, value):
+    @field_validator("index_files", mode="before")
+    def coerce_index_files_to_plural(cls, value):
+        # Ensures even a singular index_file is serialized as a list-of-one
         if isinstance(value, DownloadFileIndexFile):
-            return MGnifyDownloadFileIndexFile.model_validate(value.model_dump())
+            return [MGnifyDownloadFileIndexFile.model_validate(value.model_dump())]
+        if isinstance(value, list):
+            return [
+                MGnifyDownloadFileIndexFile.model_validate(idx.model_dump())
+                for idx in value
+            ]
         return value
 
     @staticmethod

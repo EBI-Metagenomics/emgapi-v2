@@ -2,6 +2,7 @@ from typing import Iterable, Optional
 
 from django import forms
 from django.contrib import admin, messages
+from django.contrib.admin.helpers import AdminReadonlyField
 from django.contrib.postgres.fields import ArrayField
 from django.core.validators import EMPTY_VALUES
 from django.db.models import JSONField, Q
@@ -92,6 +93,21 @@ class JSONFieldWidgetOverridesMixin(ModelAdmin):
         if isinstance(db_field, ArrayField):
             kwargs["widget"] = ArrayWidget
         return super().formfield_for_dbfield(db_field, request, **kwargs)
+
+    def render_change_form(
+        self, request, context, add=False, change=False, form_url="", obj=None
+    ):
+        form = context.get("adminform").form
+        readonly_fields = self.get_readonly_fields(request, obj)
+        for field in form.fields:
+            if field in readonly_fields:
+                form.fields["myfield"].widget = self.formfield_for_dbfield(
+                    field, request
+                ).widget
+        return super().render_change_form(request, context, add, change, form_url, obj)
+
+
+class Me(AdminReadonlyField): ...
 
 
 class AutoCompleteInlineForm(forms.ModelForm):

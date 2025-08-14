@@ -74,6 +74,36 @@ def import_qc(
             long_description="MultiQC webpage showing quality control steps and metrics",
         )
     )
+
+    contigs = File(
+        path=qc_dir.path
+        / (analysis.assembly.first_accession + "_filtered_contigs.fasta.gz"),
+        rules=[
+            FileExistsRule,
+        ],
+    )
+    qc_dir.files.append(contigs)
+    analysis.add_download(
+        DownloadFile(
+            path=contigs.path.relative_to(analysis.results_dir),
+            file_type=DownloadFileType.FASTA,
+            alias=contigs.path.name,
+            download_type=DownloadType.SEQUENCE_DATA,
+            download_group="quality_control",
+            parent_identifier=analysis.accession,
+            short_description="Filtered contig sequences",
+            long_description="FASTA sequences of the analysed contigs after length filtering",
+            index_file=[
+                DownloadFileIndexFile(
+                    path=contigs.path.with_suffix(".gz.gzi"), index_type="gzi"
+                ),
+                DownloadFileIndexFile(
+                    path=contigs.path.with_suffix(".gz.fai"), index_type="fai"
+                ),
+            ],
+        )
+    )
+
     analysis.save()
 
 
