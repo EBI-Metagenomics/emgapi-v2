@@ -29,6 +29,7 @@ pytest_plugins = [
     "workflows.fixtures.flowrun_input.conftest",
     "workflows.nextflow_utils.fixtures.conftest",
     "genomes.fixtures.genome.conftest",
+    "emgapiv2.fixtures.conftest",
 ]
 
 
