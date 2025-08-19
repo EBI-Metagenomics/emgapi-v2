@@ -1,14 +1,38 @@
-FROM ubuntu:jammy AS base
+FROM ubuntu:noble AS base
 LABEL authors="mgnify team"
 
-RUN apt -y update && apt -y upgrade && apt -y install curl nano wget zip bzip2 rsync
+RUN groupadd -r slurm
+RUN useradd -rm -d /home/slurm -s /bin/bash -g slurm -G sudo slurm
+RUN mkdir -p /home/slurm && chown -R slurm:slurm /home/slurm
+RUN useradd -rms /bin/bash munge
 
-RUN apt -y install munge python3-pip python-is-python3
+RUN apt -y update && apt -y upgrade && apt -y install curl nano wget zip bzip2 rsync build-essential
 
-RUN apt -y install sudo gosu netcat-traditional slurm-wlm
+RUN apt -y install python3-pip python-is-python3
+
+RUN apt -y install sudo gosu netcat-traditional
+
+RUN apt-get install -y \
+    libmunge-dev \
+    munge \
+    libcurl4-openssl-dev \
+    libhttp-parser-dev \
+    libjson-c-dev \
+    libyaml-dev \
+    libjwt-dev \
+    libmariadb-dev \
+    libmariadb-dev-compat \
+    lua5.4 \
+    dbus
+
+RUN curl -sL https://download.schedmd.com/slurm/slurm-24.11.6.tar.bz2 | tar -xj
+RUN cd slurm-24.11.6 && \
+    ./configure --sysconfdir=/etc/slurm && \
+    make install -j16
 
 COPY configs/slurm.conf /etc/slurm/slurm.conf
 COPY configs/slurmdbd.conf /etc/slurm/slurmdbd.conf
+COPY configs/cgroup.conf /etc/slurm/cgroup.conf
 RUN chmod 600 /etc/slurm/slurmdbd.conf
 RUN chown -R slurm:slurm /etc/slurm/
 
@@ -18,27 +42,14 @@ RUN mkdir -p /var/log/slurm && chown -R slurm:slurm /var/log/slurm
 RUN mkdir -p /var/spool/slurmctld && chown -R slurm:slurm /var/spool/slurmctld
 RUN mkdir -p /var/spool/slurmd && chown -R slurm:slurm /var/spool/slurmd
 
-FROM base AS dbd
-# Just the database daemon
-RUN apt install -y slurmdbd
-COPY entrypoints/dbd-entrypoint.sh /usr/local/bin/dbd-entrypoint.sh
-RUN chmod +x /usr/local/bin/dbd-entrypoint.sh
-ENTRYPOINT ["/usr/local/bin/dbd-entrypoint.sh"]
+# Setup jwt key
+COPY configs/jwt_hs256.key /var/spool/slurmctld/jwt_hs256.key
+RUN chown slurm:slurm /var/spool/slurmctld/jwt_hs256.key
+RUN chmod 0600 /var/spool/slurmctld/jwt_hs256.key
 
-FROM base AS ctl
-# Just the controller
-COPY entrypoints/ctl-entrypoint.sh /usr/local/bin/ctl-entrypoint.sh
-RUN chmod +x /usr/local/bin/ctl-entrypoint.sh
-ENTRYPOINT ["/usr/local/bin/ctl-entrypoint.sh"]
-
-FROM base AS worker
-# The slurm worker, and base HPC tools like Nextflow
-COPY entrypoints/worker-entrypoint.sh /usr/local/bin/worker-entrypoint.sh
-RUN chmod +x /usr/local/bin/worker-entrypoint.sh
+# Base HPC tools like Nextflow
 ENV SLURM_INCLUDE_DIR=/usr/include
 ENV SLURM_LIB_DIR=/usr/lib/x86_64-linux-gnu
-#RUN DEBIAN_FRONTEND=noninteractive \
-#    apt -y update && apt install -y default-jre
 
 # Replace the default-jre installation with Java 17
 RUN DEBIAN_FRONTEND=noninteractive \
@@ -59,14 +70,9 @@ RUN wget https://github.com/enasequence/webin-cli/releases/download/7.3.0/webin-
 RUN chmod +x /usr/bin/webin-cli/webin-cli.jar
 ENV PATH="/usr/bin/webin-cli:$PATH"
 
-ENTRYPOINT ["/usr/local/bin/worker-entrypoint.sh"]
 
-FROM worker AS single_node
-# DBD + Ctl + Worker in a single container
-RUN apt install -y slurmdbd
-COPY entrypoints/single-node-entrypoint.sh /usr/local/bin/worker-entrypoint.sh
-RUN chmod +x /usr/local/bin/worker-entrypoint.sh
-COPY configs/slurm_single_node.conf /etc/slurm/slurm.conf
-COPY configs/slurmdbd_single_node.conf /etc/slurm/slurmdbd.conf
-RUN chmod 600 /etc/slurm/slurmdbd.conf
-RUN chown -R slurm:slurm /etc/slurm/
+# DBD + Ctl + Worker + REST in a single container
+COPY entrypoints/entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh
+
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
