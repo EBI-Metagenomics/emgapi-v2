@@ -218,6 +218,7 @@ def run_assembler_for_samplesheet(
         / f"{mgnify_study.ena_study.accession}_miassembler"
         / samplesheet_hash
     )
+    assembled_runs_csv = miassembler_outdir / Path("assembled_runs.csv")
 
     command = cli_command(
         [
@@ -269,7 +270,6 @@ def run_assembler_for_samplesheet(
                     run_accession, fail_reason = row
                     qc_failed_runs[run_accession] = fail_reason
 
-        assembled_runs_csv = miassembler_outdir / Path("assembled_runs.csv")
         assembled_runs = set()
 
         if not assembled_runs_csv.is_file():
