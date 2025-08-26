@@ -48,7 +48,7 @@ def create_analyses(
             defaults={
                 "is_private": run.is_private,
                 "webin_submitter": run.webin_submitter,
-            }
+            },
         )
         if created:
             print(
