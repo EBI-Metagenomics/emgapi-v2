@@ -14,7 +14,7 @@ from workflows.flows.analyse_study_tasks.import_completed_assembly_analyses impo
 @pytest.fixture
 @patch("workflows.flows.analyse_study_tasks.copy_v6_pipeline_results.move_data")
 def amplicon_analysis_with_downloads(
-    mock_copy_flow, raw_reads_mgnify_study, raw_reads_mgnify_sample
+    mock_copy_flow, raw_reads_mgnify_study, raw_reads_mgnify_sample, prefect_harness
 ):
     sample = raw_reads_mgnify_sample[0]
     study = raw_reads_mgnify_study
@@ -73,7 +73,9 @@ def amplicon_analysis_with_downloads(
 
 @pytest.fixture
 @patch("workflows.flows.analyse_study_tasks.copy_v6_pipeline_results.move_data")
-def assembly_analysis_with_downloads(mock_copy_flow, mgnify_assemblies_completed):
+def assembly_analysis_with_downloads(
+    mock_copy_flow, mgnify_assemblies_completed, prefect_harness
+):
     assem = mgnify_assemblies_completed[0]
     assem.add_erz_accession(
         "ERZ857107"
