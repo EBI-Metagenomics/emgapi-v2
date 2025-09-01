@@ -137,6 +137,7 @@ class AssemblyAnalysisPipelineConfig(BaseModel):
     failed_assemblies_csv: str = "qc_failed_assemblies.csv"
     taxonomy_folder: str = "taxonomy"
     functional_folder: str = "functional-annotation"
+    annotation_summary_folder: str = "annotation-summary"
 
 
 class WebinConfig(BaseModel):
