@@ -159,6 +159,10 @@ fileignoreconfig:
 - filename: workflows/tests/test_analysis_rawreads_study_flow.py
   checksum: b9fad76ff7a839ac5f88a1aabd5a1c4009db9ac3ed6a6c40c42bd88cc1d1c8b0
 
+- filename: workflows/flows/upload_assembly.py
+  allowed_patterns: [key]
+
+
 allowed_patterns:
 - cache_key_fn
 - CommonMetadataKeys

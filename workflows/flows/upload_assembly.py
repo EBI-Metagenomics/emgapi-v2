@@ -1,4 +1,5 @@
 import gzip
+import json
 import os
 import re
 from datetime import timedelta
@@ -235,6 +236,38 @@ def handle_tpa_study(
     return assembly_study
 
 
+@task
+def update_assembly_metadata(
+    assembly: analyses.models.Assembly,
+) -> None:
+    """
+    Update assembly with post-assembly coverage field if that is missing in DB.
+    """
+    logger = get_run_logger()
+    run_accession = assembly.run.first_accession
+
+    coverage_report_path = Path(assembly.dir) / Path(
+        f"assembly/{assembly.assembler.name.lower()}/{assembly.assembler.version}/coverage/{run_accession}_coverage.json"
+    )
+    if not coverage_report_path.is_file():
+        raise Exception(f"Assembly coverage file not found at {coverage_report_path}")
+
+    with open(coverage_report_path, "r") as json_file:
+        coverage_report = json.load(json_file)
+
+    for key in [
+        assembly.CommonMetadataKeys.COVERAGE,
+        assembly.CommonMetadataKeys.COVERAGE_DEPTH,
+    ]:
+        if key not in coverage_report:
+            logger.warning(f"No '{key}' found in {coverage_report_path}")
+        assembly.metadata[key] = coverage_report.get(key)
+
+    logger.info(f"Assembly metadata of {assembly} is now {assembly.metadata}")
+
+    assembly.save()
+
+
 @task(
     retries=2,
     task_run_name="Generate csv for upload: {assembly}",
@@ -243,6 +276,9 @@ def generate_assembly_csv(
     metadata_dir: Path, assembly: analyses.models.Assembly, assembly_path: Path
 ):
     logger = get_run_logger()
+
+    if not assembly.metadata.get(assembly.CommonMetadataKeys.COVERAGE_DEPTH):
+        update_assembly_metadata(assembly)
 
     assembly_csv = metadata_dir / Path(f"{assembly.run.first_accession}.csv")
     with open(assembly_csv, "w") as file_out:
