@@ -353,3 +353,50 @@ def import_functions(
                     schema.import_from_column
                 ].to_list()
                 analysis.save()
+
+
+def import_annotation_summary(
+    analysis: analyses.models.Analysis,
+    dir_for_analysis: Path,
+    allow_non_exist: bool = True,
+):
+    dir_rules = [DirectoryExistsRule] if not allow_non_exist else []
+    summary_dir = Directory(
+        path=dir_for_analysis
+        / EMG_CONFIG.assembly_analysis_pipeline.annotation_summary_folder,
+        rules=dir_rules,
+    )
+    gff = File(
+        path=summary_dir.path
+        / f"{analysis.assembly.first_accession}_annotation_summary.gff.gz",
+        rules=[
+            FileExistsRule,
+            FileIsNotEmptyRule,
+        ],
+    )
+    gff_index = File(
+        path=summary_dir.path
+        / f"{analysis.assembly.first_accession}_annotation_summary.gff.gz.gzi",
+        rules=[
+            FileExistsRule,
+            FileIsNotEmptyRule,
+        ],
+    )
+
+    analysis.refresh_from_db()
+    analysis.add_download(
+        DownloadFile(
+            path=gff.path.relative_to(analysis.results_dir),
+            file_type=DownloadFileType.GFF,
+            alias=gff.path.name,
+            download_type=DownloadType.FUNCTIONAL_ANALYSIS,
+            download_group=f"{analyses.models.Analysis.FUNCTIONAL_ANNOTATION}.summary",
+            parent_identifier=analysis.accession,
+            short_description="Summary GFF of all functional annotations",
+            long_description="Consolidated annotations from the various functional and gene cluster annotation tools as a GFF (general feature format) file",
+            index_file=DownloadFileIndexFile(
+                path=gff_index.path.relative_to(analysis.results_dir),
+                index_type="gzi",
+            ),
+        )
+    )

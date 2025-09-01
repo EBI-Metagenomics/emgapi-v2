@@ -31,6 +31,7 @@ class DownloadFileType(FutureStrEnum):
     TREE = "tree"  # e.g. newick
     HTML = "html"
     OTHER = "other"
+    GFF = "gff"
 
 
 class DownloadFileIndexFile(BaseModel):
