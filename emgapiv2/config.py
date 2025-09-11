@@ -77,7 +77,8 @@ class AmpliconPipelineConfig(BaseModel):
     amplicon_pipeline_git_revision: str = (
         "main"  # branch or commit of ebi-metagenomics/amplicon-pipeline
     )
-    amplicon_pipeline_nf_profile: str = "codon_slurm"
+    pipeline_nf_config: str = "/nfs/production/nextflow-configs/codon.config"
+    pipeline_nf_profile: str = "codon_slurm"
     samplesheet_chunk_size: int = 50
     # results stats
     completed_runs_csv: str = "qc_passed_runs.csv"
