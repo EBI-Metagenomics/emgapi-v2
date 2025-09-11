@@ -106,7 +106,7 @@ GlobOfQcFolderHasFastpAndMultiqc = GlobRule(
 )
 
 GlobOfRawReadsQcFolderHasFastpAndMultiqc = GlobRule(
-    rule_name="Folder should contain fastp and multiqc files",
+    rule_name="Folder should contain two fastp files and a multiqc file",
     glob_patten="*",
     test=lambda files: sum(
         any(
