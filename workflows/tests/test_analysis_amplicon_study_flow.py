@@ -64,7 +64,11 @@ def generate_fake_pipeline_all_results(amplicon_run_folder, run):
             "w",
         ),
         open(
-            f"{amplicon_run_folder}/{EMG_CONFIG.amplicon_pipeline.primer_identification_folder}/{run}_primers.fasta",
+            f"{amplicon_run_folder}/{EMG_CONFIG.amplicon_pipeline.primer_identification_folder}/fwd_primers.fasta",
+            "w",
+        ),
+        open(
+            f"{amplicon_run_folder}/{EMG_CONFIG.amplicon_pipeline.primer_identification_folder}/rev_primers.fasta",
             "w",
         ),
         open(
@@ -162,6 +166,10 @@ def generate_fake_pipeline_all_results(amplicon_run_folder, run):
     with (
         open(
             f"{amplicon_run_folder}/{EMG_CONFIG.amplicon_pipeline.sequence_categorisation_folder}/{run}_SSU.fasta",
+            "w",
+        ),
+        open(
+            f"{amplicon_run_folder}/{EMG_CONFIG.amplicon_pipeline.sequence_categorisation_folder}/{run}_ITS_rRNA.fa",
             "w",
         ),
         open(
