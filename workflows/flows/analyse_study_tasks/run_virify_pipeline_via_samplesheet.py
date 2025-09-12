@@ -6,8 +6,8 @@ from django.conf import settings
 from prefect import flow, task, get_run_logger
 from prefect.runtime import flow_run
 
-import analyses.models
 from activate_django_first import EMG_CONFIG
+import analyses.models
 
 AnalysisStates = analyses.models.Analysis.AnalysisStates
 
@@ -28,7 +28,7 @@ from workflows.prefect_utils.slurm_policies import ResubmitIfFailedPolicy
 from workflows.data_io_utils.filenames import next_enumerated_subdir
 
 
-@task(log_prints=True)
+@task
 def add_virify_gff_to_analysis_downloads(
     analysis: analyses.models.Analysis,
     virify_outdir: Path,
@@ -89,7 +89,7 @@ def add_virify_gff_to_analysis_downloads(
         )
 
 
-@flow(name="Run VIRIfy pipeline via samplesheet", log_prints=True)
+@flow(name="Run VIRIfy pipeline via samplesheet")
 def run_virify_pipeline_via_samplesheet(
     mgnify_study: analyses.models.Study,
     assembly_analyses: List[analyses.models.Analysis],

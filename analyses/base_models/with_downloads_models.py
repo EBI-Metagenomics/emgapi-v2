@@ -61,8 +61,10 @@ class DownloadFile(BaseModel):
     alias: str = Field(
         ..., examples=["SILVA-SSU.tsv"]
     )  # an alias for the file, unique within the downloads list
-    download_type: DownloadType
-    file_type: DownloadFileType
+    download_type: DownloadType = Field(..., description="Category of download")
+    file_type: DownloadFileType = Field(
+        ..., description="Type of file for download system"
+    )
     long_description: str = Field(..., examples=["A table of taxonomic assignments"])
     short_description: str = Field(..., examples=["Tax. assignments"])
     download_group: Optional[str] = Field(

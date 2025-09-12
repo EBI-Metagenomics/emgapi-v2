@@ -26,7 +26,7 @@ from workflows.prefect_utils.slurm_policies import ResubmitIfFailedPolicy
 from workflows.data_io_utils.filenames import next_enumerated_subdir
 
 
-@task(log_prints=True)
+@task
 def add_virify_gff_to_analysis_downloads(
     analysis: analyses.models.Analysis,
     virify_outdir: Path,
@@ -87,7 +87,7 @@ def add_virify_gff_to_analysis_downloads(
         )
 
 
-@flow(name="Run virify pipeline", log_prints=True)
+@flow(name="Run virify pipeline")
 def run_virify_pipeline(
     mgnify_study: analyses.models.Study,
     assembly_analyses: List[analyses.models.Analysis],

@@ -1,9 +1,9 @@
 import inspect
 import logging
 from pathlib import Path
-from typing import List, Optional, TypeVar, Union
+from typing import List, Optional, Union
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, model_validator, field_validator
 
 from workflows.data_io_utils.file_rules.base_rules import (
     DirectoryRule,
@@ -17,9 +17,7 @@ from workflows.data_io_utils.file_rules.common_rules import (
     FileIsNotEmptyRule,
 )
 
-__all__ = ["File", "Directory", "create_file", "create_directory"]
-
-T = TypeVar("T", bound="File")
+__all__ = ["File", "Directory", "create_directory"]
 
 
 def create_file(
@@ -85,7 +83,7 @@ class Directory(File):
     # How do we map this class to the DownloadFile models?
     # I think there is a bit of repetition going on
 
-    files: List[File] = Field(
+    files: List[Union[File, tuple, str]] = Field(
         default_factory=list,
         description="File objects to specifically check in the directory",
     )
@@ -100,18 +98,116 @@ class Directory(File):
         repr=False,
     )
 
+    @field_validator("glob_rules", mode="before")
+    @classmethod
+    def validate_glob_rules(cls, glob_rules_input):
+        """
+        Validate and set default glob rules if none are provided.
+
+        :param glob_rules_input: Input glob rules
+
+        :return: List of GlobRule objects
+        """
+        if not glob_rules_input:
+            return [GlobHasFilesRule]
+        return glob_rules_input
+
+    @field_validator("rules", mode="before")
+    @classmethod
+    def validate_rules(cls, rules_input):
+        """
+        Validate and set default directory rules if none are provided.
+
+        :param rules_input: The input directory rules list
+
+        :return: List of DirectoryRule objects
+        """
+        if not rules_input:
+            return [DirectoryExistsRule]
+        return rules_input
+
+    @field_validator("files", mode="before")
+    @classmethod
+    def validate_files(cls, files_input, info):
+        """
+        Validate and transform the files input.
+
+        This validator handles different types of file specifications:
+        - File objects (used as-is)
+        - Directory objects (used as-is)
+        - Strings (converted to File objects with default rules)
+        - Tuples of (filename, rules) where filename is a string and rules is a list of FileRule
+
+        :param files_input: The input files list
+        :param info: ValidationInfo object
+
+        :return: List of File objects
+
+        :raises ValueError: If an unsupported file specification is provided
+        """
+        if files_input is None:
+            return []
+
+        processed_files = []
+        for file_item in files_input:
+            if isinstance(file_item, File):
+                # If it's already a File or Directory object, use it as-is
+                processed_files.append(file_item)
+            elif isinstance(file_item, tuple) and len(file_item) == 2:
+                # If it's a tuple of (filename, rules), create a File with those rules
+                filename, file_rules = file_item
+                # Get the path from the model being validated
+                model_path = info.data.get("path")
+                if model_path:
+                    processed_files.append(
+                        File(
+                            path=model_path.joinpath(filename),
+                            rules=file_rules,
+                        )
+                    )
+            elif isinstance(file_item, str):
+                # If it's a string, create a File with default rules
+                model_path = info.data.get("path")
+                if model_path:
+                    processed_files.append(
+                        File(
+                            path=model_path.joinpath(file_item),
+                            rules=[FileExistsRule, FileIsNotEmptyRule],
+                        )
+                    )
+            elif isinstance(file_item, Path):
+                model_path = info.data.get("path")
+                if model_path:
+                    processed_files.append(
+                        File(
+                            path=model_path / file_item,
+                            rules=[FileExistsRule, FileIsNotEmptyRule],
+                        )
+                    )
+            else:
+                raise ValueError(f"Unsupported file specification: {file_item}")
+
+        return processed_files
+
     def add_file(self, *parts, rules=None) -> None:
         """
         Create a File object within this directory.
 
         Args:
-            *parts: Path parts relative to this directory
-            rules: List of rules to apply to the file
+        :params  *parts: Path parts relative to this directory
+        :param   rules: List of rules to apply to the file
 
-        Returns:
-            File object
+        :return: File object
         """
-        self.files.append(create_file(self.path, *parts, rules=rules))
+        if rules is None:
+            rules = [FileExistsRule, FileIsNotEmptyRule]
+
+        self.files.append(
+            File(
+                path=self.path.joinpath(*parts),
+                rules=rules,
+            )
+        )
 
     @model_validator(mode="after")
     def passes_all_glob_rules(self):
@@ -142,64 +238,3 @@ class Directory(File):
                 f"Rules {[f.rule_name for f in failures]} failed for {self}"
             )
         return self
-
-
-def create_directory(
-    base_dir: Path,
-    files: Optional[List[Union[File, tuple, str]]] = None,
-    glob_rules: Optional[List[GlobRule]] = None,
-    rules: Optional[List[DirectoryRule]] = None,
-) -> Directory:
-    """
-    Factory function to create a Directory object with standard rules.
-
-    This function replaces the class method approach with a more functional approach,
-    which is generally preferred in Python when the method doesn't need to access instance attributes.
-    It also makes the code more testable and easier to understand.
-
-    The function handles different types of file specifications, making it flexible and easy to use.
-    It also sets default rules for the directory and its files, ensuring consistent validation.
-
-    Args:
-        base_dir: Base directory path
-        files: List of items to include in the directory. Can be:
-            - File objects (used as-is)
-            - Directory objects (used as-is)
-            - Strings (converted to File objects with default rules)
-            - Tuples of (filename, rules) where filename is a string and rules is a list of FileRule
-        glob_rules: List of glob rules to apply
-        rules: List of directory rules to apply
-
-    Returns:
-        Directory object
-    """
-    if files is None:
-        files = []
-    if glob_rules is None:
-        glob_rules = [GlobHasFilesRule]
-    if rules is None:
-        rules = [DirectoryExistsRule]
-
-    # Create the directory
-    directory = Directory(
-        path=base_dir,
-        rules=rules,
-        files=[],  # Start with an empty files list
-        glob_rules=glob_rules,
-    )
-
-    for file_item in files:
-        if isinstance(file_item, File):
-            # If it's already a File or Directory object, use it as-is
-            directory.files.append(file_item)
-        elif isinstance(file_item, tuple) and len(file_item) == 2:
-            # If it's a tuple of (filename, rules), create a File with those rules
-            filename, file_rules = file_item
-            directory.add_file(filename, rules=file_rules)
-        elif isinstance(file_item, str):
-            # If it's a string, create a File with default rules
-            directory.add_file(file_item)
-        else:
-            raise ValueError(f"Unsupported file specification: {file_item}")
-
-    return directory

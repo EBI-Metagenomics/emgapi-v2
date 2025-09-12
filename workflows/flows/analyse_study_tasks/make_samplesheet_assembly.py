@@ -1,7 +1,6 @@
 import csv
 from pathlib import Path
 from textwrap import dedent as _
-from typing import List
 
 from django.db.models import QuerySet
 from prefect import task
@@ -45,7 +44,7 @@ def make_samplesheet_assembly(
     sample_sheet_csv = queryset_to_samplesheet(
         queryset=assemblies,
         filename=Path(EMG_CONFIG.slurm.default_workdir)
-                 / Path(
+        / Path(
             f"{mgnify_study.ena_study.accession}_samplesheet_assembly-v6_{ss_hash}.csv"
         ),
         column_map={
@@ -57,8 +56,8 @@ def make_samplesheet_assembly(
                 lookup_string=f"metadata__{ENAAnalysisFields.GENERATED_FTP}",
                 renderer=lambda ftp_path: (
                     # convert_ena_ftp_to_fire_fastq(ftp_path) if ftp_path else ""  # TODO: once ASA supports FIRE
-                        "http://"
-                        + ftp_path
+                    "http://"
+                    + ftp_path
                 ),
             ),
         },
@@ -90,7 +89,7 @@ def make_samplesheet_assembly(
 )
 def make_samplesheet_for_map(
     mgnify_study: analyses.models.Study,
-    assembly_analyses: List[analyses.models.Analysis],
+    assembly_analyses: list[analyses.models.Analysis],
 ) -> (Path, str):
     """
     Makes a samplesheet CSV file for a set of assembly analyses, suitable for the MAP pipeline.
@@ -142,8 +141,6 @@ def make_samplesheet_for_map(
             user_proteins_gff = ""
             virify_gff = ""
             for download in analysis.downloads_as_objects:
-                print(download.file_type)
-                print(download.download_group)
                 if (
                     download.file_type == DownloadFileType.GFF
                     and download.download_group
