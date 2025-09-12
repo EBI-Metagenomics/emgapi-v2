@@ -8,6 +8,7 @@ from workflows.data_io_utils.mgnify_v6_utils.assembly import (
     import_taxonomy,
     import_qc,
     import_functions,
+    import_pathways,
 )
 from workflows.flows.analyse_study_tasks.analysis_states import AnalysisStates
 from workflows.flows.analyse_study_tasks.copy_v6_pipeline_results import (
@@ -33,7 +34,8 @@ def import_completed_assembly_analysis(analysis: analyses.models.Analysis):
     # Import functional annotations
     import_functions(analysis, dir_for_analysis)
 
-    # TODO: Import pathways
+    # Import pathways and systems
+    import_pathways(analysis, dir_for_analysis)
 
     # Mark the analysis as having its annotations imported
     copy_v6_pipeline_results(analysis.accession)

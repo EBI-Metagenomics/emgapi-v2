@@ -126,16 +126,25 @@ class AssemblyAnalysisPipelineConfig(BaseModel):
     pipeline_repo: str = "ebi-metagenomics/assembly-analysis-pipeline"
     pipeline_git_revision: str = "dev"
     pipeline_nf_config: str = "test.config"
-    pipeline_nf_profile: str = "debug"
+    pipeline_nf_profile: str = "codon"
     pipeline_time_limit_days: int = 5
     samplesheet_chunk_size: int = 10
     nextflow_master_job_memory_gb: int = 1
-    completed_assemblies_csv: str = "qc_passed_assemblies.csv"
-    failed_assemblies_csv: str = "qc_failed_assemblies.csv"
+    completed_assemblies_csv: str = "analysed_assemblies.csv"
+    qc_failed_assemblies: str = "qc_failed_assemblies.csv"
+    # Results folders
+    qc_folder: str = "qc"
+    cds_folder: str = "cds"
     taxonomy_folder: str = "taxonomy"
     functional_folder: str = "functional-annotation"
+    functional_annotation_folder: str = "functional-annotation"
+    pathway_and_systems_folder: str = "pathway-and-systems"
+    pathways_systems_folder: str = "pathways-and-systems"
+    annotation_summary_folder: str = "annotation-summary"
     downstream_samplesheets_folder: str = "downstream_samplesheets"
     virify_samplesheet: str = "virify_samplesheet.csv"
+    # TODO: implement this bit
+    # mobilome_samplesheet: str = "mobilome_samplesheet.csv"
 
 
 class VirifyPipelineConfig(BaseModel):

@@ -7,18 +7,17 @@ from django.utils.text import slugify
 from prefect import flow
 from prefect.runtime import flow_run
 
-from activate_django_first import EMG_CONFIG
-
 import analyses.models
+from activate_django_first import EMG_CONFIG
+from workflows.flows.analyse_study_tasks.analysis_states import (
+    mark_analysis_as_started,
+    mark_analysis_as_failed,
+)
 from workflows.flows.analyse_study_tasks.import_completed_assembly_analyses import (
     import_completed_assembly_analyses,
 )
 from workflows.flows.analyse_study_tasks.make_samplesheet_assembly import (
     make_samplesheet_assembly,
-)
-from workflows.flows.analyse_study_tasks.analysis_states import (
-    mark_analysis_as_started,
-    mark_analysis_as_failed,
 )
 from workflows.flows.analyse_study_tasks.run_virify_pipeline_via_samplesheet import (
     run_virify_pipeline_via_samplesheet,
@@ -119,6 +118,7 @@ def run_assembly_pipeline_via_samplesheet(
     else:
         # assume that if job finished, all finished... set statuses
         set_post_assembly_analysis_states(assembly_current_outdir, assembly_analyses)
+
         import_completed_assembly_analyses(assembly_current_outdir, assembly_analyses)
 
         # Run the virify pipeline on the assemblies

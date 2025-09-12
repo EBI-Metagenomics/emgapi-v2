@@ -51,7 +51,7 @@ def mark_analysis_status(
     analysis: Analysis,
     status: Analysis.AnalysisStates,
     reason: str = None,
-    unset_statuses: list[Analysis.AnalysisStates] = None,
+    unset_statuses: List[Analysis.AnalysisStates] = None,
 ) -> None:
     """
     Logs and updates the status of a given analysis.
