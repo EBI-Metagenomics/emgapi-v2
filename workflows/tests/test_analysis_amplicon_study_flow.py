@@ -371,6 +371,10 @@ def generate_fake_pipeline_no_asvs(amplicon_run_folder, run):
             "w",
         ),
         open(
+            f"{amplicon_run_folder}/{EMG_CONFIG.amplicon_pipeline.qc_folder}/{run}.fastp.json",
+            "w",
+        ),
+        open(
             f"{amplicon_run_folder}/{EMG_CONFIG.amplicon_pipeline.qc_folder}/{run}_multiqc_report.html",
             "w",
         ),
@@ -891,7 +895,7 @@ def test_prefect_analyse_amplicon_flow(
     Directory(
         path=study.results_dir,
         glob_rules=[
-            GlobHasFilesCountRule[6],  # partials deleted, just merged ones
+            GlobHasFilesCountRule[12],  # partials deleted, just merged ones
             GlobRule(
                 rule_name="All files are study level",
                 glob_patten=f"{study.first_accession}*{STUDY_SUMMARY_TSV}",
@@ -1183,7 +1187,7 @@ def test_prefect_analyse_amplicon_flow_private_data(
     Directory(
         path=study.results_dir,
         glob_rules=[
-            GlobHasFilesCountRule[5],  # partials deleted, just merged ones
+            GlobHasFilesCountRule[10],  # partials deleted, just merged ones
             GlobRule(
                 rule_name="All files are study level",
                 glob_patten=f"{study.first_accession}*{STUDY_SUMMARY_TSV}",

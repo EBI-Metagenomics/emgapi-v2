@@ -110,14 +110,11 @@ class RawReadsPipelineConfig(BaseModel):
     completed_runs_csv: str = "qc_passed_runs.csv"
     failed_runs_csv: str = "qc_failed_runs.csv"
     # results folders
-    qc_folder: str = "qc-stats"
-    decontam_folder: str = "decontam-stats"
-    multiqc_folder: str = "multiqc"
-    study_multiqc_folder: str = "multiqc"
+    qc_folder: str = "qc"
     taxonomy_summary_folder: str = "taxonomy-summary"
     function_summary_folder: str = "function-summary"
-    taxonomy_analysis_sources: set = {"SILVA-SSU", "SILVA-LSU", "mOTUs"}
-    function_analysis_sources: set = {"Pfam-A"}
+    taxonomy_analysis_sources: set = {"silva-ssu", "silva-lsu", "motus"}
+    function_analysis_sources: set = {"pfam"}
 
     rawreads_nextflow_master_job_memory_gb: int = 1
     rawreads_pipeline_time_limit_days: int = 5

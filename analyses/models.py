@@ -639,14 +639,14 @@ class Analysis(
         DADA2_PR2: str = "dada2_pr2"
         UNIREF: str = "uniref"
 
-    TAXONOMIES_SSU = f"{TAXONOMIES}__{TaxonomySources.SSU.value}"
-    TAXONOMIES_LSU = f"{TAXONOMIES}__{TaxonomySources.LSU.value}"
-    TAXONOMIES_ITS_ONE_DB = f"{TAXONOMIES}__{TaxonomySources.ITS_ONE_DB.value}"
-    TAXONOMIES_UNITE = f"{TAXONOMIES}__{TaxonomySources.UNITE.value}"
-    TAXONOMIES_PR2 = f"{TAXONOMIES}__{TaxonomySources.PR2.value}"
-    TAXONOMIES_DADA2_SILVA = f"{TAXONOMIES}__{TaxonomySources.DADA2_SILVA.value}"
-    TAXONOMIES_DADA2_PR2 = f"{TAXONOMIES}__{TaxonomySources.DADA2_PR2.value}"
-    TAXONOMIES_UNIREF = f"{TAXONOMIES}__{TaxonomySources.UNIREF.value}"
+    TAXONOMIES_SSU = f"{TAXONOMIES}__{TaxonomySources.SSU}"
+    TAXONOMIES_LSU = f"{TAXONOMIES}__{TaxonomySources.LSU}"
+    TAXONOMIES_ITS_ONE_DB = f"{TAXONOMIES}__{TaxonomySources.ITS_ONE_DB}"
+    TAXONOMIES_UNITE = f"{TAXONOMIES}__{TaxonomySources.UNITE}"
+    TAXONOMIES_PR2 = f"{TAXONOMIES}__{TaxonomySources.PR2}"
+    TAXONOMIES_DADA2_SILVA = f"{TAXONOMIES}__{TaxonomySources.DADA2_SILVA}"
+    TAXONOMIES_DADA2_PR2 = f"{TAXONOMIES}__{TaxonomySources.DADA2_PR2}"
+    TAXONOMIES_UNIREF = f"{TAXONOMIES}__{TaxonomySources.UNIREF}"
 
     ALLOWED_DOWNLOAD_GROUP_PREFIXES = [
         "all",  # catch-all for legacy
@@ -661,7 +661,7 @@ class Analysis(
     class FunctionalSources(FutureStrEnum):
         PFAM: str = "pfam"
 
-    FUNCTIONAL_PFAM = f"{FUNCTIONAL_ANNOTATION}__{FunctionalSources.PFAM.value}"
+    FUNCTIONAL_PFAM = f"{FUNCTIONAL_ANNOTATION}__{FunctionalSources.PFAM}"
 
     @staticmethod
     def default_annotations():

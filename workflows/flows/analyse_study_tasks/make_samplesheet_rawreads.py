@@ -18,7 +18,6 @@ from workflows.nextflow_utils.samplesheets import (
 from workflows.prefect_utils.cache_control import context_agnostic_task_input_hash
 from workflows.views import encode_samplesheet_path
 
-
 FASTQ_FTPS = analyses.models.Run.CommonMetadataKeys.FASTQ_FTPS
 METADATA__FASTQ_FTPS = f"{analyses.models.Run.metadata.field.name}__{FASTQ_FTPS}"
 
@@ -30,7 +29,7 @@ METADATA__FASTQ_FTPS = f"{analyses.models.Run.metadata.field.name}__{FASTQ_FTPS}
 def make_samplesheet_rawreads(
     mgnify_study: analyses.models.Study,
     rawreads_analyses: QuerySet,
-) -> (Path, str):
+) -> tuple[Path, str]:
     """
     Makes a samplesheet CSV file for a set of WGS raw-reads analyses, suitable for raw-reads pipeline.
     :param mgnify_study: MGYS study
@@ -51,10 +50,6 @@ def make_samplesheet_rawreads(
             f"{mgnify_study.ena_study.accession}_samplesheet_rawreads-v6_{ss_hash}.csv"
         ),
         column_map={
-            "study": SamplesheetColumnSource(
-                lookup_string="study__ena_accessions",
-                renderer=lambda accessions: accessions[0],
-            ),
             "sample": SamplesheetColumnSource(
                 lookup_string="ena_accessions",
                 renderer=lambda accessions: accessions[0],
@@ -69,14 +64,16 @@ def make_samplesheet_rawreads(
                     convert_ena_ftp_to_fire_fastq(ftps[1]) if len(ftps) > 1 else ""
                 ),
             ),
-            "library_layout": SamplesheetColumnSource(
+            "single_end": SamplesheetColumnSource(
                 pass_whole_object=True,
-                renderer=lambda run: run.metadata_preferring_inferred.get(
-                    analyses.models.Run.CommonMetadataKeys.LIBRARY_LAYOUT
+                renderer=lambda run: (
+                    "true"
+                    if run.metadata_preferring_inferred.get(
+                        analyses.models.Run.CommonMetadataKeys.LIBRARY_LAYOUT
+                    )
+                    == "SINGLE"
+                    else "false"
                 ),
-            ),
-            "library_strategy": SamplesheetColumnSource(
-                lookup_string=f"{analyses.models.Run.metadata.field.name}__library_strategy",
             ),
             "instrument_platform": SamplesheetColumnSource(
                 lookup_string=f"{analyses.models.Run.metadata.field.name}__instrument_platform",

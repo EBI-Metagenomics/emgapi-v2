@@ -25,6 +25,22 @@ FileConformsToTaxonomyTSVSchemaRule = generate_csv_schema_file_rule(
 )
 
 
+class RawReadsMotusTaxonomyTSVRow(BaseModel):
+    read_count: Union[float, int] = Field(alias="Count")
+    k_taxonomy: Optional[str] = Field(default=None, alias="Kingdom")
+    p_taxonomy: Optional[str] = Field(default=None, alias="Phylum")
+    c_taxonomy: Optional[str] = Field(default=None, alias="Class")
+    o_taxonomy: Optional[str] = Field(default=None, alias="Order")
+    f_taxonomy: Optional[str] = Field(default=None, alias="Family")
+    g_taxonomy: Optional[str] = Field(default=None, alias="Genus")
+    s_taxonomy: Optional[str] = Field(default=None, alias="Species")
+
+
+FileConformsToRawReadsMotusTaxonomyTSVSchemaRule = generate_csv_schema_file_rule(
+    RawReadsMotusTaxonomyTSVRow, delimiter=CSVDelimiter.TAB, none_values=[""]
+)
+
+
 class RawReadsTaxonomyTSVRow(BaseModel):
     read_count: Union[float, int] = Field(alias="Count")
     sk_taxonomy: Optional[str] = Field(default=None, alias="Superkingdom")
@@ -61,6 +77,18 @@ GlobOfTaxonomyFolderHasHtmlAndMseqRule = GlobRule(
     test=lambda files: sum(f.suffix in [".html", ".mseq"] for f in files) == 2,
 )
 
+GlobOfTaxonomyFolderHasTxtGzRule = GlobRule(
+    rule_name="Folder should contain txt.gz and krona html files",
+    glob_patten="*",
+    test=lambda files: sum(f.suffix in [".txt.gz"] for f in files) == 1,
+)
+
+GlobOfTaxonomyFolderHasKronaHtmlRule = GlobRule(
+    rule_name="Folder should contain txt.gz and krona html files",
+    glob_patten="*",
+    test=lambda files: sum(f.suffix in [".html"] for f in files) == 1,
+)
+
 GlobOfTaxonomyFolderHasHtmlAndKronaTxtRule = GlobRule(
     rule_name="Folder should contain html and krona txt files",
     glob_patten="**",
@@ -75,6 +103,22 @@ GlobOfQcFolderHasFastpAndMultiqc = GlobRule(
         for f in files
     )
     == 2,
+)
+
+GlobOfRawReadsQcFolderHasFastpAndMultiqc = GlobRule(
+    rule_name="Folder should contain two fastp files and a multiqc file",
+    glob_patten="*",
+    test=lambda files: sum(
+        any(
+            [
+                f.name.endswith("multiqc_report.html"),
+                f.name.endswith("decontamination.fastp.json"),
+                f.name.endswith("qc.fastp.json"),
+            ]
+        )
+        for f in files
+    )
+    == 3,
 )
 
 GlobOfMultiqcFolderHasMultiqc = GlobRule(
