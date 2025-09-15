@@ -116,7 +116,7 @@ class RawReadsPipelineConfig(BaseModel):
     taxonomy_analysis_sources: set = {"silva-ssu", "silva-lsu", "motus"}
     function_analysis_sources: set = {"pfam"}
 
-    rawreads_nextflow_master_job_memory_gb: int = 1
+    rawreads_nextflow_master_job_memory_gb: int = 8
     rawreads_pipeline_time_limit_days: int = 5
 
     allow_non_insdc_run_names: bool = False
