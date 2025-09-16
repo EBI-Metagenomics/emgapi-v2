@@ -104,7 +104,6 @@ class RawReadsPipelineConfig(BaseModel):
         "master"  # branch or commit of ebi-metagenomics/raw-reads-analysis-pipeline
     )
     rawreads_pipeline_config_file: str = "/nfs/production/nextflow-configs/codon.config"
-    rawreads_pipeline_nf_profile: str = "codon"
     samplesheet_chunk_size: int = 50
     # results stats
     completed_runs_csv: str = "qc_passed_runs.csv"
