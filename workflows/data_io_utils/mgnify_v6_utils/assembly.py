@@ -374,9 +374,17 @@ def import_annotation_summary(
             FileIsNotEmptyRule,
         ],
     )
-    gff_index = File(
+    gff_gzi_index = File(
         path=summary_dir.path
         / f"{analysis.assembly.first_accession}_annotation_summary.gff.gz.gzi",
+        rules=[
+            FileExistsRule,
+            FileIsNotEmptyRule,
+        ],
+    )
+    gff_csi_index = File(
+        path=summary_dir.path
+        / f"{analysis.assembly.first_accession}_annotation_summary.gff.gz.csi",
         rules=[
             FileExistsRule,
             FileIsNotEmptyRule,
@@ -394,9 +402,15 @@ def import_annotation_summary(
             parent_identifier=analysis.accession,
             short_description="Summary GFF of all functional annotations",
             long_description="Consolidated annotations from the various functional and gene cluster annotation tools as a GFF (general feature format) file",
-            index_file=DownloadFileIndexFile(
-                path=gff_index.path.relative_to(analysis.results_dir),
-                index_type="gzi",
-            ),
+            index_file=[
+                DownloadFileIndexFile(
+                    path=gff_gzi_index.path.relative_to(analysis.results_dir),
+                    index_type="gzi",
+                ),
+                DownloadFileIndexFile(
+                    path=gff_csi_index.path.relative_to(analysis.results_dir),
+                    index_type="csi",
+                ),
+            ],
         )
     )
