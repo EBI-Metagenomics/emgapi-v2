@@ -76,6 +76,7 @@ def run_amplicon_pipeline_via_samplesheet(
             "-resume",
             ("--input", samplesheet),
             ("--outdir", amplicon_current_outdir),
+            mgnify_study.is_private and "--private_study",
             EMG_CONFIG.slurm.use_nextflow_tower and "-with-tower",
             ("-ansi-log", "false"),
         ]
