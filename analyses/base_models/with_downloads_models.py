@@ -39,7 +39,7 @@ class DownloadFileIndexFile(BaseModel):
     An index file (e.g., a .fai for a FASTA file of .gzi for a bgzip file) of a DownloadFile.
     """
 
-    index_type: Literal["fai", "gzi"]
+    index_type: Literal["fai", "gzi", "csi"]
     path: Union[str, Path]
 
     @field_validator("path", mode="before")
