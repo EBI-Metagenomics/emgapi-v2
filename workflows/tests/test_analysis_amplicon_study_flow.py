@@ -25,126 +25,140 @@ from workflows.flows.analysis_amplicon_study import analysis_amplicon_study
 from workflows.prefect_utils.testing_utils import (
     should_not_mock_httpx_requests_to_prefect_server,
     run_flow_and_capture_logs,
+    write_empty_fasta_file,
 )
 from workflows.prefect_utils.pyslurm_patch import JobSubmitDescription
 
 EMG_CONFIG = settings.EMG_CONFIG
 
 
-def generate_fake_pipeline_all_results(amplicon_run_folder, run):
+def generate_fake_pipeline_all_results(amplicon_run_folder: Path, run):
     # QC
-    os.makedirs(
-        f"{amplicon_run_folder}/{EMG_CONFIG.amplicon_pipeline.qc_folder}",
-        exist_ok=True,
+    (amplicon_run_folder / EMG_CONFIG.amplicon_pipeline.qc_folder).mkdir(
+        exist_ok=True, parents=True
     )
-    with open(
-        f"{amplicon_run_folder}/{EMG_CONFIG.amplicon_pipeline.qc_folder}/{run}_seqfu.tsv",
-        "w",
-    ):
-        pass
-    with open(
-        f"{amplicon_run_folder}/{EMG_CONFIG.amplicon_pipeline.qc_folder}/{run}.fastp.json",
-        "w",
-    ) as fastp:
+    (
+        amplicon_run_folder
+        / EMG_CONFIG.amplicon_pipeline.qc_folder
+        / f"{run}_seqfu.tsv"
+    ).touch()
+    with (
+        amplicon_run_folder
+        / EMG_CONFIG.amplicon_pipeline.qc_folder
+        / f"{run}.fastp.json"
+    ).open("w") as fastp:
         json.dump({"summary": {"before_filtering": {"total_bases": 10}}}, fastp)
-    with open(
-        f"{amplicon_run_folder}/{EMG_CONFIG.amplicon_pipeline.qc_folder}/{run}_multiqc_report.html",
-        "w",
-    ):
-        pass
+    (
+        amplicon_run_folder
+        / EMG_CONFIG.amplicon_pipeline.qc_folder
+        / f"{run}_multiqc_report.html"
+    ).touch()
 
     # PRIMER IDENTIFICATION
-    os.makedirs(
-        f"{amplicon_run_folder}/{EMG_CONFIG.amplicon_pipeline.primer_identification_folder}",
-        exist_ok=True,
-    )
-    with (
-        open(
-            f"{amplicon_run_folder}/{EMG_CONFIG.amplicon_pipeline.primer_identification_folder}/{run}.cutadapt.json",
-            "w",
-        ),
-        open(
-            f"{amplicon_run_folder}/{EMG_CONFIG.amplicon_pipeline.primer_identification_folder}/fwd_primers.fasta",
-            "w",
-        ),
-        open(
-            f"{amplicon_run_folder}/{EMG_CONFIG.amplicon_pipeline.primer_identification_folder}/rev_primers.fasta",
-            "w",
-        ),
-        open(
-            f"{amplicon_run_folder}/{EMG_CONFIG.amplicon_pipeline.primer_identification_folder}/{run}_primer_validation.tsv",
-            "w",
-        ),
-    ):
-        pass
+    (
+        amplicon_run_folder / EMG_CONFIG.amplicon_pipeline.primer_identification_folder
+    ).mkdir(exist_ok=True, parents=True)
+    (
+        amplicon_run_folder
+        / EMG_CONFIG.amplicon_pipeline.primer_identification_folder
+        / f"{run}.cutadapt.json"
+    ).touch()
+    (
+        amplicon_run_folder
+        / EMG_CONFIG.amplicon_pipeline.primer_identification_folder
+        / "fwd_primers.fasta"
+    ).touch()
+    (
+        amplicon_run_folder
+        / EMG_CONFIG.amplicon_pipeline.primer_identification_folder
+        / "rev_primers.fasta"
+    ).touch()
+    (
+        amplicon_run_folder
+        / EMG_CONFIG.amplicon_pipeline.primer_identification_folder
+        / f"{run}_primer_validation.tsv"
+    ).touch()
 
     # AMPLIFIED REGION INFERENCE
-    os.makedirs(
-        f"{amplicon_run_folder}/{EMG_CONFIG.amplicon_pipeline.amplified_region_inference_folder}",
-        exist_ok=True,
-    )
-    with (
-        open(
-            f"{amplicon_run_folder}/{EMG_CONFIG.amplicon_pipeline.amplified_region_inference_folder}/{run}.tsv",
-            "w",
-        ),
-        open(
-            f"{amplicon_run_folder}/{EMG_CONFIG.amplicon_pipeline.amplified_region_inference_folder}/{run}.16S.V3-V4.txt",
-            "w",
-        ),
-        open(
-            f"{amplicon_run_folder}/{EMG_CONFIG.amplicon_pipeline.amplified_region_inference_folder}/{run}.18S.V9.txt",
-            "w",
-        ),
-    ):
-        pass
+    (
+        amplicon_run_folder
+        / EMG_CONFIG.amplicon_pipeline.amplified_region_inference_folder
+    ).mkdir(exist_ok=True, parents=True)
+    (
+        amplicon_run_folder
+        / EMG_CONFIG.amplicon_pipeline.amplified_region_inference_folder
+        / f"{run}.tsv"
+    ).touch()
+    (
+        amplicon_run_folder
+        / EMG_CONFIG.amplicon_pipeline.amplified_region_inference_folder
+        / f"{run}.16S.V3-V4.txt"
+    ).touch()
+    (
+        amplicon_run_folder
+        / EMG_CONFIG.amplicon_pipeline.amplified_region_inference_folder
+        / f"{run}.18S.V9.txt"
+    ).touch()
 
     # ASV
-    os.makedirs(
-        f"{amplicon_run_folder}/{EMG_CONFIG.amplicon_pipeline.asv_folder}",
-        exist_ok=True,
+    (amplicon_run_folder / EMG_CONFIG.amplicon_pipeline.asv_folder).mkdir(
+        exist_ok=True, parents=True
     )
-    os.makedirs(
-        f"{amplicon_run_folder}/{EMG_CONFIG.amplicon_pipeline.asv_folder}/16S-V3-V4",
-        exist_ok=True,
+    (amplicon_run_folder / EMG_CONFIG.amplicon_pipeline.asv_folder / "16S-V3-V4").mkdir(
+        exist_ok=True
     )
-    os.makedirs(
-        f"{amplicon_run_folder}/{EMG_CONFIG.amplicon_pipeline.asv_folder}/18S-V9",
-        exist_ok=True,
+    (amplicon_run_folder / EMG_CONFIG.amplicon_pipeline.asv_folder / "18S-V9").mkdir(
+        exist_ok=True
     )
-    os.makedirs(
-        f"{amplicon_run_folder}/{EMG_CONFIG.amplicon_pipeline.asv_folder}/concat",
-        exist_ok=True,
+    (amplicon_run_folder / EMG_CONFIG.amplicon_pipeline.asv_folder / "concat").mkdir(
+        exist_ok=True
     )
+
+    (
+        amplicon_run_folder
+        / EMG_CONFIG.amplicon_pipeline.asv_folder
+        / f"{run}_dada2_stats.tsv"
+    ).touch()
+    (
+        amplicon_run_folder
+        / EMG_CONFIG.amplicon_pipeline.asv_folder
+        / f"{run}_DADA2-SILVA_asv_tax.tsv"
+    ).touch()
+    (
+        amplicon_run_folder
+        / EMG_CONFIG.amplicon_pipeline.asv_folder
+        / f"{run}_DADA2-PR2_asv_tax.tsv"
+    ).touch()
+    (
+        amplicon_run_folder
+        / EMG_CONFIG.amplicon_pipeline.asv_folder
+        / f"{run}_asv_seqs.fasta"
+    ).touch()
+    (
+        amplicon_run_folder
+        / EMG_CONFIG.amplicon_pipeline.asv_folder
+        / f"{run}_asv_krona_counts.txt"
+    ).touch()
+    (
+        amplicon_run_folder
+        / EMG_CONFIG.amplicon_pipeline.asv_folder
+        / "concat"
+        / f"{run}_concat_asv_read_counts.tsv"
+    ).touch()
+
     with (
-        open(
-            f"{amplicon_run_folder}/{EMG_CONFIG.amplicon_pipeline.asv_folder}/{run}_dada2_stats.tsv",
-            "w",
-        ),
-        open(
-            f"{amplicon_run_folder}/{EMG_CONFIG.amplicon_pipeline.asv_folder}/{run}_DADA2-SILVA_asv_tax.tsv",
-            "w",
-        ),
-        open(
-            f"{amplicon_run_folder}/{EMG_CONFIG.amplicon_pipeline.asv_folder}/{run}_DADA2-PR2_asv_tax.tsv",
-            "w",
-        ),
-        open(
-            f"{amplicon_run_folder}/{EMG_CONFIG.amplicon_pipeline.asv_folder}/{run}_asv_seqs.fasta",
-            "w",
-        ),
-        open(
-            f"{amplicon_run_folder}/{EMG_CONFIG.amplicon_pipeline.asv_folder}/18S-V9/{run}_18S-V9_asv_read_counts.tsv",
-            "w",
-        ) as v9_tsv,
-        open(
-            f"{amplicon_run_folder}/{EMG_CONFIG.amplicon_pipeline.asv_folder}/16S-V3-V4/{run}_16S-V3-V4_asv_read_counts.tsv",
-            "w",
-        ) as v3v4_tsv,
-        open(
-            f"{amplicon_run_folder}/{EMG_CONFIG.amplicon_pipeline.asv_folder}/concat/{run}_concat_asv_read_counts.tsv",
-            "w",
-        ),
+        (
+            amplicon_run_folder
+            / EMG_CONFIG.amplicon_pipeline.asv_folder
+            / "18S-V9"
+            / f"{run}_18S-V9_asv_read_counts.tsv"
+        ).open("w") as v9_tsv,
+        (
+            amplicon_run_folder
+            / EMG_CONFIG.amplicon_pipeline.asv_folder
+            / "16S-V3-V4"
+            / f"{run}_16S-V3-V4_asv_read_counts.tsv"
+        ).open("w") as v3v4_tsv,
     ):
         for tsv in [v9_tsv, v3v4_tsv]:
             tsv.write(
@@ -159,29 +173,31 @@ def generate_fake_pipeline_all_results(amplicon_run_folder, run):
             )
 
     # SEQUENCE CATEGORISATION
-    os.makedirs(
-        f"{amplicon_run_folder}/{EMG_CONFIG.amplicon_pipeline.sequence_categorisation_folder}",
-        exist_ok=True,
+    (
+        amplicon_run_folder
+        / EMG_CONFIG.amplicon_pipeline.sequence_categorisation_folder
+    ).mkdir(exist_ok=True, parents=True)
+    write_empty_fasta_file(
+        amplicon_run_folder
+        / EMG_CONFIG.amplicon_pipeline.sequence_categorisation_folder
+        / f"{run}_SSU.fasta"
     )
+    write_empty_fasta_file(
+        amplicon_run_folder
+        / EMG_CONFIG.amplicon_pipeline.sequence_categorisation_folder
+        / f"{run}_ITS_rRNA.fasta"
+    )
+    (
+        amplicon_run_folder
+        / EMG_CONFIG.amplicon_pipeline.sequence_categorisation_folder
+        / f"{run}.tblout.deoverlapped"
+    ).touch()
     with (
-        open(
-            f"{amplicon_run_folder}/{EMG_CONFIG.amplicon_pipeline.sequence_categorisation_folder}/{run}_SSU.fasta",
-            "w",
-        ),
-        open(
-            f"{amplicon_run_folder}/{EMG_CONFIG.amplicon_pipeline.sequence_categorisation_folder}/{run}_ITS_rRNA.fa",
-            "w",
-        ),
-        open(
-            f"{amplicon_run_folder}/{EMG_CONFIG.amplicon_pipeline.sequence_categorisation_folder}/{run}.tblout.deoverlapped",
-            "w",
-        ),
-        open(
-            f"{amplicon_run_folder}/{EMG_CONFIG.amplicon_pipeline.sequence_categorisation_folder}/{run}_SSU_rRNA_bacteria.RF00177.fa",
-            "w",
-        ) as fasta,
-    ):
-        fasta.write(
+        amplicon_run_folder
+        / EMG_CONFIG.amplicon_pipeline.sequence_categorisation_folder
+        / f"{run}_SSU_rRNA_bacteria.RF00177.fa"
+    ).open("w") as ssu_rna_fasta:
+        ssu_rna_fasta.write(
             dedent(
                 f"""\
                 >{run}.100-SSU_rRNA_archaea/5-421 100/1 merged_251_171
@@ -191,43 +207,40 @@ def generate_fake_pipeline_all_results(amplicon_run_folder, run):
         )
 
     # TAXONOMY SUMMARY
-    os.makedirs(
-        f"{amplicon_run_folder}/{EMG_CONFIG.amplicon_pipeline.taxonomy_summary_folder}",
-        exist_ok=True,
+    (amplicon_run_folder / EMG_CONFIG.amplicon_pipeline.taxonomy_summary_folder).mkdir(
+        exist_ok=True, parents=True
     )
-    os.makedirs(
-        f"{amplicon_run_folder}/{EMG_CONFIG.amplicon_pipeline.taxonomy_summary_folder}/SILVA-SSU",
-        exist_ok=True,
+    (
+        amplicon_run_folder
+        / EMG_CONFIG.amplicon_pipeline.taxonomy_summary_folder
+        / "SILVA-SSU"
+    ).mkdir(exist_ok=True)
+    (
+        amplicon_run_folder
+        / EMG_CONFIG.amplicon_pipeline.taxonomy_summary_folder
+        / "PR2"
+    ).mkdir(exist_ok=True)
+    (
+        amplicon_run_folder
+        / EMG_CONFIG.amplicon_pipeline.taxonomy_summary_folder
+        / "DADA2-SILVA"
+    ).mkdir(exist_ok=True)
+    (
+        amplicon_run_folder
+        / EMG_CONFIG.amplicon_pipeline.taxonomy_summary_folder
+        / "DADA2-PR2"
+    ).mkdir(exist_ok=True)
+
+    ssu_dir = (
+        amplicon_run_folder
+        / EMG_CONFIG.amplicon_pipeline.taxonomy_summary_folder
+        / "SILVA-SSU"
     )
-    os.makedirs(
-        f"{amplicon_run_folder}/{EMG_CONFIG.amplicon_pipeline.taxonomy_summary_folder}/PR2",
-        exist_ok=True,
-    )
-    os.makedirs(
-        f"{amplicon_run_folder}/{EMG_CONFIG.amplicon_pipeline.taxonomy_summary_folder}/DADA2-SILVA",
-        exist_ok=True,
-    )
-    os.makedirs(
-        f"{amplicon_run_folder}/{EMG_CONFIG.amplicon_pipeline.taxonomy_summary_folder}/DADA2-PR2",
-        exist_ok=True,
-    )
+    (ssu_dir / f"{run}_SILVA-SSU.mseq").touch()
+    (ssu_dir / f"{run}_SILVA-SSU.txt").touch()
     with (
-        open(
-            f"{amplicon_run_folder}/{EMG_CONFIG.amplicon_pipeline.taxonomy_summary_folder}/SILVA-SSU/{run}.html",
-            "w",
-        ) as ssu_krona,
-        open(
-            f"{amplicon_run_folder}/{EMG_CONFIG.amplicon_pipeline.taxonomy_summary_folder}/SILVA-SSU/{run}_SILVA-SSU.mseq",
-            "w",
-        ),
-        open(
-            f"{amplicon_run_folder}/{EMG_CONFIG.amplicon_pipeline.taxonomy_summary_folder}/SILVA-SSU/{run}_SILVA-SSU.tsv",
-            "w",
-        ) as ssu_tsv,
-        open(
-            f"{amplicon_run_folder}/{EMG_CONFIG.amplicon_pipeline.taxonomy_summary_folder}/SILVA-SSU/{run}_SILVA-SSU.txt",
-            "w",
-        ),
+        (ssu_dir / f"{run}.html").open("w") as ssu_krona,
+        (ssu_dir / f"{run}_SILVA-SSU.tsv").open("w") as ssu_tsv,
     ):
         ssu_tsv.writelines(
             [
@@ -239,24 +252,15 @@ def generate_fake_pipeline_all_results(amplicon_run_folder, run):
             ]
         )
         ssu_krona.write("<html></html>")
-    with (
-        open(
-            f"{amplicon_run_folder}/{EMG_CONFIG.amplicon_pipeline.taxonomy_summary_folder}/PR2/{run}.html",
-            "w",
-        ),
-        open(
-            f"{amplicon_run_folder}/{EMG_CONFIG.amplicon_pipeline.taxonomy_summary_folder}/PR2/{run}_PR2.mseq",
-            "w",
-        ),
-        open(
-            f"{amplicon_run_folder}/{EMG_CONFIG.amplicon_pipeline.taxonomy_summary_folder}/PR2/{run}_PR2.tsv",
-            "w",
-        ),
-        open(
-            f"{amplicon_run_folder}/{EMG_CONFIG.amplicon_pipeline.taxonomy_summary_folder}/PR2/{run}_PR2.txt",
-            "w",
-        ) as pr2_tax,
-    ):
+    pr2_dir = (
+        amplicon_run_folder
+        / EMG_CONFIG.amplicon_pipeline.taxonomy_summary_folder
+        / "PR2"
+    )
+    (pr2_dir / f"{run}.html").touch()
+    (pr2_dir / f"{run}_PR2.mseq").touch()
+    (pr2_dir / f"{run}_PR2.tsv").touch()
+    with ((pr2_dir / f"{run}_PR2.txt").open("w") as pr2_tax,):
         pr2_tax.write(
             dedent(
                 """\
@@ -273,35 +277,25 @@ def generate_fake_pipeline_all_results(amplicon_run_folder, run):
         """
             )
         )
+    dada2_silva_dir = (
+        amplicon_run_folder
+        / EMG_CONFIG.amplicon_pipeline.taxonomy_summary_folder
+        / "DADA2-SILVA"
+    )
+    (dada2_silva_dir / f"{run}_16S-V3-V4.html").touch()
+    (dada2_silva_dir / f"{run}_DADA2-SILVA.mseq").touch()
+    (dada2_silva_dir / f"{run}_18S-V9.html").touch()
+    (dada2_silva_dir / f"{run}_concat.html").touch()
     with (
-        open(
-            f"{amplicon_run_folder}/{EMG_CONFIG.amplicon_pipeline.taxonomy_summary_folder}/DADA2-SILVA/{run}_16S-V3-V4_DADA2-SILVA_asv_krona_counts.txt",
-            "w",
+        (dada2_silva_dir / f"{run}_16S-V3-V4_DADA2-SILVA_asv_krona_counts.txt").open(
+            "w"
         ) as dada2_16s_krona_count,
-        open(
-            f"{amplicon_run_folder}/{EMG_CONFIG.amplicon_pipeline.taxonomy_summary_folder}/DADA2-SILVA/{run}_16S-V3-V4.html",
-            "w",
-        ),
-        open(
-            f"{amplicon_run_folder}/{EMG_CONFIG.amplicon_pipeline.taxonomy_summary_folder}/DADA2-SILVA/{run}_DADA2-SILVA.mseq",
-            "w",
-        ),
-        open(
-            f"{amplicon_run_folder}/{EMG_CONFIG.amplicon_pipeline.taxonomy_summary_folder}/DADA2-SILVA/{run}_18S-V9_DADA2-SILVA_asv_krona_counts.txt",
-            "w",
+        (dada2_silva_dir / f"{run}_18S-V9_DADA2-SILVA_asv_krona_counts.txt").open(
+            "w"
         ) as dada2_18s_krona_count,
-        open(
-            f"{amplicon_run_folder}/{EMG_CONFIG.amplicon_pipeline.taxonomy_summary_folder}/DADA2-SILVA/{run}_18S-V9.html",
-            "w",
-        ),
-        open(
-            f"{amplicon_run_folder}/{EMG_CONFIG.amplicon_pipeline.taxonomy_summary_folder}/DADA2-SILVA/{run}_concat_DADA2-SILVA_asv_krona_counts.txt",
-            "w",
+        (dada2_silva_dir / f"{run}_concat_DADA2-SILVA_asv_krona_counts.txt").open(
+            "w"
         ) as dada2_concat_krona_count,
-        open(
-            f"{amplicon_run_folder}/{EMG_CONFIG.amplicon_pipeline.taxonomy_summary_folder}/DADA2-SILVA/{run}_concat.html",
-            "w",
-        ),
     ):
         for file in [
             dada2_16s_krona_count,
@@ -319,35 +313,25 @@ def generate_fake_pipeline_all_results(amplicon_run_folder, run):
             """
                 )
             )
+    dada2_pr2_dir = (
+        amplicon_run_folder
+        / EMG_CONFIG.amplicon_pipeline.taxonomy_summary_folder
+        / "DADA2-PR2"
+    )
+    (dada2_pr2_dir / f"{run}_16S-V3-V4.html").touch()
+    (dada2_pr2_dir / f"{run}_DADA2-PR2.mseq").touch()
+    (dada2_pr2_dir / f"{run}_18S-V9.html").touch()
+    (dada2_pr2_dir / f"{run}_concat.html").touch()
     with (
-        open(
-            f"{amplicon_run_folder}/{EMG_CONFIG.amplicon_pipeline.taxonomy_summary_folder}/DADA2-PR2/{run}_16S-V3-V4_DADA2-PR2_asv_krona_counts.txt",
-            "w",
+        (dada2_pr2_dir / f"{run}_16S-V3-V4_DADA2-PR2_asv_krona_counts.txt").open(
+            "w"
         ) as dada2_16s_pr2_krona_count,
-        open(
-            f"{amplicon_run_folder}/{EMG_CONFIG.amplicon_pipeline.taxonomy_summary_folder}/DADA2-PR2/{run}_16S-V3-V4.html",
-            "w",
-        ),
-        open(
-            f"{amplicon_run_folder}/{EMG_CONFIG.amplicon_pipeline.taxonomy_summary_folder}/DADA2-PR2/{run}_DADA2-PR2.mseq",
-            "w",
-        ),
-        open(
-            f"{amplicon_run_folder}/{EMG_CONFIG.amplicon_pipeline.taxonomy_summary_folder}/DADA2-PR2/{run}_18S-V9_DADA2-PR2_asv_krona_counts.txt",
-            "w",
+        (dada2_pr2_dir / f"{run}_18S-V9_DADA2-PR2_asv_krona_counts.txt").open(
+            "w"
         ) as dada2_18s_pr2_krona_count,
-        open(
-            f"{amplicon_run_folder}/{EMG_CONFIG.amplicon_pipeline.taxonomy_summary_folder}/DADA2-PR2/{run}_18S-V9.html",
-            "w",
-        ),
-        open(
-            f"{amplicon_run_folder}/{EMG_CONFIG.amplicon_pipeline.taxonomy_summary_folder}/DADA2-PR2/{run}_concat_DADA2-PR2_asv_krona_counts.txt",
-            "w",
+        (dada2_pr2_dir / f"{run}_concat_DADA2-PR2_asv_krona_counts.txt").open(
+            "w"
         ) as dada2_concat_pr2_krona_count,
-        open(
-            f"{amplicon_run_folder}/{EMG_CONFIG.amplicon_pipeline.taxonomy_summary_folder}/DADA2-PR2/{run}_concat.html",
-            "w",
-        ),
     ):
         for file in [
             dada2_16s_pr2_krona_count,
@@ -685,11 +669,11 @@ def test_prefect_analyse_amplicon_flow(
 
     # ------- results for completed runs with all results
     generate_fake_pipeline_all_results(
-        f"{amplicon_folder}/{amplicon_run_all_results}", amplicon_run_all_results
+        amplicon_folder / amplicon_run_all_results, amplicon_run_all_results
     )
     # ------- results for completed runs with no asv results
     generate_fake_pipeline_no_asvs(
-        f"{amplicon_folder}/{amplicon_run_no_asv}", amplicon_run_no_asv
+        amplicon_folder / amplicon_run_no_asv, amplicon_run_no_asv
     )
     generate_fake_pipeline_no_asvs(
         f"{amplicon_folder}/{amplicon_run_no_qc}", amplicon_run_no_qc
@@ -1053,7 +1037,7 @@ def test_prefect_analyse_amplicon_flow_private_data(
 
     # ------- results for completed runs with all results
     generate_fake_pipeline_all_results(
-        f"{amplicon_folder}/{amplicon_run_all_results}", amplicon_run_all_results
+        amplicon_folder / amplicon_run_all_results, amplicon_run_all_results
     )
 
     ## Pretend that a human resumed the flow with the biome picker.
