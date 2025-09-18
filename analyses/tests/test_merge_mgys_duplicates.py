@@ -9,6 +9,7 @@ from analyses.models import Study as MGnifyStudy
 from analyses.models import Assembly, Run, Sample
 from ena.models import Study as ENAStudy
 from ena.models import Sample as ENASample
+from workflows.prefect_utils.testing_utils import combine_caplog_records
 
 
 @pytest.fixture
@@ -163,13 +164,14 @@ def test_reassign_runs_and_assemblies(setup_duplicate_studies, caplog):
 
     with caplog.at_level(logging.INFO):
         call_command("merge_mgys_duplicates")
+        caplog_text = combine_caplog_records(caplog.records)
 
         # public: run and assembly in different studies
-        assert "Moving 0 assemblies from MGYS00010001 to MGYS00006001" in caplog.text
-        assert "Moving 1 runs from MGYS00010001 to MGYS00006001" in caplog.text
+        assert "Moving 0 assemblies from MGYS00010001 to MGYS00006001" in caplog_text
+        assert "Moving 1 runs from MGYS00010001 to MGYS00006001" in caplog_text
         # private: run and assembly in same study
-        assert "Moving 1 assemblies from MGYS00010002 to MGYS00006002" in caplog.text
-        assert "Moving 1 runs from MGYS00010002 to MGYS00006002" in caplog.text
+        assert "Moving 1 assemblies from MGYS00010002 to MGYS00006002" in caplog_text
+        assert "Moving 1 runs from MGYS00010002 to MGYS00006002" in caplog_text
 
         # Check that 2 new duplicate studies are deleted
         assert MGnifyStudy.objects.count() == start_count - 2
