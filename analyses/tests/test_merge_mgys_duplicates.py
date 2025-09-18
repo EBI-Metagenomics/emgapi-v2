@@ -9,6 +9,7 @@ from analyses.models import Study as MGnifyStudy
 from analyses.models import Assembly, Run, Sample
 from ena.models import Study as ENAStudy
 from ena.models import Sample as ENASample
+from workflows.prefect_utils.testing_utils import combine_caplog_records
 
 
 @pytest.fixture
@@ -141,18 +142,19 @@ def test_deduplicate_mgys_studies(setup_duplicate_studies, caplog):
 
     with caplog.at_level(logging.INFO):
         call_command("merge_mgys_duplicates")
+        caplog_text = combine_caplog_records(caplog.records)
 
         assert (
             "ENA accession ['ERP11111', 'PRJEB11111'] is linked to multiple MGnify Studies"
-            in caplog.text
+            in caplog_text
         )
         assert (
             "ENA accession ['ERP22222', 'PRJEB22222'] is linked to multiple MGnify Studies"
-            in caplog.text
+            in caplog_text
         )
         assert (
             "ENA accession ['ERP33333', 'PRJEB33333'] is linked to multiple MGnify Studies:"
-            not in caplog.text
+            not in caplog_text
         )
 
 
@@ -163,13 +165,14 @@ def test_reassign_runs_and_assemblies(setup_duplicate_studies, caplog):
 
     with caplog.at_level(logging.INFO):
         call_command("merge_mgys_duplicates")
+        caplog_text = combine_caplog_records(caplog.records)
 
         # public: run and assembly in different studies
-        assert "Moving 0 assemblies from MGYS00010001 to MGYS00006001" in caplog.text
-        assert "Moving 1 runs from MGYS00010001 to MGYS00006001" in caplog.text
+        assert "Moving 0 assemblies from MGYS00010001 to MGYS00006001" in caplog_text
+        assert "Moving 1 runs from MGYS00010001 to MGYS00006001" in caplog_text
         # private: run and assembly in same study
-        assert "Moving 1 assemblies from MGYS00010002 to MGYS00006002" in caplog.text
-        assert "Moving 1 runs from MGYS00010002 to MGYS00006002" in caplog.text
+        assert "Moving 1 assemblies from MGYS00010002 to MGYS00006002" in caplog_text
+        assert "Moving 1 runs from MGYS00010002 to MGYS00006002" in caplog_text
 
         # Check that 2 new duplicate studies are deleted
         assert MGnifyStudy.objects.count() == start_count - 2
@@ -197,17 +200,18 @@ def test_clashing_runs_gives_warning(setup_duplicate_studies, caplog):
     )
     with caplog.at_level(logging.INFO):
         call_command("merge_mgys_duplicates")
+        caplog_text = combine_caplog_records(caplog.records)
 
         assert (
             "DUPLICATE RUNS FOUND IN BOTH STUDIES: old MGYS00006001 and new MGYS00010001"
-            in caplog.text
+            in caplog_text
         )
 
-        assert "Deleted 1 duplicate runs from old study MGYS00006001" in caplog.text
+        assert "Deleted 1 duplicate runs from old study MGYS00006001" in caplog_text
 
         assert (
             "Deleting ENA study PRJEB11111 as it is no longer linked to any MGnify studies."
-            in caplog.text
+            in caplog_text
         )
         # this time MGYS00010001 is skipped and not deleted
         assert MGnifyStudy.objects.count() == start_count - 2

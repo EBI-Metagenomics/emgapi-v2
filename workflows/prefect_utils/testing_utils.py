@@ -1,5 +1,8 @@
+import gzip
+import pathlib
 import time
 from dataclasses import dataclass
+from logging import LogRecord
 from typing import Any, Callable
 
 from prefect import State, get_client
@@ -71,3 +74,17 @@ async def run_async_flow_and_capture_logs(flow: Callable, *args, **kwargs):
 
 def should_not_mock_httpx_requests_to_prefect_server(request):
     return request.url.host != "127.0.0.1"
+
+
+def combine_caplog_records(caplog_records: list[LogRecord]):
+    return "\n".join([rec.getMessage() for rec in caplog_records])
+
+
+def write_empty_fasta_file(path: pathlib.Path):
+    """
+    Pyfastx (for example) requires a fasta file to start with a fasta header at least.
+    This makes a minimal fasta file that will pass such validation.
+    """
+    opener = gzip.open if path.suffix.endswith(".gz") else open
+    with opener(path, "w") as f:
+        f.write(">empty\n")

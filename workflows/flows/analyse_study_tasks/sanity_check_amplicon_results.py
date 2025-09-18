@@ -26,9 +26,10 @@ def sanity_check_amplicon_results(
          - ${run_id}.fastp.json
          - ${run_id}_suffix_header_err.json
          - ${run_id}_multiqc_report.html
+         - ${run_id}_dada2_errors.txt
     SEQUENCE CATEGORISATION folder:
         required:
-         - ${run_id}_${gene}.fasta (depending on if the gene was SSU/LSU/ITS)
+         - ${run_id}_${gene}.fa(sta) (depending on if the gene was SSU/LSU/ITS)
          - ${run_id}.tblout.deoverlapped
          optional:
          - ${run_id}_${gene}_rRNA_${domain}.${domain_id}.fa (domain can be bacteria/archaea/eukarya)
@@ -39,11 +40,12 @@ def sanity_check_amplicon_results(
          - ${run_id}.*S.${V?}.txt - max 2 files, if passed inference thresholds, example, ERR4334351.16S.V3-V4.txt
     PRIMER IDENTIFICATION folder:
         if only required file present - it should be empty
-        if 3 files are present they can be all not empty or all empty
+        if 4 files are present they can be all not empty or all empty
         required:
          - ${run_id}.cutadapt.json - if ony that file it should be empty
         optional (if ${run_id}.cutadapt.json not empty):
-         - ${run_id}_primers.fasta
+         - fwd_primers.fasta
+         - rev_primers.fasta
          - ${run_id}_primer_validation.tsv
     ASV:
         required:
@@ -105,7 +107,7 @@ def sanity_check_amplicon_results(
     # SEQUENCE CATEGORISATION optional folder
     if sequence_categorisation_folder.exists():
         # if folder exists - checking for required files
-        pattern_gene_fasta = re.compile(r"\w+_(SSU|LSU|ITS)\.fasta$")
+        pattern_gene_fasta = re.compile(r"\w+_(SSU|LSU|ITS)(?:_rRNA)?\.fa(sta)?$")
         matching_gene_files = [
             True if f.is_file() and pattern_gene_fasta.match(f.name) else False
             for f in sequence_categorisation_folder.iterdir()
@@ -150,26 +152,32 @@ def sanity_check_amplicon_results(
                 if cutadapt_json.stat().st_size:
                     reason = f"required file in {EMG_CONFIG.amplicon_pipeline.primer_identification_folder} did not passed sanity check"
                     logger.info(f"Post sanity check for {run_id}: {reason}")
-        elif len(list(primer_identification_folder.iterdir())) == 3:
-            primers_file = Path(
-                f"{primer_identification_folder}/{run_id}_primers.fasta"
+        elif len(list(primer_identification_folder.iterdir())) == 4:
+            forward_primers_file = Path(
+                f"{primer_identification_folder}/fwd_primers.fasta"
+            )
+            reverse_primers_file = Path(
+                f"{primer_identification_folder}/rev_primers.fasta"
             )
             validation_file = Path(
                 f"{primer_identification_folder}/{run_id}_primer_validation.tsv"
             )
             if (
-                primers_file.exists()
+                forward_primers_file.exists()
+                and reverse_primers_file.exists()
                 and validation_file.exists()
                 and cutadapt_json.exists()
             ):
                 if not (
                     (
-                        primers_file.stat().st_size == 0
+                        forward_primers_file.stat().st_size == 0
+                        and reverse_primers_file.stat().st_size == 0
                         and validation_file.stat().st_size == 0
                         and cutadapt_json.stat().st_size == 0
                     )
                     or (
-                        primers_file.stat().st_size != 0
+                        forward_primers_file.stat().st_size != 0
+                        and reverse_primers_file.stat().st_size == 0
                         and validation_file.stat().st_size != 0
                         and cutadapt_json.stat().st_size != 0
                     )
