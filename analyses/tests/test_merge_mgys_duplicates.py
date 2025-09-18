@@ -142,18 +142,19 @@ def test_deduplicate_mgys_studies(setup_duplicate_studies, caplog):
 
     with caplog.at_level(logging.INFO):
         call_command("merge_mgys_duplicates")
+        caplog_text = combine_caplog_records(caplog.records)
 
         assert (
             "ENA accession ['ERP11111', 'PRJEB11111'] is linked to multiple MGnify Studies"
-            in caplog.text
+            in caplog_text
         )
         assert (
             "ENA accession ['ERP22222', 'PRJEB22222'] is linked to multiple MGnify Studies"
-            in caplog.text
+            in caplog_text
         )
         assert (
             "ENA accession ['ERP33333', 'PRJEB33333'] is linked to multiple MGnify Studies:"
-            not in caplog.text
+            not in caplog_text
         )
 
 
@@ -199,17 +200,18 @@ def test_clashing_runs_gives_warning(setup_duplicate_studies, caplog):
     )
     with caplog.at_level(logging.INFO):
         call_command("merge_mgys_duplicates")
+        caplog_text = combine_caplog_records(caplog.records)
 
         assert (
             "DUPLICATE RUNS FOUND IN BOTH STUDIES: old MGYS00006001 and new MGYS00010001"
-            in caplog.text
+            in caplog_text
         )
 
-        assert "Deleted 1 duplicate runs from old study MGYS00006001" in caplog.text
+        assert "Deleted 1 duplicate runs from old study MGYS00006001" in caplog_text
 
         assert (
             "Deleting ENA study PRJEB11111 as it is no longer linked to any MGnify studies."
-            in caplog.text
+            in caplog_text
         )
         # this time MGYS00010001 is skipped and not deleted
         assert MGnifyStudy.objects.count() == start_count - 2

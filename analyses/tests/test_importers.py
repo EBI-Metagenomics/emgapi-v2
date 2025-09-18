@@ -14,6 +14,7 @@ from workflows.data_io_utils.legacy_emg_dbs import (
 )
 from workflows.prefect_utils.testing_utils import (
     should_not_mock_httpx_requests_to_prefect_server,
+    combine_caplog_records,
 )
 
 
@@ -68,9 +69,10 @@ def test_import_legacy_studies(
     # with no args, should do a dry run from MGYS 0
     with caplog.at_level("INFO"):
         call_command("import_studies_from_legacy_db", "--dry_run")
+        caplog_text = combine_caplog_records(caplog.records)
 
-    assert "Would have Imported 1 studies" in caplog.text
-    assert "5000" in caplog.text
+    assert "Would have Imported 1 studies" in caplog_text
+    assert "5000" in caplog_text
     assert Study.objects.count() == 0
 
     caplog.clear()
@@ -78,15 +80,17 @@ def test_import_legacy_studies(
     # after 5001 should be no studies
     with caplog.at_level("INFO"):
         call_command("import_studies_from_legacy_db", "-a", "5001", "--dry_run")
+        caplog_text = combine_caplog_records(caplog.records)
 
-    assert "Would have Imported 0 studies" in caplog.text
+    assert "Would have Imported 0 studies" in caplog_text
 
     caplog.clear()
 
     # dry run off should import a study
     with caplog.at_level("INFO"):
         call_command("import_studies_from_legacy_db")
-        assert "Imported 1 studies" in caplog.text
+        caplog_text = combine_caplog_records(caplog.records)
+        assert "Imported 1 studies" in caplog_text
 
     assert Study.objects.count() == 1
     assert Study.objects.first().accession == "MGYS00005000"
@@ -115,7 +119,8 @@ def test_import_legacy_studies(
 
     with caplog.at_level("INFO"):
         call_command("import_studies_from_legacy_db", "-a", 5000)
-        assert "Imported 1 studies" in caplog.text
+        caplog_text = combine_caplog_records(caplog.records)
+        assert "Imported 1 studies" in caplog_text
 
     assert Study.objects.count() == 2
     assert Study.objects.order_by("-created_at").first().accession == "MGYS00005002"
@@ -151,8 +156,9 @@ def test_import_legacy_super_studies(
     # Import the study
     with caplog.at_level("INFO"):
         call_command("import_studies_from_legacy_db")
-        assert "Imported" in caplog.text
-        assert "studies" in caplog.text
+        caplog_text = combine_caplog_records(caplog.records)
+        assert "Imported" in caplog_text
+        assert "studies" in caplog_text
 
     assert Study.objects.filter(id=5003).exists()
     caplog.clear()
@@ -181,9 +187,10 @@ def test_import_legacy_super_studies(
     # Test dry run
     with caplog.at_level("INFO"):
         call_command("import_super_studies_from_legacy_db", "--dry_run")
-        assert "Would have Imported 1 super studies" in caplog.text
-        assert "Would make super study for ID 1 / Test Super Study" in caplog.text
-        assert "Would associate study" in caplog.text
+        caplog_text = combine_caplog_records(caplog.records)
+        assert "Would have Imported 1 super studies" in caplog_text
+        assert "Would make super study for ID 1 / Test Super Study" in caplog_text
+        assert "Would associate study" in caplog_text
 
     # Verify nothing was imported
     assert SuperStudy.objects.count() == 0
@@ -192,9 +199,10 @@ def test_import_legacy_super_studies(
     # Test actual import
     with caplog.at_level("INFO"):
         call_command("import_super_studies_from_legacy_db")
-        assert "Imported 1 super studies" in caplog.text
-        assert "Created new super study object" in caplog.text
-        assert "Associated study" in caplog.text
+        caplog_text = combine_caplog_records(caplog.records)
+        assert "Imported 1 super studies" in caplog_text
+        assert "Created new super study object" in caplog_text
+        assert "Associated study" in caplog_text
 
     # Verify super study was imported
     assert SuperStudy.objects.count() == 1
@@ -240,8 +248,9 @@ def test_import_legacy_publications(
     # Import the study
     with caplog.at_level("INFO"):
         call_command("import_studies_from_legacy_db")
-        assert "Imported" in caplog.text
-        assert "studies" in caplog.text
+        caplog_text = combine_caplog_records(caplog.records)
+        assert "Imported" in caplog_text
+        assert "studies" in caplog_text
 
     assert Study.objects.filter(id=5004).exists()
     caplog.clear()
@@ -276,12 +285,13 @@ def test_import_legacy_publications(
     # Test dry run
     with caplog.at_level("INFO"):
         call_command("import_publications_from_legacy_db", "--dry_run")
-        assert "Would have Imported 1 publications" in caplog.text
+        caplog_text = combine_caplog_records(caplog.records)
+        assert "Would have Imported 1 publications" in caplog_text
         assert (
             "Would make publication for ID 1 / Test Publication for MGnify"
-            in caplog.text
+            in caplog_text
         )
-        assert "Would associate study" in caplog.text
+        assert "Would associate study" in caplog_text
 
     # Verify nothing was imported
     assert Publication.objects.count() == 0
@@ -290,9 +300,10 @@ def test_import_legacy_publications(
     # Test actual import
     with caplog.at_level("INFO"):
         call_command("import_publications_from_legacy_db")
-        assert "Imported 1 publications" in caplog.text
-        assert "Created new publication object" in caplog.text
-        assert "Associated study" in caplog.text
+        caplog_text = combine_caplog_records(caplog.records)
+        assert "Imported 1 publications" in caplog_text
+        assert "Created new publication object" in caplog_text
+        assert "Associated study" in caplog_text
 
     # Verify publication was imported
     assert Publication.objects.count() == 1
@@ -314,7 +325,8 @@ def test_import_legacy_publications(
     # Test that trying to import the same publication again skips it
     with caplog.at_level("INFO"):
         call_command("import_publications_from_legacy_db")
+        caplog_text = combine_caplog_records(caplog.records)
         assert (
             "Publication with PubMed ID 12345678 already exists, skipping"
-            in caplog.text
+            in caplog_text
         )

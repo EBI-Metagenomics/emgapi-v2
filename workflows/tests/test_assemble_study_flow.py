@@ -27,6 +27,7 @@ from workflows.prefect_utils.analyses_models_helpers import (
 )
 from workflows.prefect_utils.testing_utils import (
     should_not_mock_httpx_requests_to_prefect_server,
+    combine_caplog_records,
 )
 
 EMG_CONFIG = settings.EMG_CONFIG
@@ -734,7 +735,9 @@ def test_reference_genome_selection(prefect_harness, mgnify_assemblies, caplog):
 
     ref = get_reference_genome(study)
     assert ref is None
-    assert f"Found no run in {study} with host taxon info" in caplog.text
+    assert f"Found no run in {study} with host taxon info" in combine_caplog_records(
+        caplog.records
+    )
     caplog.clear()
 
     run = study.runs.first()
@@ -744,7 +747,9 @@ def test_reference_genome_selection(prefect_harness, mgnify_assemblies, caplog):
     run.save()
     ref = get_reference_genome(study)
     assert ref is None
-    assert f"Using run {run} for determining host" in caplog.text
+    assert f"Using run {run} for determining host" in combine_caplog_records(
+        caplog.records
+    )
     caplog.clear()
 
     run.metadata[analyses.models.Run.CommonMetadataKeys.HOST_TAX_ID] = 7460  # honeybee
