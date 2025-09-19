@@ -2,7 +2,8 @@ import pytest
 
 from analyses.models import Assembly, Biome, Run, Sample, Study
 from ena.models import Study as ENAStudy, Sample as ENASample
-from genomes.models.genome import Genome, GenomeAssemblyLink
+from genomes.models import GenomeAssemblyLink
+from genomes.models.genome import Genome
 from genomes.models.genome_catalogue import GenomeCatalogue
 from genomes.models.geographic_location import GeographicLocation
 
