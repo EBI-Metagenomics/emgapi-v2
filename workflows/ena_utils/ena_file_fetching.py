@@ -12,7 +12,7 @@ def convert_ena_ftp_to_fire_fastq(
 ) -> str:
     fire_url = ftp_url
     protocol_and_parts = fire_url.split("://")
-    fire_url = protocol_and_parts[-1]  # without e.g. http:// if present
+    fire_url = "ftp://" + protocol_and_parts[-1]  # replacing (if present) any protocol with ftp:// or adding it
 
     if not fire_url.startswith(EMG_CONFIG.ena.ftp_prefix):
         if raise_if_not_convertible:
