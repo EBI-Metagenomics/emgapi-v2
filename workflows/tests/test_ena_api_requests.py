@@ -155,7 +155,7 @@ def test_get_study_from_ena_use_secondary_as_primary(httpx_mock, prefect_harness
     assert len(created_study.additional_accessions) == 1
 
 
-@pytest.mark.httpx_mock
+@pytest.mark.httpx_mock(should_mock=should_not_mock_httpx_requests_to_prefect_server)
 @pytest.mark.django_db(transaction=True)
 def test_get_study_only_available_in_ena_portal(httpx_mock, prefect_harness):
     """
