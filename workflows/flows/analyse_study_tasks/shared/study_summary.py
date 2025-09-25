@@ -117,10 +117,13 @@ def generate_study_summary_for_pipeline_run(
     if analysis_type in {"assembly"}:
         summary_generator_kwargs["assemblies"] = results_dir.files[0].path
         summary_generator_kwargs["study_dir"] = results_dir.path
+        summary_generator_kwargs["outdir"] = study_dir.path
+        # TODO: these should be the same shape in MGnify Pipelines Toolkit really...
 
     logger.info(
         f"Study results_dir, where summaries will be made, is {study.results_dir}"
     )
+    logger.info(f"Args {summary_generator_kwargs}")
 
     with chdir(study.results_dir):
         with click.Context(study_summary_generator.summarise_analyses) as ctx:
