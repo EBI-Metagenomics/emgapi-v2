@@ -14,7 +14,7 @@ from prefect.artifacts import Artifact
 from pydantic import BaseModel
 
 import analyses.models
-from workflows.data_io_utils.file_rules.nodes import create_directory
+from workflows.data_io_utils.file_rules.nodes import Directory
 from workflows.flows.analysis_assembly_study import analysis_assembly_study
 from workflows.prefect_utils.analyses_models_helpers import get_users_as_choices
 from workflows.prefect_utils.testing_utils import (
@@ -616,7 +616,8 @@ def generate_fake_assembly_pipeline_results(
         )
 
     # Create downstream_samplesheets directory
-    downstream_samplesheets_dir = f"{study_dir}/downstream_samplesheets"
+    # TODO: the downstream_samplesheets directory should be created in the root of the project
+    downstream_samplesheets_dir = f"{assembly_dir}/downstream_samplesheets"
     os.makedirs(downstream_samplesheets_dir, exist_ok=True)
 
     # Create virify_samplesheet.csv with required columns
@@ -660,21 +661,21 @@ def generate_fake_assembly_pipeline_results(
     "mock_suspend_flow_run", ["workflows.flows.analysis_assembly_study"], indirect=True
 )
 def test_prefect_analyse_assembly_flow(
-        mock_queryset_hash_for_assembly,
-        mock_flow_run_context_assembly,
-        mock_flow_run_context_virify,
-        mock_next_enumerated_subdir,
-        httpx_mock,
-        prefect_harness,
-        mock_cluster_can_accept_jobs_yes,
-        mock_start_cluster_job,
-        mock_check_cluster_job_all_completed,
-        assembly_ena_study,
-        mock_suspend_flow_run,
-        admin_user,
-        top_level_biomes,
-        sample_fasta_records,
-        sample_gff_records,
+    mock_queryset_hash_for_assembly,
+    mock_flow_run_context_assembly,
+    mock_flow_run_context_virify,
+    mock_next_enumerated_subdir,
+    httpx_mock,
+    prefect_harness,
+    mock_cluster_can_accept_jobs_yes,
+    mock_start_cluster_job,
+    mock_check_cluster_job_all_completed,
+    assembly_ena_study,
+    mock_suspend_flow_run,
+    admin_user,
+    top_level_biomes,
+    sample_fasta_records,
+    sample_gff_records,
 ):
     """
     Test should create/get ENA and MGnify study into DB.
@@ -703,13 +704,11 @@ def test_prefect_analyse_assembly_flow(
 
     # mock ENA response for assemblies
     httpx_mock.add_response(
-        url=f"{EMG_CONFIG.ena.portal_search_api}?"
-            f"result=analysis"
-            f"&query=%22%28study_accession={study_accession}+OR+secondary_study_accession={study_accession}%29%22"
-            f"&limit=10000"
-            f"&format=json"
-            f"&fields=sample_accession%2Csample_title%2Csecondary_sample_accession%2Crun_accession%2Canalysis_accession%2Ccompleteness_score%2Ccontamination_score%2Cscientific_name%2Clocation%2Clat%2Clon%2Cgenerated_ftp"
-            f"&dataPortal=metagenome",
+        url=EMG_CONFIG.ena.portal_search_api,
+        match_params={
+            "result": "analysis",
+            "query": f'"(study_accession={study_accession} OR secondary_study_accession={study_accession})"',
+        },
         json=[
             {
                 "sample_accession": "SAMN08514017",
@@ -745,13 +744,11 @@ def test_prefect_analyse_assembly_flow(
 
     # mock ENA response for runs
     httpx_mock.add_response(
-        url=f"{EMG_CONFIG.ena.portal_search_api}?"
-            f"result=read_run"
-            f"&query=%22%28study_accession={study_accession}+OR+secondary_study_accession={study_accession}%29%22"
-            f"&limit=10000"
-            f"&format=json"
-            f"&fields=run_accession%2Csample_accession%2Csample_title%2Csecondary_sample_accession%2Cfastq_md5%2Cfastq_ftp%2Clibrary_layout%2Clibrary_strategy%2Clibrary_source%2Cscientific_name%2Chost_tax_id%2Chost_scientific_name%2Cinstrument_platform%2Cinstrument_model%2Clocation%2Clat%2Clon"
-            f"&dataPortal=metagenome",
+        url=EMG_CONFIG.ena.portal_search_api,
+        match_params={
+            "result": "read_run",
+            "query": f'"(study_accession={study_accession} OR secondary_study_accession={study_accession})"',
+        },
         json=[
             {
                 "sample_accession": "SAMN08514017",
@@ -927,8 +924,8 @@ def test_prefect_analyse_assembly_flow(
 
     assert study.external_results_dir == f"{study_accession[:-3]}/{study_accession}"
 
-    create_directory(
-        base_dir=Path(study.results_dir),
+    Directory(
+        path=Path(study.results_dir),
         files=[
             f"{study_accession}_go_summary.tsv",
             f"{study_accession}_goslim_summary.tsv",

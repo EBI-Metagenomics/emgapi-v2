@@ -1,7 +1,7 @@
 import inspect
 import logging
 from pathlib import Path
-from typing import List, Optional, Union
+from typing import List, Union
 
 from pydantic import BaseModel, Field, model_validator, field_validator
 
@@ -17,34 +17,7 @@ from workflows.data_io_utils.file_rules.common_rules import (
     FileIsNotEmptyRule,
 )
 
-__all__ = ["File", "Directory", "create_directory"]
-
-
-def create_file(
-    base_dir: Path, *parts, rules: Optional[List[FileRule]] = None
-) -> "File":
-    """
-    Factory function to create a File object with standard rules.
-
-    This function replaces the class method approach with a more functional approach,
-    which is generally preferred in Python when the method doesn't need to access instance attributes.
-    It also makes the code more testable and easier to understand.
-
-    Args:
-        base_dir: Base directory path
-        *parts: Additional path parts to join with base_dir
-        rules: List of rules to apply (defaults to standard rules)
-
-    Returns:
-        File object
-    """
-    if rules is None:
-        rules = [FileExistsRule, FileIsNotEmptyRule]
-
-    return File(
-        path=base_dir.joinpath(*parts),
-        rules=rules,
-    )
+__all__ = ["File", "Directory"]
 
 
 class File(BaseModel):
@@ -86,6 +59,9 @@ class Directory(File):
     files: List[Union[File, tuple, str]] = Field(
         default_factory=list,
         description="File objects to specifically check in the directory",
+    )
+    subdirectories: List["Directory"] = Field(
+        default_factory=list, description="Subdirectories"
     )
     rules: List[DirectoryRule] = Field(
         default_factory=list,

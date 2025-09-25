@@ -3,9 +3,7 @@ import logging
 
 from django.core.management.base import BaseCommand
 
-from workflows.data_io_utils.mgnify_v6_utils.assembly import (
-    create_assembly_v6_schema,
-)
+from workflows.data_io_utils.schemas.assembly import AssemblyResultSchema
 
 logger = logging.getLogger(__name__)
 
@@ -42,7 +40,7 @@ class Command(BaseCommand):
         folder_path = Path(options["folder_path"])
 
         try:
-            schema = create_assembly_v6_schema()
+            schema = AssemblyResultSchema()
             schema.validate_directory_structure(
                 base_path=folder_path, assembly_id=options["assembly_id"]
             )

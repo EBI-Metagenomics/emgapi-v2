@@ -7,6 +7,8 @@ from django.db import models
 from pydantic import BaseModel, field_validator, Field
 
 from emgapiv2.enum_utils import FutureStrEnum
+from workflows.data_io_utils.schemas import PipelineFileSchema
+from analyses.models import Analysis
 
 
 class DownloadType(FutureStrEnum):
@@ -82,6 +84,41 @@ class DownloadFile(BaseModel):
         if isinstance(value, Path):
             return str(value)
         return value
+
+    @classmethod
+    def from_pipeline_file_schema(
+        cls, schema: PipelineFileSchema, analysis: Analysis, base_path: Path
+    ) -> Optional["DownloadFile"]:
+        """
+        Factory method to create a DownloadFile from a PipelineFileSchema.
+
+        :param schema: The pipeline file schema
+        :param analysis: The analysis object
+        :param base_path: Base path containing the pipeline results
+        :return: DownloadFile object or None if file doesn't exist and isn't required
+        """
+        identifier = analysis.assembly.first_accession
+        file_path = base_path / schema.get_filename(identifier)
+
+        if not file_path.exists():
+            if schema.required:
+                from workflows.data_io_utils.schemas.exceptions import (
+                    PipelineValidationError,
+                )
+
+                raise PipelineValidationError(f"Required file {file_path} not found")
+            return None
+
+        return cls(
+            path=file_path.relative_to(analysis.results_dir),
+            file_type=schema.download_metadata.file_type,
+            alias=file_path.name,
+            download_type=schema.download_metadata.download_type,
+            download_group=schema.download_metadata.download_group,
+            parent_identifier=analysis.accession,
+            short_description=schema.download_metadata.short_description,
+            long_description=schema.download_metadata.long_description,
+        )
 
 
 class WithDownloadsModel(models.Model):

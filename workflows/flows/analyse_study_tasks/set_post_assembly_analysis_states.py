@@ -6,6 +6,9 @@ from prefect import task
 from prefect.tasks import task_input_hash
 
 from workflows.flows.analyse_study_tasks.analysis_states import AnalysisStates
+from workflows.flows.analyse_study_tasks.sanity_check_assembly_results import (
+    sanity_check_assembly_analysis_results,
+)
 
 from workflows.prefect_utils.analyses_models_helpers import mark_analysis_status
 

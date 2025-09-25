@@ -6,16 +6,14 @@ from django.conf import settings
 from prefect import flow, task, get_run_logger
 from prefect.runtime import flow_run
 
-from activate_django_first import EMG_CONFIG
 import analyses.models
+from activate_django_first import EMG_CONFIG
+
 
 AnalysisStates = analyses.models.Analysis.AnalysisStates
 
-from analyses.base_models.with_downloads_models import (
-    DownloadFile,
-    DownloadType,
-    DownloadFileType,
-)
+from workflows.data_io_utils.schemas.virify import VirifyResultSchema
+from workflows.data_io_utils.schemas.validation import sanity_check_pipeline_results
 from workflows.flows.analyse_study_tasks.analysis_states import (
     mark_analysis_as_failed,
 )
@@ -29,64 +27,58 @@ from workflows.data_io_utils.filenames import next_enumerated_subdir
 
 
 @task
+def sanity_check_virify_results(
+    analysis: analyses.models.Analysis,
+    virify_outdir: Path,
+):
+    """
+    Validate VIRify pipeline results using the unified schema.
+
+    :param analysis: The analysis to validate results for
+    :param virify_outdir: The output directory of the VIRify pipeline
+    :return: Validated Directory object
+    """
+    schema = VirifyResultSchema()
+    return sanity_check_pipeline_results(
+        schema, virify_outdir, analysis.assembly.first_accession, "VIRify"
+    )
+
+
+@task
 def add_virify_gff_to_analysis_downloads(
     analysis: analyses.models.Analysis,
     virify_outdir: Path,
 ):
     """
-    Add the virify GFF file to the analysis downloads.
+    Add the virify GFF file to the analysis downloads using unified schema.
 
     :param analysis: The analysis to add the download to
     :param virify_outdir: The output directory of the virify pipeline
     """
     logger = get_run_logger()
 
-    # Path to the GFF file
-    gff_dir = virify_outdir / EMG_CONFIG.virify_pipeline.final_gff_folder
-
-    # Check if the GFF directory exists
-    if not gff_dir.exists():
-        logger.warning(
-            f"GFF directory {gff_dir} does not exist. No GFF file to add to downloads."
-        )
-        return
-
-    # Find GFF files in the directory
-    gff_files = list(gff_dir.glob("*.gff"))
-
-    if not gff_files:
-        logger.warning(
-            f"No GFF files found in {gff_dir}. No GFF file to add to downloads."
-        )
-        return
-
-    # Use the first GFF file found
-    gff_file = gff_files[0]
-
-    # Create a relative path from the analysis results directory
-    rel_path = f"virify/{gff_file.name}"
-
-    # Create a download file object
-    download = DownloadFile(
-        path=rel_path,
-        alias=f"virify_{gff_file.name}",
-        download_type=DownloadType.GENOME_ANALYSIS,
-        file_type=DownloadFileType.GFF,
-        long_description="Viral genome annotation from VIRify pipeline",
-        short_description="Viral annotations",
-        download_group="virify",
-    )
-
-    # Add the download to the analysis
     try:
-        analysis.add_download(download)
-        logger.info(
-            f"Added virify GFF file {gff_file.name} to analysis {analysis.accession} downloads"
-        )
-    except FileExistsError:
-        logger.warning(
-            f"Download with alias {download.alias} already exists for analysis {analysis.accession}"
-        )
+        # Validate results first
+        sanity_check_virify_results(analysis, virify_outdir)
+
+        # Use schema to generate downloads
+        schema = VirifyResultSchema()
+        downloads = schema.generate_downloads(analysis, virify_outdir)
+
+        # Add downloads to analysis
+        for download in downloads:
+            try:
+                analysis.add_download(download)
+                logger.info(
+                    f"Added VIRify file {download.alias} to analysis {analysis.accession} downloads"
+                )
+            except FileExistsError:
+                logger.warning(
+                    f"Download with alias {download.alias} already exists for analysis {analysis.accession}"
+                )
+    except Exception as e:
+        logger.error(f"Failed to add VIRify downloads for {analysis.accession}: {e}")
+        raise
 
 
 @flow(name="Run VIRIfy pipeline via samplesheet")

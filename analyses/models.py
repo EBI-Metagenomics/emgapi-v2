@@ -36,6 +36,7 @@ from analyses.base_models.with_watchers_models import WithWatchersModel
 from emgapiv2.async_utils import anysync_property
 from emgapiv2.enum_utils import FutureStrEnum
 from emgapiv2.model_utils import JSONFieldWithSchema
+from workflows.data_io_utils.schemas import PipelineFileSchema
 from workflows.ena_utils.read_run import ENAReadRunFields
 from workflows.ena_utils.sample import ENASampleFields
 
@@ -759,6 +760,42 @@ class Analysis(
             )
         if prev_experiment_type != self.experiment_type:
             self.save()
+
+    def import_from_pipeline_file_schema(
+        self, schema: "PipelineFileSchema", file_path: "Path"
+    ) -> None:
+        """
+        Import data from a pipeline file schema into this analysis.
+
+        :param schema: The pipeline file schema with import configuration
+        :param file_path: Path to the file to import
+        """
+        if not schema.import_config or not file_path.exists():
+            return
+
+        try:
+            import pandas as pd
+            from workflows.data_io_utils.csv.csv_comment_handler import CSVDelimiter
+
+            df = pd.read_csv(file_path, sep=CSVDelimiter.TAB)
+
+            if schema.import_config.import_column:
+                data = df[schema.import_config.import_column].to_list()
+            else:
+                if schema.import_config.import_as_records:
+                    data = df.to_dict(orient="records")
+                else:
+                    data = df.to_dict()
+
+            self.annotations[schema.import_config.annotations_key] = data
+            self.save()
+
+        except Exception as e:
+            from workflows.data_io_utils.schemas.exceptions import PipelineImportError
+
+            raise PipelineImportError(
+                f"Failed to import data from {file_path}: {e}", file_path=str(file_path)
+            )
 
     class Meta:
         verbose_name_plural = "Analyses"

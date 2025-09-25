@@ -157,13 +157,11 @@ def make_samplesheet_for_map(
             print(f"VIRIfy GFF {virify_gff}")
 
             if not user_proteins_gff:
-                # TODO: is this the best way to handle this? Or should we just skip this row?
                 raise ValueError(
                     f"Can't run MAP for {analysis} because there is no predicted cds file"
                 )
 
             if not virify_gff:
-                # TODO: is this the best way to handle this? Or should we just skip this row?
                 raise ValueError(
                     f"Can't run MAP for {analysis} because there is no VIRify GFF file"
                 )

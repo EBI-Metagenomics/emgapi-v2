@@ -11,11 +11,8 @@ from activate_django_first import EMG_CONFIG
 
 AnalysisStates = analyses.models.Analysis.AnalysisStates
 
-from analyses.base_models.with_downloads_models import (
-    DownloadFile,
-    DownloadType,
-    DownloadFileType,
-)
+from workflows.data_io_utils.schemas.map import MapResultSchema
+from workflows.data_io_utils.schemas.validation import sanity_check_pipeline_results
 from workflows.flows.analyse_study_tasks.analysis_states import (
     mark_analysis_as_failed,
 )
@@ -32,57 +29,58 @@ from workflows.data_io_utils.filenames import next_enumerated_subdir
 
 
 @task
+def sanity_check_map_results(
+    analysis: analyses.models.Analysis,
+    map_outdir: Path,
+):
+    """
+    Validate MAP pipeline results using the unified schema.
+
+    :param analysis: The analysis to validate results for
+    :param map_outdir: The output directory of the MAP pipeline
+    :return: Validated Directory object
+    """
+    schema = MapResultSchema()
+    return sanity_check_pipeline_results(
+        schema, map_outdir, analysis.assembly.first_accession, "MAP"
+    )
+
+
+@task
 def add_map_gff_to_analysis_downloads(
     analysis: analyses.models.Analysis,
     map_outdir: Path,
 ):
     """
-    Add the MAP (Mobilome Annotation Pipeline) GFF file to the analysis downloads.
+    Add the MAP (Mobilome Annotation Pipeline) GFF file to the analysis downloads using unified schema.
 
     :param analysis: The analysis to add the download to
     :param map_outdir: The output directory of the MAP pipeline
     """
     logger = get_run_logger()
 
-    # Check if the GFF directory exists
-    if not map_outdir.exists():
-        logger.warning(
-            f"MAP output directory {map_outdir} does not exist. No GFF file to add to downloads."
-        )
-        return
-
-    # Find GFF files in the directory
-    # mobilome_prokka.gff contains the mobilome annotation plus any other feature
-    # annotated by PROKKA, mobileOG, or ViPhOG.
-    gff_file = map_outdir / "mobilome_prokka.gff"
-
-    if not gff_file.exists():
-        logger.warning(
-            f"No GFF files found in {gff_file}. No GFF file to add to downloads."
-        )
-        return
-
-    # Create a download file object
-    download = DownloadFile(
-        path=gff_file,
-        alias=f"map_{gff_file.name}",
-        download_type=DownloadType.GENOME_ANALYSIS,
-        file_type=DownloadFileType.GFF,
-        long_description="Mobilome annotation from MAP (Mobilome Annotation Pipeline)",
-        short_description="Mobilome annotations",
-        download_group="map",
-    )
-
-    # Add the download to the analysis
     try:
-        analysis.add_download(download)
-        logger.info(
-            f"Added MAP GFF file {gff_file.name} to analysis {analysis.accession} downloads"
-        )
-    except FileExistsError:
-        logger.warning(
-            f"Download with alias {download.alias} already exists for analysis {analysis.accession}"
-        )
+        # Validate results first
+        sanity_check_map_results(analysis, map_outdir)
+
+        # Use schema to generate downloads
+        schema = MapResultSchema()
+        downloads = schema.generate_downloads(analysis, map_outdir)
+
+        # Add downloads to analysis
+        for download in downloads:
+            try:
+                analysis.add_download(download)
+                logger.info(
+                    f"Added MAP file {download.alias} to analysis {analysis.accession} downloads"
+                )
+            except FileExistsError:
+                logger.warning(
+                    f"Download with alias {download.alias} already exists for analysis {analysis.accession}"
+                )
+    except Exception as e:
+        logger.error(f"Failed to add MAP downloads for {analysis.accession}: {e}")
+        raise
 
 
 @flow(name="Run MAP pipeline via samplesheet")

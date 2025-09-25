@@ -4,9 +4,7 @@ from typing import List
 from prefect import flow, task, get_run_logger
 
 import analyses.models
-from workflows.data_io_utils.mgnify_v6_utils.assembly import (
-    create_assembly_v6_schema,
-)
+from workflows.data_io_utils.schemas.assembly import AssemblyResultSchema
 from workflows.flows.analyse_study_tasks.analysis_states import AnalysisStates
 from workflows.flows.analyse_study_tasks.copy_v6_pipeline_results import (
     copy_v6_pipeline_results,
@@ -18,24 +16,24 @@ from workflows.prefect_utils.analyses_models_helpers import mark_analysis_status
 def import_completed_assembly_analysis(analysis: analyses.models.Analysis):
     """
     Import results for a completed assembly analysis using the unified schema.
-    
+
     :param analysis: The analysis to import results for
     """
     analysis.refresh_from_db()
     dir_for_analysis = Path(analysis.results_dir)
 
     # Use the unified schema for both validation and import
-    schema = create_assembly_v6_schema()
-    
+    schema = AssemblyResultSchema()
+
     # First validate the directory structure (optional but recommended)
     try:
-        validated_directory = schema.validate_directory_structure(
+        schema.validate_directory_structure(
             dir_for_analysis.parent,  # Parent because results_dir includes assembly_id
             analysis.assembly.first_accession,
         )
     except Exception as e:
         print(f"Validation warning for {analysis}: {e}. Proceeding with import anyway.")
-    
+
     # Import all results using the unified schema
     schema.import_analysis_results(analysis, dir_for_analysis.parent)
 
