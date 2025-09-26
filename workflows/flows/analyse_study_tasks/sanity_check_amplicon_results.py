@@ -177,7 +177,7 @@ def sanity_check_amplicon_results(
                     )
                     or (
                         forward_primers_file.stat().st_size != 0
-                        and reverse_primers_file.stat().st_size == 0
+                        and reverse_primers_file.stat().st_size != 0
                         and validation_file.stat().st_size != 0
                         and cutadapt_json.stat().st_size != 0
                     )
