@@ -19,7 +19,7 @@ django-db-file-storage~=0.5.6.1  # logo storage in db
 django-unfold==0.60.0  # admin panel
 
 # Serving
-asgiref~=3.8.1
+asgiref~=3.9.2
 gunicorn==23.0.0
 whitenoise==6.9.0
 
