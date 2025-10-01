@@ -1,9 +1,4 @@
 ---
-version: "3.9"
-
-include:
-  - slurm-dev-environment/docker-compose.yaml
-
 services:
   prefect-database:
     # Postgres for prefect server
@@ -54,7 +49,7 @@ services:
       - PREFECT_API_URL=http://127.0.0.1:4200/api
       - PREFECT_SERVER_API_HOST=0.0.0.0
       - PREFECT_API_DATABASE_CONNECTION_URL=postgresql+asyncpg://postgres:postgres@prefect-database:5432/prefect
-      - EXTRA_PIP_PACKAGES=httpx[cli]
+      - EXTRA_PIP_PACKAGES=httpx[cli] prefect-slurm==0.1.0
       - PREFECT_LOCAL_STORAGE_PATH=/root/.prefect/storage
     healthcheck:
       interval: 2s
@@ -104,9 +99,45 @@ services:
       - logs:/var/log/slurm
       - jobdir:/opt/jobs
       - ./prefectserver:/root/.prefect
+      - ./slurm-dev-environment/entrypoints/submitter-entrypoint.sh:/usr/local/bin/submitter-entrypoint.sh
       - "./slurm-dev-environment/fs/nfs/production:/nfs/production"
       - "./slurm-dev-environment/fs/nfs/ftp:/nfs/ftp"
       - "./slurm-dev-environment/fs/hps:/hps"
+
+  prefect-slurm-worker:
+    # A prefect-slurm worker deployed in a separate node to the app
+    build:
+      context: .
+      target: agent
+    restart: always
+    container_name: prefect-slurm-worker
+    hostname: prefect_slurm_worker
+    command: prefect worker start --pool new-slurm --type slurm
+    entrypoint: /usr/local/bin/prefect-slurm-entrypoint.sh
+    environment:
+      - PREFECT_SLURM_API_URL=http://slurm_node:6820
+      - PREFECT_SLURM_USER_NAME=slurm
+      - PREFECT_SLURM_TOKEN_FILE=/home/slurm/.prefect_slurm.jwt
+      - PREFECT_API_URL=http://prefect-server:4200/api
+      - DATABASE_URL=postgres://postgres:postgres@app-database:5432/emg
+      - DJANGO_DEBUG=1
+    profiles: ["prefect", "all"]
+    env_file:
+      - path: ./secrets-local.env
+        required: false
+    depends_on:
+      prefect-server:
+        condition: service_healthy
+      app-database:
+        condition: service_started
+    networks: [emg, slurm]
+    volumes:
+      - ".:/app"
+      - munge:/etc/munge
+      - logs:/var/log/slurm
+      - jobdir:/opt/jobs
+      - ./slurm-dev-environment/entrypoints/prefect-slurm-entrypoint.sh:/usr/local/bin/prefect-slurm-entrypoint.sh
+      - ./slurm-dev-environment/fs/nfs/production:/nfs/production
 
   app:
     # Django app
@@ -178,10 +209,67 @@ services:
       - "8088:80"
     networks: ["emg"]
 
+  slurm_db:
+    image: mariadb:latest
+    hostname: slurm_db
+    container_name: slurm_db
+    environment:
+      MYSQL_RANDOM_ROOT_PASSWORD: "yes"
+      MYSQL_DATABASE: slurm
+      MYSQL_USER: slurm
+      MYSQL_PASSWORD: slurm
+    volumes:
+      - db:/var/lib/mysql
+    ports:
+      - "3306:3306"
+    profiles: ["slurm", "all"]
+    healthcheck:
+      test: ['CMD', '/usr/local/bin/healthcheck.sh', '--connect']
+      interval: 2s
+      timeout: 2s
+      retries: 5
+    networks: [slurm]
+
+  slurm_node:
+    # A single node instance of slurm (dbd, controller, worker, restd)
+    build:
+      dockerfile: Dockerfile.slurm
+      context: .
+    command: ["slurmd"]
+    hostname: slurm_node
+    container_name: slurm_node
+    depends_on:
+      slurm_db:
+        condition: service_healthy
+    volumes:
+      - munge:/etc/munge
+      - logs:/var/log/slurm
+      - jobdir:/opt/jobs
+      - ".:/app"
+      - "./slurm-dev-environment/configs/slurm_prolog.sh:/usr/local/bin/slurm_prolog.sh"
+      - "./slurm-dev-environment/configs/slurm_epilog.sh:/usr/local/bin/slurm_epilog.sh"
+      - "./slurm-dev-environment/entrypoints/entrypoint.sh:/usr/local/bin/entrypoint.sh"
+      - "./slurm-dev-environment/fs/nfs/production:/nfs/production"
+      - "./slurm-dev-environment/fs/hps:/hps"
+      - "./slurm-dev-environment/fs/nfs/public:/publicnfs"
+      - "./slurm-dev-environment/fs/nfs/ftp:/publicftp"
+    expose:
+      - "6818"
+    ports:
+      - "6820:6820"
+    profiles: ["slurm", "all"]
+    networks: [slurm, "emg"]
+
 volumes:
   prefectdb:
   appdb:
+  db:
+  munge:
+  logs:
+  jobdir:
 
 networks:
   emg:
     name: emg
+  slurm:
+    name: slurm
