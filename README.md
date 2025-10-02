@@ -132,8 +132,6 @@ task prefect -- deployment run "Download a study read-runs/realistic_example_dep
 
 (Note that you can't run this one in the same way as `simple_example.py`, because `realistic_example.py` does not have a `__main__`).
 
-Note: If you get an error like `I/O error writing script/environment to file` while running the flow, make sure to add write permissions for other users to the working directory of the flow `chmod -R o+x slurm-dev-environment/fs/nfs/production/dev-slurm-work-dir`
-
 ---
 
 ### Code style guide
