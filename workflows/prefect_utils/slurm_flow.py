@@ -14,6 +14,7 @@ from django.utils.timezone import now
 from prefect import flow, get_run_logger, task
 from prefect.artifacts import create_markdown_artifact
 from prefect.runtime import flow_run
+from prefect_slurm.worker import SlurmWorker
 
 from emgapiv2.log_utils import mask_sensitive_data as safe
 from workflows.models import OrchestratedClusterJob
@@ -638,7 +639,7 @@ def run_cluster_job(
 
     worker_type = get_prefect_worker_type()
 
-    if worker_type == "slurm":
+    if worker_type == SlurmWorker.type:
         return run_subprocess(
             name=_name,
             command=command,
