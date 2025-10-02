@@ -97,6 +97,8 @@ class AmpliconPipelineConfig(BaseModel):
     allow_non_insdc_run_names: bool = False
     keep_study_summary_partials: bool = False
 
+    mpt_version = "1.2.7--pyhdfd78af_0"
+
 
 class RawReadsPipelineConfig(BaseModel):
     rawreads_pipeline_repo: str = "ebi-metagenomics/raw-reads-analysis-pipeline"
