@@ -97,7 +97,7 @@ class AmpliconPipelineConfig(BaseModel):
     allow_non_insdc_run_names: bool = False
     keep_study_summary_partials: bool = False
 
-    mpt_version = "1.2.7--pyhdfd78af_0"
+    mpt_version: str = "1.2.7--pyhdfd78af_0"  # mgnify-pipelines-toolkit version
 
 
 class RawReadsPipelineConfig(BaseModel):
