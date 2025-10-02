@@ -3,7 +3,7 @@ import logging
 import os
 import subprocess
 import time
-from datetime import datetime, timedelta
+from datetime import timedelta
 from pathlib import Path
 from textwrap import dedent as _
 from typing import List, Optional, Union
@@ -474,8 +474,8 @@ def run_subprocess(
         logger.error(f"Failed to run subprocess: {e}")
         process.kill()
         process.wait()
+
         ocj.last_known_state = SlurmStatus.failed
-        ocj.updated_at = datetime.now()
         ocj.save()
 
         raise SubprocessFailedException(process.pid, process.returncode, "Timed out")
@@ -484,13 +484,11 @@ def run_subprocess(
         logger.info(f"Job {ocj} finished successfully.")
 
         ocj.last_known_state = SlurmStatus.completed
-        ocj.updated_at = datetime.now()
         ocj.save()
 
         store_nextflow_trace(ocj)
     else:
         ocj.last_known_state = SlurmStatus.failed
-        ocj.updated_at = datetime.now()
         ocj.save()
 
         error_details = "\n".join(
