@@ -324,12 +324,10 @@ def run_subprocess(
     """
     Run a command as a subprocess.
 
-    This task MAY launch a subprocess, otherwise it may return the Job ID of a previously launched job
-    that is considered identical.
+    This task MAY launch a subprocess, otherwise it may return a database object of a previously run job that is considered identical (e.g. the same command was run for the same inputs).
 
-    This allows flows to "reattach" to slurm jobs that they previously started,
-    even if the flow has crashed and been restarted.
-    (E.g. if the prefect worker VM is restarted during a long-running nextflow pipeline.)
+    This allows flows to "reattach" to command that they previously ran,
+    even if the flow has crashed and been restarted. In this case, it could be that the command previously finished successfully, or failed, and is not worth retrying – so by reattach we mean use the previous result. It could also mean that the exact same command is currently running under a different flow, in which case this method MAY currently fail since the `pid` of that currently running job may well be unavailable to this flowrun (if it is on a different slurm node).
 
     It also allows flows to require a slurm job to have run, but to accept that slurm job may have been run by
     a previous or different flow.
