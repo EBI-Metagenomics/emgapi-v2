@@ -15,6 +15,7 @@ def get_prefect_worker_type() -> Optional[str]:
             return None
 
 
+# TODO: Remove this function and all of it's calls once we removed the process-based prefect worker
 def make_environment(
     environment: Optional[Union[str, Dict[str, Any]]],
 ) -> Dict[str, Any]:
