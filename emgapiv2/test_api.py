@@ -168,7 +168,7 @@ def test_api_analysis_downloads(raw_read_analyses, ninja_api_client):
         dl_api["url"]
         == f"http://localhost:8080/pub/databases/metagenomics/mgnify_results/analyses/{analysis.accession}/results/taxonomies.tsv.gz"
     )
-    assert dl_api["index_file"]["relative_url"] == "taxonomies.tsv.gz.gzi"
+    assert dl_api["index_files"][0]["relative_url"] == "taxonomies.tsv.gz.gzi"
     assert "path" not in dl_api
 
 

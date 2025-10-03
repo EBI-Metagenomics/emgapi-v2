@@ -16,7 +16,13 @@ class OrchestratedClusterJobAdmin(JSONFieldWidgetOverridesMixin, ModelAdmin):
         "created_at",
     ]
     list_display = ["id", "name", "cluster_job_id", "display_status"]
-    readonly_fields = ["id", "created_at", "updated_at"]
+    readonly_fields = [
+        "id",
+        "created_at",
+        "updated_at",
+        "nextflow_trace",
+        "cluster_log",
+    ]
     ordering = ["-updated_at"]
 
     @display(
