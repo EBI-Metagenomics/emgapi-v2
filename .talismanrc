@@ -165,6 +165,9 @@ fileignoreconfig:
 - filename: workflows/prefect_utils/slurm_flow.py
   allowed_patterns: [key]
 
+- filename: workflows/flows/alternative_realistic_example.py
+  allowed_patterns: [key]
+
 allowed_patterns:
 - cache_key_fn
 - CommonMetadataKeys
