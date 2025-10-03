@@ -17,16 +17,14 @@ tasks:
     cmds:
       - docker compose exec -e PREFECT_CLIENT_RETRY_EXTRA_CODES=0 app python manage.py prefectcli work-pool create --type {{.TYPE}} {{.CLI_ARGS}} {{.NAME}}
     vars:
-      TYPE: "process"
-      NAME: "slurm"
+      TYPE: '{{.TYPE | default "process"}}'
+      NAME: '{{.NAME | default "slurm"}}'
 
   deploy-flow:
     desc: "Build and deploy a prefect flow. E.g. FLOW=mgnify_run_pipeline_flow task deploy-flow"
     cmds:
       - docker compose --profile prefect up -d
-      - docker compose run -e PREFECT_CLIENT_RETRY_EXTRA_CODES=0 app python manage.py prefectcli deploy {{ .FILE | default (list "workflows/flows/" .FLOW ".py" | join "") }}:{{.FLOW}} --name {{.FLOW}}_deployment -p {{.POOL}} --prefect-file workflows/prefect_deployments/prefect-dev-donco.yaml
-    vars:
-      POOL: "slurm"
+      - docker compose run -e PREFECT_CLIENT_RETRY_EXTRA_CODES=0 app python manage.py prefectcli deploy {{ .FILE | default (list "workflows/flows/" .FLOW ".py" | join "") }}:{{.FLOW}} --name {{.FLOW}}_deployment -p {{.POOL | default "slurm"}} --prefect-file workflows/prefect_deployments/prefect-dev-donco.yaml
     requires:
       vars: [FLOW]
 
@@ -106,6 +104,9 @@ tasks:
       # make results for assembly available
       - mkdir -p slurm-dev-environment/fs/nfs/ftp/public/databases/metagenomics/mgnify_results/PRJNA398/PRJNA398089/ERZ857/ERZ857107/V6/
       - cp -r slurm-dev-environment/fs/nfs/public/tests/assembly_v6_output/ERZ857107/ERZ857107 slurm-dev-environment/fs/nfs/ftp/public/databases/metagenomics/mgnify_results/PRJNA398/PRJNA398089/ERZ857/ERZ857107/V6/assembly
+      # make workdir
+      - mkdir -p slurm-dev-environment/fs/nfs/production/dev-slurm-work-dir
+      - chmod -R o+w slurm-dev-environment/fs
 
   debug-break-prefect-connection:
     desc: "Temporarily return 404s from the prefect server, when prefect worker tries to access it"

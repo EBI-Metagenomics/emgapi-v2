@@ -8,3 +8,5 @@ pixi-env
 .nextflow
 slurm-dev-environment/fs
 !slurm-dev-environment/fs/hps/tests
+__pycache__
+.venv

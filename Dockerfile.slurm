@@ -2,13 +2,14 @@ FROM ubuntu:noble AS base
 LABEL authors="mgnify team"
 
 RUN groupadd -r slurm
-RUN useradd -rm -d /home/slurm -s /bin/bash -g slurm -G sudo slurm
+RUN useradd -rm -d /home/slurm -s /bin/bash -g slurm -G sudo -u 999 slurm
 RUN mkdir -p /home/slurm && chown -R slurm:slurm /home/slurm
-RUN useradd -rms /bin/bash munge
+RUN groupadd -r -g 555 munge
+RUN useradd -rms /bin/bash -g munge -u 555 munge
 
 RUN apt -y update && apt -y upgrade && apt -y install curl nano wget zip bzip2 rsync build-essential
 
-RUN apt -y install python3-pip python-is-python3
+RUN apt -y install python3-pip python3-venv python-is-python3
 
 RUN apt -y install sudo gosu netcat-traditional
 
@@ -30,9 +31,9 @@ RUN cd slurm-24.11.6 && \
     ./configure --sysconfdir=/etc/slurm && \
     make install -j16
 
-COPY configs/slurm.conf /etc/slurm/slurm.conf
-COPY configs/slurmdbd.conf /etc/slurm/slurmdbd.conf
-COPY configs/cgroup.conf /etc/slurm/cgroup.conf
+COPY slurm-dev-environment/configs/slurm.conf /etc/slurm/slurm.conf
+COPY slurm-dev-environment/configs/slurmdbd.conf /etc/slurm/slurmdbd.conf
+COPY slurm-dev-environment/configs/cgroup.conf /etc/slurm/cgroup.conf
 RUN chmod 600 /etc/slurm/slurmdbd.conf
 RUN chown -R slurm:slurm /etc/slurm/
 
@@ -43,7 +44,7 @@ RUN mkdir -p /var/spool/slurmctld && chown -R slurm:slurm /var/spool/slurmctld
 RUN mkdir -p /var/spool/slurmd && chown -R slurm:slurm /var/spool/slurmd
 
 # Setup jwt key
-COPY configs/jwt_hs256.key /var/spool/slurmctld/jwt_hs256.key
+COPY slurm-dev-environment/configs/jwt_hs256.key /var/spool/slurmctld/jwt_hs256.key
 RUN chown slurm:slurm /var/spool/slurmctld/jwt_hs256.key
 RUN chmod 0600 /var/spool/slurmctld/jwt_hs256.key
 
@@ -60,10 +61,15 @@ RUN DEBIAN_FRONTEND=noninteractive \
     apt install -y openjdk-17-jre-headless
 
 RUN wget -qO- https://get.nextflow.io | bash
-RUN chmod +x nextflow
+RUN chmod +rwx nextflow
 RUN mv nextflow /usr/bin/
-COPY configs/slurm_prolog.sh /usr/local/bin/slurm_prolog.sh
-COPY configs/slurm_epilog.sh /usr/local/bin/slurm_epilog.sh
+COPY slurm-dev-environment/configs/slurm_prolog.sh /usr/local/bin/slurm_prolog.sh
+COPY slurm-dev-environment/configs/slurm_epilog.sh /usr/local/bin/slurm_epilog.sh
+
+COPY requirements.txt .
+RUN python -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+RUN pip install --use-pep517 --upgrade -r requirements.txt
 
 RUN mkdir -p /usr/bin/webin-cli
 RUN wget https://github.com/enasequence/webin-cli/releases/download/7.3.0/webin-cli-7.3.0.jar -O /usr/bin/webin-cli/webin-cli.jar
@@ -72,7 +78,7 @@ ENV PATH="/usr/bin/webin-cli:$PATH"
 
 
 # DBD + Ctl + Worker + REST in a single container
-COPY entrypoints/entrypoint.sh /usr/local/bin/entrypoint.sh
+COPY slurm-dev-environment/entrypoints/entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh
 
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
