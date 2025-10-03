@@ -19,3 +19,5 @@ spec:
             - configMapRef:
                 name: proxy-config
       restartPolicy: OnFailure
+      imagePullSecrets:
+        - name: quay-pull-secret
