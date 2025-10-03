@@ -2,7 +2,6 @@ from typing import Iterable, Optional
 
 from django import forms
 from django.contrib import admin, messages
-from django.contrib.admin.helpers import AdminReadonlyField
 from django.contrib.postgres.fields import ArrayField
 from django.core.validators import EMPTY_VALUES
 from django.db.models import JSONField, Q
@@ -105,9 +104,6 @@ class JSONFieldWidgetOverridesMixin(ModelAdmin):
                     field, request
                 ).widget
         return super().render_change_form(request, context, add, change, form_url, obj)
-
-
-class Me(AdminReadonlyField): ...
 
 
 class AutoCompleteInlineForm(forms.ModelForm):
