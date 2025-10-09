@@ -7,7 +7,7 @@ typing_extensions~=4.14.1
 tzdata
 
 # Django and plugins
-django==5.2.1
+django==5.2.7
 django-cors-headers==4.7.0
 dj-database-url==3.0.0
 django-debug-toolbar==5.2.0
