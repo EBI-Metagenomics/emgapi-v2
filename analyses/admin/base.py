@@ -93,6 +93,18 @@ class JSONFieldWidgetOverridesMixin(ModelAdmin):
             kwargs["widget"] = ArrayWidget
         return super().formfield_for_dbfield(db_field, request, **kwargs)
 
+    def render_change_form(
+        self, request, context, add=False, change=False, form_url="", obj=None
+    ):
+        form = context.get("adminform").form
+        readonly_fields = self.get_readonly_fields(request, obj)
+        for field in form.fields:
+            if field in readonly_fields:
+                form.fields["myfield"].widget = self.formfield_for_dbfield(
+                    field, request
+                ).widget
+        return super().render_change_form(request, context, add, change, form_url, obj)
+
 
 class AutoCompleteInlineForm(forms.ModelForm):
     """This is a workaround for a (probable?) bug in django unfold where the wrong field name is sent with autocomplete ajax requests"""

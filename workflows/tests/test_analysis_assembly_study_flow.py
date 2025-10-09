@@ -209,6 +209,27 @@ def generate_fake_assembly_pipeline_results(assembly_dir, assembly_accession):
     with open(f"{tax_dir}/{assembly_accession}_SSU.fasta.gz", "w"):
         pass
 
+    # Create annotation summary directory
+    annot_summary_dir = f"{assembly_dir}/annotation-summary"
+    os.makedirs(annot_summary_dir, exist_ok=True)
+    with gzip.open(
+        f"{annot_summary_dir}/{assembly_accession}_annotation_summary.gff.gz", "wt"
+    ) as annot_summary_file:
+        annot_summary_file.write(
+            dedent(
+                f"""\
+                ##gff-version 3
+                {assembly_accession}	FragGeneScanRS	CDS	1	707	.	+	.	ID={assembly_accession}_1_1_707_+
+                """
+            )
+        )
+    (
+        Path(annot_summary_dir) / f"{assembly_accession}_annotation_summary.gff.gz.gzi"
+    ).touch()
+    (
+        Path(annot_summary_dir) / f"{assembly_accession}_annotation_summary.gff.gz.csi"
+    ).touch()
+
 
 MockFileIsNotEmptyRule = FileRule(
     rule_name="File should not be empty (unit test mock)",
