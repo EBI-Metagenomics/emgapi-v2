@@ -7,21 +7,21 @@ typing_extensions~=4.14.1
 tzdata
 
 # Django and plugins
-django==5.2.1
-django-cors-headers==4.7.0
-dj-database-url==3.0.0
+django==5.2.7
+django-cors-headers==4.9.0
+dj-database-url==3.0.1
 django-debug-toolbar==5.2.0
-django-json-widget==2.0.1  # for jsonfields in admin panel
+django-json-widget==2.0.4  # for jsonfields in admin panel
 django-ltree-2==0.1.12  # biome hierarchies
 django-ninja~=1.4.3  # api
-django-ninja-jwt~=5.3.7  # api auth
+django-ninja-jwt~=5.3.9  # api auth
 django-db-file-storage~=0.5.6.1  # logo storage in db
-django-unfold==0.60.0  # admin panel
+django-unfold==0.67.0  # admin panel
 
 # Serving
-asgiref~=3.8.1
+asgiref~=3.10.0
 gunicorn==23.0.0
-whitenoise==6.9.0
+whitenoise==6.11.0
 
 # DB
 psycopg2-binary
@@ -32,11 +32,11 @@ prefect-shell==0.3.1
 prefect-slack==0.3.1
 
 # Pydantic
-pydantic~=2.11.7
-pydantic-settings~=2.10.1
+pydantic<2.12.0  # TODO upgrade once https://github.com/eadwinCode/django-ninja-jwt/pull/151 is released
+pydantic-settings~=2.11.0
 
 # Data handling
-pandas==2.3.0
+pandas==2.3.3
 biopython==1.85
 numpy~=2.2.6
 

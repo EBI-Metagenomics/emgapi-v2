@@ -16,6 +16,8 @@ FROM base AS django
 COPY requirements* .
 RUN pip install --ignore-installed --use-pep517 -r requirements-dev.txt
 RUN pip install --ignore-installed --use-pep517 -r requirements-tools.txt
+RUN pip --no-input uninstall pydantic; pip --no-input install pydantic==2.10.6
+#TODO: remove the above once https://github.com/eadwinCode/django-ninja-jwt/pull/151
 COPY . .
 RUN python manage.py collectstatic --noinput
 
