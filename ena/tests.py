@@ -1,4 +1,7 @@
+import re
+
 import pytest
+from django.core.management import call_command
 
 import analyses.models
 import ena.models
@@ -70,3 +73,40 @@ def test_ena_suppression_and_privacy_propagation(mgnify_assemblies, raw_read_ana
 
     assert analyses.models.Study.public_objects.count() == 0
     assert analyses.models.Study.objects.count() == 1
+
+
+@pytest.mark.django_db(transaction=True)
+def test_sync_samples_with_ena(raw_read_analyses, httpx_mock):
+    httpx_mock.add_response(
+        url=re.compile(r".*result=sample.*"),
+        json=[{"sample_title": "from tromso", "lat": "69.6"}],
+        is_reusable=True,
+    )
+
+    mgnify_sample: analyses.models.Sample = analyses.models.Sample.objects.first()
+    ena_sample: ena.models.Sample = ena.models.Sample.objects.first()
+
+    mgnify_sample.metadata = {"lat": "69.6", "inferred_lat": 70}
+    mgnify_sample.save()
+
+    call_command("sync_samples_with_ena", "--accessions", mgnify_sample.first_accession)
+    ena_sample.refresh_from_db()
+    assert ena_sample.metadata == {"sample_title": "from tromso", "lat": "69.6"}
+
+    mgnify_sample.refresh_from_db()
+    assert mgnify_sample.metadata == {
+        "sample_title": "from tromso",
+        "lat": "69.6",
+        "inferred_lat": 70,
+    }
+
+    mgnify_sample.metadata = {"lat": "69.6", "inferred_lat": 70}
+    mgnify_sample.save()
+
+    call_command("sync_samples_with_ena", "--all")
+    mgnify_sample.refresh_from_db()
+    assert mgnify_sample.metadata == {
+        "sample_title": "from tromso",
+        "lat": "69.6",
+        "inferred_lat": 70,
+    }

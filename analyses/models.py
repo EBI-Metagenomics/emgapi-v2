@@ -177,14 +177,16 @@ class Study(
 class PublicSampleManager(PrivacyFilterManagerMixin, ENADerivedManager): ...
 
 
-class Sample(ENADerivedModel, TimeStampedModel):
+class Sample(InferredMetadataMixin, ENADerivedModel, TimeStampedModel):
     CommonMetadataKeys = ENASampleFields
 
     objects = ENADerivedManager()
     public_objects = PublicSampleManager()
 
     id = models.AutoField(primary_key=True)
-    ena_sample = models.ForeignKey(ena.models.Sample, on_delete=models.CASCADE)
+    ena_sample = models.ForeignKey(
+        ena.models.Sample, on_delete=models.CASCADE, related_name="analyses_samples"
+    )
     studies = models.ManyToManyField(Study)
 
     metadata = models.JSONField(default=dict, blank=True)

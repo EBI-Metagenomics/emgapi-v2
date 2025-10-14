@@ -352,6 +352,7 @@ def test_prefect_analyse_rawreads_flow(
     mock_queryset_hash_for_rawreads,
     prefect_harness,
     httpx_mock,
+    ena_any_sample_metadata,
     mock_cluster_can_accept_jobs_yes,
     mock_start_cluster_job,
     mock_check_cluster_job_all_completed,
