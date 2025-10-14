@@ -113,6 +113,7 @@ class PublicStudyManager(PrivacyFilterManagerMixin, StudyManager):
 
 
 class Study(
+    InferredMetadataMixin,
     ENADerivedModel,
     WithDownloadsModel,
     TimeStampedModel,
@@ -129,8 +130,13 @@ class Study(
         accession_prefix="MGYS", accession_length=8, db_index=True
     )
     ena_study = models.ForeignKey(
-        ena.models.Study, on_delete=models.CASCADE, null=True, blank=True
+        ena.models.Study,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="analyses_studies",
     )
+    metadata = models.JSONField(default=dict, blank=True)
     biome = models.ForeignKey(Biome, on_delete=models.CASCADE, null=True, blank=True)
 
     class StudyFeatures(BaseModel):

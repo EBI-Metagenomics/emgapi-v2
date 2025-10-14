@@ -52,3 +52,5 @@ def mgnify_sample_lots_of_metadata(raw_reads_mgnify_sample):
         _.CHECKLIST: "ERC000031",
         _.SAMPLE_ALIAS: "ISS-D1",
     }
+    sample.save()
+    return sample

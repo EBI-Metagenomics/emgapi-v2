@@ -376,7 +376,7 @@ def test_prefect_analyse_rawreads_flow(
         url=f"{EMG_CONFIG.ena.portal_search_api}?"
         f"result=study"
         f"&query=%22%28study_accession%3D{study_accession}+OR+secondary_study_accession%3D{study_accession}%29%22"
-        f"&fields=study_title%2Csecondary_study_accession"
+        f"&fields=study_title%2Cstudy_description%2Ccenter_name%2Csecondary_study_accession%2Cstudy_name"
         f"&limit=10"
         f"&format=json"
         f"&dataPortal=metagenome",

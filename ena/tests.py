@@ -110,3 +110,27 @@ def test_sync_samples_with_ena(raw_read_analyses, httpx_mock):
         "lat": "69.6",
         "inferred_lat": 70,
     }
+
+
+@pytest.mark.django_db(transaction=True)
+def test_sync_studies_with_ena(raw_reads_mgnify_study, httpx_mock):
+    httpx_mock.add_response(
+        url=re.compile(r".*result=study.*"),
+        json=[
+            {
+                "study_title": "from tromso",
+                "study_description": "we looked deep into the fjords",
+            }
+        ],
+        is_reusable=True,
+    )
+
+    mgnify_study: analyses.models.Study = analyses.models.Study.objects.first()
+    ena_study: ena.models.Study = ena.models.Study.objects.first()
+
+    call_command("sync_studies_with_ena", "--accessions", ena_study.accession)
+    mgnify_study.refresh_from_db()
+    assert mgnify_study.metadata == {
+        "study_title": "from tromso",
+        "study_description": "we looked deep into the fjords",
+    }

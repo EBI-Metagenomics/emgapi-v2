@@ -22,6 +22,7 @@ from emgapiv2.api.third_party_metadata import EuropePmcAnnotationResponse
 from emgapiv2.enum_utils import FutureStrEnum
 from genomes.schemas.GenomeCatalogue import GenomeCatalogueList
 from workflows.data_io_utils.filenames import trailing_slash_ensured_dir
+from workflows.ena_utils.study import ENAStudyFields
 
 logger = logging.getLogger(__name__)
 
@@ -69,6 +70,18 @@ class MGnifyStudy(ModelSchema):
 
 class MGnifyStudyDetail(MGnifyStudy):
     downloads: List[MGnifyStudyDownloadFile] = Field(..., alias="downloads_as_objects")
+    metadata: dict[ENAStudyFields, Any] = Field(
+        ...,
+        examples=[
+            {
+                ENAStudyFields.STUDY_TITLE: "ISS Metagenomes",
+                ENAStudyFields.STUDY_DESCRIPTION: "Dust was taken from a vacuum cleaner on the Internal Space Station.",
+                ENAStudyFields.CENTER_NAME: "NASA",
+            },
+            {ENAStudyFields.STUDY_TITLE: "Healthy stool samples"},
+        ],
+        description="Metadata associated with the study, a partial copy of the ENA Study record.",
+    )
 
     class Meta:
         model = analyses.models.Study

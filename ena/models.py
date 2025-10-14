@@ -57,6 +57,8 @@ class Study(ENAModel):
         null=True, blank=True, max_length=25, db_index=True
     )
 
+    metadata = models.JSONField(default=dict)
+
     class Meta:
         verbose_name_plural = "studies"
 
@@ -133,6 +135,22 @@ def on_ena_study_saved_update_derived_suppression_and_privacy_states(
                                 related_objects_to_update_status_of,
                                 [field_to_propagate],
                             )
+
+
+@receiver(post_save, sender=Study)
+def on_ena_study_saved_update_mgnify_study_metadata(
+    sender, instance: Study, created, **kwargs
+):
+    if not instance.analyses_studies.exists():
+        logger.warning(f"No analyses.Study found for ena.Study {instance}")
+        return
+    if instance.analyses_studies.count() > 1:
+        logger.warning(f"More than one analyses.Study found for ena.Sample {instance}")
+        return
+    analyses_study = instance.analyses_studies.first()
+    analyses_study.metadata.update(instance.metadata)
+    # Note: does not remove keys from analyses_study.metadata – so keys like INFERRED_location would be kept.
+    analyses_study.save()
 
 
 class Sample(ENAModel):
