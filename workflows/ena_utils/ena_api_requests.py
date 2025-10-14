@@ -618,3 +618,21 @@ def sync_sample_metadata_from_ena(sample: ena.models.Sample):
     if portal_sample := portal_sample_response[0]:
         sample.metadata = portal_sample
         sample.save()
+
+
+def sync_study_metadata_from_ena(study: ena.models.Study):
+    base_logger.info(f"Syncing study metadata from ENA for {study}")
+    # TODO: consider refactoring this, and similar methods, into the ena/ app instead of workflows/
+    portal_study_response = ENAAPIRequest(
+        result=ENAPortalResultType.STUDY,
+        fields=[
+            ENAStudyFields[f.upper()] for f in EMG_CONFIG.ena.study_metadata_fields
+        ],
+        limit=1,
+        query=ENAStudyQuery(study_accession=study.accession)
+        | ENAStudyQuery(secondary_study_accession=study.accession),
+    ).get(auth=dcc_auth, raise_on_empty=True)
+    base_logger.debug(f"Got study metadata from ENA: {len(portal_study_response)}")
+    if portal_study := portal_study_response[0]:
+        study.metadata = portal_study
+        study.save()
