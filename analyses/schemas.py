@@ -114,6 +114,21 @@ class MGnifySample(ModelSchema):
 
 class MGnifySampleDetail(MGnifySample):
     studies: List[MGnifyStudy]
+    metadata: dict[analyses.models.Sample.CommonMetadataKeys, Any] = Field(
+        ...,
+        examples=[
+            {
+                analyses.models.Sample.CommonMetadataKeys.ALTITUDE: 402317,
+                analyses.models.Sample.CommonMetadataKeys.TEMPERATURE: 19.1,
+                analyses.models.Sample.CommonMetadataKeys.SAMPLE_TITLE: "space suit expedition sample",
+            },
+            {
+                analyses.models.Sample.CommonMetadataKeys.DISEASE: "Flu",
+                analyses.models.Sample.CommonMetadataKeys.SAMPLE_TITLE: "Patient 3 stool",
+            },
+        ],
+        description="Metadata associated with the sample, sourced from the ENA Sample record.",
+    )
 
     class Meta(MGnifySample.Meta): ...
 

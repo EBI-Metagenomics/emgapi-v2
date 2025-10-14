@@ -272,7 +272,11 @@ def test_get_study_from_ena_private(httpx_mock, prefect_harness):
 @pytest.mark.httpx_mock(should_mock=should_not_mock_httpx_requests_to_prefect_server)
 @pytest.mark.django_db(transaction=True)
 def test_get_study_readruns_from_ena(
-    httpx_mock, raw_read_ena_study, raw_reads_mgnify_study, prefect_harness
+    httpx_mock,
+    raw_read_ena_study,
+    raw_reads_mgnify_study,
+    prefect_harness,
+    ena_any_sample_metadata,
 ):
     """
     run1 is not metagenomic/metatranscriptomic data
