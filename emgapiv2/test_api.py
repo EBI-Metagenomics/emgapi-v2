@@ -184,6 +184,17 @@ def test_api_samples_list(raw_reads_mgnify_sample, ninja_api_client):
 
 
 @pytest.mark.django_db
+def test_api_study_samples_list(raw_reads_mgnify_sample, ninja_api_client):
+    items = call_endpoint_and_get_data(
+        ninja_api_client,
+        f"/studies/{raw_reads_mgnify_sample[0].studies.first().accession}/samples/",
+        count=len(raw_reads_mgnify_sample),
+    )
+    assert items[0]["accession"] in [s.first_accession for s in raw_reads_mgnify_sample]
+    assert "studies" not in items[0]
+
+
+@pytest.mark.django_db
 def test_api_sample_detail(raw_reads_mgnify_sample, ninja_api_client):
     db_sample = raw_reads_mgnify_sample[0]
     sample = call_endpoint_and_get_data(
