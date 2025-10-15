@@ -125,8 +125,8 @@ class MGnifySample(ModelSchema):
         fields = ["updated_at"]
 
 
-class MGnifySampleDetail(MGnifySample):
-    studies: List[MGnifyStudy]
+class MGnifySampleWithMetadata(MGnifySample):
+    # when rendering sample(s) in the context of a study, we don't need the study list on every sample
     metadata: dict[analyses.models.Sample.CommonMetadataKeys, Any] = Field(
         ...,
         examples=[
@@ -142,6 +142,12 @@ class MGnifySampleDetail(MGnifySample):
         ],
         description="Metadata associated with the sample, sourced from the ENA Sample record.",
     )
+
+    class Meta(MGnifySample.Meta): ...
+
+
+class MGnifySampleDetail(MGnifySampleWithMetadata):
+    studies: List[MGnifyStudy]
 
     class Meta(MGnifySample.Meta): ...
 

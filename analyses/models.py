@@ -193,7 +193,7 @@ class Sample(InferredMetadataMixin, ENADerivedModel, TimeStampedModel):
     ena_sample = models.ForeignKey(
         ena.models.Sample, on_delete=models.CASCADE, related_name="analyses_samples"
     )
-    studies = models.ManyToManyField(Study)
+    studies = models.ManyToManyField(Study, related_name="samples")
 
     metadata = models.JSONField(default=dict, blank=True)
 
