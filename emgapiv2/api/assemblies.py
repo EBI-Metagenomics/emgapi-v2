@@ -5,7 +5,7 @@ from ninja.pagination import RouterPaginated
 import analyses.models
 from analyses.schemas import (
     Assembly,
-    AssemblyDetail,
+    AssemblyDetail, MGnifyAnalysis,
 )
 from emgapiv2.api.schema_utils import make_links_section, make_related_detail_link
 
@@ -51,9 +51,37 @@ def list_assemblies(request):
 )
 def get_assembly(request, accession: str):
     assembly = get_object_or_404(
-        analyses.models.Assembly.public_objects.select_related(
-            "run", "sample", "reads_study", "assembly_study", "assembler"
-        ).prefetch_related("genome_links__genome"),
+        analyses.models.Assembly.public_objects
+        .select_related("run", "sample", "reads_study", "assembly_study", "assembler")
+        .prefetch_related("genome_links__genome__catalogue"),
         ena_accessions__contains=[accession],
     )
+    # assembly = get_object_or_404(
+    #     analyses.models.Assembly.public_objects.select_related(
+    #         "run", "sample", "reads_study", "assembly_study", "assembler"
+    #     ).prefetch_related("genome_links__genome"),
+    #     ena_accessions__contains=[accession],
+    # )
     return assembly
+
+@router.get(
+    "/{accession}/analyses",
+    response=List[MGnifyAnalysis],
+    summary="List analyses for an assembly",
+    description=(
+        "Return MGnify analyses (MGYAs) that were generated from this assembly.\n"
+        "Accessible at `/assemblies/{accession}/analyses`."
+    ),
+    operation_id="list_analyses_for_assembly",
+)
+def list_analyses_for_assembly(request, accession: str):
+    get_object_or_404(
+        analyses.models.Assembly.public_objects,
+        ena_accessions__contains=[accession],
+    )
+    qs = analyses.models.Analysis.public_objects.select_related(
+        "study", "sample", "run", "assembly"
+    ).filter(
+        assembly__ena_accessions__contains=[accession]
+    )
+    return qs

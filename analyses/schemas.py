@@ -209,6 +209,14 @@ class GenomeSchema(Schema):
 
     accession: str = Field(..., examples=["MGYG000000001"])
     catalogue_id: Optional[str] = Field()
+    taxon_lineage: Optional[str] = Field()
+    catalogue_version: Optional[str] = Field(
+        None, description="Version of the genome catalogue"
+    )
+
+    @staticmethod
+    def resolve_catalogue_version(obj) -> Optional[str]:
+        return getattr(getattr(obj, "catalogue", None), "version", None)
 
     class Config:
         from_attributes = True
