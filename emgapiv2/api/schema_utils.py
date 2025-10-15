@@ -27,6 +27,8 @@ class OpenApiKeywords(FutureStrEnum):
     LINKS = "links"
     OPERATIONID = "operationId"
     PARAMETERS = "parameters"
+    URL = "url"
+    EXTERNAL_DOCS = "externalDocs"
 
 
 def make_related_detail_link(

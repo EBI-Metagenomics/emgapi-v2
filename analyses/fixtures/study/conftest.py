@@ -7,6 +7,7 @@ from analyses.base_models.with_downloads_models import (
     DownloadFileType,
 )
 from workflows.data_io_utils.filenames import accession_prefix_separated_dir_path
+from workflows.ena_utils.study import ENAStudyFields
 
 django.setup()
 
@@ -40,6 +41,19 @@ def study_downloads(raw_reads_mgnify_study):
     raw_reads_mgnify_study.results_dir = "/app/data/tests/amplicon_v6_output"
     raw_reads_mgnify_study.external_results_dir = f"{accession_prefix_separated_dir_path(raw_reads_mgnify_study.first_accession, -3)}/"
     raw_reads_mgnify_study.save()
+
+
+@pytest.fixture
+def mgnify_study_full_metadata(raw_reads_mgnify_study):
+    _ = ENAStudyFields
+    raw_reads_mgnify_study.metadata = {
+        _.STUDY_TITLE: "Space station dust",
+        _.STUDY_DESCRIPTION: "Microbiome sampling of a vacuum cleaner on the ISS. The vacuum cleaner was in the air when it was taken.",
+        _.CENTER_NAME: "NASA",
+        _.STUDY_NAME: "ISS metagenomes",
+    }
+    raw_reads_mgnify_study.save()
+    return raw_reads_mgnify_study
 
 
 @pytest.fixture

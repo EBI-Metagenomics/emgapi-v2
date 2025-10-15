@@ -13,6 +13,7 @@ from analyses.schemas import (
     MGnifyAnalysis,
     MGnifyPublication,
     OrderByFilter,
+    MGnifySampleWithMetadata,
 )
 from emgapiv2.api import perms
 from emgapiv2.api.auth import WebinJWTAuth, DjangoSuperUserAuth, NoAuth
@@ -137,3 +138,31 @@ class StudyController(UnauthorisedIsUnfoundController):
         return self.get_object_or_exception(
             analyses.models.Study.objects, accession=accession
         ).publications.all()
+
+    @http_get(
+        "/{accession}/samples/",
+        response=NinjaPaginationResponseSchema[MGnifySampleWithMetadata],
+        summary="List Samples associated with this Study",
+        description="List all samples associated with this study.",
+        operation_id="list_mgnify_study_samples",
+        tags=[ApiSections.STUDIES, ApiSections.SAMPLES],
+        openapi_extra=make_links_section(
+            make_related_detail_link(
+                related_detail_operation_id="get_mgnify_sample",
+                self_object_name="study",
+                related_object_name="sample",
+                related_id_in_response="accession",
+                from_list_to_detail=True,
+                related_lookup_param="accession",
+            )
+        ),
+        auth=[WebinJWTAuth(), DjangoSuperUserAuth(), NoAuth()],
+        permissions=[
+            perms.IsPublic | perms.IsWebinOwner | perms.IsAdminUserWithObjectPerms
+        ],
+    )
+    @paginate()
+    def list_mgnify_study_samples(self, accession: str):
+        return self.get_object_or_exception(
+            analyses.models.Study.objects, accession=accession
+        ).samples.all()

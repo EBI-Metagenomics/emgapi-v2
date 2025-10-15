@@ -4,3 +4,4 @@ from django.apps import AppConfig
 class GenomesConfig(AppConfig):
     default_auto_field = "django.db.models.BigAutoField"
     name = "genomes"
+    verbose_name = "MGnify Genomes"
