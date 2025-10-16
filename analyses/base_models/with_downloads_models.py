@@ -7,8 +7,7 @@ from django.db import models
 from pydantic import BaseModel, field_validator, Field
 
 from emgapiv2.enum_utils import FutureStrEnum
-from workflows.data_io_utils.schemas import PipelineFileSchema
-from analyses.models import Analysis
+from workflows.data_io_utils.file_rules.common_rules import FileExistsRule
 
 
 class DownloadType(FutureStrEnum):
@@ -87,21 +86,25 @@ class DownloadFile(BaseModel):
 
     @classmethod
     def from_pipeline_file_schema(
-        cls, schema: PipelineFileSchema, analysis: Analysis, base_path: Path
+        cls,
+        schema,  # Type: PipelineFileSchema - no type hint due to circular import with workflows.data_io_utils.schemas.base
+        analysis,  # Type: Analysis - no type hint due to circular import with analyses.models
+        directory_path: Path,
     ) -> Optional["DownloadFile"]:
         """
         Factory method to create a DownloadFile from a PipelineFileSchema.
 
-        :param schema: The pipeline file schema
-        :param analysis: The analysis object
-        :param base_path: Base path containing the pipeline results
+        :param schema: The pipeline file schema (PipelineFileSchema)
+        :param analysis: The analysis object (Analysis)
+        :param directory_path: Full path to the directory containing the file
         :return: DownloadFile object or None if file doesn't exist and isn't required
         """
         identifier = analysis.assembly.first_accession
-        file_path = base_path / schema.get_filename(identifier)
+        file_path = directory_path / schema.get_filename(identifier)
 
         if not file_path.exists():
-            if schema.required:
+            # Check if file is required based on validation rules
+            if FileExistsRule in schema.validation_rules:
                 from workflows.data_io_utils.schemas.exceptions import (
                     PipelineValidationError,
                 )

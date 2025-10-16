@@ -1,6 +1,6 @@
+import uuid
 from datetime import timedelta
 from pathlib import Path
-from typing import List
 
 from django.conf import settings
 from prefect import flow, task, get_run_logger
@@ -8,40 +8,18 @@ from prefect.runtime import flow_run
 
 import analyses.models
 from activate_django_first import EMG_CONFIG
-
-
-AnalysisStates = analyses.models.Analysis.AnalysisStates
-
+from analyses.models import PipelineState
 from workflows.data_io_utils.schemas.virify import VirifyResultSchema
 from workflows.data_io_utils.schemas.validation import sanity_check_pipeline_results
-from workflows.flows.analyse_study_tasks.analysis_states import (
-    mark_analysis_as_failed,
-)
+
 from workflows.prefect_utils.build_cli_command import cli_command
 from workflows.prefect_utils.slurm_flow import (
     run_cluster_job,
     ClusterJobFailedException,
 )
 from workflows.prefect_utils.slurm_policies import ResubmitIfFailedPolicy
-from workflows.data_io_utils.filenames import next_enumerated_subdir
 
-
-@task
-def sanity_check_virify_results(
-    analysis: analyses.models.Analysis,
-    virify_outdir: Path,
-):
-    """
-    Validate VIRify pipeline results using the unified schema.
-
-    :param analysis: The analysis to validate results for
-    :param virify_outdir: The output directory of the VIRify pipeline
-    :return: Validated Directory object
-    """
-    schema = VirifyResultSchema()
-    return sanity_check_pipeline_results(
-        schema, virify_outdir, analysis.assembly.first_accession, "VIRify"
-    )
+AnalysisStates = analyses.models.Analysis.AnalysisStates
 
 
 @task
@@ -59,10 +37,13 @@ def add_virify_gff_to_analysis_downloads(
 
     try:
         # Validate results first
-        sanity_check_virify_results(analysis, virify_outdir)
+        schema = VirifyResultSchema()
+
+        sanity_check_pipeline_results(
+            schema, virify_outdir, analysis.assembly.first_accession, "VIRify"
+        )
 
         # Use schema to generate downloads
-        schema = VirifyResultSchema()
         downloads = schema.generate_downloads(analysis, virify_outdir)
 
         # Add downloads to analysis
@@ -81,24 +62,46 @@ def add_virify_gff_to_analysis_downloads(
         raise
 
 
-@flow(name="Run VIRIfy pipeline via samplesheet")
-def run_virify_pipeline_via_samplesheet(
-    mgnify_study: analyses.models.Study,
-    assembly_analyses: List[analyses.models.Analysis],
-    assembly_pipeline_outdir: Path,
+@flow(name="Run VIRify pipeline batch")
+def run_virify_batch(
+    assembly_batch_id: uuid.UUID,
 ):
     """
-    Run the VIRIfy pipeline for a set of assemblies using the downstream samplesheet.
+    Run the VIRIfy pipeline for a batch of assemblies.
+    Updates business state at milestones - Prefect tracks execution details.
 
-    :param mgnify_study: The MGnify study
-    :param assembly_analyses: List of assembly analyses
-    :param assembly_pipeline_outdir: The output directory of the assembly pipeline
+    :param assembly_batch_id: The AssemblyAnalysisBatch to process
     """
     logger = get_run_logger()
 
+    assembly_batch = analyses.models.AssemblyAnalysisBatch.objects.get(
+        id=assembly_batch_id
+    )
+
+    # Store Prefect flow run ID
+    assembly_batch.virify_flow_run_id = flow_run.id
+    assembly_batch.save()
+
+    # Record pipeline version
+    assembly_batch.set_pipeline_version(
+        analyses.models.AssemblyAnalysisBatch.PipelineType.VIRIFY,
+        EMG_CONFIG.virify_pipeline.pipeline_git_revision,
+    )
+
+    # Mark the batch as virify-in-progress
+    assembly_batch.set_pipeline_state(
+        analyses.models.AssemblyAnalysisBatch.PipelineType.VIRIFY,
+        PipelineState.IN_PROGRESS,
+    )
+
+    # Get ASA output directory to find samplesheet
+    asa_outdir = assembly_batch.get_pipeline_workspace(
+        analyses.models.AssemblyAnalysisBatch.PipelineType.ASA.value
+    )
+
     # Path to the virify samplesheet
     virify_samplesheet_path = (
-        assembly_pipeline_outdir
+        asa_outdir
         / EMG_CONFIG.assembly_analysis_pipeline.downstream_samplesheets_folder
         / EMG_CONFIG.assembly_analysis_pipeline.virify_samplesheet
     )
@@ -108,25 +111,27 @@ def run_virify_pipeline_via_samplesheet(
         logger.warning(
             f"Virify samplesheet {virify_samplesheet_path} does not exist. Skipping virify pipeline."
         )
-        # TODO: update the status of the job
-        # for assembly_analysis in assembly_analyses:
-        #     assembly_analysis ..
+        assembly_batch.last_error = (
+            f"VIRify samplesheet not found at {virify_samplesheet_path}"
+        )
+        assembly_batch.set_pipeline_state(
+            analyses.models.AssemblyAnalysisBatch.PipelineType.VIRIFY,
+            PipelineState.FAILED,
+        )
         return
 
-    # Mark analyses as started
-    # Add the MAP GFF file to each analysis's downloads
-    # TODO: I feel we need and intermediate status  here, otherwise the analysis will cycle through running/started a
-    # a few times
-    for analysis in assembly_analyses:
-        analysis.mark_status(AnalysisStates.ANALYSIS_STARTED)
+    assembly_batch.virify_samplesheet_path = str(virify_samplesheet_path)
+    assembly_batch.save()
 
-    # Create a new output directory for the virify pipeline
-    virify_outdir_parent = Path(
-        f"{EMG_CONFIG.slurm.default_workdir}/{mgnify_study.ena_study.accession}_virify/{flow_run.root_flow_run_id}"
+    mgnify_study = assembly_batch.study
+
+    # Create VIRify workspace
+    # TODO: should we store this in an "enumerated" dir?
+    virify_outdir = assembly_batch.get_pipeline_workspace(
+        analyses.models.AssemblyAnalysisBatch.PipelineType.VIRIFY.value
     )
 
-    virify_outdir = next_enumerated_subdir(virify_outdir_parent, mkdirs=True)
-    logger.info(f"Using output dir {virify_outdir} for virify pipeline")
+    logger.info(f"Using output dir {virify_outdir} for VIRify pipeline")
 
     # Build the command to run the virify pipeline
     command = cli_command(
@@ -170,24 +175,34 @@ def run_virify_pipeline_via_samplesheet(
             working_dir=virify_outdir,
             resubmit_policy=ResubmitIfFailedPolicy,
         )
-    except ClusterJobFailedException:
+    except ClusterJobFailedException as cluster_exception:
         logger.error(
-            f"Virify pipeline failed for study {mgnify_study.ena_study.accession}"
+            f"Virify pipeline failed for study {mgnify_study.ena_study.accession}: {cluster_exception}"
         )
-        for analysis in assembly_analyses:
-            mark_analysis_as_failed(analysis, reason="Virify pipeline failed")
-        return
+        # Mark batch as failed (VIRify failure doesn't propagate to analyses)
+        assembly_batch.last_error = str(cluster_exception)
+        assembly_batch.set_pipeline_state(
+            analyses.models.AssemblyAnalysisBatch.PipelineType.VIRIFY,
+            PipelineState.FAILED,
+        )
+        raise
+    except Exception as e:
+        logger.error(f"Unexpected error in VIRify pipeline: {e}")
+        # Mark batch as failed (VIRify failure doesn't propagate to analyses)
+        assembly_batch.last_error = str(e)
+        assembly_batch.set_pipeline_state(
+            analyses.models.AssemblyAnalysisBatch.PipelineType.VIRIFY,
+            PipelineState.FAILED,
+        )
+        raise
+    else:
+        # Add the virify GFF file to each analysis's downloads
+        for analysis in assembly_batch.analyses:
+            add_virify_gff_to_analysis_downloads(analysis, virify_outdir)
 
-    # Add the virify GFF file to each analysis's downloads
-    for analysis in assembly_analyses:
-        add_virify_gff_to_analysis_downloads(analysis, virify_outdir)
-
-    # TODO: update status
-    # # Generate study summary
-    # This is not needed - we won't add anything from VIRfy to the study summary
-    # generate_study_summary_for_pipeline_run(
-    #     pipeline_outdir=virify_outdir,
-    #     mgnify_study_accession=mgnify_study.accession,
-    #     analysis_type="virify",
-    #     completed_runs_filename="virify_completed_runs.csv",
-    # )
+        # Mark VIRify pipeline as ready
+        assembly_batch.set_pipeline_state(
+            analyses.models.AssemblyAnalysisBatch.PipelineType.VIRIFY,
+            PipelineState.READY,
+        )
+        logger.info("VIRify pipeline completed successfully and marked as READY")

@@ -9,17 +9,17 @@ from prefect import flow
 from activate_django_first import EMG_CONFIG
 
 import analyses.models
-from workflows.flows.analyse_study_tasks.import_completed_rawreads_analyses import (
+from workflows.flows.analyse_study_tasks.raw_reads.import_completed_rawreads_analyses import (
     import_completed_analyses,
 )
-from workflows.flows.analyse_study_tasks.make_samplesheet_rawreads import (
+from workflows.flows.analyse_study_tasks.raw_reads.make_samplesheet_rawreads import (
     make_samplesheet_rawreads,
 )
-from workflows.flows.analyse_study_tasks.analysis_states import (
+from workflows.flows.analyse_study_tasks.shared.analysis_states import (
     mark_analysis_as_started,
     mark_analysis_as_failed,
 )
-from workflows.flows.analyse_study_tasks.set_rawreads_post_analysis_states import (
+from workflows.flows.analyse_study_tasks.raw_reads.set_rawreads_post_analysis_states import (
     set_post_analysis_states,
 )
 from workflows.flows.analyse_study_tasks.shared.study_summary import (

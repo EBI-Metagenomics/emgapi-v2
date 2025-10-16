@@ -9,17 +9,23 @@ import analyses.models
     log_prints=True,
 )
 def create_analyses_for_assemblies(
-    study: analyses.models.Study,
+    study_id: int,
+    assemblies_accessions: list[str],
     pipeline: analyses.models.Analysis.PipelineVersions = analyses.models.Analysis.PipelineVersions.v6,
 ) -> List[analyses.models.Analysis]:
     """
     Get or create analysis objects for each assembly in the study.
-    :param study: An MGYS study that already has assemblies to be analysed attached.
+    :param study_id: An analysis study id.
+    :param assemblies_accessions: List of assembly accessions to be analysed.
     :param pipeline: Pipeline version e.g. v6
     :return: List of matching/created analysis objects.
     """
+    study: analyses.models.Study = analyses.models.Study.objects.get(id=study_id)
     analyses_list = []
-    for assembly in study.assemblies_assembly.all():
+    # Use __overlap to find assemblies where ena_accessions (JSONField array) has any match
+    for assembly in study.assemblies_assembly.filter(
+        ena_accessions__overlap=assemblies_accessions
+    ).select_related("sample"):
         analysis, created = analyses.models.Analysis.objects.get_or_create(
             study=study,
             sample=assembly.sample,

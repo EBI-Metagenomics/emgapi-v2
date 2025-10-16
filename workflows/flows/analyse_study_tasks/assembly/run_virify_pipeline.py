@@ -14,7 +14,7 @@ from analyses.base_models.with_downloads_models import (
     DownloadType,
     DownloadFileType,
 )
-from workflows.flows.analyse_study_tasks.analysis_states import (
+from workflows.flows.analyse_study_tasks.shared.analysis_states import (
     mark_analysis_as_failed,
 )
 from workflows.prefect_utils.build_cli_command import cli_command

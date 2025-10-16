@@ -10,9 +10,9 @@ from analyses.base_models.with_downloads_models import (
     DownloadType,
     DownloadFileType,
 )
-from workflows.flows.analyse_study_tasks.run_map_via_samplesheet import (
+from workflows.flows.analyse_study_tasks.run_map_batch import (
     add_map_gff_to_analysis_downloads,
-    run_map_pipeline_via_samplesheet,
+    run_map_batch,
 )
 from workflows.prefect_utils.slurm_flow import ClusterJobFailedException
 
@@ -180,15 +180,15 @@ def test_add_map_gff_to_analysis_downloads_file_exists_error(mock_map_outdir):
 
 
 @pytest.mark.django_db
-@patch("workflows.flows.analyse_study_tasks.run_map_via_samplesheet.run_cluster_job")
+@patch("workflows.flows.analyse_study_tasks.run_map_batch.run_cluster_job")
 @patch(
-    "workflows.flows.analyse_study_tasks.run_map_via_samplesheet.next_enumerated_subdir"
+    "workflows.flows.analyse_study_tasks.run_map_batch.next_enumerated_subdir"
 )
-@patch("workflows.flows.analyse_study_tasks.run_map_via_samplesheet.flow_run")
+@patch("workflows.flows.analyse_study_tasks.run_map_batch.flow_run")
 @patch(
-    "workflows.flows.analyse_study_tasks.run_map_via_samplesheet.add_map_gff_to_analysis_downloads"
+    "workflows.flows.analyse_study_tasks.run_map_batch.add_map_gff_to_analysis_downloads"
 )
-def test_run_map_pipeline_via_samplesheet_success(
+def test_run_map_batch_success(
     mock_add_downloads,
     mock_flow_run,
     mock_next_enumerated_subdir,
@@ -198,7 +198,7 @@ def test_run_map_pipeline_via_samplesheet_success(
     """
     Test running the MAP pipeline successfully.
 
-    This test verifies that the run_map_pipeline_via_samplesheet function
+    This test verifies that the run_map_batch function
     correctly runs the MAP pipeline and adds downloads when successful.
     """
     # Set up mocks
@@ -223,7 +223,7 @@ def test_run_map_pipeline_via_samplesheet_success(
     )
 
     # Call the flow function
-    run_map_pipeline_via_samplesheet(
+    run_map_batch(
         mgnify_study=study,
         assembly_analyses=[analysis1, analysis2],
         assembly_pipeline_outdir=mock_assembly_pipeline_outdir,
@@ -243,15 +243,15 @@ def test_run_map_pipeline_via_samplesheet_success(
 
 
 @pytest.mark.django_db
-@patch("workflows.flows.analyse_study_tasks.run_map_via_samplesheet.run_cluster_job")
+@patch("workflows.flows.analyse_study_tasks.run_map_batch.run_cluster_job")
 @patch(
-    "workflows.flows.analyse_study_tasks.run_map_via_samplesheet.next_enumerated_subdir"
+    "workflows.flows.analyse_study_tasks.run_map_batch.next_enumerated_subdir"
 )
-@patch("workflows.flows.analyse_study_tasks.run_map_via_samplesheet.flow_run")
+@patch("workflows.flows.analyse_study_tasks.run_map_batch.flow_run")
 @patch(
-    "workflows.flows.analyse_study_tasks.run_map_via_samplesheet.mark_analysis_as_failed"
+    "workflows.flows.analyse_study_tasks.run_map_batch.mark_analysis_as_failed"
 )
-def test_run_map_pipeline_via_samplesheet_cluster_job_failed(
+def test_run_map_batch_cluster_job_failed(
     mock_mark_failed,
     mock_flow_run,
     mock_next_enumerated_subdir,
@@ -261,7 +261,7 @@ def test_run_map_pipeline_via_samplesheet_cluster_job_failed(
     """
     Test running the MAP pipeline when the cluster job fails.
 
-    This test verifies that the run_map_pipeline_via_samplesheet function
+    This test verifies that the run_map_batch function
     correctly handles the case where the cluster job fails.
     """
     # Set up mocks
@@ -283,7 +283,7 @@ def test_run_map_pipeline_via_samplesheet_cluster_job_failed(
     )
 
     # Call the flow function
-    run_map_pipeline_via_samplesheet(
+    run_map_batch(
         mgnify_study=study,
         assembly_analyses=[analysis1, analysis2],
         assembly_pipeline_outdir=mock_assembly_pipeline_outdir,
@@ -296,11 +296,11 @@ def test_run_map_pipeline_via_samplesheet_cluster_job_failed(
 
 
 @pytest.mark.django_db
-def test_run_map_pipeline_via_samplesheet_no_samplesheet(tmp_path):
+def test_run_map_batch_no_samplesheet(tmp_path):
     """
     Test running the MAP pipeline when the samplesheet doesn't exist.
 
-    This test verifies that the run_map_pipeline_via_samplesheet function
+    This test verifies that the run_map_batch function
     correctly handles the case where the samplesheet doesn't exist.
     """
     # Create mock study and analyses
@@ -313,7 +313,7 @@ def test_run_map_pipeline_via_samplesheet_no_samplesheet(tmp_path):
     )
 
     # Call the flow function with a directory that doesn't have the samplesheet
-    result = run_map_pipeline_via_samplesheet(
+    result = run_map_batch(
         mgnify_study=study,
         assembly_analyses=[analysis],
         assembly_pipeline_outdir=tmp_path,
@@ -324,7 +324,7 @@ def test_run_map_pipeline_via_samplesheet_no_samplesheet(tmp_path):
 
 
 @pytest.mark.django_db
-@patch("workflows.flows.analyse_study_tasks.run_map_via_samplesheet.get_run_logger")
+@patch("workflows.flows.analyse_study_tasks.run_map_batch.get_run_logger")
 def test_add_map_gff_to_analysis_downloads_logs_warnings(mock_get_logger, tmp_path):
     """
     Test that add_map_gff_to_analysis_downloads logs appropriate warnings.
@@ -356,4 +356,3 @@ def test_add_map_gff_to_analysis_downloads_logs_warnings(mock_get_logger, tmp_pa
     add_map_gff_to_analysis_downloads(analysis, tmp_path)
     mock_logger.warning.assert_called_once()
     assert "No GFF files found" in mock_logger.warning.call_args[0][0]
-

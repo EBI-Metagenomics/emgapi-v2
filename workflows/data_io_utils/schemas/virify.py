@@ -1,10 +1,3 @@
-"""
-VIRify pipeline result schema using the unified base classes.
-
-This module provides the schema definition for VIRify pipeline results,
-creating validation and download generation for viral genome annotation outputs.
-"""
-
 from pathlib import Path
 from typing import List
 
@@ -43,7 +36,7 @@ class VirifyResultSchema(PipelineResultSchema):
         # Initialize parent class
         super().__init__(
             pipeline_name="VIRify",
-            pipeline_version="2.0",
+            pipeline_version="2.0",  # TODO: add version to the settings
             directories=[viral_annotation_dir],
         )
 
@@ -60,17 +53,19 @@ class VirifyResultSchema(PipelineResultSchema):
         :return: List of DownloadFile objects
         """
         downloads = []
-        gff_dir = base_path / EMG_CONFIG.virify_pipeline.final_gff_folder
+        # Include assembly accession in path (same as validation does)
+        assembly_dir = base_path / analysis.assembly.first_accession
+        gff_dir = assembly_dir / EMG_CONFIG.virify_pipeline.final_gff_folder
 
         if not gff_dir.exists():
             return downloads
 
-        # Find all GFF files in the directory
-        gff_files = list(gff_dir.glob("*.gff"))
+        # Find all GFF files in the directory (both compressed and uncompressed)
+        gff_files = list(gff_dir.glob("*.gff")) + list(gff_dir.glob("*.gff.gz"))
 
         for gff_file in gff_files:
             download = DownloadFile(
-                path=gff_file.relative_to(analysis.results_dir),
+                path=gff_file.relative_to(base_path),
                 file_type=DownloadFileType.GFF,
                 alias=f"virify_{gff_file.name}",
                 download_type=DownloadType.GENOME_ANALYSIS,

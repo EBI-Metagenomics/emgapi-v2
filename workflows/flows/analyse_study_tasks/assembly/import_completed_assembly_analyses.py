@@ -4,9 +4,8 @@ from typing import List
 from prefect import flow, task, get_run_logger
 
 import analyses.models
-from workflows.data_io_utils.schemas.assembly import AssemblyResultSchema
-from workflows.flows.analyse_study_tasks.analysis_states import AnalysisStates
-from workflows.flows.analyse_study_tasks.copy_v6_pipeline_results import (
+from workflows.flows.analyse_study_tasks.shared.analysis_states import AnalysisStates
+from workflows.flows.analyse_study_tasks.shared.copy_v6_pipeline_results import (
     copy_v6_pipeline_results,
 )
 from workflows.prefect_utils.analyses_models_helpers import mark_analysis_status
@@ -15,27 +14,29 @@ from workflows.prefect_utils.analyses_models_helpers import mark_analysis_status
 @task
 def import_completed_assembly_analysis(analysis: analyses.models.Analysis):
     """
-    Import results for a completed assembly analysis using the unified schema.
+    Import results for a completed assembly analysis using the new unified import method.
 
     :param analysis: The analysis to import results for
     """
+    logger = get_run_logger()
     analysis.refresh_from_db()
     dir_for_analysis = Path(analysis.results_dir)
 
-    # Use the unified schema for both validation and import
-    schema = AssemblyResultSchema()
-
-    # First validate the directory structure (optional but recommended)
     try:
-        schema.validate_directory_structure(
-            dir_for_analysis.parent,  # Parent because results_dir includes assembly_id
-            analysis.assembly.first_accession,
+        # Single method call handles validation, import, and download generation
+        downloads_count = analysis.import_from_pipeline_results(
+            base_path=dir_for_analysis.parent,
+            pipeline_type=analysis.PIPELINE_ASSEMBLY,
+            validate_first=True,
         )
+        logger.info(f"Successfully imported {downloads_count} downloads for {analysis}")
     except Exception as e:
-        print(f"Validation warning for {analysis}: {e}. Proceeding with import anyway.")
-
-    # Import all results using the unified schema
-    schema.import_analysis_results(analysis, dir_for_analysis.parent)
+        logger.error(f"Import failed for {analysis}: {e}")
+        analysis.mark_status(
+            analysis.AnalysisStates.ANALYSIS_POST_SANITY_CHECK_FAILED,
+            reason=f"Failed during import: {e}",
+        )
+        return
 
     # Mark the analysis as having its annotations imported
     copy_v6_pipeline_results(analysis.accession)

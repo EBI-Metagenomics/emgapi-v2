@@ -32,7 +32,9 @@ prefect-shell==0.3.1
 prefect-slack==0.3.1
 
 # Pydantic
-pydantic~=2.11.7
+# Pinned to 2.10.x because django-ninja-jwt 5.3.7 is incompatible with 2.11+
+# The ~= operator allows patch updates but not minor: >=2.10.1, <2.11.0
+pydantic>=2.10.1,<2.11.0
 pydantic-settings~=2.10.1
 
 # Data handling

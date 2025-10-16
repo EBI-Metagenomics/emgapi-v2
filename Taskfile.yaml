@@ -45,6 +45,20 @@ tasks:
     cmds:
       - docker compose --profile all down
 
+  rebuild:
+    desc: "Rebuild all containers (e.g. after updating requirements.txt)"
+    cmds:
+      - docker compose --profile all down
+      - docker compose --profile all build
+      - echo "✓ All containers rebuilt. Use 'task run' to start them."
+
+  rebuild-no-cache:
+    desc: "Rebuild all containers without cache (use when requirements.txt changes)"
+    cmds:
+      - docker compose --profile all down
+      - docker compose --profile all build --no-cache
+      - echo "✓ All containers rebuilt from scratch. Use 'task run' to start them."
+
   manage:
     desc: "Run a management command. E.g. task manage -- migrate"
     cmds:

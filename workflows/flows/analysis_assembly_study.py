@@ -1,5 +1,6 @@
 from textwrap import dedent as _
 from typing import Optional, List
+from pathlib import Path
 
 from prefect import flow, get_run_logger, suspend_flow_run, events
 from prefect.input import RunInput
@@ -14,25 +15,21 @@ from workflows.ena_utils.ena_api_requests import (
     get_study_from_ena,
     get_study_assemblies_from_ena,
 )
-from workflows.flows.analyse_study_tasks.copy_v6_pipeline_results import (
+from workflows.flows.analyse_study_tasks.shared.copy_v6_pipeline_results import (
     copy_v6_study_summaries,
 )
-from workflows.flows.analyse_study_tasks.create_analyses_for_assemblies import (
+from workflows.flows.analyse_study_tasks.assembly.create_analyses_for_assemblies import (
     create_analyses_for_assemblies,
 )
-from workflows.flows.analyse_study_tasks.get_analyses_to_attempt import (
-    get_analyses_to_attempt,
-)
-from workflows.flows.analyse_study_tasks.run_assembly_pipeline_via_samplesheet import (
-    run_assembly_pipeline_via_samplesheet,
+from workflows.flows.analyse_study_tasks.assembly.run_assembly_analysis_pipeline_batch import (
+    run_assembly_analysis_pipeline_batch,
 )
 from workflows.flows.analyse_study_tasks.shared.study_summary import (
-    merge_study_summaries,
+    merge_assembly_study_summaries,
     add_study_summaries_to_downloads,
 )
 from workflows.flows.assemble_study import get_biomes_as_choices
 from workflows.prefect_utils.analyses_models_helpers import (
-    chunk_list,
     get_users_as_choices,
     add_study_watchers,
 )
@@ -42,10 +39,12 @@ from workflows.prefect_utils.analyses_models_helpers import (
     name="Run assembly analysis v6 pipeline on a study",
     flow_run_name="Analyse assembly: {study_accession}",
 )
-def analysis_assembly_study(study_accession: str):
+def analysis_assembly_study(study_accession: str, study_results_outdir: str = None):
     """
     Get a study from ENA (or MGnify), and run assembly-v6 pipeline on its read-runs.
+
     :param study_accession: e.g. PRJ or ERP accession
+    :param study_results_outdir: Optional path for the results
     """
     logger = get_run_logger()
 
@@ -64,11 +63,11 @@ def analysis_assembly_study(study_accession: str):
     logger.info(f"MGnify study is {mgnify_study.accession}: {mgnify_study.title}")
 
     # Get assemble-able runs
-    assemblies = get_study_assemblies_from_ena(
+    assemblies_accessions: list[str] = get_study_assemblies_from_ena(
         ena_study.accession,
-        limit=10000,
+        limit=10000,  # TODO: this should be a config value
     )
-    logger.info(f"Returned {len(assemblies)} assemblies from ENA portal API")
+    logger.info(f"Returned {len(assemblies_accessions)} assemblies from ENA portal API")
 
     # Check if biome-picker is needed
     if not mgnify_study.biome:
@@ -87,7 +86,7 @@ def analysis_assembly_study(study_accession: str):
                 description=_(
                     f"""\
                         **Assembly Analysis V6**
-                        This will analyse all {len(assemblies)} assemblies of study {ena_study.accession} \
+                        This will analyse all {len(assemblies_accessions)} assemblies of study {ena_study.accession} \
                         using [Assembly Analysis Pipeline V6](https://github.com/EBI-Metagenomics/assembly-analysis-pipeline).
 
                         **Biome tagger**
@@ -113,39 +112,40 @@ def analysis_assembly_study(study_accession: str):
             f"MGnify study currently has watchers {mgnify_study.watchers.values_list('username', flat=True)}. Add more in the DB Admin Panel if needed."
         )
 
-    # Create analyses objects for all assemblies
+    # Create analysis objects for all assemblies
     create_analyses_for_assemblies(
-        mgnify_study,
+        mgnify_study.id,
+        assemblies_accessions,
         pipeline=analyses.models.Analysis.PipelineVersions.v6,
     )
-    analyses_to_attempt = get_analyses_to_attempt(
-        mgnify_study,
-        for_experiment_type=analyses.models.WithExperimentTypeModel.ExperimentTypes.ASSEMBLY,
+
+    # Create batches for study analyses (handles chunking, duplicate checking, safety caps)
+    batches = analyses.models.AssemblyAnalysisBatch.objects.create_batches_for_study(
+        study=mgnify_study,
+        pipeline=analyses.models.Analysis.PipelineVersions.v6,
+        max_analyses=EMG_CONFIG.assembly_analysis_pipeline.max_analyses_per_study,
+        base_results_dir=Path(study_results_outdir) if study_results_outdir else None,
     )
 
-    # Work on chunks of 20 assemblies at a time
-    # Doing so means we don't use our entire cluster allocation for this study
-    chunked_analyses = chunk_list(
-        analyses_to_attempt,
-        EMG_CONFIG.assembly_analysis_pipeline.samplesheet_chunk_size,
-    )
-    for analyses_chunk in chunked_analyses:
-        # launch jobs for all analyses in this chunk in a single flow
+    logger.info(f"Created {len(batches)} batches for study {mgnify_study.accession}")
+
+    # Run each batch through the pipeline
+    for batch in batches:
         logger.info(
-            f"Working on assembly analyses: {analyses_chunk[0]}-{analyses_chunk[-1]}"
+            f"Running batch {str(batch.id)[:8]} with {batch.total_analyses} analyses"
         )
-        run_assembly_pipeline_via_samplesheet(mgnify_study, analyses_chunk)
+        run_assembly_analysis_pipeline_batch(batch.id)
 
-    merge_study_summaries(
-        mgnify_study.accession,
+    merge_assembly_study_summaries(
+        mgnify_study,
         cleanup_partials=True,
-        analysis_type="assembly",
     )
     add_study_summaries_to_downloads(mgnify_study.accession)
 
     copy_v6_study_summaries(mgnify_study.accession)
 
     mgnify_study.refresh_from_db()
+    # TODO: do we need this?
     mgnify_study.features.has_v6_analyses = mgnify_study.analyses.filter(
         pipeline_version=analyses.models.Analysis.PipelineVersions.v6, is_ready=True
     ).exists()

@@ -11,8 +11,6 @@ from workflows.data_io_utils.file_rules.base_rules import (
     GlobRule,
 )
 from workflows.data_io_utils.file_rules.common_rules import (
-    GlobHasFilesRule,
-    DirectoryExistsRule,
     FileExistsRule,
     FileIsNotEmptyRule,
 )
@@ -52,9 +50,6 @@ class File(BaseModel):
 
 
 class Directory(File):
-    # TODO: think about the design of the models (pydantic and django ones)
-    # How do we map this class to the DownloadFile models?
-    # I think there is a bit of repetition going on
 
     files: List[Union[File, tuple, str]] = Field(
         default_factory=list,
@@ -73,34 +68,6 @@ class Directory(File):
         description="List of glob rules to be applied to the dir",
         repr=False,
     )
-
-    @field_validator("glob_rules", mode="before")
-    @classmethod
-    def validate_glob_rules(cls, glob_rules_input):
-        """
-        Validate and set default glob rules if none are provided.
-
-        :param glob_rules_input: Input glob rules
-
-        :return: List of GlobRule objects
-        """
-        if not glob_rules_input:
-            return [GlobHasFilesRule]
-        return glob_rules_input
-
-    @field_validator("rules", mode="before")
-    @classmethod
-    def validate_rules(cls, rules_input):
-        """
-        Validate and set default directory rules if none are provided.
-
-        :param rules_input: The input directory rules list
-
-        :return: List of DirectoryRule objects
-        """
-        if not rules_input:
-            return [DirectoryExistsRule]
-        return rules_input
 
     @field_validator("files", mode="before")
     @classmethod
@@ -169,10 +136,8 @@ class Directory(File):
         """
         Create a File object within this directory.
 
-        Args:
         :params  *parts: Path parts relative to this directory
         :param   rules: List of rules to apply to the file
-
         :return: File object
         """
         if rules is None:

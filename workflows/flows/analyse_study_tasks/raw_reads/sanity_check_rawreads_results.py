@@ -6,7 +6,7 @@ from prefect.tasks import task_input_hash
 from activate_django_first import EMG_CONFIG
 
 import analyses.models
-from workflows.flows.analyse_study_tasks.analysis_states import AnalysisStates
+from workflows.flows.analyse_study_tasks.shared.analysis_states import AnalysisStates
 from workflows.prefect_utils.analyses_models_helpers import mark_analysis_status
 
 

@@ -22,10 +22,8 @@ from workflows.flows.assemble_study_tasks.assemble_samplesheets import (
 from workflows.flows.assemble_study_tasks.make_samplesheets import (
     make_samplesheets_for_runs_to_assemble,
 )
-from workflows.prefect_utils.analyses_models_helpers import (
-    mark_assembly_status,
-    get_users_as_choices,
-)
+from workflows.prefect_utils.analyses_models_helpers import mark_assembly_status
+
 from workflows.prefect_utils.testing_utils import (
     should_not_mock_httpx_requests_to_prefect_server,
     combine_caplog_records,
@@ -644,14 +642,12 @@ def test_assembly_statuses(prefect_harness, mgnify_assemblies):
 
     # marking as failed should work
     mark_assembly_status(
-    mark_assembly_status(
         assembly, assembly.AssemblyStates.ASSEMBLY_FAILED, reason="It broke"
     )
     assembly.refresh_from_db()
     assert assembly.status[assembly.AssemblyStates.ASSEMBLY_FAILED]
 
     # making as complete later (perhaps a retry) should work, and can unset failed at same time
-    mark_assembly_status(
     mark_assembly_status(
         assembly,
         assembly.AssemblyStates.ASSEMBLY_COMPLETED,

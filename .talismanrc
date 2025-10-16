@@ -160,6 +160,10 @@ fileignoreconfig:
 - filename: workflows/tests/test_import_v5_amplicon_analyses.py
   checksum: ac644b851d31913ca9328d5a83516146c4c76874201df0a2d7086df6b60435c8
 
+fileignoreconfig:
+- filename: workflows/data_io_utils/schemas/base.py
+  checksum: 27b03a470da785c58f8294d2aa0aa3ef5f4e5ec5cffd97984ab446a5b8a9f337
+
 allowed_patterns:
 - cache_key_fn
 - CommonMetadataKeys

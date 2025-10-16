@@ -9,17 +9,17 @@ from prefect import flow
 from activate_django_first import EMG_CONFIG
 
 import analyses.models
-from workflows.flows.analyse_study_tasks.import_completed_amplicon_analyses import (
+from workflows.flows.analyse_study_tasks.amplicon.import_completed_amplicon_analyses import (
     import_completed_analyses,
 )
-from workflows.flows.analyse_study_tasks.make_samplesheet_amplicon import (
+from workflows.flows.analyse_study_tasks.amplicon.make_samplesheet_amplicon import (
     make_samplesheet_amplicon,
 )
-from workflows.flows.analyse_study_tasks.analysis_states import (
+from workflows.flows.analyse_study_tasks.shared.analysis_states import (
     mark_analysis_as_started,
     mark_analysis_as_failed,
 )
-from workflows.flows.analyse_study_tasks.set_post_analysies_states import (
+from workflows.flows.analyse_study_tasks.amplicon.set_post_analysies_states import (
     set_post_analysis_states,
 )
 from workflows.flows.analyse_study_tasks.shared.markergene_study_summary import (

@@ -1,3 +1,4 @@
+import uuid
 from pathlib import Path
 from typing import Union, Tuple, Literal, List
 
@@ -11,7 +12,6 @@ from mgnify_pipelines_toolkit.analysis.assembly import (
 from mgnify_pipelines_toolkit.analysis.rawreads import (
     study_summary_generator as rawreads_study_summary_generator,
 )
-
 from prefect import flow, get_run_logger, task
 
 from activate_django_first import EMG_CONFIG
@@ -20,8 +20,7 @@ from analyses.base_models.with_downloads_models import (
     DownloadType,
     DownloadFileType,
 )
-
-from analyses.models import Study
+from analyses.models import Study, AssemblyAnalysisBatch
 from workflows.data_io_utils.file_rules.common_rules import (
     DirectoryExistsRule,
     FileExistsRule,
@@ -223,6 +222,95 @@ def merge_study_summaries(
             file.unlink()
 
 
+@flow
+def generate_assembly_batch_summary(
+    assembly_batch_id: uuid.UUID,
+) -> Union[List[Path], None]:
+    """
+    Generate a study summary file for a single assembly analysis batch.
+
+    Assembly batches have a different structure than samplesheet-based runs:
+    - Results are in batch.get_pipeline_workspace(PipelineType.ASA)
+    - completed_assemblies.csv is in the ASA workspace, not batch root
+    - Summaries are written to study.results_dir with batch-specific prefix
+
+    :param assembly_batch_id: The AssemblyAnalysisBatch to summarize
+    :return: List of paths to the study summary files generated
+    """
+    logger = get_run_logger()
+
+    assembly_batch = AssemblyAnalysisBatch.objects.get(id=assembly_batch_id)
+
+    study = assembly_batch.study
+
+    logger.info(f"Generating assembly batch summary for {assembly_batch}")
+
+    # ASA workspace contains the analysis results
+    asa_workspace = assembly_batch.get_pipeline_workspace(
+        AssemblyAnalysisBatch.PipelineType.ASA
+    )
+
+    # Validate ASA workspace exists
+    results_dir = Directory(
+        path=asa_workspace,
+        rules=[DirectoryExistsRule],
+    )
+
+    # Find completed assemblies CSV in ASA workspace
+    completed_assemblies_csv = (
+        asa_workspace / EMG_CONFIG.assembly_analysis_pipeline.completed_assemblies_csv
+    )
+    results_dir.files.append(
+        File(
+            path=completed_assemblies_csv,
+            rules=[FileExistsRule, FileIsNotEmptyRule],
+        )
+    )
+
+    logger.info(f"Using completed assemblies from {completed_assemblies_csv}")
+    logger.info(f"Expecting to find analysis results in {asa_workspace}")
+
+    # Ensure the study has a results_dir to write summaries to
+    if not study.results_dir:
+        study.results_dir = (
+            Path(EMG_CONFIG.slurm.default_workdir) / f"{study.ena_study.accession}_v6"
+        )
+        logger.info(f"Setting {study}'s results_dir to default {study.results_dir}")
+        study.results_dir.mkdir(exist_ok=True, parents=True)
+        study.save()
+
+    study_dir = Directory(
+        path=Path(study.results_dir),
+        rules=[DirectoryExistsRule],
+    )
+
+    # Get assembly-specific summary generator
+    assembly_summary_generator = STUDY_SUMMARY_GENERATORS["assembly"]
+
+    # Use batch ID prefix to distinguish between batches
+    batch_prefix = f"{str(assembly_batch.id)[:8]}"
+
+    logger.info(
+        f"Study results_dir, where summaries will be made, is {study.results_dir}"
+    )
+
+    with chdir(study.results_dir):
+        # TODO: we need to expose the summary as a lib component we can just import instead of having to use
+        #       click to bootstrap the environment
+        with click.Context(assembly_summary_generator.summarise_analyses) as ctx:
+            ctx.invoke(
+                assembly_summary_generator.summarise_analyses,
+                output_prefix=batch_prefix,
+                assemblies=completed_assemblies_csv,
+                study_dir=asa_workspace,
+                outdir=study.results_dir,
+            )
+
+    generated_files = list(study_dir.path.glob(f"{batch_prefix}*_{STUDY_SUMMARY_TSV}"))
+    logger.info(f"Assembly batch summary generator made files: {generated_files}")
+    return generated_files
+
+
 @task
 def add_study_summaries_to_downloads(mgnify_study_accession: str):
     logger = get_run_logger()
@@ -314,6 +402,98 @@ def _get_download_file(
             long_description=f"Summary of {analysis_source} functional assignment {analysis_layer}, across all runs in the study.",
             alias=summary_file.name,
         )
+
+
+@flow
+def merge_assembly_study_summaries(
+    study: Union[Study, str],
+    cleanup_partials: bool = False,
+    bludgeon: bool = True,
+) -> Union[List[Path], None]:
+    """
+    Merge multiple assembly batch summaries into study-level summaries.
+
+    This is specific to assembly analyses which use batches. The partial
+    summaries are created by generate_assembly_batch_summary() with batch-specific
+    prefixes (batch UUID prefixes), and this function merges them into study-level
+    summaries with the study accession prefix.
+
+    :param study: The Study object or study accession string
+    :param cleanup_partials: If True, delete batch-specific summaries after merging
+    :param bludgeon: If True, delete existing study-level summaries before merging
+    :return: List of paths to the merged study summary files
+    """
+    logger = get_run_logger()
+
+    # Accept either Study object or accession string
+    if isinstance(study, str):
+        study = Study.objects.get(accession=study)
+    else:
+        # Refresh from DB to get latest results_dir set by batch runs
+        study.refresh_from_db()
+
+    logger.info(f"Merging assembly study summaries for {study}, in {study.results_dir}")
+    if not study.results_dir:
+        logger.warning(f"Study {study} has no results_dir, so cannot merge summaries")
+        return []
+
+    logger.debug(f"Glob of dir is {list(Path(study.results_dir).glob('*'))}")
+    existing_merged_files = list(
+        Path(study.results_dir).glob(
+            f"{INSDC_PROJECT_ACCESSION_GLOB}{STUDY_SUMMARY_TSV}"
+        )
+    ) + list(
+        Path(study.results_dir).glob(f"{INSDC_STUDY_ACCESSION_GLOB}{STUDY_SUMMARY_TSV}")
+    )
+    if existing_merged_files:
+        logger.warning(
+            f"{len(existing_merged_files)} study-level summaries already exist in {study.results_dir}"
+        )
+    if bludgeon:
+        for existing_merged_file in existing_merged_files:
+            logger.warning(f"Deleting {existing_merged_file}")
+            existing_merged_file.unlink()
+
+    summary_files = list(Path(study.results_dir).glob(f"*{STUDY_SUMMARY_TSV}"))
+    logger.info(
+        f"There appear to be {len(summary_files)} study summary files in {study.results_dir}"
+    )
+
+    logger.info(
+        f"Study results_dir, where summaries will be merged, is {study.results_dir}"
+    )
+    study_dir = Directory(
+        path=Path(study.results_dir),
+        rules=[DirectoryExistsRule],
+    )
+
+    assembly_summary_generator = STUDY_SUMMARY_GENERATORS["assembly"]
+
+    with chdir(study.results_dir):
+        with click.Context(assembly_summary_generator.merge_summaries) as ctx:
+            ctx.invoke(
+                assembly_summary_generator.merge_summaries,
+                output_prefix=study.first_accession,
+                study_dir=study_dir.path,
+            )
+
+    generated_files = list(
+        study_dir.path.glob(f"{study.first_accession}*_{STUDY_SUMMARY_TSV}")
+    )
+
+    if not generated_files:
+        logger.warning(f"No study summary was merged in {study.results_dir}")
+        return []
+
+    if cleanup_partials:
+        for file in summary_files:
+            logger.info(f"Removing partial study summary file {file}")
+            assert not file.name.startswith(
+                study.first_accession
+            )  # ensure we do not delete merged files
+            file.unlink()
+
+    return generated_files
 
 
 @task

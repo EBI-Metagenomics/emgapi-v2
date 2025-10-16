@@ -1,16 +1,17 @@
-"""
-Assembly pipeline result schema using the unified base classes.
-
-This module provides the schema definition for Assembly pipeline results,
-refactored to use the new unified base classes instead of the legacy
-multiple inheritance approach.
-"""
-
 import analyses.models
 from activate_django_first import EMG_CONFIG
 from analyses.base_models.with_downloads_models import (
     DownloadFileType,
     DownloadType,
+)
+from mgnify_pipelines_toolkit.schemas.dataframes import (
+    InterProSummarySchema,
+    PFAMSummarySchema,
+    GOSummarySchema,
+    KOSummarySchema,
+    AntismashSummarySchema,
+    SanntisSummarySchema,
+    KEGGModulesSummarySchema,
 )
 from workflows.data_io_utils.file_rules.common_rules import (
     DirectoryExistsRule,
@@ -32,7 +33,7 @@ from .base import (
 
 class AssemblyResultSchema(PipelineResultSchema):
     """
-    Assembly pipeline result schema with predefined structure.
+    Assembly pipeline result schema with a predefined structure.
 
     This class defines the complete schema for Assembly pipeline v6 results,
     including all expected directories and files.
@@ -204,6 +205,7 @@ class AssemblyResultSchema(PipelineResultSchema):
                                 annotations_key=analyses.models.Analysis.INTERPRO_IDENTIFIERS,
                                 import_as_records=True,
                             ),
+                            content_validator=InterProSummarySchema,
                         ),
                     ],
                 ),
@@ -226,6 +228,7 @@ class AssemblyResultSchema(PipelineResultSchema):
                                 annotations_key=analyses.models.Analysis.PFAMS,
                                 import_as_records=True,
                             ),
+                            content_validator=PFAMSummarySchema,
                         ),
                     ],
                 ),
@@ -248,6 +251,7 @@ class AssemblyResultSchema(PipelineResultSchema):
                                 annotations_key=analyses.models.Analysis.GO_TERMS,
                                 import_as_records=True,
                             ),
+                            content_validator=GOSummarySchema,
                         ),
                         PipelineFileSchema(
                             filename_template="{identifier}_goslim_summary.tsv.gz",
@@ -263,6 +267,7 @@ class AssemblyResultSchema(PipelineResultSchema):
                                 annotations_key=analyses.models.Analysis.GO_SLIMS,
                                 import_as_records=True,
                             ),
+                            content_validator=GOSummarySchema,
                         ),
                     ],
                 ),
@@ -332,6 +337,7 @@ class AssemblyResultSchema(PipelineResultSchema):
                                 short_description="KEGG KO summary",
                                 long_description="KEGG Orthology assignments summary",
                             ),
+                            content_validator=KOSummarySchema,
                         ),
                     ],
                 ),
@@ -446,6 +452,7 @@ class AssemblyResultSchema(PipelineResultSchema):
                                 annotations_key=analyses.models.Analysis.ANTISMASH_GENE_CLUSTERS,
                                 import_as_records=True,
                             ),
+                            content_validator=AntismashSummarySchema,
                         ),
                     ],
                 ),
@@ -464,7 +471,6 @@ class AssemblyResultSchema(PipelineResultSchema):
                                 short_description="SanntiS GFF output",
                                 long_description="SanntiS biosynthetic gene cluster predictions",
                             ),
-                            required=False,
                         ),
                         PipelineFileSchema(
                             filename_template="{identifier}_sanntis_summary.tsv.gz",
@@ -480,7 +486,7 @@ class AssemblyResultSchema(PipelineResultSchema):
                                 annotations_key=analyses.models.Analysis.SANNTIS_GENE_CLUSTERS,
                                 import_as_records=True,
                             ),
-                            required=False,
+                            content_validator=SanntisSummarySchema,
                         ),
                     ],
                 ),
@@ -558,6 +564,7 @@ class AssemblyResultSchema(PipelineResultSchema):
                                 annotations_key=analyses.models.Analysis.KEGG_MODULES,
                                 import_as_records=True,
                             ),
+                            content_validator=KEGGModulesSummarySchema,
                         ),
                     ],
                 ),

@@ -1,6 +1,6 @@
+import uuid
 from datetime import timedelta
 from pathlib import Path
-from typing import List
 
 from django.conf import settings
 from prefect import flow, task, get_run_logger
@@ -8,15 +8,10 @@ from prefect.runtime import flow_run
 
 import analyses.models
 from activate_django_first import EMG_CONFIG
-
-AnalysisStates = analyses.models.Analysis.AnalysisStates
-
+from analyses.models import PipelineState
 from workflows.data_io_utils.schemas.map import MapResultSchema
 from workflows.data_io_utils.schemas.validation import sanity_check_pipeline_results
-from workflows.flows.analyse_study_tasks.analysis_states import (
-    mark_analysis_as_failed,
-)
-from workflows.flows.analyse_study_tasks.make_samplesheet_assembly import (
+from workflows.flows.analyse_study_tasks.assembly.make_samplesheet_assembly import (
     make_samplesheet_for_map,
 )
 from workflows.prefect_utils.build_cli_command import cli_command
@@ -25,7 +20,8 @@ from workflows.prefect_utils.slurm_flow import (
     ClusterJobFailedException,
 )
 from workflows.prefect_utils.slurm_policies import ResubmitIfFailedPolicy
-from workflows.data_io_utils.filenames import next_enumerated_subdir
+
+AnalysisStates = analyses.models.Analysis.AnalysisStates
 
 
 @task
@@ -83,68 +79,92 @@ def add_map_gff_to_analysis_downloads(
         raise
 
 
-@flow(name="Run MAP pipeline via samplesheet")
-def run_map_pipeline_via_samplesheet(
-    mgnify_study: analyses.models.Study,
-    assembly_analyses: List[analyses.models.Analysis],
-    assembly_pipeline_outdir: Path,
+@flow(name="Run MAP pipeline batch")
+def run_map_batch(
+    assembly_batch_id: uuid.UUID,
 ):
     """
-    Run the MAP (Mobilome Annotation Pipeline) for a set of assemblies using the downstream samplesheet.
-    This pipeline takes a samplesheet produced by the combination of assembly-annotation-pipeline + virify.
-    It processes a fasta file with proteins from the assembly-annotation-pipeline and the final GFF from virify.
+    Run the MAP (Mobilome Annotation Pipeline) for a batch of assemblies.
+    Updates business state at milestones - Prefect tracks execution details.
 
-    :param mgnify_study: The MGnify study
-    :param assembly_analyses: List of assembly analyses
-    :param assembly_pipeline_outdir: The output directory of the assembly pipeline
+    :param assembly_batch_id: The AssemblyAnalysisBatch to process
     """
     logger = get_run_logger()
 
-    # Path to the MAP samplesheet
+    assembly_batch = analyses.models.AssemblyAnalysisBatch.objects.get(
+        id=assembly_batch_id
+    )
+
+    # Store Prefect flow run ID
+    assembly_batch.map_flow_run_id = flow_run.id
+    assembly_batch.save()
+
+    # Record pipeline version
+    # TODO: Update when MAP pipeline config is available in EMG_CONFIG
+    assembly_batch.set_pipeline_version(
+        analyses.models.AssemblyAnalysisBatch.PipelineType.MAP,
+        EMG_CONFIG.virify_pipeline.pipeline_git_revision,  # Placeholder - replace with MAP config
+    )
+
+    # Mark business state as in progress
+    assembly_batch.set_pipeline_state(
+        analyses.models.AssemblyAnalysisBatch.PipelineType.MAP,
+        PipelineState.IN_PROGRESS,
+    )
+
+    # Get analyses from batch
+    assembly_analyses = list(assembly_batch.assembly_analysis_set.all())
+    mgnify_study = assembly_batch.study
+
+    # Create samplesheets directory in batch workspace
+    samplesheets_dir = Path(assembly_batch.results_dir) / "samplesheets"
+    samplesheets_dir.mkdir(parents=True, exist_ok=True)
+
     # Create the MAP samplesheet using the make_samplesheet_for_map function
-    map_samplesheet_path, _ = make_samplesheet_for_map(mgnify_study, assembly_analyses)
+    # The function uses the filesystem to find CDS and VIRify GFF files
+    map_samplesheet_path, _ = make_samplesheet_for_map(
+        assembly_batch, output_dir=samplesheets_dir
+    )
 
     # Check if the MAP samplesheet exists
     if not map_samplesheet_path.exists():
         logger.warning(
             f"MAP samplesheet {map_samplesheet_path} does not exist. Skipping MAP pipeline."
         )
-        # TODO: update the status of the job
-        # for assembly_analysis in assembly_analyses:
-        #     assembly_analysis ..
+        assembly_batch.last_error = (
+            f"MAP samplesheet not found at {map_samplesheet_path}"
+        )
+        assembly_batch.set_pipeline_state(
+            analyses.models.AssemblyAnalysisBatch.PipelineType.MAP, PipelineState.FAILED
+        )
         return
 
-    # Mark analyses as started
-    # Add the MAP GFF file to each analysis's downloads
-    # TODO: I feel we need intermediate states here, otherwise the analysis goes from
-    for analysis in assembly_analyses:
-        analysis.mark_status(AnalysisStates.ANALYSIS_STARTED)
+    # Store samplesheet path
+    assembly_batch.map_samplesheet_path = str(map_samplesheet_path)
+    assembly_batch.save()
 
-    # Create a new output directory for the MAP pipeline
-    map_outdir_parent = Path(
-        f"{EMG_CONFIG.slurm.default_workdir}/{mgnify_study.ena_study.accession}_map/{flow_run.root_flow_run_id}"
+    map_outdir = assembly_batch.get_pipeline_workspace(
+        analyses.models.AssemblyAnalysisBatch.PipelineType.MAP.value
     )
 
-    map_outdir = next_enumerated_subdir(map_outdir_parent, mkdirs=True)
     logger.info(f"Using output dir {map_outdir} for MAP pipeline")
 
     # Build the command to run the MAP pipeline
-    # TODO: Update this once MAP pipeline configuration is available in EMG_CONFIG
     command = cli_command(
         [
             (
                 "nextflow",
                 "run",
-                EMG_CONFIG.virify_pipeline.pipeline_repo,  # Replace with MAP pipeline repo when available
+                EMG_CONFIG.map_pipeline.pipeline_repo,
             ),
             (
                 "-r",
-                EMG_CONFIG.virify_pipeline.pipeline_git_revision,  # Replace with MAP pipeline revision when available
+                EMG_CONFIG.map_pipeline.pipeline_git_revision,
             ),
             "-latest",
             (
                 "-profile",
-                EMG_CONFIG.virify_pipeline.pipeline_nf_profile,  # Replace with MAP pipeline profile when available
+                EMG_CONFIG.map_pipeline.pipeline_nf_profile,
             ),
             "-resume",
             ("--samplesheet", map_samplesheet_path),
@@ -171,24 +191,31 @@ def run_map_pipeline_via_samplesheet(
             working_dir=map_outdir,
             resubmit_policy=ResubmitIfFailedPolicy,
         )
-    except ClusterJobFailedException:
+    except ClusterJobFailedException as cluster_exception:
         logger.error(
-            f"MAP pipeline failed for study {mgnify_study.ena_study.accession}"
+            f"MAP pipeline failed for study {mgnify_study.ena_study.accession}: {cluster_exception}"
         )
+        # Mark batch as failed (MAP failure doesn't propagate to analyses)
+        assembly_batch.last_error = str(cluster_exception)
+        assembly_batch.set_pipeline_state(
+            analyses.models.AssemblyAnalysisBatch.PipelineType.MAP, PipelineState.FAILED
+        )
+        raise
+    except Exception as e:
+        logger.error(f"Unexpected error in MAP pipeline: {e}")
+        # Mark batch as failed (MAP failure doesn't propagate to analyses)
+        assembly_batch.last_error = str(e)
+        assembly_batch.set_pipeline_state(
+            analyses.models.AssemblyAnalysisBatch.PipelineType.MAP, PipelineState.FAILED
+        )
+        raise
+    else:
+        # Add MAP GFF files to each analysis's downloads
         for analysis in assembly_analyses:
-            mark_analysis_as_failed(analysis, reason="MAP pipeline failed")
-        return
+            add_map_gff_to_analysis_downloads(analysis, map_outdir)
 
-    for analysis in assembly_analyses:
-        add_map_gff_to_analysis_downloads(analysis, map_outdir)
-
-    # TODO: update status
-
-    # # Generate study summary
-    # This is not needed - we won't add anything from MAP to the study summary
-    # generate_study_summary_for_pipeline_run(
-    #     pipeline_outdir=map_outdir,
-    #     mgnify_study_accession=mgnify_study.accession,
-    #     analysis_type="map",
-    #     completed_runs_filename="map_completed_runs.csv",
-    # )
+        # Mark MAP pipeline as ready
+        assembly_batch.set_pipeline_state(
+            analyses.models.AssemblyAnalysisBatch.PipelineType.MAP, PipelineState.READY
+        )
+        logger.info("MAP pipeline completed successfully and marked as READY")

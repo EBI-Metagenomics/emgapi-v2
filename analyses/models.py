@@ -3,18 +3,22 @@ from __future__ import annotations
 import logging
 import os
 import re
+import uuid
 from pathlib import Path
 from typing import ClassVar, Union, Optional
 
+import pandas as pd
 from aenum import extend_enum
 from db_file_storage.model_utils import delete_file, delete_file_if_needed
+from django.conf import settings
 from django.contrib.postgres.indexes import GinIndex
 from django.core.exceptions import MultipleObjectsReturned, ObjectDoesNotExist
 from django.core.files.storage import storages
 from django.db import models
-from django.db.models import JSONField, Q, Func, Value
+from django.db.models import JSONField, Q, Func, Value, QuerySet
 from django.db.models.signals import post_save
 from django.dispatch import receiver
+from django.utils import timezone
 from django.utils.text import Truncator
 from django_ltree.models import TreeModel
 from pydantic import BaseModel, ConfigDict, Field
@@ -30,16 +34,19 @@ from analyses.base_models.base_models import (
     DbStoredFileField,
 )
 from analyses.base_models.mgnify_accessioned_models import MGnifyAccessionField
-from analyses.base_models.with_downloads_models import WithDownloadsModel
+from analyses.base_models.with_downloads_models import WithDownloadsModel, DownloadFile
 from analyses.base_models.with_status_models import SelectByStatusManagerMixin
 from analyses.base_models.with_watchers_models import WithWatchersModel
 from emgapiv2.async_utils import anysync_property
 from emgapiv2.enum_utils import FutureStrEnum
 from emgapiv2.model_utils import JSONFieldWithSchema
-from workflows.data_io_utils.schemas import PipelineFileSchema
+from workflows.data_io_utils.csv.csv_comment_handler import CSVDelimiter
+from workflows.data_io_utils.file_rules.common_rules import (
+    DirectoryExistsRule,
+    FileExistsRule,
+)
 from workflows.ena_utils.read_run import ENAReadRunFields
 from workflows.ena_utils.sample import ENASampleFields
-
 
 # Some models associated with MGnify Analyses (MGYS, MGYA etc).
 
@@ -529,6 +536,411 @@ class ComputeResourceHeuristic(TimeStampedModel):
             return f"ComputeResourceHeuristic {self.id} ({self.process})"
 
 
+class PipelineState(models.TextChoices):
+    """Business-level pipeline states."""
+
+    PENDING = "pending", "Pending"
+    IN_PROGRESS = "in_progress", "In Progress"
+    READY = "ready", "Ready"
+    FAILED = "failed", "Failed"
+
+
+class StudyAnalysisBatch(TimeStampedModel):
+    """
+    Base model for batches of analyses processed together.
+    Tracks pipeline milestones - detailed execution state is in Prefect.
+
+    Note: This is kept as a concrete model (not abstract) for database compatibility.
+    Do not instantiate directly - use specific batch types instead. For example:
+    - AssemblyAnalysisBatch (ASA -> VIRify -> MAP)
+    - AmpliconAnalysisBatch (planned)
+    - RawReadsAnalysisBatch (planned)
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    study = models.ForeignKey(
+        Study, on_delete=models.CASCADE, related_name="analysis_batches"
+    )
+    batch_type = models.CharField(max_length=50)
+    results_dir = models.CharField(max_length=500)
+    total_analyses = models.IntegerField()
+    prefect_flow_run_id = models.CharField(max_length=100, null=True, blank=True)
+
+    class Meta:
+        verbose_name = "Study Analysis Batch"
+        verbose_name_plural = "Study Analysis Batches"
+
+    def __str__(self):
+        return f"{self.batch_type.title()}Batch {str(self.id)[:8]}: {self.total_analyses} analyses"
+
+    def get_pipeline_workspace(self, pipeline_name: str) -> Path:
+        """Get workspace directory for a pipeline."""
+        return Path(self.results_dir) / pipeline_name
+
+
+class AssemblyAnalysisBatchManager(models.Manager):
+
+    def create_batches_for_study(
+        self,
+        study: "Study",
+        pipeline: "Analysis.PipelineVersions" = None,
+        chunk_size: int = None,
+        max_analyses: int = None,
+        base_results_dir: Path = None,
+        skip_completed: bool = True,
+    ) -> list["AssemblyAnalysisBatch"]:
+        """
+        Create batches for all pending analyses in a study.
+
+        This is the primary entry point for batch creation. It handles:
+        - Querying analyses from the study (to be used as the source of truth)
+        - Filtering out already-completed analyses
+        - Validating analyses (warns about blocked/failed)
+        - Enforcing maximum analysis limits
+        - Chunking analyses into manageable batch sizes
+        - Creating batches
+
+        :param study: The study
+        :param pipeline: Pipeline version filter (default: v6)
+        :param chunk_size: Maximum analyses per batch (default: from config)
+        :param max_analyses: Maximum total analyses to process (safety cap)
+        :param base_results_dir: Optional base results directory
+        :param skip_completed: Skip already-completed analyses (default True)
+        :return: List of created batches
+        :raises ValueError: If no valid analyses remain after filtering
+        """
+        # Apply defaults
+        if pipeline is None:
+            pipeline = Analysis.PipelineVersions.v6
+        if chunk_size is None:
+            chunk_size = (
+                settings.EMG_CONFIG.assembly_analysis_pipeline.samplesheet_chunk_size
+            )
+
+        # Query analyses from study (single source of truth)
+        analyses_qs = study.analyses.filter(pipeline_version=pipeline)
+
+        # Filter out completed analyses
+        if skip_completed:
+            analyses_qs = analyses_qs.exclude_by_statuses(
+                [Analysis.AnalysisStates.ANALYSIS_ANNOTATIONS_IMPORTED]
+            )
+
+        # Validate analyses - warns about blocked/failed but doesn't fail
+        blocked_or_failed = analyses_qs.filter_by_statuses(
+            [
+                Analysis.AnalysisStates.ANALYSIS_BLOCKED,
+                Analysis.AnalysisStates.ANALYSIS_QC_FAILED,
+            ]
+        )
+
+        if blocked_or_failed.exists():
+            blocked_accessions = list(
+                blocked_or_failed.values_list("accession", flat=True)
+            )
+            logger.warning(
+                f"Including {len(blocked_accessions)} blocked/qc-failed analyses in batches: "
+                f"{', '.join(blocked_accessions[:5])}{'...' if len(blocked_accessions) > 5 else ''}"
+            )
+
+        analysis_ids = list(analyses_qs.values_list("id", flat=True))
+
+        if not analysis_ids:
+            raise ValueError(f"No pending analyses found for study {study.accession}")
+
+        # Apply safety cap if specified
+        if max_analyses and len(analysis_ids) > max_analyses:
+            logger.warning(
+                f"Study {study.accession} has {len(analysis_ids)} analyses, "
+                f"but max_analyses={max_analyses}. Processing first {max_analyses} only."
+            )
+            analysis_ids = analysis_ids[:max_analyses]
+
+        logger.info(
+            f"Creating batches for {len(analysis_ids)} analyses in study {study.accession} "
+            f"(chunk_size={chunk_size})"
+        )
+
+        # Chunk analyses
+        chunks = [
+            analysis_ids[i : i + chunk_size]
+            for i in range(0, len(analysis_ids), chunk_size)
+        ]
+
+        logger.info(f"Creating {len(chunks)} batches")
+
+        # Create batches for each chunk
+        batches = []
+        for chunk in chunks:
+            batch = self._create_for_analyses(
+                study=study, analysis_ids=chunk, base_results_dir=base_results_dir
+            )
+            batches.append(batch)
+
+        return batches
+
+    def _create_for_analyses(
+        self, study: "Study", analysis_ids: list[int], base_results_dir: Path = None
+    ) -> "AssemblyAnalysisBatch":
+        """
+        Internal method to create a batch for a list of analysis IDs.
+
+        This is a simple, "dumb" method that just creates the batch object
+        without validation. All validations should be done in create_batches_for_study.
+
+        :param study: The study
+        :param analysis_ids: List of analysis IDs
+        :param base_results_dir: Optional base results directory
+        :return: Created batch
+        """
+        batch = AssemblyAnalysisBatch(
+            study=study,
+            batch_type="assembly_analysis",
+            results_dir="",
+            total_analyses=len(analysis_ids),
+        )
+        # Save to generate the id (which is a UUID)
+        batch.save()
+
+        # It would be also possible to move this into the save method (but I rather not... I think).
+        dir_name = f"{study.accession}_assembly_analysis_{str(batch.id)[:8]}"
+
+        if base_results_dir:
+            results_dir = base_results_dir / dir_name
+        else:
+            results_dir = Path(
+                f"{settings.EMG_CONFIG.results.base_dir}/{study.accession}/{dir_name}"
+            )
+
+        results_dir.mkdir(parents=True, exist_ok=True)
+
+        # Update the batch with actual results_dir
+        batch.results_dir = str(results_dir)
+        batch.save()
+
+        # Link analysis to batch (bulk update for efficiency)
+        Analysis.objects.filter(id__in=analysis_ids).update(
+            assembly_analysis_batch=batch, results_dir=str(results_dir)
+        )
+
+        return batch
+
+
+class AssemblyAnalysisBatch(StudyAnalysisBatch):
+    """Batch for assembly analyses (ASA -> VIRify -> MAP)."""
+
+    objects = AssemblyAnalysisBatchManager()
+
+    class PipelineType(models.TextChoices):
+        """Assembly analysis pipelines."""
+
+        ASA = "asa", "Assembly Analysis"
+        VIRIFY = "virify", "VIRify"
+        MAP = "map", "MAP"
+
+    # Samplesheets
+    asa_samplesheet_path = models.CharField(max_length=500, null=True, blank=True)
+    virify_samplesheet_path = models.CharField(max_length=500, null=True, blank=True)
+    map_samplesheet_path = models.CharField(max_length=500, null=True, blank=True)
+
+    # Business states
+    asa_state = models.CharField(
+        max_length=20, choices=PipelineState.choices, default=PipelineState.PENDING
+    )
+    virify_state = models.CharField(
+        max_length=20, choices=PipelineState.choices, default=PipelineState.PENDING
+    )
+    map_state = models.CharField(
+        max_length=20, choices=PipelineState.choices, default=PipelineState.PENDING
+    )
+
+    # Prefect flow run IDs
+    asa_flow_run_id = models.CharField(max_length=100, null=True, blank=True)
+    virify_flow_run_id = models.CharField(max_length=100, null=True, blank=True)
+    map_flow_run_id = models.CharField(max_length=100, null=True, blank=True)
+
+    # Timestamps
+    asa_started_at = models.DateTimeField(null=True, blank=True)
+    asa_completed_at = models.DateTimeField(null=True, blank=True)
+    virify_started_at = models.DateTimeField(null=True, blank=True)
+    virify_completed_at = models.DateTimeField(null=True, blank=True)
+    map_started_at = models.DateTimeField(null=True, blank=True)
+    map_completed_at = models.DateTimeField(null=True, blank=True)
+
+    # Error tracking
+    last_error = models.TextField(null=True, blank=True)
+
+    # Pipeline versions
+    pipeline_versions = JSONField(default=dict, blank=True)
+
+    class Meta:
+        verbose_name = "Assembly Analysis Batch"
+        verbose_name_plural = "Assembly Analysis Batches"
+
+    def __str__(self):
+        return f"Assembly_AnalysisBatch {self.id}: {self.total_analyses} analyses"
+
+    @property
+    def analyses(self) -> QuerySet[Analysis]:
+        """Get all analyses in this batch.
+        This is not for free; it will query the db.
+        :return: QuerySet[Analysis]
+        """
+        return self.assembly_analysis_set.all()
+
+    def generate_asa_samplesheet(self) -> Path:
+        """
+        Generate ASA samplesheet for this batch (lazy, idempotent).
+
+        The samplesheet is stored in the batch working directory:
+        {batch.results_dir}/samplesheets/
+
+        :return: Path to generated samplesheet
+        """
+        # Import here to avoid circular dependency
+        from workflows.flows.analyse_study_tasks.assembly.make_samplesheet_assembly import (
+            make_samplesheet_assembly,
+        )
+
+        # Return existing samplesheet if already generated
+        if self.asa_samplesheet_path and Path(self.asa_samplesheet_path).exists():
+            return Path(self.asa_samplesheet_path)
+
+        # Create samplesheets directory in batch workspace
+        samplesheets_dir = Path(self.results_dir) / "samplesheets"
+        samplesheets_dir.mkdir(parents=True, exist_ok=True)
+
+        # Generate a new samplesheet for this batch
+        samplesheet_path, _ = make_samplesheet_assembly(
+            self.study, self.assembly_analysis_set.all(), output_dir=samplesheets_dir
+        )
+
+        # Store path
+        self.asa_samplesheet_path = str(samplesheet_path)
+        self.save()
+
+        return samplesheet_path
+
+    def set_pipeline_state(self, pipeline_type: PipelineType, state: PipelineState):
+        """
+        Update the pipeline state and propagate to linked analyses.
+
+        :param pipeline_type: The pipeline type
+        :param state: The pipeline state
+        """
+        # TODO: have a think about this... too many assumptions here
+        if pipeline_type == self.PipelineType.ASA:
+            self.asa_state = state
+            if state == PipelineState.IN_PROGRESS and not self.asa_started_at:
+                self.asa_started_at = timezone.now()
+            elif state == PipelineState.READY:
+                self.asa_completed_at = timezone.now()
+                # ASA READY: analyses should already be marked as imported by the import flow
+                # No need to propagate - just confirm the batch is ready
+            elif state == PipelineState.FAILED:
+                # Propagate failure to analyses
+                self._sync_analyses_state(
+                    Analysis.AnalysisStates.ANALYSIS_FAILED, reason=self.last_error
+                )
+        elif pipeline_type == self.PipelineType.VIRIFY:
+            self.virify_state = state
+            if state == PipelineState.IN_PROGRESS and not self.virify_started_at:
+                self.virify_started_at = timezone.now()
+            elif state == PipelineState.READY:
+                self.virify_completed_at = timezone.now()
+                # VIRify completion doesn't change core analysis status
+                # Downloads are added separately in the flow
+            elif state == PipelineState.FAILED:
+                # VIRify failure doesn't fail the whole analysis
+                # Just recorded in batch
+                pass
+        elif pipeline_type == self.PipelineType.MAP:
+            self.map_state = state
+            if state == PipelineState.IN_PROGRESS and not self.map_started_at:
+                self.map_started_at = timezone.now()
+            elif state == PipelineState.READY:
+                self.map_completed_at = timezone.now()
+                # MAP completion doesn't change core analysis status
+                # Downloads are added separately in the flow
+            elif state == PipelineState.FAILED:
+                # MAP failure doesn't fail the whole analysis
+                # Just recorded in batch
+                pass
+        self.save()
+
+    def _sync_analyses_state(
+        self, analysis_state: "Analysis.AnalysisStates", reason: str = None
+    ):
+        """
+        Synchronize analysis states with batch state.
+        Called automatically when the batch state changes.
+
+        :param analysis_state: The AnalysisStates enum value to set
+        :param reason:  an Optional reason for state change (e.g., error message)
+        """
+        for analysis in self.assembly_analysis_set.all():
+            analysis.mark_status(analysis_state, reason=reason)
+
+    def set_pipeline_version(self, pipeline_type: PipelineType, version: str):
+        """
+        Record pipeline version.
+
+        :param pipeline_type: The pipeline type
+        :param version: Version string (e.g., "v6.0.0", "dev", "main")
+        """
+        if not self.pipeline_versions:
+            self.pipeline_versions = {}
+        self.pipeline_versions[pipeline_type.value] = version
+        self.save()
+
+    def get_pipeline_version(self, pipeline_type: PipelineType) -> Optional[str]:
+        """
+        Get the pipeline version.
+
+        :param pipeline_type: The pipeline type
+        :return: Version string or None
+        """
+        return (
+            self.pipeline_versions.get(pipeline_type.value)
+            if self.pipeline_versions
+            else None
+        )
+
+    def get_pipeline_workspace(self, pipeline_type: Union[PipelineType, str]) -> Path:
+        """
+        Get workspace for a pipeline.
+
+        :param pipeline_type: PipelineType enum or string pipeline name
+        :return: Path to pipeline workspace
+        """
+        if isinstance(pipeline_type, str):
+            pipeline_name = pipeline_type
+        else:
+            pipeline_name = pipeline_type.value
+        return Path(self.results_dir) / pipeline_name
+
+    @property
+    def is_ready_for_virify(self) -> bool:
+        """Check if ready for VIRify."""
+        return self.asa_state == PipelineState.READY
+
+    @property
+    def is_ready_for_map(self) -> bool:
+        """Check if ready for MAP."""
+        return (
+            self.asa_state == PipelineState.READY
+            and self.virify_state == PipelineState.READY
+        )
+
+    def refresh_analysis_count(self):
+        """
+        Update the total_analyses count based on linked analyses.
+        Call this after adding/removing analyses from the batch.
+        """
+        self.total_analyses = self.assembly_analysis_set.count()
+        self.save()
+
+
 class AnalysisManagerDeferringAnnotations(SelectByStatusManagerMixin, models.Manager):
     """
     The annotations field is a potentially large JSONB field.
@@ -612,6 +1024,13 @@ class Analysis(
         blank=True,
         related_name="analyses",
     )
+    assembly_analysis_batch = models.ForeignKey(
+        AssemblyAnalysisBatch,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="assembly_analysis_set",
+    )
     is_suppressed = models.BooleanField(default=False)
 
     GENOME_PROPERTIES = "genome_properties"
@@ -653,12 +1072,15 @@ class Analysis(
     TAXONOMIES_DADA2_PR2 = f"{TAXONOMIES}__{TaxonomySources.DADA2_PR2}"
     TAXONOMIES_UNIREF = f"{TAXONOMIES}__{TaxonomySources.UNIREF}"
 
+    # TODO: check this... not sure if this is clear enough
     ALLOWED_DOWNLOAD_GROUP_PREFIXES = [
         "all",  # catch-all for legacy
         f"{TAXONOMIES}.closed_reference.",
         f"{TAXONOMIES}.asv.",
         "quality_control",
         "primer_identification",
+        "taxonomy",
+        "annotation_summary",
         ASV,
         CODING_SEQUENCES,
         FUNCTIONAL_ANNOTATION,
@@ -762,40 +1184,195 @@ class Analysis(
             self.save()
 
     def import_from_pipeline_file_schema(
-        self, schema: "PipelineFileSchema", file_path: "Path"
+        self,
+        schema,  # Type: PipelineFileSchema - no type hint due to circular import with workflows.data_io_utils.schemas.base
+        file_path: Path,
     ) -> None:
         """
         Import data from a pipeline file schema into this analysis.
 
-        :param schema: The pipeline file schema with import configuration
+        :param schema: The pipeline file schema with import configuration (PipelineFileSchema)
         :param file_path: Path to the file to import
         """
-        if not schema.import_config or not file_path.exists():
+        df = pd.read_csv(file_path, sep=CSVDelimiter.TAB)
+
+        if schema.import_config.import_column:
+            _ = df[schema.import_config.import_column].to_list()
+        else:
+            if schema.import_config.import_as_records:
+                _ = df.to_dict(orient="records")
+            else:
+                _ = df.to_dict()
+
+        # FIXME: Fix this one - data variable was removed as it's not being used
+        # self.annotations[schema.import_config.annotations_key] = data
+        self.save()
+
+    # Pipeline type constants
+    PIPELINE_ASSEMBLY = "assembly"
+    PIPELINE_VIRIFY = "virify"
+    PIPELINE_MAP = "map"
+
+    def import_from_pipeline_results(
+        self, base_path: Path, pipeline_type: str, validate_first: bool = True
+    ) -> int:
+        """
+        Complete pipeline results import orchestrator.
+
+        This is the central method that coordinates:
+        - Pipeline schema selection
+        - Structure validation (optional)
+        - Annotation import
+        - Download generation
+
+        :param base_path: Path to pipeline results directory
+        :param pipeline_type: Pipeline type ('assembly', 'virify', 'map')
+        :param validate_first: Whether to validate structure before import
+        :return: Number of downloads generated
+        """
+        logger.info(f"Importing {pipeline_type} results from {base_path}")
+
+        # Get schema for validation
+        schema = self.get_pipeline_schema(pipeline_type)
+
+        # Validation (optional) - raises exception on failure
+        if validate_first:
+            schema.validate_results(base_path, self.assembly.first_accession)
+
+        # Import annotations - raises exception on failure
+        identifier = self.assembly.first_accession
+
+        # Walk through schema directories and import files directly
+        for dir_schema in schema.directories:
+            self._import_from_directory(dir_schema, base_path / identifier, identifier)
+
+        # Generate downloads - count successful ones
+        downloads_generated = self._generate_downloads_from_schema(
+            schema, base_path, identifier
+        )
+
+        self.save()
+
+        logger.info(
+            f"Successfully imported {pipeline_type} results with {downloads_generated} downloads"
+        )
+        return downloads_generated
+
+    def get_pipeline_schema(self, pipeline_type: str):
+        """
+        Simple factory method to get appropriate pipeline schema.
+
+        :param pipeline_type: Pipeline type string
+        :return: Appropriate PipelineResultSchema instance
+        :raises: ValueError for unknown pipeline types
+        """
+        from workflows.data_io_utils.schemas.assembly import AssemblyResultSchema
+        from workflows.data_io_utils.schemas.virify import VirifyResultSchema
+        from workflows.data_io_utils.schemas.map import MapResultSchema
+
+        schemas = {
+            self.PIPELINE_ASSEMBLY: AssemblyResultSchema,
+            self.PIPELINE_VIRIFY: VirifyResultSchema,
+            self.PIPELINE_MAP: MapResultSchema,
+        }
+
+        if pipeline_type not in schemas:
+            raise ValueError(
+                f"Unknown pipeline type: {pipeline_type}. Valid types: {list(schemas.keys())}"
+            )
+
+        return schemas[pipeline_type]()
+
+    def _import_from_directory(
+        self, dir_schema, base_path: Path, identifier: str  # PipelineDirectorySchema
+    ):
+        """
+        Import annotations from a directory using its schema.
+
+        :param dir_schema: PipelineDirectorySchema defining the directory structure
+        :param base_path: Base path containing the directory
+        :param identifier: Pipeline run identifier
+        :raises: PipelineImportError if required files are missing
+        """
+        dir_path = base_path / dir_schema.folder_name
+
+        if not dir_path.exists():
+            # Check if directory is required based on validation rules
+            if DirectoryExistsRule in dir_schema.validation_rules:
+                # TODO: Should we define custom exception?
+                raise ValueError(f"Required directory {dir_path} not found")
             return
 
-        try:
-            import pandas as pd
-            from workflows.data_io_utils.csv.csv_comment_handler import CSVDelimiter
+        # Import files directly from schema
+        for file_schema in dir_schema.files:
+            if file_schema.import_config:  # Only import files that have import config
+                file_path = dir_path / file_schema.get_filename(identifier)
 
-            df = pd.read_csv(file_path, sep=CSVDelimiter.TAB)
-
-            if schema.import_config.import_column:
-                data = df[schema.import_config.import_column].to_list()
-            else:
-                if schema.import_config.import_as_records:
-                    data = df.to_dict(orient="records")
+                if file_path.exists():
+                    self.import_from_pipeline_file_schema(file_schema, file_path)
                 else:
-                    data = df.to_dict()
+                    # Check if file is required based on validation rules
+                    if FileExistsRule in file_schema.validation_rules:
+                        # TODO: Should we definea custom exception?
+                        raise ValueError(f"Required file {file_path} not found")
 
-            self.annotations[schema.import_config.annotations_key] = data
-            self.save()
+        # Recurse into subdirectories
+        for subdir_schema in dir_schema.subdirectories:
+            self._import_from_directory(subdir_schema, dir_path, identifier)
 
-        except Exception as e:
-            from workflows.data_io_utils.schemas.exceptions import PipelineImportError
+    def _generate_downloads_from_schema(
+        self, schema, base_path: Path, identifier: str  # PipelineResultSchema
+    ) -> int:
+        """
+        Generate downloads from pipeline schema.
 
-            raise PipelineImportError(
-                f"Failed to import data from {file_path}: {e}", file_path=str(file_path)
+        :param schema: PipelineResultSchema defining the pipeline structure
+        :param base_path: Base path containing the pipeline results
+        :param identifier: Pipeline run identifier
+        :return: Number of downloads generated
+        """
+        downloads_count = 0
+
+        for dir_schema in schema.directories:
+            downloads_count += self._generate_downloads_from_directory(
+                dir_schema, base_path / identifier, identifier
             )
+
+        return downloads_count
+
+    def _generate_downloads_from_directory(
+        self, dir_schema, base_path: Path, identifier: str  # PipelineDirectorySchema
+    ) -> int:
+        """
+        Generate downloads from a directory schema.
+
+        :param dir_schema: PipelineDirectorySchema defining the directory structure
+        :param base_path: Base path containing the directory
+        :param identifier: Pipeline run identifier
+        :return: Number of downloads generated
+        """
+        downloads_count = 0
+        dir_path = base_path / dir_schema.folder_name
+
+        if not dir_path.exists():
+            return 0
+
+        # Generate downloads directly from schema files
+        for file_schema in dir_schema.files:
+            download_file = DownloadFile.from_pipeline_file_schema(
+                file_schema, self, dir_path
+            )
+            if download_file:
+                self.add_download(download_file)
+                downloads_count += 1
+
+        # Recurse into subdirectories
+        for subdir_schema in dir_schema.subdirectories:
+            downloads_count += self._generate_downloads_from_directory(
+                subdir_schema, dir_path, identifier
+            )
+
+        return downloads_count
 
     class Meta:
         verbose_name_plural = "Analyses"

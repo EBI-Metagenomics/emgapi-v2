@@ -5,8 +5,8 @@ from typing import List
 from prefect import task
 from prefect.tasks import task_input_hash
 
-from workflows.flows.analyse_study_tasks.analysis_states import AnalysisStates
-from workflows.flows.analyse_study_tasks.sanity_check_assembly_results import (
+from workflows.flows.analyse_study_tasks.shared.analysis_states import AnalysisStates
+from workflows.flows.analyse_study_tasks.assembly.sanity_check_assembly_results import (
     sanity_check_assembly_analysis_results,
 )
 

@@ -1,18 +1,15 @@
-"""
-Base schema classes for unified pipeline validation and import system.
-
-This module provides the foundation classes that all pipeline-specific schemas
-inherit from, implementing validation, download generation, and import functionality
-using composition over inheritance.
-"""
-
+import gzip
+import json
 import logging
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Type
 
-from pydantic import BaseModel, Field
+import pandas as pd
+import pandera as pa
 from prefect import get_run_logger
+from pydantic import BaseModel, Field
 
+import analyses.models
 from analyses.base_models.with_downloads_models import (
     DownloadFile,
     DownloadFileType,
@@ -23,9 +20,9 @@ from workflows.data_io_utils.file_rules.base_rules import (
     DirectoryRule,
     GlobRule,
 )
+from workflows.data_io_utils.file_rules.common_rules import DirectoryExistsRule
 from workflows.data_io_utils.file_rules.nodes import Directory
 from .exceptions import PipelineValidationError, PipelineImportError
-import analyses.models
 
 
 class DownloadFileMetadata(BaseModel):
@@ -84,7 +81,9 @@ class PipelineFileSchema(BaseModel):
     import_config: Optional[ImportConfig] = Field(
         None, description="Configuration for importing data from this file"
     )
-    required: bool = Field(True, description="Whether this file is required to exist")
+    content_validator: Optional[Type[pa.DataFrameModel]] = Field(
+        None, description="Pandera schema for validating file contents"
+    )
 
     def get_filename(self, identifier: str) -> str:
         """
@@ -97,20 +96,17 @@ class PipelineFileSchema(BaseModel):
 
     def validate_file(self, path: Path) -> bool:
         """
-        Validate this file using its validation rules.
+        Validate this file using its validation rules and content validator.
+
+        File existence is determined by validation rules:
+        - FileExistsRule = required file
+        - FileIfExistsIsNotEmptyRule = optional file
 
         :param path: Path to the file to validate
         :return: True if validation passes
         :raises PipelineValidationError: If validation fails
         """
-        if not path.exists() and self.required:
-            raise PipelineValidationError(
-                f"Required file {path} does not exist", failed_rules=["FileExists"]
-            )
-
-        if not path.exists() and not self.required:
-            return True
-
+        # File-level validation rules (existence, size, etc.)
         failed_rules = []
         for rule in self.validation_rules:
             try:
@@ -125,7 +121,60 @@ class PipelineFileSchema(BaseModel):
                 f"Validation failed for {path}", failed_rules=failed_rules
             )
 
+        # Content validation using Pandera schema (only if file exists)
+        if path.exists() and self.content_validator is not None:
+            self._validate_content(path)
+
         return True
+
+    def _validate_content(self, path: Path) -> None:
+        """
+        Validate file contents using Pandera schema.
+
+        Reads gzipped files on-the-fly without decompressing to disk.
+        Automatically detects separator based on file extension:
+        - .tsv / .tsv.gz → tab-separated
+        - .csv / .csv.gz → comma-separated
+
+        :param path: Path to the file to validate
+        :raises PipelineValidationError: If content validation fails
+        """
+        try:
+            # Determine separator from file extension (handle .gz files)
+            if path.suffix == ".gz":
+                # Get extension before .gz (e.g., .tsv from .tsv.gz)
+                actual_extension = Path(path.stem).suffix
+            else:
+                # Get extension directly
+                actual_extension = path.suffix
+
+            separator = "\t" if actual_extension == ".tsv" else ","
+
+            # Read file (handles gzip automatically)
+            if path.suffix == ".gz":
+                with gzip.open(path, "rt") as f:
+                    df = pd.read_csv(f, sep=separator)
+            else:
+                df = pd.read_csv(path, sep=separator)
+
+            # Validate using Pandera schema
+            self.content_validator.validate(df, lazy=True)
+
+            logging.info(f"Content validation passed: {path.name} ({len(df)} rows)")
+
+        except pa.errors.SchemaErrors as e:
+            try:
+                error_details = json.dumps(e.message, indent=2)
+            except (TypeError, ValueError):
+                error_details = str(e.message)
+            error_msg = f"Content validation failed for {path}:\n{error_details}"
+            logging.error(error_msg)
+            raise PipelineValidationError(error_msg) from e
+
+        except Exception as e:
+            error_msg = f"Unexpected error validating content of {path.name}: {e}"
+            logging.error(error_msg)
+            raise PipelineValidationError(error_msg) from e
 
 
 class PipelineDirectorySchema(BaseModel):
@@ -149,11 +198,13 @@ class PipelineDirectorySchema(BaseModel):
     glob_rules: List[GlobRule] = Field(
         default_factory=list, description="Glob validation rules"
     )
-    required: bool = Field(True, description="Whether directory is required to exist")
 
     def validate_directory(self, base_path: Path, identifier: str) -> Directory:
         """
         Validate this directory and return a validated Directory object.
+
+        Directory existence is determined by validation rules:
+        - DirectoryExistsRule in validation_rules = required directory
 
         :param base_path: Base path containing the pipeline results
         :param identifier: Pipeline run identifier
@@ -161,15 +212,6 @@ class PipelineDirectorySchema(BaseModel):
         :raises PipelineValidationError: If validation fails
         """
         dir_path = base_path / self.folder_name
-
-        if not dir_path.exists() and self.required:
-            raise PipelineValidationError(
-                f"Required directory {dir_path} does not exist"
-            )
-
-        if not dir_path.exists() and not self.required:
-            # Return empty directory for optional missing directories
-            return Directory(path=dir_path)
 
         # Prepare files for validation
         files_to_validate = []
@@ -190,6 +232,11 @@ class PipelineDirectorySchema(BaseModel):
                 f"Directory validation failed for {dir_path}: {e}"
             )
 
+        # Validate file contents using schema validators
+        for file_schema in self.files:
+            file_path = dir_path / file_schema.get_filename(identifier)
+            file_schema.validate_file(file_path)
+
         # Validate subdirectories recursively
         for subdir_schema in self.subdirectories:
             sub_validated_dir = subdir_schema.validate_directory(dir_path, identifier)
@@ -209,7 +256,8 @@ class PipelineDirectorySchema(BaseModel):
         dir_path = base_path / self.folder_name
 
         if not dir_path.exists():
-            if self.required:
+            # Check if directory is required based on validation rules
+            if DirectoryExistsRule in self.validation_rules:
                 from .exceptions import PipelineImportError
 
                 raise PipelineImportError(
@@ -233,7 +281,7 @@ class PipelineResultSchema(BaseModel):
     Top-level schema for complete pipeline result validation and import.
 
     This class coordinates the validation and import of entire pipeline
-    output directories, providing a unified interface for all pipeline types.
+    output directories.
     """
 
     pipeline_name: str = Field(..., description="Name of the pipeline")
@@ -293,13 +341,11 @@ class PipelineResultSchema(BaseModel):
 
         identifier = analysis.assembly.first_accession
 
-        # Import from each directory
         for dir_schema in self.directories:
             try:
                 dir_schema.import_directory_results(analysis, base_path / identifier)
             except PipelineImportError as e:
                 logger.error(f"Failed to import from {dir_schema.folder_name}: {e}")
-                # Continue with other directories even if one fails
 
         logger.info(f"Completed importing {self.pipeline_name} results")
 

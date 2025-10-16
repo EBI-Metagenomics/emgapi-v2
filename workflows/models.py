@@ -10,7 +10,6 @@ from django.utils.timezone import now
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from emgapiv2.model_utils import JSONFieldWithSchema
-
 from .prefect_utils.slurm_policies import _SlurmResubmitPolicy
 from .prefect_utils.slurm_status import SlurmStatus
 from .signals import ready
