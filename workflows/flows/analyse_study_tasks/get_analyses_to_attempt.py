@@ -12,7 +12,10 @@ from workflows.ena_utils.ena_api_requests import ENALibraryStrategyPolicy
 )
 def get_analyses_to_attempt(
     study: analyses.models.Study,
-    for_experiment_type: analyses.models.WithExperimentTypeModel.ExperimentTypes,
+    for_experiment_type: Union[
+        analyses.models.WithExperimentTypeModel.ExperimentTypes,
+        List[analyses.models.WithExperimentTypeModel.ExperimentTypes],
+    ],
     ena_library_strategy_policy: ENALibraryStrategyPolicy = ENALibraryStrategyPolicy.ONLY_IF_CORRECT_IN_ENA,
 ) -> List[Union[str, int]]:
     """
@@ -22,6 +25,10 @@ def get_analyses_to_attempt(
     :param ena_library_strategy_policy: Optional policy for handling runs in the study that aren't labeled as for_experiment_type.
     :return: List of analysis object IDs
     """
+    if isinstance(for_experiment_type, (list, set, tuple)):
+        for_experiment_type_ = list(for_experiment_type)
+    else:
+        for_experiment_type_ = [for_experiment_type]
     study.refresh_from_db()
     analyses_worth_trying = study.analyses.exclude_by_statuses(
         [
@@ -33,14 +40,14 @@ def get_analyses_to_attempt(
 
     if ena_library_strategy_policy == ENALibraryStrategyPolicy.ONLY_IF_CORRECT_IN_ENA:
         analyses_worth_trying = analyses_worth_trying.filter(
-            experiment_type=for_experiment_type.value
+            experiment_type__in=[v.value for v in for_experiment_type_]
         )
     elif (
         ena_library_strategy_policy
         == ENALibraryStrategyPolicy.ASSUME_OTHER_ALSO_MATCHES
     ):
         analyses_worth_trying = analyses_worth_trying.filter(
-            Q(experiment_type=for_experiment_type.value)
+            Q(experiment_type__in=[v.value for v in for_experiment_type_])
             | Q(
                 experiment_type=analyses.models.WithExperimentTypeModel.ExperimentTypes.UNKNOWN.value
             )
