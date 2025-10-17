@@ -140,17 +140,23 @@ def analysis_rawreads_study(study_accession: str):
     # get or create Analysis for runs
     create_analyses(
         mgnify_study,
-        for_experiment_type=analyses.models.WithExperimentTypeModel.ExperimentTypes.METAGENOMIC,
+        for_experiment_type=[
+            analyses.models.WithExperimentTypeModel.ExperimentTypes.METAGENOMIC,
+            analyses.models.WithExperimentTypeModel.ExperimentTypes.METATRANSCRIPTOMIC,
+        ],
         pipeline=analyses.models.Analysis.PipelineVersions.v6,
         ena_library_strategy_policy=analyse_study_input.library_strategy_policy,
     )
     analyses_to_attempt = get_analyses_to_attempt(
         mgnify_study,
-        for_experiment_type=analyses.models.WithExperimentTypeModel.ExperimentTypes.METAGENOMIC,
+        for_experiment_type=[
+            analyses.models.WithExperimentTypeModel.ExperimentTypes.METAGENOMIC,
+            analyses.models.WithExperimentTypeModel.ExperimentTypes.METATRANSCRIPTOMIC,
+        ],
         ena_library_strategy_policy=analyse_study_input.library_strategy_policy,
     )
 
-    # Work on chunks of 20 readruns at a time
+    # Work on chunks of 50 readruns at a time
     # Doing so means we don't use our entire cluster allocation for this study
     chunked_runs = chunk_list(
         analyses_to_attempt, EMG_CONFIG.rawreads_pipeline.samplesheet_chunk_size
