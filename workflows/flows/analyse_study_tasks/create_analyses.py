@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Union
 
 from django.db.models import Q
 from prefect import task
@@ -12,7 +12,10 @@ from workflows.ena_utils.ena_api_requests import ENALibraryStrategyPolicy
 )
 def create_analyses(
     study: analyses.models.Study,
-    for_experiment_type: analyses.models.WithExperimentTypeModel.ExperimentTypes,
+    for_experiment_type: Union[
+        analyses.models.WithExperimentTypeModel.ExperimentTypes,
+        List[analyses.models.WithExperimentTypeModel.ExperimentTypes],
+    ],
     pipeline: analyses.models.Analysis.PipelineVersions = analyses.models.Analysis.PipelineVersions.v6,
     ena_library_strategy_policy: ENALibraryStrategyPolicy = ENALibraryStrategyPolicy.ONLY_IF_CORRECT_IN_ENA,
 ) -> List[analyses.models.Analysis]:
@@ -24,16 +27,20 @@ def create_analyses(
     :param ena_library_strategy_policy: Optional policy for handling runs in the study that aren't labeled as for_experiment_type.
     :return: List of matching/created analysis objects.
     """
+    if isinstance(for_experiment_type, (list, set, tuple)):
+        for_experiment_type_ = list(for_experiment_type)
+    else:
+        for_experiment_type_ = [for_experiment_type]
     analyses_list = []
     runs = study.runs
     if ena_library_strategy_policy == ENALibraryStrategyPolicy.ONLY_IF_CORRECT_IN_ENA:
-        runs = runs.filter(experiment_type=for_experiment_type.value)
+        runs = runs.filter(experiment_type__in=[v.value for v in for_experiment_type_])
     elif (
         ena_library_strategy_policy
         == ENALibraryStrategyPolicy.ASSUME_OTHER_ALSO_MATCHES
     ):
         runs = runs.filter(
-            Q(experiment_type=for_experiment_type.value)
+            Q(experiment_type__in=[v.value for v in for_experiment_type_])
             | Q(
                 experiment_type=analyses.models.WithExperimentTypeModel.ExperimentTypes.UNKNOWN.value
             )

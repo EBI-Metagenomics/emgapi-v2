@@ -31,6 +31,7 @@ class DownloadFileType(FutureStrEnum):
     TREE = "tree"  # e.g. newick
     HTML = "html"
     OTHER = "other"
+    GFF = "gff"
 
 
 class DownloadFileIndexFile(BaseModel):
@@ -38,7 +39,7 @@ class DownloadFileIndexFile(BaseModel):
     An index file (e.g., a .fai for a FASTA file of .gzi for a bgzip file) of a DownloadFile.
     """
 
-    index_type: Literal["fai", "gzi"]
+    index_type: Literal["fai", "gzi", "csi"]
     path: Union[str, Path]
 
     @field_validator("path", mode="before")
@@ -67,7 +68,9 @@ class DownloadFile(BaseModel):
         None, examples=["taxonomies.closed_reference.ssu"]
     )
     file_size_bytes: Optional[int] = Field(None, examples=[1024])
-    index_file: Optional[DownloadFileIndexFile] = Field(None)
+    index_file: Optional[DownloadFileIndexFile | list[DownloadFileIndexFile]] = Field(
+        None
+    )
 
     parent_identifier: Optional[Union[str, int]] = (
         None  # e.g. the accession of an Analysis this download is for
