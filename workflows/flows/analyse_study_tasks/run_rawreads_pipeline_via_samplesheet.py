@@ -1,3 +1,4 @@
+import os
 from datetime import timedelta
 from pathlib import Path
 from typing import List, Union
@@ -31,6 +32,9 @@ from workflows.prefect_utils.slurm_flow import (
     ClusterJobFailedException,
 )
 from workflows.prefect_utils.slurm_policies import ResubmitIfFailedPolicy
+from workflows.flows.analyse_study_tasks.cleanup_pipeline_directories import (
+    delete_pipeline_workdir,
+)
 
 
 @flow(name="Run raw-reads analysis pipeline-v6 via samplesheet", log_prints=True)
@@ -57,6 +61,14 @@ def run_rawreads_pipeline_via_samplesheet(
     )
     print(f"Using output dir {rawreads_current_outdir} for this execution")
 
+    workdir = (
+        Path(EMG_CONFIG.rawreads_pipeline.base_workdir)
+        / f"{os.environ['USER']}"
+        / f"{mgnify_study.ena_study.accession}_rawreads_v6"
+        / f"rawreads-v6-sheet-{slugify(samplesheet)[-10:]}"
+    )
+    os.makedirs(workdir, exist_ok=True)
+
     command = cli_command(
         [
             ("nextflow", "run", EMG_CONFIG.rawreads_pipeline.rawreads_pipeline_repo),
@@ -68,6 +80,7 @@ def run_rawreads_pipeline_via_samplesheet(
             ("--outdir", rawreads_current_outdir),
             EMG_CONFIG.slurm.use_nextflow_tower and "-with-tower",
             ("-name", f"rawreads-v6-sheet-{slugify(samplesheet)[-10:]}"),
+            ("-work-dir", workdir),
             ("-ansi-log", "false"),
         ]
     )
@@ -102,3 +115,6 @@ def run_rawreads_pipeline_via_samplesheet(
             analysis_type="rawreads",
             completed_runs_filename=EMG_CONFIG.rawreads_pipeline.completed_runs_csv,
         )
+        delete_pipeline_workdir(
+            workdir
+        )  # will also delete past "abandoned" nextflow files
