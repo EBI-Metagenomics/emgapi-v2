@@ -184,7 +184,7 @@ def analysis_rawreads_study(study_accession: str):
     study_workdir = (
         Path(EMG_CONFIG.rawreads_pipeline.base_workdir)
         / f"{os.environ['USER']}"
-        / f"{mgnify_study.accession}_rawreads_v6"
+        / f"{mgnify_study.ena_study.accession}_rawreads_v6"
     )
     delete_pipeline_workdir(
         study_workdir

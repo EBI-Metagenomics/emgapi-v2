@@ -52,7 +52,7 @@ def run_rawreads_pipeline_via_samplesheet(
         mark_analysis_as_started(analysis)
 
     rawreads_current_outdir_parent = Path(
-        f"{EMG_CONFIG.slurm.default_workdir}/{mgnify_study.accession}_rawreads_v6"
+        f"{EMG_CONFIG.slurm.default_workdir}/{mgnify_study.ena_study.accession}_rawreads_v6"
     )
 
     rawreads_current_outdir = (
@@ -64,7 +64,7 @@ def run_rawreads_pipeline_via_samplesheet(
     workdir = (
         Path(EMG_CONFIG.rawreads_pipeline.base_workdir)
         / f"{os.environ['USER']}"
-        / f"{mgnify_study.accession}_rawreads_v6"
+        / f"{mgnify_study.ena_study.accession}_rawreads_v6"
         / f"rawreads-v6-sheet-{slugify(samplesheet)[-10:]}"
     )
     os.makedirs(workdir, exist_ok=True)
@@ -91,7 +91,7 @@ def run_rawreads_pipeline_via_samplesheet(
             + f"{',TOWER_ACCESS_TOKEN' if settings.EMG_CONFIG.slurm.use_nextflow_tower else ''} "
         )
         run_cluster_job(
-            name=f"Analyse raw-reads study {mgnify_study.accession} via samplesheet {slugify(samplesheet)}",
+            name=f"Analyse raw-reads study {mgnify_study.ena_study.accession} via samplesheet {slugify(samplesheet)}",
             command=command,
             expected_time=timedelta(
                 days=EMG_CONFIG.rawreads_pipeline.rawreads_pipeline_time_limit_days
