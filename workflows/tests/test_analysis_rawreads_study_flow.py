@@ -365,6 +365,7 @@ def test_prefect_analyse_rawreads_flow(
     Create analysis for assembly runs and launch it with samplesheet.
     One assembly has all results, one assembly failed
     """
+    os.environ["USER"] = "testuser"
     mock_queryset_hash_for_rawreads.return_value = "abc123"
 
     study_accession = "ERP136383"
