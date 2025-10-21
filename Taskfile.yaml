@@ -164,6 +164,6 @@ tasks:
       - echo "You may also need to update workflows/ena_utils/requestors.py:ENAAPIRequest"
 
   clean-nextflow-workdirs:
-    desc: "Scan for old nextflow work directories and delete."
+    desc: "Scan for old nextflow work directories and delete. (Usage: `task clean-nextflow-workdirs -- scan` and `task clean-nextflow-workdirs -- delete`)"
     cmds:
       - docker compose run --entrypoint /bin/bash app -c "python utils/clean_nextflow_workdirs.py {{.CLI_ARGS}}"
