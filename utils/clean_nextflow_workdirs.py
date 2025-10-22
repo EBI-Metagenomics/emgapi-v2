@@ -18,7 +18,7 @@ def get_directory_time_since_modification(
         if mtime > max_mtime:
             max_mtime = float(mtime)
             age = datetime.datetime.now() - datetime.datetime.fromtimestamp(max_mtime)
-            if age > min_age:
+            if age <= min_age:
                 return age
     return age
 
