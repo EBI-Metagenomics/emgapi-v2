@@ -352,6 +352,7 @@ def test_prefect_analyse_rawreads_flow(
     mock_queryset_hash_for_rawreads,
     prefect_harness,
     httpx_mock,
+    ena_any_sample_metadata,
     mock_cluster_can_accept_jobs_yes,
     mock_start_cluster_job,
     mock_check_cluster_job_all_completed,
@@ -376,7 +377,7 @@ def test_prefect_analyse_rawreads_flow(
         url=f"{EMG_CONFIG.ena.portal_search_api}?"
         f"result=study"
         f"&query=%22%28study_accession%3D{study_accession}+OR+secondary_study_accession%3D{study_accession}%29%22"
-        f"&fields=study_title%2Csecondary_study_accession"
+        f"&fields=study_title%2Cstudy_description%2Ccenter_name%2Csecondary_study_accession%2Cstudy_name"
         f"&limit=10"
         f"&format=json"
         f"&dataPortal=metagenome",

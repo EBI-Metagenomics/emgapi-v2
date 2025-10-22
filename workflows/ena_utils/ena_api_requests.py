@@ -1,3 +1,4 @@
+import logging
 import operator
 from datetime import timedelta
 from functools import reduce
@@ -21,6 +22,7 @@ from workflows.ena_utils.ena_accession_matching import (
 from workflows.ena_utils.ena_auth import dcc_auth
 from workflows.ena_utils.read_run import ENAReadRunFields, ENAReadRunQuery
 from workflows.ena_utils.requestors import ENAAPIRequest, ENAAvailabilityException
+from workflows.ena_utils.sample import ENASampleFields, ENASampleQuery
 from workflows.ena_utils.study import ENAStudyQuery, ENAStudyFields
 
 ALLOWED_LIBRARY_SOURCE: list = ["METAGENOMIC", "METATRANSCRIPTOMIC"]
@@ -32,6 +34,9 @@ EMG_CONFIG = settings.EMG_CONFIG
 
 RETRIES = EMG_CONFIG.ena.portal_search_api_max_retries
 RETRY_DELAY = EMG_CONFIG.ena.portal_search_api_retry_delay_seconds
+
+
+base_logger = logging.getLogger(__name__)
 
 
 class ENALibraryStrategyPolicy(FutureStrEnum):
@@ -192,10 +197,10 @@ def check_reads_fastq(
 
 def _make_samples_and_run(
     run_or_assembly_response: dict, study: analyses.models.Study
-) -> (ena.models.Sample, analyses.models.Sample, analyses.models.Run):
+) -> tuple[ena.models.Sample, analyses.models.Sample, analyses.models.Run]:
     _ = ENAReadRunFields  # fields used here are also present on ENAAnalysisFields
 
-    ena_sample, __ = ena.models.Sample.objects.update_or_create(
+    ena_sample, ena_sample_was_created = ena.models.Sample.objects.update_or_create(
         accession__in=[
             run_or_assembly_response[_.SAMPLE_ACCESSION],
             run_or_assembly_response[_.SECONDARY_SAMPLE_ACCESSION],
@@ -256,6 +261,13 @@ def _make_samples_and_run(
         run_or_assembly_response[_.LIBRARY_STRATEGY],
         run_or_assembly_response[_.LIBRARY_SOURCE],
     )
+
+    if ena_sample_was_created:
+        # Also fetch ALL sample metadata from ENA.
+        # Don't re-fetch unless this is first creation, as this triggers another API call per sample.
+        # This propagates to mgnify_sample by hooks.
+        sync_sample_metadata_from_ena(ena_sample)
+
     return ena_sample, mgnify_sample, run
 
 
@@ -588,3 +600,39 @@ def get_study_assemblies_from_ena(accession: str, limit: int = 10) -> list[str]:
         assembly.save()
         assemblies.append(assembly)
     return assemblies
+
+
+def sync_sample_metadata_from_ena(sample: ena.models.Sample):
+    base_logger.info(f"Syncing sample metadata from ENA for {sample}")
+    # TODO: consider refactoring this, and similar methods, into the ena/ app instead of workflows/
+    portal_sample_response = ENAAPIRequest(
+        result=ENAPortalResultType.SAMPLE,
+        fields=[
+            field.value for field in ENASampleFields
+        ],  # all available sample fields
+        limit=1,
+        query=ENASampleQuery(sample_accession=sample.accession)
+        | ENASampleQuery(secondary_sample_accession=sample.accession),
+    ).get(auth=dcc_auth, raise_on_empty=True)
+    base_logger.debug(f"Got sample metadata from ENA: {len(portal_sample_response)}")
+    if portal_sample := portal_sample_response[0]:
+        sample.metadata = portal_sample
+        sample.save()
+
+
+def sync_study_metadata_from_ena(study: ena.models.Study):
+    base_logger.info(f"Syncing study metadata from ENA for {study}")
+    # TODO: consider refactoring this, and similar methods, into the ena/ app instead of workflows/
+    portal_study_response = ENAAPIRequest(
+        result=ENAPortalResultType.STUDY,
+        fields=[
+            ENAStudyFields[f.upper()] for f in EMG_CONFIG.ena.study_metadata_fields
+        ],
+        limit=1,
+        query=ENAStudyQuery(study_accession=study.accession)
+        | ENAStudyQuery(secondary_study_accession=study.accession),
+    ).get(auth=dcc_auth, raise_on_empty=True)
+    base_logger.debug(f"Got study metadata from ENA: {len(portal_study_response)}")
+    if portal_study := portal_study_response[0]:
+        study.metadata = portal_study
+        study.save()

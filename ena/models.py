@@ -57,6 +57,8 @@ class Study(ENAModel):
         null=True, blank=True, max_length=25, db_index=True
     )
 
+    metadata = models.JSONField(default=dict)
+
     class Meta:
         verbose_name_plural = "studies"
 
@@ -103,7 +105,7 @@ def on_ena_study_saved_update_derived_suppression_and_privacy_states(
                         #  we want to avoid circular imports, and because Analysis works slightly differently
                         #  but is caught by this.
 
-                        related_qs: QuerySet = related_model.objects
+                        related_qs: QuerySet = related_model.objects.get_queryset()
 
                         related_objects_to_update_status_of = related_qs.filter(
                             ena_study=instance
@@ -135,9 +137,42 @@ def on_ena_study_saved_update_derived_suppression_and_privacy_states(
                             )
 
 
+@receiver(post_save, sender=Study)
+def on_ena_study_saved_update_mgnify_study_metadata(
+    sender, instance: Study, created, **kwargs
+):
+    if not instance.analyses_studies.exists():
+        logger.warning(f"No analyses.Study found for ena.Study {instance}")
+        return
+    if instance.analyses_studies.count() > 1:
+        logger.warning(f"More than one analyses.Study found for ena.Sample {instance}")
+        return
+    analyses_study = instance.analyses_studies.first()
+    analyses_study.metadata.update(instance.metadata)
+    # Note: does not remove keys from analyses_study.metadata – so keys like INFERRED_location would be kept.
+    analyses_study.save()
+
+
 class Sample(ENAModel):
+    # TODO: refactor this model away. It causes more complexity than benefit.
     metadata = models.JSONField(default=dict)
     study = models.ForeignKey(Study, on_delete=models.CASCADE, related_name="samples")
 
     def __str__(self):
         return self.accession
+
+
+@receiver(post_save, sender=Sample)
+def on_ena_sample_saved_update_mgnify_sample_metadata(
+    sender, instance: Sample, created, **kwargs
+):
+    if not instance.analyses_samples.exists():
+        logger.warning(f"No analyses.Sample found for ena.Sample {instance}")
+        return
+    if instance.analyses_samples.count() > 1:
+        logger.warning(f"More than one analyses.Sample found for ena.Sample {instance}")
+        return
+    analyses_sample = instance.analyses_samples.first()
+    analyses_sample.metadata.update(instance.metadata)
+    # Note: does not remove keys from analyses_sample.metadata – so keys like INFERRED_location would be kept.
+    analyses_sample.save()

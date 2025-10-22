@@ -170,7 +170,13 @@ class ENAConfig(BaseModel):
     portal_search_api_retry_delay_seconds: int = 15
     browser_view_url_prefix: AnyHttpUrl = "https://www.ebi.ac.uk/ena/browser/view"
     # TODO: migrate to the ENA Handler
-    study_metadata_fields: list[str] = ["study_title", "secondary_study_accession"]
+    study_metadata_fields: list[str] = [
+        "study_title",
+        "study_description",
+        "center_name",
+        "secondary_study_accession",
+        "study_name",
+    ]
 
     ftp_prefix: str = "ftp.sra.ebi.ac.uk/vol1/"
     fire_prefix: str = "s3://era-public/"
