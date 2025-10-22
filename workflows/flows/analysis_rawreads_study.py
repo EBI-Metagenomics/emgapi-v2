@@ -1,5 +1,3 @@
-import os
-from pathlib import Path
 from typing import Optional, List
 
 from prefect import flow, get_run_logger, suspend_flow_run
@@ -40,7 +38,7 @@ from workflows.prefect_utils.analyses_models_helpers import (
     add_study_watchers,
 )
 from workflows.flows.analyse_study_tasks.cleanup_pipeline_directories import (
-    delete_pipeline_workdir,
+    delete_study_nextflow_workdir,
 )
 
 _METAGENOMIC = "WGS"
@@ -180,15 +178,11 @@ def analysis_rawreads_study(study_accession: str):
     )
     add_rawreads_study_summaries_to_downloads(mgnify_study.accession)
     copy_v6_study_summaries(mgnify_study.accession)
-    # delete work directory
-    study_workdir = (
-        Path(EMG_CONFIG.rawreads_pipeline.base_workdir)
-        / f"{os.environ['USER']}"
-        / f"{mgnify_study.ena_study.accession}_rawreads_v6"
+    delete_study_nextflow_workdir(
+        EMG_CONFIG.rawreads_pipeline.base_workdir,
+        mgnify_study.ena_study.accession,
+        analyses_to_attempt,
     )
-    delete_pipeline_workdir(
-        study_workdir
-    )  # will also delete past "abandoned" nextflow files
 
     mgnify_study.refresh_from_db()
     mgnify_study.features.has_v6_analyses = mgnify_study.analyses.filter(
