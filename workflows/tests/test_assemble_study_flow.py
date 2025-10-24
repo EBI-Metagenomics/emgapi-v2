@@ -22,9 +22,8 @@ from workflows.flows.assemble_study_tasks.assemble_samplesheets import (
 from workflows.flows.assemble_study_tasks.make_samplesheets import (
     make_samplesheets_for_runs_to_assemble,
 )
-from workflows.prefect_utils.analyses_models_helpers import (
-    mark_assembly_status,
-)
+from workflows.prefect_utils.analyses_models_helpers import mark_assembly_status
+
 from workflows.prefect_utils.testing_utils import (
     should_not_mock_httpx_requests_to_prefect_server,
     combine_caplog_records,

@@ -5,6 +5,10 @@ fileignoreconfig:
 - filename: .github/workflows/release_k8s.yml
   checksum: 0e93196d244417801fd40ad6bfa01f53a6bf04257371378a1dc3e14cbc7a04d8
 
+fileignoreconfig:
+- filename: workflows/tests/test_analysis_rawreads_study_flow.py
+  checksum: 0f7255bdd7303269337a7d9be17d5246bfc32980697ba4135f54be201d13180a
+
 - filename: analyses/base_models/base_models.py
   allowed_patterns: [key]
 
@@ -168,6 +172,15 @@ fileignoreconfig:
 - filename: workflows/flows/alternative_realistic_example.py
   allowed_patterns: [key]
 
+fileignoreconfig:
+- filename: workflows/data_io_utils/schemas/base.py
+  checksum: 27b03a470da785c58f8294d2aa0aa3ef5f4e5ec5cffd97984ab446a5b8a9f337
+
+fileignoreconfig:
+- filename: Taskfile.yaml
+  checksum: 592e19dbbafe04c136aa73a4921ac04b2d0473e654416b08d09e81d7544b8b09
+
+
 allowed_patterns:
 - cache_key_fn
 - CommonMetadataKeys
@@ -184,5 +197,3 @@ allowed_patterns:
 - pass_whole_object
 - dictionary key
 - OpenApiKeywords
-- KeyError
-- key=lambda

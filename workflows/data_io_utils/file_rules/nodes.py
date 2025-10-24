@@ -1,14 +1,18 @@
 import inspect
 import logging
 from pathlib import Path
-from typing import List
+from typing import List, Union
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, model_validator, field_validator
 
 from workflows.data_io_utils.file_rules.base_rules import (
     DirectoryRule,
     FileRule,
     GlobRule,
+)
+from workflows.data_io_utils.file_rules.common_rules import (
+    FileExistsRule,
+    FileIsNotEmptyRule,
 )
 
 __all__ = ["File", "Directory"]
@@ -46,9 +50,13 @@ class File(BaseModel):
 
 
 class Directory(File):
-    files: List[File] = Field(
+
+    files: List[Union[File, tuple, str]] = Field(
         default_factory=list,
         description="File objects to specifically check in the directory",
+    )
+    subdirectories: List["Directory"] = Field(
+        default_factory=list, description="Subdirectories"
     )
     rules: List[DirectoryRule] = Field(
         default_factory=list,
@@ -60,6 +68,87 @@ class Directory(File):
         description="List of glob rules to be applied to the dir",
         repr=False,
     )
+
+    @field_validator("files", mode="before")
+    @classmethod
+    def validate_files(cls, files_input, info):
+        """
+        Validate and transform the files input.
+
+        This validator handles different types of file specifications:
+        - File objects (used as-is)
+        - Directory objects (used as-is)
+        - Strings (converted to File objects with default rules)
+        - Tuples of (filename, rules) where filename is a string and rules is a list of FileRule
+
+        :param files_input: The input files list
+        :param info: ValidationInfo object
+
+        :return: List of File objects
+
+        :raises ValueError: If an unsupported file specification is provided
+        """
+        if files_input is None:
+            return []
+
+        processed_files = []
+        for file_item in files_input:
+            if isinstance(file_item, File):
+                # If it's already a File or Directory object, use it as-is
+                processed_files.append(file_item)
+            elif isinstance(file_item, tuple) and len(file_item) == 2:
+                # If it's a tuple of (filename, rules), create a File with those rules
+                filename, file_rules = file_item
+                # Get the path from the model being validated
+                model_path = info.data.get("path")
+                if model_path:
+                    processed_files.append(
+                        File(
+                            path=model_path.joinpath(filename),
+                            rules=file_rules,
+                        )
+                    )
+            elif isinstance(file_item, str):
+                # If it's a string, create a File with default rules
+                model_path = info.data.get("path")
+                if model_path:
+                    processed_files.append(
+                        File(
+                            path=model_path.joinpath(file_item),
+                            rules=[FileExistsRule, FileIsNotEmptyRule],
+                        )
+                    )
+            elif isinstance(file_item, Path):
+                model_path = info.data.get("path")
+                if model_path:
+                    processed_files.append(
+                        File(
+                            path=model_path / file_item,
+                            rules=[FileExistsRule, FileIsNotEmptyRule],
+                        )
+                    )
+            else:
+                raise ValueError(f"Unsupported file specification: {file_item}")
+
+        return processed_files
+
+    def add_file(self, *parts, rules=None) -> None:
+        """
+        Create a File object within this directory.
+
+        :params  *parts: Path parts relative to this directory
+        :param   rules: List of rules to apply to the file
+        :return: File object
+        """
+        if rules is None:
+            rules = [FileExistsRule, FileIsNotEmptyRule]
+
+        self.files.append(
+            File(
+                path=self.path.joinpath(*parts),
+                rules=rules,
+            )
+        )
 
     @model_validator(mode="after")
     def passes_all_glob_rules(self):
