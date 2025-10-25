@@ -10,6 +10,19 @@ EMG_CONFIG = settings.EMG_CONFIG
 def convert_ena_ftp_to_fire_fastq(
     ftp_url: str, raise_if_not_convertible: bool = False
 ) -> str:
+    """
+    Converts an ENA FTP URL to a FIRE s3:// URL.
+
+    If the URL does not start with the expected FTP prefix,
+    it can either raise an error or log a warning based on the
+    `raise_if_not_convertible` flag.
+
+    :param ftp_url: The ENA FTP URL to be converted.
+    :param raise_if_not_convertible: Flag to determine whether to raise an
+        exception if the URL is not convertible. Default is False.
+    :return: The converted FIRE-FASTQ compatible URL, or the original URL if
+        it was not convertible.
+    """
     fire_url = ftp_url
     protocol_and_parts = fire_url.split("://")
     fire_url = protocol_and_parts[-1]  # without e.g. http:// if present
