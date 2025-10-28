@@ -36,17 +36,22 @@ def validate_pipeline_version(version: str) -> int:
 
 
 def parse_options(options):
-    options["results_directory"] = os.path.realpath(
-        options["results_directory"].strip()
-    )
+    # options["results_directory"] = os.path.realpath(
+    #     options["results_directory"].strip()
+    # )
     if not os.path.exists(options["results_directory"]):
         raise FileNotFoundError(
             f"Results dir {options['results_directory']} does not exist"
         )
 
+    # options["catalogue_dir"] = os.path.join(
+    #     options["results_directory"], options["catalogue_directory"].strip()
+    # )
     options["catalogue_dir"] = os.path.join(
-        options["results_directory"], options["catalogue_directory"].strip()
+        options["results_directory"], 'website'
     )
+
+
     options["catalogue_name"] = options["catalogue_name"].strip()
     options["catalogue_version"] = options["catalogue_version"].strip()
     options["gold_biome"] = options["gold_biome"].strip()
@@ -72,7 +77,9 @@ def get_catalogue(options):
             "version": options["catalogue_version"],
             "name": f"{options['catalogue_name']} v{options['catalogue_version']}",
             "biome": biome,
-            "result_directory": options["catalogue_dir"],
+            # "result_directory": options["catalogue_dir"],
+            # "result_directory": f"/nfs/public/services/metagenomics/results/{relative_path}",
+            "result_directory": f"/nfs/public/services/metagenomics/results/{options['results_directory']}",
             "ftp_url": GenomeConfig.MAGS_FTP_SITE,
             "pipeline_version_tag": options["pipeline_version"],
             "catalogue_biome_label": options["catalogue_biome_label"],
@@ -134,7 +141,7 @@ def process_genome_dir(catalogue, genome_dir):
 @flow(name="import_genomes_flow")
 def import_genomes_flow(
     results_directory: str,
-    catalogue_directory: str,
+    # catalogue_directory: str | None,
     catalogue_name: str,
     catalogue_version: str,
     gold_biome: str,
@@ -145,7 +152,7 @@ def import_genomes_flow(
     # Reconstruct options dictionary for backward compatibility with existing functions
     options = {
         "results_directory": results_directory,
-        "catalogue_directory": catalogue_directory,
+        # "catalogue_directory": catalogue_directory,
         "catalogue_name": catalogue_name,
         "catalogue_version": catalogue_version,
         "gold_biome": gold_biome,
@@ -182,7 +189,8 @@ def upload_catalogue_summary(catalogue, catalogue_dir):
         logger.info(f"Uploaded catalogue summary from {summary_file}")
     else:
         catalogue.other_stats = {}
-        logger.error(f"No catalogue summary found at {summary_file}")
+        logger.warning(f"No catalogue summary found at {summary_file}")
+        # logger.error(f"No catalogue summary found at {summary_file}")
     catalogue.save()
 
 
@@ -292,8 +300,9 @@ def upload_catalogue_files(catalogue, catalogue_dir):
         DownloadType,
         DownloadFileType,
     )
+    logger.info(f"MGS catalogue dir: {catalogue_dir}")
 
-    summary_path = Path(catalogue_dir) / "phylo_tree.json"
+    summary_path = Path(catalogue_dir) / "website/phylo_tree.json"
     if summary_path.is_file():
         download_file = DownloadFile(
             path=str(summary_path.relative_to(catalogue_dir)),
