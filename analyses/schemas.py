@@ -119,10 +119,14 @@ class MGnifySample(ModelSchema):
     ena_accessions: List[str] = Field(
         ..., examples=[["ERS000001", "SAMEA000000001"], ["ERS000002"]]
     )
+    sample_title: str | None = Field(
+        ..., examples=["space suit expedition sample", "Patient 3 stool"]
+    )
+    biome: Optional[Biome]
 
     class Meta:
         model = analyses.models.Sample
-        fields = ["updated_at"]
+        fields = ["updated_at", "biome"]
 
 
 class MGnifySampleWithMetadata(MGnifySample):
