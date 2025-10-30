@@ -36,17 +36,10 @@ def validate_pipeline_version(version: str) -> int:
 
 
 def parse_options(options):
-    # options["results_directory"] = os.path.realpath(
-    #     options["results_directory"].strip()
-    # )
     if not os.path.exists(options["results_directory"]):
         raise FileNotFoundError(
             f"Results dir {options['results_directory']} does not exist"
         )
-
-    # options["catalogue_dir"] = os.path.join(
-    #     options["results_directory"], options["catalogue_directory"].strip()
-    # )
     options["catalogue_dir"] = os.path.join(
         options["results_directory"], 'website'
     )
@@ -77,8 +70,6 @@ def get_catalogue(options):
             "version": options["catalogue_version"],
             "name": f"{options['catalogue_name']} v{options['catalogue_version']}",
             "biome": biome,
-            # "result_directory": options["catalogue_dir"],
-            # "result_directory": f"/nfs/public/services/metagenomics/results/{relative_path}",
             "result_directory": f"/nfs/public/services/metagenomics/results/{options['results_directory']}",
             "ftp_url": GenomeConfig.MAGS_FTP_SITE,
             "pipeline_version_tag": options["pipeline_version"],
@@ -118,6 +109,7 @@ def process_genome_dir(catalogue, genome_dir):
 
     genome_data["catalogue"] = catalogue
     genome_data["result_directory"] = get_genome_result_path(genome_dir)
+    genome_data["result_directory"] = f"/nfs/public/services/metagenomics/results/{genome_data['result_directory'].replace('/website/', '/')}"
     genome_data["biome"] = Biome.objects.filter(path=path).first()
 
     genome_data = Genome.clean_data(genome_data)
@@ -141,7 +133,6 @@ def process_genome_dir(catalogue, genome_dir):
 @flow(name="import_genomes_flow")
 def import_genomes_flow(
     results_directory: str,
-    # catalogue_directory: str | None,
     catalogue_name: str,
     catalogue_version: str,
     gold_biome: str,
@@ -152,7 +143,6 @@ def import_genomes_flow(
     # Reconstruct options dictionary for backward compatibility with existing functions
     options = {
         "results_directory": results_directory,
-        # "catalogue_directory": catalogue_directory,
         "catalogue_name": catalogue_name,
         "catalogue_version": catalogue_version,
         "gold_biome": gold_biome,
