@@ -34,6 +34,12 @@ class StudyListFilters(BiomeFilter):
         )
     )
 
+    search: Optional[str] = Field(
+        None,
+        description="Search within study titles and accessions",
+        q=["title__icontains", "accession", "ena_accessions__icontains"],
+    )
+
     def filter_has_analyses_from_pipeline(self, version: str | None) -> Q:
         if not version:
             return Q()
