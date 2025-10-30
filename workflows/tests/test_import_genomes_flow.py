@@ -19,7 +19,7 @@ def mock_genome_directory():
     temp_dir = tempfile.mkdtemp()
 
     try:
-        catalogue_dir = os.path.join(temp_dir, "catalogue")
+        catalogue_dir = os.path.join(temp_dir, "website")
         os.makedirs(catalogue_dir)
 
         with open(os.path.join(catalogue_dir, "phylo_tree.json"), "w") as f:
@@ -109,7 +109,6 @@ def test_parse_options():
     with patch("os.path.exists", return_value=True):
         options = get_default_options()
         parsed_options = parse_options(options)
-        assert parsed_options["catalogue_directory"] == "genomes/sheep-rumen/1.0"
         assert (parsed_options["catalogue_name"]) == "Sheep rumen"
         assert parsed_options["catalogue_version"] == "1.0"
         assert parsed_options["gold_biome"] == "root:Host-associated:Human"
@@ -129,7 +128,6 @@ def test_get_catalogue():
     biome = Biome.objects.create(
         id=1,
         biome_name="Rumen",
-        # path="root:Host-Associated:Human:Digestive System",
         path="root.host_associated.mammals.digestive_system.stomach.rumen",
     )
 
@@ -142,7 +140,7 @@ def test_get_catalogue():
         assert catalogue.version == "1.0"
         assert catalogue.name == "Sheep rumen v1.0"
         assert catalogue.biome == biome
-        assert catalogue.result_directory == "genomes/sheep-rumen/1.0"
+        assert catalogue.result_directory == "/nfs/public/services/metagenomics/results/genomes/sheep-rumen/1.0"
         assert catalogue.pipeline_version_tag == "v3.0.0dev"
         assert catalogue.catalogue_biome_label == "Sheep Rumen"
         assert catalogue.catalogue_type == "prokaryotes"
@@ -198,12 +196,11 @@ def test_import_genomes_flow_with_mock_directory(
     mock_lineage_to_path.return_value = biome.path
 
     options = get_default_options(
-        mock_genome_directory, catalogue_directory="catalogue"
+        mock_genome_directory
     )
     run_flow_and_capture_logs(
         import_genomes_flow,
         results_directory=options["results_directory"],
-        catalogue_directory=options["catalogue_directory"],
         catalogue_name=options["catalogue_name"],
         catalogue_version=options["catalogue_version"],
         gold_biome=options["gold_biome"],
@@ -225,8 +222,7 @@ def test_import_genomes_flow_with_mock_directory(
 
 
 def get_default_options(
-    results_directory: str = "/path/to/results",
-    catalogue_directory: str = "genomes/sheep-rumen/1.0",
+    results_directory: str = "genomes/sheep-rumen/1.0",
     catalogue_name: str = "Sheep rumen",
     catalogue_version: str = "1.0",
     gold_biome: str = "root:Host-associated:Human",
@@ -236,8 +232,7 @@ def get_default_options(
 ):
     return {
         "results_directory": results_directory,
-        "catalogue_directory": catalogue_directory,
-        "catalogue_dir": catalogue_directory,
+        "catalogue_dir": "genomes/sheep-rumen/1.0",
         "catalogue_name": catalogue_name,
         "catalogue_version": catalogue_version,
         "gold_biome": gold_biome,

@@ -292,7 +292,7 @@ def upload_catalogue_files(catalogue, catalogue_dir):
     )
     logger.info(f"MGS catalogue dir: {catalogue_dir}")
 
-    summary_path = Path(catalogue_dir) / "website/phylo_tree.json"
+    summary_path = Path(catalogue_dir) / "phylo_tree.json"
     if summary_path.is_file():
         download_file = DownloadFile(
             path=str(summary_path.relative_to(catalogue_dir)),
