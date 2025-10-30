@@ -28,12 +28,42 @@ GenomeCatalogueDetail.model_rebuild()
 
 api = NinjaExtraAPI(
     title="MGnify API",
-    description="The API for [MGnify](https://www.ebi.ac.uk/metagenomics), "
-    "EBI’s platform for the submission, analysis, discovery and comparison of metagenomic-derived datasets.",
+    description=dedent(
+        """\
+        **The API for [MGnify](https://www.ebi.ac.uk/metagenomics), EBI’s platform for the submission, analysis, discovery and comparison of metagenomic-derived datasets.**
+
+        ## Endpoints
+        API endpoints (URLs) are available for all data types stored in MGnify.
+        In general, there are list endpoints (ending `/`) and detail endpoints (ending `/<accession>`) for individually accessioned data.
+        Where a data type is not accessioned, alternative natural identifiers are used (like a short `slug` for Super Studies).
+        Commonly used relationships are available as nested list endpoints, like `studies/{accession}/samples` for the samples belonging to a study.
+
+        ## Data format
+        The API returns JSON responses.
+        List endpoints return data in the format {count: 10, items: [{...}, ...]} (unless specified otherwise)
+        Detail endpoints return a single object `{...}`.
+
+        ## Data availability
+        Most data are public, available without authentication.
+        Private data is available only to authenticated users, and the authentication is based on Webin credentials from ENA.
+        To use these, a JWT token must be obtained for the Webin credentials, using the `/auth` endpoints.
+    """
+    ),
     urls_namespace="api",
-    version="2.0-alpha",
+    version="2.0.0",
     docs_url="/",
     openapi_extra={
+        OpenApiKeywords.EXTERNAL_DOCS: {
+            OpenApiKeywords.DESCRIPTION: "MGnify documentation",
+            OpenApiKeywords.URL: "https://docs.mgnify.org/",
+        },
+        "info": {
+            "contact": {
+                OpenApiKeywords.NAME: "MGnify Support",
+                OpenApiKeywords.URL: "https://www.ebi.ac.uk/about/contact/support/metagenomics",
+            },
+            "termsOfService": "https://www.ebi.ac.uk/about/terms-of-use",
+        },
         "tags": [
             {
                 OpenApiKeywords.NAME: ApiSections.STUDIES,
@@ -105,7 +135,7 @@ api = NinjaExtraAPI(
             #         """
             #     ),
             # },
-        ]
+        ],
     },
 )
 

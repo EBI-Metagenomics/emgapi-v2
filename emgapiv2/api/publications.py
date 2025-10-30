@@ -1,9 +1,8 @@
 from typing import Literal, Optional
 
-from ninja import Query, FilterSchema
+from ninja import Query, FilterSchema, Field
 from ninja_extra import api_controller, http_get, paginate
 from ninja_extra.schemas import NinjaPaginationResponseSchema
-from pydantic import Field
 
 import analyses.models
 from analyses.schemas import (
@@ -42,7 +41,7 @@ class PublicationController(UnauthorisedIsUnfoundController):
     )
     def get_mgnify_publication(self, pubmed_id: int):
         return self.get_object_or_exception(
-            analyses.models.Publication.objects, pubmed_id=pubmed_id
+            analyses.models.Publication.objects.get_queryset(), pubmed_id=pubmed_id
         )
 
     @http_get(
@@ -54,7 +53,7 @@ class PublicationController(UnauthorisedIsUnfoundController):
     )
     def get_mgnify_publication_annotations(self, pubmed_id: int):
         self.get_object_or_exception(
-            analyses.models.Publication.objects, pubmed_id=pubmed_id
+            analyses.models.Publication.objects.get_queryset(), pubmed_id=pubmed_id
         )
         return get_epmc_publication_annotations(pubmed_id)
 

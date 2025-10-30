@@ -28,6 +28,7 @@ pytest_plugins = [
     "workflows.fixtures.slurm.conftest",
     "workflows.fixtures.flowrun_input.conftest",
     "workflows.nextflow_utils.fixtures.conftest",
+    "workflows.fixtures.ena_utils.conftest",
     "genomes.fixtures.genome.conftest",
 ]
 

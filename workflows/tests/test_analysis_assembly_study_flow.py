@@ -255,6 +255,7 @@ def test_prefect_analyse_assembly_flow(
     mock_flow_run_context,
     prefect_harness,
     httpx_mock,
+    ena_any_sample_metadata,
     mock_cluster_can_accept_jobs_yes,
     mock_start_cluster_job,
     mock_check_cluster_job_all_completed,
