@@ -40,7 +40,7 @@ api = NinjaExtraAPI(
 
         ## Data format
         The API returns JSON responses.
-        List endpoints almost always return data like `{count: 10, items: [{...}, ...]}`.
+        List endpoints return data in the format {count: 10, items: [{...}, ...]} (unless specified otherwise)
         Detail endpoints return a single object `{...}`.
 
         ## Data availability
