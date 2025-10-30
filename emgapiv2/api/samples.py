@@ -1,9 +1,12 @@
+from typing import Optional, Literal
+
+from ninja import Field, Query
 from ninja_extra import api_controller, http_get, paginate
 from ninja_extra.exceptions import NotFound
 from ninja_extra.schemas import NinjaPaginationResponseSchema
 
 import analyses.models
-from analyses.schemas import MGnifySample, MGnifySampleDetail
+from analyses.schemas import MGnifySample, MGnifySampleDetail, OrderByFilter
 from emgapiv2.api import perms
 from emgapiv2.api.auth import WebinJWTAuth, NoAuth, DjangoSuperUserAuth
 from emgapiv2.api.perms import UnauthorisedIsUnfoundController
@@ -11,7 +14,16 @@ from emgapiv2.api.schema_utils import (
     make_links_section,
     make_related_detail_link,
     ApiSections,
+    BiomeFilter,
 )
+
+
+class SampleListFilters(BiomeFilter):
+    search: Optional[str] = Field(
+        None,
+        description="Search within sample titles and accessions",
+        q=["sample_title__icontains", "ena_accessions__icontains"],
+    )
 
 
 @api_controller("samples", tags=[ApiSections.SAMPLES])
@@ -56,6 +68,14 @@ class SampleController(UnauthorisedIsUnfoundController):
         operation_id="list_mgnify_samples",
     )
     @paginate()
-    def list_mgnify_samples(self):
+    def list_mgnify_samples(
+        self,
+        filters: SampleListFilters = Query(...),
+        order: OrderByFilter[
+            Literal["sample_title", "-sample_title", "updated_at", "-updated_at", ""]
+        ] = Query(...),
+    ):
         qs = analyses.models.Sample.public_objects.all().prefetch_related("studies")
+        qs = order.order_by(qs)
+        qs = filters.filter(qs)
         return qs

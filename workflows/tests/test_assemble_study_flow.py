@@ -61,6 +61,7 @@ def test_prefect_assemble_study_flow(
     mock_queryset_hash_for_assemblies,
     prefect_harness,
     httpx_mock,
+    ena_any_sample_metadata,
     mock_suspend_flow_run,
     mock_cluster_can_accept_jobs_yes,
     mock_start_cluster_job,
@@ -467,6 +468,7 @@ def test_prefect_assemble_study_flow(
 def test_prefect_assemble_private_study_flow(
     mock_queryset_hash_for_assemblies,
     prefect_harness,
+    ena_any_sample_metadata,
     httpx_mock,
     mock_suspend_flow_run,
     mock_cluster_can_accept_jobs_yes,
