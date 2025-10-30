@@ -22,6 +22,7 @@ from emgapiv2.api.third_party_metadata import EuropePmcAnnotationResponse
 from emgapiv2.enum_utils import FutureStrEnum
 from genomes.schemas.GenomeCatalogue import GenomeCatalogueList
 from workflows.data_io_utils.filenames import trailing_slash_ensured_dir
+from workflows.ena_utils.study import ENAStudyFields
 
 logger = logging.getLogger(__name__)
 
@@ -69,6 +70,18 @@ class MGnifyStudy(ModelSchema):
 
 class MGnifyStudyDetail(MGnifyStudy):
     downloads: List[MGnifyStudyDownloadFile] = Field(..., alias="downloads_as_objects")
+    metadata: dict[ENAStudyFields, Any] = Field(
+        ...,
+        examples=[
+            {
+                ENAStudyFields.STUDY_TITLE: "ISS Metagenomes",
+                ENAStudyFields.STUDY_DESCRIPTION: "Dust was taken from a vacuum cleaner on the Internal Space Station.",
+                ENAStudyFields.CENTER_NAME: "NASA",
+            },
+            {ENAStudyFields.STUDY_TITLE: "Healthy stool samples"},
+        ],
+        description="Metadata associated with the study, a partial copy of the ENA Study record.",
+    )
 
     class Meta:
         model = analyses.models.Study
@@ -106,13 +119,38 @@ class MGnifySample(ModelSchema):
     ena_accessions: List[str] = Field(
         ..., examples=[["ERS000001", "SAMEA000000001"], ["ERS000002"]]
     )
+    sample_title: str | None = Field(
+        ..., examples=["space suit expedition sample", "Patient 3 stool"]
+    )
+    biome: Optional[Biome]
 
     class Meta:
         model = analyses.models.Sample
-        fields = ["updated_at"]
+        fields = ["updated_at", "biome"]
 
 
-class MGnifySampleDetail(MGnifySample):
+class MGnifySampleWithMetadata(MGnifySample):
+    # when rendering sample(s) in the context of a study, we don't need the study list on every sample
+    metadata: dict[analyses.models.Sample.CommonMetadataKeys, Any] = Field(
+        ...,
+        examples=[
+            {
+                analyses.models.Sample.CommonMetadataKeys.ALTITUDE: 402317,
+                analyses.models.Sample.CommonMetadataKeys.TEMPERATURE: 19.1,
+                analyses.models.Sample.CommonMetadataKeys.SAMPLE_TITLE: "space suit expedition sample",
+            },
+            {
+                analyses.models.Sample.CommonMetadataKeys.DISEASE: "Flu",
+                analyses.models.Sample.CommonMetadataKeys.SAMPLE_TITLE: "Patient 3 stool",
+            },
+        ],
+        description="Metadata associated with the sample, sourced from the ENA Sample record.",
+    )
+
+    class Meta(MGnifySample.Meta): ...
+
+
+class MGnifySampleDetail(MGnifySampleWithMetadata):
     studies: List[MGnifyStudy]
 
     class Meta(MGnifySample.Meta): ...

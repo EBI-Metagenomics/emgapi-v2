@@ -113,6 +113,7 @@ class PublicStudyManager(PrivacyFilterManagerMixin, StudyManager):
 
 
 class Study(
+    InferredMetadataMixin,
     ENADerivedModel,
     WithDownloadsModel,
     TimeStampedModel,
@@ -129,8 +130,13 @@ class Study(
         accession_prefix="MGYS", accession_length=8, db_index=True
     )
     ena_study = models.ForeignKey(
-        ena.models.Study, on_delete=models.CASCADE, null=True, blank=True
+        ena.models.Study,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="analyses_studies",
     )
+    metadata = models.JSONField(default=dict, blank=True)
     biome = models.ForeignKey(Biome, on_delete=models.CASCADE, null=True, blank=True)
 
     class StudyFeatures(BaseModel):
@@ -158,7 +164,15 @@ class Study(
         verbose_name_plural = "studies"
 
         indexes = [
-            GinIndex(fields=["features"]),
+            GinIndex(
+                fields=["features"]
+            ),  # Faster selection of studies with e.g. a certain pipeline version
+            GinIndex(
+                name="idx_study_title_trgm",
+                fields=["title"],
+                opclasses=["gin_trgm_ops"],
+            ),
+            # Fast fulltext (ish) search on the study title.
         ]
 
     @property
@@ -177,20 +191,45 @@ class Study(
 class PublicSampleManager(PrivacyFilterManagerMixin, ENADerivedManager): ...
 
 
-class Sample(ENADerivedModel, TimeStampedModel):
+class Sample(InferredMetadataMixin, ENADerivedModel, TimeStampedModel):
     CommonMetadataKeys = ENASampleFields
 
     objects = ENADerivedManager()
     public_objects = PublicSampleManager()
 
     id = models.AutoField(primary_key=True)
-    ena_sample = models.ForeignKey(ena.models.Sample, on_delete=models.CASCADE)
-    studies = models.ManyToManyField(Study)
+    ena_sample = models.ForeignKey(
+        ena.models.Sample, on_delete=models.CASCADE, related_name="analyses_samples"
+    )
+    biome = models.ForeignKey(Biome, on_delete=models.CASCADE, null=True, blank=True)
+    studies = models.ManyToManyField(Study, related_name="samples")
 
     metadata = models.JSONField(default=dict, blank=True)
 
+    sample_title = models.GeneratedField(
+        expression=Func(
+            Value("sample_title"),
+            function="jsonb_extract_path_text",
+            template="(jsonb_extract_path_text(metadata, %(expressions)s))",
+        ),
+        output_field=models.TextField(),
+        db_persist=True,
+        null=True,
+        blank=True,
+    )
+
     def __str__(self):
         return f"Sample {self.id}: {self.ena_sample}"
+
+    class Meta:
+        indexes = [
+            GinIndex(
+                name="idx_sample_title_trgm",
+                fields=["sample_title"],
+                opclasses=["gin_trgm_ops"],
+            ),
+            # Fast fulltext (ish) search on the sample name.
+        ]
 
 
 class WithExperimentTypeModel(models.Model):
@@ -921,6 +960,14 @@ class Publication(TimeStampedModel):
     class Meta:
         verbose_name = "Publication"
         verbose_name_plural = "Publications"
+        indexes = [
+            GinIndex(
+                name="idx_publication_title_trgm",
+                fields=["title"],
+                opclasses=["gin_trgm_ops"],
+            ),
+            # Fast fulltext (ish) search on the title.
+        ]
 
     def __str__(self):
         return f"Publication {self.pk}: {Truncator(self.title).words(5)}"

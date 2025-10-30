@@ -11,7 +11,7 @@ from analyses.base_models.with_downloads_models import (
     DownloadType,
     DownloadFileIndexFile,
 )
-from analyses.models import Analysis
+from analyses.models import Analysis, Sample
 
 R = TypeVar("R")
 
@@ -181,6 +181,35 @@ def test_api_samples_list(raw_reads_mgnify_sample, ninja_api_client):
     assert items[0]["ena_accessions"] in [
         s.ena_accessions for s in raw_reads_mgnify_sample
     ]
+
+    # title search should work
+    sample: Sample = raw_reads_mgnify_sample[0]
+    sample.metadata["sample_title"] = "from the space station"
+    sample.save()
+    sample.refresh_from_db()
+    assert sample.sample_title == "from the space station"
+
+    items = call_endpoint_and_get_data(
+        ninja_api_client, "/samples/?search=SPACE", count=1
+    )
+    assert items[0]["accession"] == sample.first_accession
+
+    # accession search should work
+    items = call_endpoint_and_get_data(
+        ninja_api_client, f"/samples/?search={sample.first_accession}", count=1
+    )
+    assert items[0]["accession"] == sample.first_accession
+
+
+@pytest.mark.django_db
+def test_api_study_samples_list(raw_reads_mgnify_sample, ninja_api_client):
+    items = call_endpoint_and_get_data(
+        ninja_api_client,
+        f"/studies/{raw_reads_mgnify_sample[0].studies.first().accession}/samples/",
+        count=len(raw_reads_mgnify_sample),
+    )
+    assert items[0]["accession"] in [s.first_accession for s in raw_reads_mgnify_sample]
+    assert "studies" not in items[0]
 
 
 @pytest.mark.django_db
