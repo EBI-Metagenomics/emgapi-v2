@@ -140,7 +140,10 @@ def test_get_catalogue():
         assert catalogue.version == "1.0"
         assert catalogue.name == "Sheep rumen v1.0"
         assert catalogue.biome == biome
-        assert catalogue.result_directory == "/nfs/public/services/metagenomics/results/genomes/sheep-rumen/1.0"
+        assert (
+            catalogue.result_directory
+            == "/nfs/public/services/metagenomics/results/genomes/sheep-rumen/1.0"
+        )
         assert catalogue.pipeline_version_tag == "v3.0.0dev"
         assert catalogue.catalogue_biome_label == "Sheep Rumen"
         assert catalogue.catalogue_type == "prokaryotes"
@@ -195,9 +198,7 @@ def test_import_genomes_flow_with_mock_directory(
     )
     mock_lineage_to_path.return_value = biome.path
 
-    options = get_default_options(
-        mock_genome_directory
-    )
+    options = get_default_options(mock_genome_directory)
     run_flow_and_capture_logs(
         import_genomes_flow,
         results_directory=options["results_directory"],

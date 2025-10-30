@@ -40,10 +40,7 @@ def parse_options(options):
         raise FileNotFoundError(
             f"Results dir {options['results_directory']} does not exist"
         )
-    options["catalogue_dir"] = os.path.join(
-        options["results_directory"], 'website'
-    )
-
+    options["catalogue_dir"] = os.path.join(options["results_directory"], "website")
 
     options["catalogue_name"] = options["catalogue_name"].strip()
     options["catalogue_version"] = options["catalogue_version"].strip()
@@ -109,7 +106,9 @@ def process_genome_dir(catalogue, genome_dir):
 
     genome_data["catalogue"] = catalogue
     genome_data["result_directory"] = get_genome_result_path(genome_dir)
-    genome_data["result_directory"] = f"/nfs/public/services/metagenomics/results/{genome_data['result_directory'].replace('/website/', '/')}"
+    genome_data["result_directory"] = (
+        f"/nfs/public/services/metagenomics/results/{genome_data['result_directory'].replace('/website/', '/')}"
+    )
     genome_data["biome"] = Biome.objects.filter(path=path).first()
 
     genome_data = Genome.clean_data(genome_data)
@@ -290,6 +289,7 @@ def upload_catalogue_files(catalogue, catalogue_dir):
         DownloadType,
         DownloadFileType,
     )
+
     logger.info(f"MGS catalogue dir: {catalogue_dir}")
 
     summary_path = Path(catalogue_dir) / "phylo_tree.json"
