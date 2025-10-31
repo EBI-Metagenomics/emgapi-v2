@@ -105,9 +105,9 @@ def process_genome_dir(catalogue, genome_dir):
     path = Biome.lineage_to_path(genome_data["gold_biome"])
 
     genome_data["catalogue"] = catalogue
-    genome_data["result_directory"] = get_genome_result_path(genome_dir)
+    genome_results_path = get_genome_result_path(genome_dir)
     genome_data["result_directory"] = (
-        f"/nfs/public/services/metagenomics/results/{genome_data['result_directory'].replace('/website/', '/')}"
+        f"/nfs/public/services/metagenomics/results/{genome_results_path.replace('/website/', '/')}"
     )
     genome_data["biome"] = Biome.objects.filter(path=path).first()
 
@@ -289,8 +289,6 @@ def upload_catalogue_files(catalogue, catalogue_dir):
         DownloadType,
         DownloadFileType,
     )
-
-    logger.info(f"MGS catalogue dir: {catalogue_dir}")
 
     summary_path = Path(catalogue_dir) / "phylo_tree.json"
     if summary_path.is_file():
