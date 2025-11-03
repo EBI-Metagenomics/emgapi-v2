@@ -51,6 +51,7 @@ class Command(BaseCommand):
         :param args: Positional arguments
         :param options: Command options dictionary
         """
+        # TODO: this command is meant to be used for testing the batch creation at this point.
         study_accession = options["study_accession"]
         # TODO: implement the biome setting
         # biome_path = options["biome"]
@@ -78,6 +79,7 @@ class Command(BaseCommand):
         #     self.stdout.write(f"Biome set: {biome.path}")
 
         # Fetch assemblies from ENA
+        # TODO: print an error or similar if the study has more than 500 assemblies (which is the default arg)
         assemblies_accessions = get_study_assemblies_from_ena(
             ena_study.accession,
             limit=options["max_assemblies"],

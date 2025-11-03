@@ -222,11 +222,11 @@ def run_assembler_for_samplesheet(
 
     command = cli_command(
         [
-            ("nextflow", "run", EMG_CONFIG.assembler.assembly_pipeline_repo),
-            ("-r", EMG_CONFIG.assembler.miassemebler_git_revision),
+            ("nextflow", "run", EMG_CONFIG.assembler.pipeline_repo),
+            ("-r", EMG_CONFIG.assembler.pipeline_git_revision),
             "-latest",  # Pull changes from GitHub
-            ("-profile", EMG_CONFIG.assembler.miassembler_nf_profile),
-            ("-config", EMG_CONFIG.assembler.miassembler_config_file),
+            ("-profile", EMG_CONFIG.assembler.pipeline_nf_profile),
+            ("-config", EMG_CONFIG.assembler.pipeline_config_file),
             "-resume",
             ("--samplesheet", samplesheet_csv),
             mgnify_study.is_private and "--private_study",
@@ -239,10 +239,8 @@ def run_assembler_for_samplesheet(
         run_cluster_job(
             name=f"Assemble study {mgnify_study.ena_study.accession} via samplesheet {file_path_shortener(samplesheet_csv, 1, 15, True)}",
             command=command,
-            expected_time=timedelta(
-                days=EMG_CONFIG.assembler.assembly_pipeline_time_limit_days
-            ),
-            memory=f"{EMG_CONFIG.assembler.assembly_nextflow_master_job_memory_gb}G",
+            expected_time=timedelta(days=EMG_CONFIG.assembler.pipeline_time_limit_days),
+            memory=f"{EMG_CONFIG.assembler.nextflow_master_job_memory_gb}G",
             environment="ALL,TOWER_ACCESS_TOKEN,TOWER_WORKSPACE_ID",
             input_files_to_hash=[samplesheet_csv],
             resubmit_policy=ResubmitIfFailedPolicy,

@@ -6,7 +6,6 @@ import re
 from pathlib import Path
 from typing import ClassVar, Union, Optional
 
-import pandas as pd
 from aenum import extend_enum
 from db_file_storage.model_utils import delete_file, delete_file_if_needed
 from django.conf import settings
@@ -32,17 +31,12 @@ from analyses.base_models.base_models import (
     DbStoredFileField,
 )
 from analyses.base_models.mgnify_accessioned_models import MGnifyAccessionField
-from analyses.base_models.with_downloads_models import WithDownloadsModel, DownloadFile
+from analyses.base_models.with_downloads_models import WithDownloadsModel
 from analyses.base_models.with_status_models import SelectByStatusManagerMixin
 from analyses.base_models.with_watchers_models import WithWatchersModel
 from emgapiv2.async_utils import anysync_property
 from emgapiv2.enum_utils import FutureStrEnum
 from emgapiv2.model_utils import JSONFieldWithSchema
-from workflows.data_io_utils.csv.csv_comment_handler import CSVDelimiter
-from workflows.data_io_utils.file_rules.common_rules import (
-    DirectoryExistsRule,
-    FileExistsRule,
-)
 from workflows.ena_utils.read_run import ENAReadRunFields
 from workflows.ena_utils.sample import ENASampleFields
 
@@ -675,9 +669,7 @@ class Analysis(
     )
     is_suppressed = models.BooleanField(default=False)
 
-    # TODO: we need docs around these "constants" there loads and it's not clear (at least to me [mbc]) what their
-    #       purpose is.
-
+    # TODO: remove all of the abandoned annotations JSON fields and associated logic from this model
     PFAMS = "pfams"
 
     TAXONOMIES = "taxonomies"
@@ -714,9 +706,6 @@ class Analysis(
     class FunctionalSources(FutureStrEnum):
         PFAM: str = "pfam"
 
-    # TODO: this doesn't seems to be used
-    FUNCTIONAL_PFAM = f"{FUNCTIONAL_ANNOTATION}__{FunctionalSources.PFAM}"
-
     @staticmethod
     def default_annotations():
         return {
@@ -724,8 +713,8 @@ class Analysis(
             Analysis.PFAMS: [],
         }
 
+    # TODO: These fields are part of a previous and abandoned idea of storing annotations and qc in json fields
     annotations = models.JSONField(default=default_annotations.__func__)
-    # TODO: what do we store here? A help_text would be useful.
     quality_control = models.JSONField(default=dict, blank=True)
 
     ALLOWED_DOWNLOAD_GROUP_PREFIXES = [
@@ -760,6 +749,9 @@ class Analysis(
 
     class AnalysisStates(FutureStrEnum):
         # TODO: this is pipeline specific - I think we need to move elsewhere or refactor (mbc)
+        # One idea is to strictly keyed high level generic state (even fewer than this set),
+        # and then a freely-keyed one for the pipeline specifics.
+        # Maybe using something similar to Prefect's StateType
         ANALYSIS_STARTED = "analysis_started"
         ANALYSIS_COMPLETED = "analysis_completed"
         ANALYSIS_BLOCKED = "analysis_blocked"
@@ -816,172 +808,6 @@ class Analysis(
             )
         if prev_experiment_type != self.experiment_type:
             self.save()
-
-    def import_from_pipeline_file_schema(
-        self,
-        schema,
-        file_path: Path,
-    ) -> None:
-        """
-        Import data from a pipeline file schema into this analysis.
-
-        # Type: PipelineFileSchema - no type hint due to circular import with workflows.data_io_utils.schemas.base
-
-        :param schema: The pipeline file schema with import configuration (PipelineFileSchema)
-        :param file_path: Path to the file to import
-        """
-        df = pd.read_csv(file_path, sep=CSVDelimiter.TAB)
-
-        if schema.import_config.import_column:
-            data = df[schema.import_config.import_column].to_list()
-        else:
-            if schema.import_config.import_as_records:
-                data = df.to_dict(orient="records")
-            else:
-                data = df.to_dict()
-
-        self.annotations[schema.import_config.annotations_key] = data
-        self.save()
-
-    def import_from_pipeline_results(
-        self, schema, base_path: Path, validate_first: bool = True
-    ) -> int:
-        """
-        Complete pipeline results import orchestrator.
-
-        This is the central method that coordinates:
-        - Structure validation (optional)
-        - Annotation import
-        - Download generation
-
-        :param schema: Pipeline result schema instance (PipelineResultSchema)
-        :param base_path: Path to pipeline results directory
-        :param validate_first: Whether to validate structure before import
-        :return: Number of downloads generated
-        """
-        logger.info(f"Importing pipeline results from {base_path}")
-
-        # Import annotations - raises exception on failure
-        identifier = self.assembly.first_accession
-
-        # Validation (optional) - raises exception on failure
-        if validate_first:
-            schema.validate_results(base_path, identifier)
-
-        # Walk through schema directories and import files directly
-        for dir_schema in schema.directories:
-            self._import_from_directory(dir_schema, base_path / identifier, identifier)
-
-        # Generate downloads - count successful ones
-        downloads_generated = self._generate_downloads_from_schema(
-            schema, base_path, identifier
-        )
-
-        self.save()
-
-        logger.info(
-            f"Successfully imported pipeline results with {downloads_generated} downloads"
-        )
-        return downloads_generated
-
-    def _import_from_directory(self, dir_schema, base_path: Path, identifier: str):
-        """
-        Import annotations from a directory using its schema.
-
-        dir_schema type -> PipelineDirectorySchema - can't add because of circular import
-
-        :param dir_schema: PipelineDirectorySchema defining the directory structure
-        :param base_path: Base path containing the directory
-        :param identifier: Pipeline run identifier
-        :raises: PipelineImportError if required files are missing
-        """
-        dir_path = base_path / dir_schema.folder_name
-
-        if not dir_path.exists():
-            # Check if a directory is required based on validation rules
-            if DirectoryExistsRule in dir_schema.validation_rules:
-                # TODO: Should we define custom exception?
-                raise ValueError(f"Required directory {dir_path} not found")
-            return
-
-        # Import files directly from the schema
-        for file_schema in dir_schema.files:
-            if file_schema.import_config:  # Only import files that have import config
-                file_path = dir_path / file_schema.get_filename(identifier)
-
-                if file_path.exists():
-                    self.import_from_pipeline_file_schema(file_schema, file_path)
-                else:
-                    # Check if a file is required based on validation rules
-                    if FileExistsRule in file_schema.validation_rules:
-                        # TODO: Should we define a custom exception?
-                        raise ValueError(f"Required file {file_path} not found")
-
-        # Recurse into subdirectories
-        for subdir_schema in dir_schema.subdirectories:
-            self._import_from_directory(subdir_schema, dir_path, identifier)
-
-    def _generate_downloads_from_schema(
-        self, schema, base_path: Path, identifier: str  # PipelineResultSchema
-    ) -> int:
-        """
-        Generate downloads from the pipeline schema.
-
-        :param schema: PipelineResultSchema defining the pipeline structure
-        :param base_path: Base path containing the pipeline results
-        :param identifier: Pipeline run identifier
-        :return: Number of downloads generated
-        """
-        downloads_count = 0
-
-        for dir_schema in schema.directories:
-            downloads_count += self._generate_downloads_from_directory(
-                dir_schema,
-                base_path / identifier,
-                identifier,
-                results_base_path=base_path,
-            )
-
-        return downloads_count
-
-    def _generate_downloads_from_directory(
-        self,
-        dir_schema,
-        base_path: Path,
-        identifier: str,
-        results_base_path: Path,  # PipelineDirectorySchema
-    ) -> int:
-        """
-        Generate downloads from a directory schema.
-
-        :param dir_schema: PipelineDirectorySchema defining the directory structure
-        :param base_path: Base path containing the directory
-        :param identifier: Pipeline run identifier
-        :param results_base_path: Root base path for computing relative download paths
-        :return: Number of downloads generated
-        """
-        downloads_count = 0
-        dir_path = base_path / dir_schema.folder_name
-
-        if not dir_path.exists():
-            return 0
-
-        # Generate downloads directly from schema files
-        for file_schema in dir_schema.files:
-            download_file = DownloadFile.from_pipeline_file_schema(
-                file_schema, self, dir_path, results_base_path
-            )
-            if download_file:
-                self.add_download(download_file)
-                downloads_count += 1
-
-        # Recurse into subdirectories
-        for subdir_schema in dir_schema.subdirectories:
-            downloads_count += self._generate_downloads_from_directory(
-                subdir_schema, dir_path, identifier, results_base_path
-            )
-
-        return downloads_count
 
     class Meta:
         verbose_name_plural = "Analyses"

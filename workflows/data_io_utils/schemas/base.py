@@ -12,8 +12,7 @@ from pydantic import BaseModel, Field
 import analyses.models
 from analyses.base_models.with_downloads_models import (
     DownloadFile,
-    DownloadFileType,
-    DownloadType,
+    DownloadFileMetadata,
 )
 from workflows.data_io_utils.file_rules.base_rules import (
     FileRule,
@@ -21,24 +20,8 @@ from workflows.data_io_utils.file_rules.base_rules import (
     GlobRule,
 )
 from workflows.data_io_utils.file_rules.common_rules import DirectoryExistsRule
-from workflows.data_io_utils.file_rules.nodes import Directory
+from workflows.data_io_utils.file_rules.nodes import Directory, File
 from .exceptions import PipelineValidationError, PipelineImportError
-
-
-class DownloadFileMetadata(BaseModel):
-    """
-    Metadata configuration for generating DownloadFile objects.
-
-    This class separates download metadata from validation logic,
-    providing a clean way to configure how pipeline outputs should
-    be exposed as downloadable files.
-    """
-
-    file_type: DownloadFileType = Field(..., description="Type of the download file")
-    download_type: DownloadType = Field(..., description="Category of the download")
-    download_group: str = Field(..., description="Group identifier for the download")
-    short_description: str = Field(..., description="Brief description of the file")
-    long_description: str = Field(..., description="Detailed description of the file")
 
 
 class ImportConfig(BaseModel):
@@ -213,11 +196,23 @@ class PipelineDirectorySchema(BaseModel):
         """
         dir_path = base_path / self.folder_name
 
-        # Prepare files for validation
+        # Prepare files for validation - create File objects
         files_to_validate = []
         for file_schema in self.files:
             filename = file_schema.get_filename(identifier)
-            files_to_validate.append((filename, file_schema.validation_rules))
+            file_path = dir_path / filename
+            # Create File object with validation rules from schema
+            try:
+                file_obj = File(
+                    path=file_path,
+                    rules=file_schema.validation_rules,
+                )
+                files_to_validate.append(file_obj)
+            except ValueError as e:
+                # File validation failed - wrap and re-raise as PipelineValidationError
+                raise PipelineValidationError(
+                    f"Directory validation failed for {dir_path}: {e}"
+                )
 
         # Create Directory object with validation
         try:

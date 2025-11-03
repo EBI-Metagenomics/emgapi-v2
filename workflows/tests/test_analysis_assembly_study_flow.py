@@ -358,6 +358,7 @@ def test_prefect_analyse_assembly_flow(
     mock_check_cluster_job_all_completed,
     mock_suspend_flow_run,
     assembly_analysis_ena_study,
+    assembly_analysis_ena_samples,
     admin_user,
     top_level_biomes,
 ):
@@ -656,6 +657,7 @@ def test_prefect_analyse_assembly_flow_missing_directory(
     mock_start_cluster_job,
     mock_check_cluster_job_all_completed,
     assembly_analysis_ena_study,
+    assembly_analysis_ena_samples,
     mock_suspend_flow_run,
     admin_user,
     top_level_biomes,
@@ -822,6 +824,7 @@ def test_prefect_analyse_assembly_flow_invalid_schema(
     mock_start_cluster_job,
     mock_check_cluster_job_all_completed,
     assembly_analysis_ena_study,
+    assembly_analysis_ena_samples,
     mock_suspend_flow_run,
     admin_user,
     top_level_biomes,

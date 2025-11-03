@@ -62,12 +62,12 @@ def run_amplicon_pipeline_via_samplesheet(
 
     command = cli_command(
         [
-            ("nextflow", "run", EMG_CONFIG.amplicon_pipeline.amplicon_pipeline_repo),
-            ("-r", EMG_CONFIG.amplicon_pipeline.amplicon_pipeline_git_revision),
+            ("nextflow", "run", EMG_CONFIG.amplicon_pipeline.pipeline_repo),
+            ("-r", EMG_CONFIG.amplicon_pipeline.pipeline_git_revision),
             "-latest",  # Pull changes from GitHub
             (
                 "-c",
-                settings.EMG_CONFIG.amplicon_pipeline.pipeline_nf_config,
+                settings.EMG_CONFIG.amplicon_pipeline.pipeline_config_file,
             ),
             (
                 "-profile",
@@ -91,9 +91,9 @@ def run_amplicon_pipeline_via_samplesheet(
             name=f"Analyse amplicon study {mgnify_study.ena_study.accession} via samplesheet {slugify(samplesheet)}",
             command=command,
             expected_time=timedelta(
-                days=EMG_CONFIG.amplicon_pipeline.amplicon_pipeline_time_limit_days
+                days=EMG_CONFIG.amplicon_pipeline.pipeline_time_limit_days
             ),
-            memory=f"{EMG_CONFIG.amplicon_pipeline.amplicon_nextflow_master_job_memory_gb}G",
+            memory=f"{EMG_CONFIG.amplicon_pipeline.nextflow_master_job_memory_gb}G",
             environment=env_variables,
             input_files_to_hash=[samplesheet],
             working_dir=amplicon_current_outdir,

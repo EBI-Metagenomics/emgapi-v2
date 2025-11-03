@@ -2,6 +2,7 @@ import uuid
 
 from prefect import task, get_run_logger
 
+from workflows.data_io_utils.mgnify_v6_utils.assembly import AssemblyResultImporter
 from workflows.data_io_utils.schemas import (
     MapResultSchema,
     VirifyResultSchema,
@@ -60,8 +61,9 @@ def assembly_analysis_batch_results_importer(
         logger.info(
             f"Validating and importing results into the DB the downloads for {analysis} using schema {schema}"
         )
-        # TODO: extend this to capture errors and log them
-        downloads_count = analysis.import_from_pipeline_results(
+        # TODO: extend this to capture errors and log them, if the validation fails it will just bubble up
+        importer = AssemblyResultImporter(analysis)
+        downloads_count = importer.import_results(
             schema=schema,
             base_path=base_path,
             validate_first=True,

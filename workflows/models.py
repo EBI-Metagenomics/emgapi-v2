@@ -178,6 +178,8 @@ ready()
 
 #############################################################
 ## == The following models are for the Assembly Analysis == #
+## This is the first implementation of multi-step pipeline  #
+## and batching of analyses.                                #
 #############################################################
 
 
@@ -236,6 +238,7 @@ class AssemblyAnalysisPipelineStatus(models.TextChoices):
     """
     Pipeline execution states (synced from Prefect).
     Maps Prefect flow states to batch-level pipeline states.
+    TODO: We should revisit all the different pipeline status and centralise them
     """
 
     PENDING = "pending", "Pending"
@@ -405,9 +408,8 @@ class AssemblyAnalysisBatchManager(models.Manager):
         analysis_ids = list(analyses_qs.values_list("id", flat=True))
 
         if not analysis_ids:
+            logger.error(f"No pending analyses found for study {study.accession}")
             return []
-            # TODO: should this be an error?
-            # raise ValueError(f"No pending analyses found for study {study.accession}")
 
         # Apply safety cap if specified
         if max_analyses and len(analysis_ids) > max_analyses:
@@ -525,7 +527,6 @@ class AssemblyAnalysisBatch(StudyAnalysisBatch, AssemblyAnalysisPipelineBaseMode
         max_length=100, null=True, blank=True, db_index=True
     )
 
-    # Error tracking
     last_error = models.TextField(null=True, blank=True)
 
     # Pipeline versions
@@ -592,7 +593,7 @@ class AssemblyAnalysisBatch(StudyAnalysisBatch, AssemblyAnalysisPipelineBaseMode
         """
         Validate that a state transition is allowed.
 
-        Terminal states (COMPLETED, FAILED, PARTIAL_RESULTS, IMPORTED)
+        Terminal states (COMPLETED, FAILED)
         cannot transition to active states (RUNNING, SCHEDULED).
 
         :param pipeline_type: The pipeline being transitioned
@@ -616,7 +617,7 @@ class AssemblyAnalysisBatch(StudyAnalysisBatch, AssemblyAnalysisPipelineBaseMode
         if from_status == to_status:
             return
 
-        # Allow terminal -> terminal transitions (e.g., COMPLETED -> PARTIAL_RESULTS)
+        # Allow terminal -> terminal transitions (e.g., COMPLETED -> FAILED)
         # Allow active -> terminal transitions (normal flow)
         # Allow active -> active transitions (e.g., SCHEDULED -> RUNNING)
 

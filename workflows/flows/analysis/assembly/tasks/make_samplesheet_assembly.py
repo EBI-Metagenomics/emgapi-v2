@@ -5,8 +5,8 @@ from pathlib import Path
 from django.db.models import QuerySet
 from prefect import task, get_run_logger
 
-import analyses.models
 from activate_django_first import EMG_CONFIG
+import analyses.models
 from workflows.ena_utils.analysis import ENAAnalysisFields
 from workflows.models import (
     AssemblyAnalysisBatch,
@@ -140,6 +140,8 @@ def make_samplesheet_for_map(
 
     # Create the samplesheet with the required columns
     with open(map_samplesheet_filename, "w", newline="") as csvfile:
+        # MAP requires these fields
+        # https://github.com/EBI-Metagenomics/mobilome-annotation-pipeline?tab=readme-ov-file#inputs
         fieldnames = ["sample", "assembly", "user_proteins_gff", "virify_gff"]
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
         writer.writeheader()

@@ -71,10 +71,10 @@ def run_rawreads_pipeline_via_samplesheet(
 
     command = cli_command(
         [
-            ("nextflow", "run", EMG_CONFIG.rawreads_pipeline.rawreads_pipeline_repo),
-            ("-r", EMG_CONFIG.rawreads_pipeline.rawreads_pipeline_git_revision),
+            ("nextflow", "run", EMG_CONFIG.rawreads_pipeline.pipeline_repo),
+            ("-r", EMG_CONFIG.rawreads_pipeline.pipeline_git_revision),
             "-latest",  # Pull changes from GitHub
-            ("-config", EMG_CONFIG.rawreads_pipeline.rawreads_pipeline_config_file),
+            ("-config", EMG_CONFIG.rawreads_pipeline.pipeline_config_file),
             "-resume",
             ("--samplesheet", samplesheet),
             ("--outdir", rawreads_current_outdir),
@@ -94,9 +94,9 @@ def run_rawreads_pipeline_via_samplesheet(
             name=f"Analyse raw-reads study {mgnify_study.ena_study.accession} via samplesheet {slugify(samplesheet)}",
             command=command,
             expected_time=timedelta(
-                days=EMG_CONFIG.rawreads_pipeline.rawreads_pipeline_time_limit_days
+                days=EMG_CONFIG.rawreads_pipeline.pipeline_time_limit_days
             ),
-            memory=f"{EMG_CONFIG.rawreads_pipeline.rawreads_nextflow_master_job_memory_gb}G",
+            memory=f"{EMG_CONFIG.rawreads_pipeline.nextflow_master_job_memory_gb}G",
             environment=env_variables,
             input_files_to_hash=[samplesheet],
             working_dir=rawreads_current_outdir,
