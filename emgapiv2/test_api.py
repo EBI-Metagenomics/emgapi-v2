@@ -356,3 +356,10 @@ def test_publication_annotations(ninja_api_client, publication, httpx_mock):
     assert (
         annotations["other"][1]["annotations"][0]["mentions"][0]["exact"] == "preflight"
     )
+
+
+@pytest.mark.django_db
+def test_biomes_endpoint(ninja_api_client, top_level_biomes):
+    biomes = call_endpoint_and_get_data(ninja_api_client, "/biomes/", count=4)
+    assert biomes[-1]["biome_name"] == "Human"
+    assert biomes[-1]["lineage"] == "root:Host-Associated:Human"

@@ -17,6 +17,7 @@ class ApiSections(FutureStrEnum):
     REQUESTS = "Requests"
     PRIVATE_DATA = "Private Data"
     GENOMES = "Genomes"
+    MISC = "Miscellaneous"
     AUTH = "Authentication"
 
 

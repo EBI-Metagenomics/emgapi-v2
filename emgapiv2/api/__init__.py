@@ -4,6 +4,7 @@ from ninja_extra import NinjaExtraAPI
 
 from emgapiv2.api.schema_utils import OpenApiKeywords, ApiSections
 from .analyses import AnalysisController
+from .biome import BiomeController
 from .private import MyDataController
 from .publications import PublicationController
 from .samples import SampleController
@@ -119,6 +120,14 @@ api = NinjaExtraAPI(
                 ),
             },
             {
+                OpenApiKeywords.NAME: ApiSections.MISC,
+                OpenApiKeywords.DESCRIPTION: dedent(
+                    """
+                    Other miscellaneous endpoints in support of the API.
+                    """
+                ),
+            },
+            {
                 OpenApiKeywords.NAME: ApiSections.AUTH,
                 OpenApiKeywords.DESCRIPTION: dedent(
                     """
@@ -145,6 +154,7 @@ api.register_controllers(SampleController)
 api.register_controllers(StudyController)
 api.register_controllers(SuperStudyController)
 api.register_controllers(GenomeController)
+api.register_controllers(BiomeController)
 api.register_controllers(MyDataController)
 
 # Private data auth token provider (Webin JWTs)
