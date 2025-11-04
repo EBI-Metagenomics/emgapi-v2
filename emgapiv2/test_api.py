@@ -363,3 +363,11 @@ def test_biomes_endpoint(ninja_api_client, top_level_biomes):
     biomes = call_endpoint_and_get_data(ninja_api_client, "/biomes/", count=4)
     assert biomes[-1]["biome_name"] == "Human"
     assert biomes[-1]["lineage"] == "root:Host-Associated:Human"
+
+    call_endpoint_and_get_data(
+        ninja_api_client, "/biomes/?biome_lineage=root:Host-Associated", count=2
+    )
+
+    call_endpoint_and_get_data(ninja_api_client, "/biomes/?max_depth=1", count=1)
+    call_endpoint_and_get_data(ninja_api_client, "/biomes/?max_depth=2", count=3)
+    call_endpoint_and_get_data(ninja_api_client, "/biomes/?max_depth=10", count=4)

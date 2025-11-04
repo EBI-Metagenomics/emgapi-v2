@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, ClassVar
 
 from caseconverter import pascalcase, titlecase
 from django.db.models import Q
@@ -68,6 +68,10 @@ def make_links_section(links: dict, response_code: int = 200) -> dict:
 
 
 class BiomeFilter(FilterSchema):
+    LOOKUP_STRING: ClassVar[str] = (
+        "biome__path__descendants"  # e.g. biome__path__descendants if this object's self.biome: Biome
+    )
+
     biome_lineage: Optional[str] = Field(
         None, description="The lineage to match, including all descendant biomes"
     )
@@ -75,4 +79,4 @@ class BiomeFilter(FilterSchema):
     def filter_biome_lineage(self, lineage: str | None) -> Q:
         if not lineage:
             return Q()
-        return Q(biome__path__descendants=Biome.lineage_to_path(lineage))
+        return Q(**{self.LOOKUP_STRING: Biome.lineage_to_path(lineage)})
