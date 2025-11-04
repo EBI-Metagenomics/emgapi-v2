@@ -23,6 +23,14 @@ def assembly_ena_study():
 
 
 @pytest.fixture
+def assembly_analysis_ena_study():
+    raw_reads_study = {"primary_accession": "PRJEB24849", "title": "Project 2"}
+    return ena_models.Study.objects.get_or_create(
+        accession=raw_reads_study["primary_accession"], title=raw_reads_study["title"]
+    )[0]
+
+
+@pytest.fixture
 def private_webin():
     return "Webin-12345"
 

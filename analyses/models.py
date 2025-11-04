@@ -8,6 +8,7 @@ from typing import ClassVar, Union, Optional
 
 from aenum import extend_enum
 from db_file_storage.model_utils import delete_file, delete_file_if_needed
+from django.conf import settings
 from django.contrib.postgres.indexes import GinIndex
 from django.core.exceptions import MultipleObjectsReturned, ObjectDoesNotExist
 from django.core.files.storage import storages
@@ -38,7 +39,6 @@ from emgapiv2.enum_utils import FutureStrEnum
 from emgapiv2.model_utils import JSONFieldWithSchema
 from workflows.ena_utils.read_run import ENAReadRunFields
 from workflows.ena_utils.sample import ENASampleFields
-
 
 # Some models associated with MGnify Analyses (MGYS, MGYA etc).
 
@@ -159,6 +159,27 @@ class Study(
 
     def __str__(self):
         return self.accession
+
+    def set_results_dir_default(self):
+        """
+        This method checks if the `results_dir` attribute is not set. If so, it will
+        initialize `results_dir` to a default value based on the `ena_study.accession`
+        and the pre-configured `default_workdir`. The method then creates the directory
+        if it does not already exist and saves the updated state.
+        """
+        # TODO: This needs to be refactored
+        # This feels like it probably belongs elsewhere, though exactly where depends on what odd case
+        # we're trying to catch? Should it be a migration? Or a management command we run after
+        # certain bad things happen? Or somewhere in the flows?
+        if not self.results_dir:
+            # TODO: there is a v6 hardcoded here.
+            self.results_dir = (
+                Path(settings.EMG_CONFIG.slurm.default_workdir)
+                / f"{self.ena_study.accession}_v6"
+            )
+            logger.info(f"Setting {self}'s results_dir to default {self.results_dir}")
+            self.results_dir.mkdir(exist_ok=True)
+            self.save()
 
     class Meta:
         verbose_name_plural = "studies"
@@ -452,7 +473,7 @@ class Assembly(InferredMetadataMixin, TimeStampedModel, ENADerivedModel):
         self.status[status] = set_status_as
         if reason:
             self.status[f"{status}_reason"] = reason
-        return self.save()
+        self.save()
 
     def add_erz_accession(self, erz_accession):
         if erz_accession not in self.ena_accessions:
@@ -631,7 +652,7 @@ class Analysis(
 
     accession = MGnifyAccessionField(accession_prefix="MGYA", accession_length=8)
 
-    suppression_following_fields = ["sample"]  # TODO
+    suppression_following_fields = ["sample"]
     study = models.ForeignKey(
         Study, on_delete=models.CASCADE, to_field="accession", related_name="analyses"
     )
@@ -652,20 +673,19 @@ class Analysis(
     )
     is_suppressed = models.BooleanField(default=False)
 
-    GENOME_PROPERTIES = "genome_properties"
-    GO_TERMS = "go_terms"
-    GO_SLIMS = "go_slims"
-    INTERPRO_IDENTIFIERS = "interpro_identifiers"
-    KEGG_MODULES = "kegg_modules"
-    KEGG_ORTHOLOGS = "kegg_orthologs"
-    ANTISMASH_GENE_CLUSTERS = "antismash_gene_clusters"
+    # TODO: remove all of the abandoned annotations JSON fields and associated logic from this model
     PFAMS = "pfams"
-    RHEA_REACTIONS = "rhea_reactions"
 
     TAXONOMIES = "taxonomies"
     CLOSED_REFERENCE = "closed_reference"
     ASV = "asv"
+
+    # ASA - results categories
+    CODING_SEQUENCES = "coding_sequences"
     FUNCTIONAL_ANNOTATION = "functional_annotation"
+    PATHWAYS_AND_SYSTEMS = "pathways_and_systems"
+    VIRIFY = "virify"
+    MAP = "mobilome_annotation_pipeline"
 
     class TaxonomySources(FutureStrEnum):
         SSU: str = "ssu"
@@ -687,37 +707,36 @@ class Analysis(
     TAXONOMIES_DADA2_PR2 = f"{TAXONOMIES}__{TaxonomySources.DADA2_PR2}"
     TAXONOMIES_UNIREF = f"{TAXONOMIES}__{TaxonomySources.UNIREF}"
 
+    class FunctionalSources(FutureStrEnum):
+        PFAM: str = "pfam"
+
+    @staticmethod
+    def default_annotations():
+        return {
+            Analysis.TAXONOMIES: [],
+            Analysis.PFAMS: [],
+        }
+
+    # TODO: These fields are part of a previous and abandoned idea of storing annotations and qc in json fields
+    annotations = models.JSONField(default=default_annotations.__func__)
+    quality_control = models.JSONField(default=dict, blank=True)
+
     ALLOWED_DOWNLOAD_GROUP_PREFIXES = [
         "all",  # catch-all for legacy
         f"{TAXONOMIES}.closed_reference.",
         f"{TAXONOMIES}.asv.",
         "quality_control",
         "primer_identification",
-        "asv",
+        "taxonomy",
+        "annotation_summary",
+        ASV,
+        PFAMS,
+        CODING_SEQUENCES,
         FUNCTIONAL_ANNOTATION,
+        PATHWAYS_AND_SYSTEMS,
+        VIRIFY,
+        MAP,
     ]
-
-    class FunctionalSources(FutureStrEnum):
-        PFAM: str = "pfam"
-
-    FUNCTIONAL_PFAM = f"{FUNCTIONAL_ANNOTATION}__{FunctionalSources.PFAM}"
-
-    @staticmethod
-    def default_annotations():
-        return {
-            Analysis.GENOME_PROPERTIES: [],
-            Analysis.GO_TERMS: [],
-            Analysis.GO_SLIMS: [],
-            Analysis.INTERPRO_IDENTIFIERS: [],
-            Analysis.KEGG_MODULES: [],
-            Analysis.KEGG_ORTHOLOGS: [],
-            Analysis.TAXONOMIES: [],
-            Analysis.ANTISMASH_GENE_CLUSTERS: [],
-            Analysis.PFAMS: [],
-        }
-
-    annotations = models.JSONField(default=default_annotations.__func__)
-    quality_control = models.JSONField(default=dict, blank=True)
 
     class KnownMetadataKeys:
         MARKER_GENE_SUMMARY = "marker_gene_summary"  # for amplicon analyses
@@ -733,6 +752,10 @@ class Analysis(
     )
 
     class AnalysisStates(FutureStrEnum):
+        # TODO: this is pipeline specific - I think we need to move elsewhere or refactor (mbc)
+        # One idea is to strictly keyed high level generic state (even fewer than this set),
+        # and then a freely-keyed one for the pipeline specifics.
+        # Maybe using something similar to Prefect's StateType
         ANALYSIS_STARTED = "analysis_started"
         ANALYSIS_COMPLETED = "analysis_completed"
         ANALYSIS_BLOCKED = "analysis_blocked"
@@ -757,12 +780,18 @@ class Analysis(
     )
 
     def mark_status(
-        self, status: AnalysisStates, set_status_as: bool = True, reason: str = None
+        self,
+        status: AnalysisStates,
+        set_status_as: bool = True,
+        reason: str = None,
+        save: bool = True,
     ):
         self.status[status] = set_status_as
         if reason:
             self.status[f"{status}_reason"] = reason
-        return self.save()
+        if save:
+            return self.save()
+        return self
 
     @property
     def assembly_or_run(self) -> Union[Assembly, Run]:

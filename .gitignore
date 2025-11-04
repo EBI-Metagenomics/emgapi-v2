@@ -27,3 +27,4 @@ dev-db.json
 talisman_report/
 slurm-dev-environment/fs/nfs/ftp/public/databases/metagenomics/mgnify_results/*
 genomes/temp/*
+slurm-dev-environment/fs/nfs/public/tests/assembly_v6_output/ERP106708/MGYS*
