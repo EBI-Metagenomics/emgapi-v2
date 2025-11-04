@@ -89,7 +89,7 @@ def make_samplesheet_for_map(
     Uses filesystem structure instead of database queries to find required files.
     Assumes results follow the expected pipeline structure:
     - ASA CDS GFF: {asa_workspace}/{assembly_accession}/cds/{assembly_accession}_predicted_cds.gff.gz
-    - VIRify GFF: {virify_workspace}/{assembly_accession}/08-final/gff/{assembly_accession}_virify.gff.gz
+    - VIRify GFF: {virify_workspace}/{assembly_accession}/08-final/gff/{assembly_accession}_virify.gff
 
     The samplesheet has the following columns:
     - sample: the assembly first_accession
@@ -170,7 +170,7 @@ def make_samplesheet_for_map(
                 virify_workspace
                 / assembly_accession
                 / EMG_CONFIG.virify_pipeline.final_gff_folder
-                / f"{assembly_accession}_virify.gff.gz"
+                / f"{assembly_accession}_virify.gff"
             )
 
             # The files should exist at this point... but nevertheless check

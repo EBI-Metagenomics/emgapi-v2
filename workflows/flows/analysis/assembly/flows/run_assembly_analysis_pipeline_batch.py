@@ -205,8 +205,6 @@ def run_assembly_analysis_pipeline_batch(
             # We stop the execution here as this is a problematic issue
             return
 
-        assembly_analysis_batch.refresh_from_db()
-
         ##################
         # === VIRify === #
         ##################
@@ -214,6 +212,8 @@ def run_assembly_analysis_pipeline_batch(
         run_virify_batch(
             assembly_analyses_batch_id=assembly_analysis_batch.id,
         )
+        # Refresh batch to get updates from run_virify_batch (samplesheet path, status, etc.)
+        assembly_analysis_batch.refresh_from_db()
         logger.info("Validating and importing completed VIRify analyses.")
         # At least one analysis must be completed to mark the batch as completed
         completed_virify_analyses_count = assembly_analysis_batch.batch_analyses.filter(
@@ -262,7 +262,6 @@ def run_assembly_analysis_pipeline_batch(
                 return
         else:
             logger.info("No VIRify analyses completed, marking batch as failed.")
-        assembly_analysis_batch.refresh_from_db()
 
         ###############
         # === MAP === #
@@ -271,6 +270,8 @@ def run_assembly_analysis_pipeline_batch(
         run_map_batch(
             assembly_analyses_batch_id=assembly_analysis_batch.id,
         )
+        # Refresh batch to get updates from run_map_batch (samplesheet path, status, etc.)
+        assembly_analysis_batch.refresh_from_db()
         logger.info(
             "Validating and importing completed Mobilome Annotation Pipeline analyses."
         )

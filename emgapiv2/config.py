@@ -122,6 +122,7 @@ class RawReadsPipelineConfig(MGnifyPipelineConfig):
     # Resources
     pipeline_time_limit_days: int = 5
     samplesheet_chunk_size: int = 50
+    # TODO: remove this one, it is part of the default pipelines config
     base_workdir: str = (
         "/hps/nobackup/rdf/metagenomics/service-team/nextflow-workdir/rawreads-pipeline"
     )
@@ -145,7 +146,6 @@ class RawReadsPipelineConfig(MGnifyPipelineConfig):
 
 
 class AssemblyAnalysisPipelineConfig(MGnifyPipelineConfig):
-    # TODO: review this one as I think I've hard-coded some bits in the code but they should use these settings
     pipeline_repo: str = "ebi-metagenomics/assembly-analysis-pipeline"
     pipeline_git_revision: str = "dev"
     pipeline_time_limit_days: int = 5

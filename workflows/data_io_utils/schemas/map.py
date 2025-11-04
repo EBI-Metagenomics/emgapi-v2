@@ -28,7 +28,7 @@ class MapResultSchema(PipelineResultSchema):
         """
         # Main mobilome annotation directory (root of MAP output)
         mobilome_annotation_dir = PipelineDirectorySchema(
-            folder_name=".",  # MAP outputs directly to the output directory root
+            folder_name=EMG_CONFIG.map_pipeline.final_gff_folder,
             validation_rules=[DirectoryExistsRule],
             files=[
                 PipelineFileSchema(
@@ -37,7 +37,6 @@ class MapResultSchema(PipelineResultSchema):
                     download_metadata=DownloadFileMetadata(
                         file_type=DownloadFileType.GFF,
                         download_type=DownloadType.FUNCTIONAL_ANALYSIS,
-                        # TODO: we need to centralise models and download groups
                         download_group=analyses.models.Analysis.MAP,
                         short_description="Mobilome annotations",
                         long_description="Mobilome annotation from MAP (Mobilome Annotation Pipeline)",

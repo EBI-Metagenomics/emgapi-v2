@@ -20,7 +20,7 @@ from workflows.models import (
 from workflows.prefect_utils.slurm_flow import ClusterJobFailedException
 
 
-def setup_asa_output_fixtures(asa_outdir: Path, assembly_accession: str):
+def setup_asa_output_helpers(asa_outdir: Path, assembly_accession: str):
     """
     Create mock ASA pipeline output files.
 
@@ -74,7 +74,7 @@ def setup_asa_output_fixtures(asa_outdir: Path, assembly_accession: str):
     analysed_assemblies_csv.write_text(f"{assembly_accession},completed")
 
 
-def setup_virify_output_fixtures(virify_outdir: Path, assembly_accession: str):
+def setup_virify_output_helpers(virify_outdir: Path, assembly_accession: str):
     """
     Create mock VIRify pipeline output files.
 
@@ -86,24 +86,25 @@ def setup_virify_output_fixtures(virify_outdir: Path, assembly_accession: str):
     gff_dir = assembly_dir / settings.EMG_CONFIG.virify_pipeline.final_gff_folder
     gff_dir.mkdir(parents=True, exist_ok=True)
 
-    # Create VIRify GFF file
-    virify_gff = gff_dir / f"{assembly_accession}_virify.gff.gz"
+    # Create VIRify GFF file (not gzipped to match schema expectation)
+    virify_gff = gff_dir / f"{assembly_accession}_virify.gff"
     virify_gff.write_text("##gff-version 3\n# Mock VIRify GFF content")
 
 
-def setup_map_output_fixtures(map_outdir: Path, assembly_accession: str):
+def setup_map_output_helpers(map_outdir: Path, assembly_accession: str):
     """
     Create mock MAP pipeline output files.
 
     :param map_outdir: MAP output directory
     :param assembly_accession: Assembly accession
     """
-    # Create assembly-specific directory
+    # Create assembly-specific directory with gff subdirectory
     assembly_dir = map_outdir / assembly_accession
-    assembly_dir.mkdir(parents=True, exist_ok=True)
+    gff_dir = assembly_dir / settings.EMG_CONFIG.map_pipeline.final_gff_folder
+    gff_dir.mkdir(parents=True, exist_ok=True)
 
-    # Create MAP GFF file (directly in assembly directory, not in subdirectory)
-    map_gff = assembly_dir / "mobilome_prokka.gff"
+    # Create MAP GFF file in the gff subdirectory to match schema expectation
+    map_gff = gff_dir / "mobilome_prokka.gff"
     map_gff.write_text("##gff-version 3\n# Mock MAP GFF content")
 
 
@@ -201,9 +202,9 @@ def test_full_chain_success(
     virify_outdir = batch.get_pipeline_workspace(AssemblyAnalysisPipeline.VIRIFY)
     map_outdir = batch.get_pipeline_workspace(AssemblyAnalysisPipeline.MAP)
 
-    setup_asa_output_fixtures(asa_outdir, assembly_accession)
-    setup_virify_output_fixtures(virify_outdir, assembly_accession)
-    setup_map_output_fixtures(map_outdir, assembly_accession)
+    setup_asa_output_helpers(asa_outdir, assembly_accession)
+    setup_virify_output_helpers(virify_outdir, assembly_accession)
+    setup_map_output_helpers(map_outdir, assembly_accession)
 
     # Run the full chain
     run_assembly_analysis_pipeline_batch(assembly_analysis_batch_id=batch.id)
@@ -386,7 +387,7 @@ def test_virify_failure_partial_results(
 
     # Set up ASA output (so it completes) but VIRify will fail
     asa_outdir = batch.get_pipeline_workspace(AssemblyAnalysisPipeline.ASA)
-    setup_asa_output_fixtures(asa_outdir, assembly_accession)
+    setup_asa_output_helpers(asa_outdir, assembly_accession)
 
     # Run the flow
     run_assembly_analysis_pipeline_batch(assembly_analysis_batch_id=batch.id)

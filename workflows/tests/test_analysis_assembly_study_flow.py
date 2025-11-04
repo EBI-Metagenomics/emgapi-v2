@@ -275,7 +275,7 @@ def setup_virify_batch_fixtures(
     Helper to copy VIRify test fixtures into the batch workspace.
     This mimics what the actual VIRify pipeline would produce.
 
-    VIRify structure: {virify_workspace}/{assembly_accession}/08-final/gff/*.gff.gz
+    VIRify structure: {virify_workspace}/{assembly_accession}/08-final/gff/*.gff (decompressed)
 
     :param batch: The AssemblyAnalysisBatch to set up fixtures for
     :param scenario: Test scenario with study and assembly details
@@ -296,11 +296,15 @@ def setup_virify_batch_fixtures(
         / "gff"
         / f"{scenario.assembly_accession_success}_virify.gff.gz"
     )
-    dst_gff = gff_dir / f"{scenario.assembly_accession_success}_virify.gff.gz"
+    dst_gff = gff_dir / f"{scenario.assembly_accession_success}_virify.gff"
 
     if src_gff.exists():
-        shutil.copy2(src_gff, dst_gff)
-        print(f"Copied VIRify GFF from {src_gff} to {dst_gff}")
+        # Copy and decompress the gzipped fixture to match schema expectation (.gff not .gff.gz)
+        import gzip
+
+        with gzip.open(src_gff, "rt") as f_in:
+            dst_gff.write_text(f_in.read())
+        print(f"Copied and decompressed VIRify GFF from {src_gff} to {dst_gff}")
     else:
         print(f"Warning: VIRify fixture not found at {src_gff}")
 
@@ -314,7 +318,7 @@ def setup_map_batch_fixtures(
     Helper to copy MAP test fixtures into the batch workspace.
     This mimics what the actual MAP pipeline would produce.
 
-    MAP structure: {map_workspace}/{assembly_accession}/mobilome_prokka.gff
+    MAP structure: {map_workspace}/{assembly_accession}/gff/mobilome_prokka.gff
 
     :param batch: The AssemblyAnalysisBatch to set up fixtures for
     :param scenario: Test scenario with study and assembly details
@@ -323,14 +327,14 @@ def setup_map_batch_fixtures(
     # Get MAP workspace
     map_workspace = batch.get_pipeline_workspace(AssemblyAnalysisPipeline.MAP)
 
-    # Create MAP output directory (includes assembly accession directory)
+    # Create MAP output directory (includes assembly accession directory and gff subdirectory)
     assembly_dir = map_workspace / scenario.assembly_accession_success
-    assembly_dir.mkdir(parents=True, exist_ok=True)
+    gff_dir = assembly_dir / EMG_CONFIG.map_pipeline.final_gff_folder
+    gff_dir.mkdir(parents=True, exist_ok=True)
 
-    # TODO: Add actual MAP fixtures when available
-    # For now, create a placeholder GFF file to satisfy schema validation
-    # MAP expects a mobilome_prokka.gff file in the assembly directory
-    placeholder_gff = assembly_dir / "mobilome_prokka.gff"
+    # Create a placeholder GFF file to satisfy schema validation
+    # MAP expects a mobilome_prokka.gff file in the gff subdirectory
+    placeholder_gff = gff_dir / "mobilome_prokka.gff"
     if not placeholder_gff.exists():
         placeholder_gff.write_text("##gff-version 3\n# Placeholder MAP output\n")
         print(f"Created placeholder MAP GFF at {placeholder_gff}")
@@ -577,14 +581,12 @@ def test_prefect_analyse_assembly_flow(
 
     # Verify VIRify pipeline state
     assert batch.virify_status == AssemblyAnalysisPipelineStatus.COMPLETED
-    # TODO: for some reason these are empty, but in run_virify_batch() this saved...
-    # assert batch.virify_samplesheet_path is not None
-    # assert Path(batch.virify_samplesheet_path).exists()
-    # Verify VIRify pipeline version
-    # assert (
-    #     batch.get_pipeline_version(AssemblyAnalysisPipeline.VIRIFY)
-    #     == settings.EMG_CONFIG.virify_pipeline.pipeline_git_revision
-    # )
+    assert batch.virify_samplesheet_path is not None
+    assert Path(batch.virify_samplesheet_path).exists()
+    assert (
+        batch.get_pipeline_version(AssemblyAnalysisPipeline.VIRIFY)
+        == settings.EMG_CONFIG.virify_pipeline.pipeline_git_revision
+    )
 
     # Verify VIRify workspace and results
     virify_workspace = batch.get_pipeline_workspace(AssemblyAnalysisPipeline.VIRIFY)
@@ -593,19 +595,18 @@ def test_prefect_analyse_assembly_flow(
         virify_workspace
         / assembly_test_scenario.assembly_accession_success
         / EMG_CONFIG.virify_pipeline.final_gff_folder
-        / f"{assembly_test_scenario.assembly_accession_success}_virify.gff.gz"
+        / f"{assembly_test_scenario.assembly_accession_success}_virify.gff"
     )
     assert virify_gff.exists()
 
     # Verify MAP pipeline state
-    # TODO: just as VIRIfy, these are not recorded for some reason!
-    # assert batch.map_status == AssemblyAnalysisPipelineStatus.COMPLETED
-    # assert batch.map_samplesheet_path is not None
-    # # Verify MAP pipeline version
-    # assert (
-    #     batch.get_pipeline_version(AssemblyAnalysisPipeline.MAP)
-    #     == settings.EMG_CONFIG.map_pipeline.pipeline_git_revision
-    # )
+    assert batch.map_status == AssemblyAnalysisPipelineStatus.COMPLETED
+    assert batch.map_samplesheet_path is not None
+    # Verify MAP pipeline version
+    assert (
+        batch.get_pipeline_version(AssemblyAnalysisPipeline.MAP)
+        == settings.EMG_CONFIG.map_pipeline.pipeline_git_revision
+    )
 
     # Verify MAP workspace and results
     map_workspace = batch.get_pipeline_workspace(AssemblyAnalysisPipeline.MAP)
@@ -613,6 +614,7 @@ def test_prefect_analyse_assembly_flow(
     map_gff = (
         map_workspace
         / assembly_test_scenario.assembly_accession_success
+        / EMG_CONFIG.map_pipeline.final_gff_folder
         / "mobilome_prokka.gff"
     )
     assert map_gff.exists()

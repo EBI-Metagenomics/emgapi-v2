@@ -2,22 +2,13 @@ from django.contrib import admin
 from django.urls import reverse
 from django.utils.html import format_html
 from unfold.admin import ModelAdmin
-from unfold.contrib.filters.admin import AutocompleteSelectFilter
+from unfold.contrib.filters.admin import AutocompleteSelectMultipleFilter
 from unfold.decorators import display, action
 
+from workflows.admin.utils import STATUS_LABELS
 from workflows.models import (
     AssemblyAnalysisBatchAnalysis,
-    AssemblyAnalysisPipelineStatus,
 )
-
-STATUS_LABELS = {
-    AssemblyAnalysisPipelineStatus.PENDING: "info",
-    AssemblyAnalysisPipelineStatus.RUNNING: "warning",
-    AssemblyAnalysisPipelineStatus.COMPLETED: "success",
-    AssemblyAnalysisPipelineStatus.FAILED: "danger",
-}
-
-# TODO: this whole file needs to be reviewd. Claude generated this one and I didn't have time for a proper review
 
 
 @admin.register(AssemblyAnalysisBatchAnalysis)
@@ -44,20 +35,21 @@ class AssemblyAnalysisBatchAnalysisAdmin(ModelAdmin):
         "order",
     ]
 
+    list_filter_submit = True
+
     list_filter = [
-        "disabled",
+        ("batch", AutocompleteSelectMultipleFilter),
+        ("analysis__assembly", AutocompleteSelectMultipleFilter),
         "asa_status",
         "virify_status",
         "map_status",
-        ("batch", AutocompleteSelectFilter),
-        ("analysis__assembly", AutocompleteSelectFilter),
+        "disabled",
         "created_at",
     ]
 
     search_fields = [
         "analysis__accession",
-        "analysis__assembly__first_accession",
-        "analysis__assembly__accessions",
+        "analysis__assembly__ena_accessions",
         "batch__study__accession",
         "batch__id",
     ]
@@ -69,6 +61,16 @@ class AssemblyAnalysisBatchAnalysisAdmin(ModelAdmin):
     ordering = ["-created_at"]
 
     actions = ["disable_selected_relations", "enable_selected_relations"]
+
+    def get_queryset(self, request):
+        """
+        Override to use all_objects manager to show disabled records in admin.
+
+        :param request: The HTTP request
+        :return: QuerySet including disabled batch assembly analyses
+        :rtype: QuerySet
+        """
+        return self.model.all_objects.get_queryset()
 
     fieldsets = (
         (
@@ -165,8 +167,8 @@ class AssemblyAnalysisBatchAnalysisAdmin(ModelAdmin):
     @display(
         description="Disabled",
         label={
-            True: "danger",
-            False: "success",
+            "Yes": "danger",
+            "No": "success",
         },
     )
     def disabled_badge(self, obj):

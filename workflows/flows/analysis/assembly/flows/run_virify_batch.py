@@ -87,6 +87,9 @@ def run_virify_batch(assembly_analyses_batch_id: uuid.UUID):
         )
         return
 
+    logger.info(
+        f"Using samplesheet {virify_samplesheet_path} for VIRify pipeline, saving in batch"
+    )
     assembly_analysis_batch.virify_samplesheet_path = str(virify_samplesheet_path)
     assembly_analysis_batch.save()
 

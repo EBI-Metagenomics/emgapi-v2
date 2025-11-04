@@ -70,7 +70,7 @@ def analysis_assembly_study(study_accession: str, workspace_dir: str = None):
     # Get assemble-able runs
     assemblies_accessions: list[str] = get_study_assemblies_from_ena(
         ena_study.accession,
-        limit=500,  # TODO: this should be a config value
+        limit=10000,  # TODO: this should be a config value
     )
     logger.info(f"Returned {len(assemblies_accessions)} assemblies from ENA portal API")
 

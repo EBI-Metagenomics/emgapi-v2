@@ -167,8 +167,12 @@ class Study(
         and the pre-configured `default_workdir`. The method then creates the directory
         if it does not already exist and saves the updated state.
         """
+        # TODO: This needs to be refactored
+        # This feels like it probably belongs elsewhere, though exactly where depends on what odd case
+        # we're trying to catch? Should it be a migration? Or a management command we run after
+        # certain bad things happen? Or somewhere in the flows?
         if not self.results_dir:
-            # TODO: there is a v6 harcoded here.
+            # TODO: there is a v6 hardcoded here.
             self.results_dir = (
                 Path(settings.EMG_CONFIG.slurm.default_workdir)
                 / f"{self.ena_study.accession}_v6"
@@ -648,7 +652,7 @@ class Analysis(
 
     accession = MGnifyAccessionField(accession_prefix="MGYA", accession_length=8)
 
-    suppression_following_fields = ["sample"]  # TODO, what?
+    suppression_following_fields = ["sample"]
     study = models.ForeignKey(
         Study, on_delete=models.CASCADE, to_field="accession", related_name="analyses"
     )

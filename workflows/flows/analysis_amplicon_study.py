@@ -76,7 +76,7 @@ def analysis_amplicon_study(study_accession: str):
 
     read_runs = get_study_readruns_from_ena(
         ena_study.accession,
-        limit=10000,
+        limit=10000,  # TODO: This should be a parameter or config
         raise_on_empty=False,
         filter_library_strategy=library_strategy_policy_to_filter(
             _AMPLICON, policy=ENALibraryStrategyPolicy.ONLY_IF_CORRECT_IN_ENA

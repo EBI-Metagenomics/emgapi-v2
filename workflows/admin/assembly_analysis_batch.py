@@ -2,25 +2,16 @@ from django.contrib import admin
 from django.urls import reverse
 from django.utils.html import format_html
 from unfold.admin import ModelAdmin, TabularInline
-from unfold.contrib.filters.admin import AutocompleteSelectFilter
+from unfold.contrib.filters.admin import AutocompleteSelectMultipleFilter
 from unfold.decorators import display, action
 
 from analyses.admin.base import JSONFieldWidgetOverridesMixin
+from workflows.admin.utils import STATUS_LABELS
 from workflows.models import (
     AssemblyAnalysisBatch,
     AssemblyAnalysisBatchAnalysis,
     AssemblyAnalysisPipelineStatus,
 )
-
-# TODO: this is repeated
-STATUS_LABELS = {
-    AssemblyAnalysisPipelineStatus.PENDING: "info",
-    AssemblyAnalysisPipelineStatus.RUNNING: "warning",
-    AssemblyAnalysisPipelineStatus.COMPLETED: "success",
-    AssemblyAnalysisPipelineStatus.FAILED: "danger",
-}
-
-# TODO: this whole file needs to be reviewd. Claude generated this one and I didn't have time for a proper review
 
 
 class AssemblyAnalysisBatchAnalysisInline(TabularInline):
@@ -39,6 +30,7 @@ class AssemblyAnalysisBatchAnalysisInline(TabularInline):
         "virify_status",
         "map_status",
         "disabled",
+        "disabled_reason",
         "order",
     ]
     readonly_fields = ["analysis_link", "assembly_link"]
@@ -74,6 +66,8 @@ class AssemblyAnalysisBatchAdmin(JSONFieldWidgetOverridesMixin, ModelAdmin):
     - Display of pipeline states and versions
     """
 
+    list_filter_submit = True
+
     list_display = [
         "id_short",
         "study_link",
@@ -84,15 +78,16 @@ class AssemblyAnalysisBatchAdmin(JSONFieldWidgetOverridesMixin, ModelAdmin):
         "updated_at",
     ]
 
-    list_filter = [
-        ["study", AutocompleteSelectFilter],  # FIXME: not wroking!
+    list_filter = (
+        ["study", AutocompleteSelectMultipleFilter],
         "asa_status",
         "virify_status",
         "map_status",
         "created_at",
-    ]
+    )
 
     search_fields = [
+        "id",
         "study__accession",
         "study__title",
     ]
@@ -160,7 +155,8 @@ class AssemblyAnalysisBatchAdmin(JSONFieldWidgetOverridesMixin, ModelAdmin):
             batch.save()
 
             # Reset all batch assembly analyses to PENDING
-            batch.batch_analyses.all_objects.all().update(
+            # This doesn't account for the disabled ones.
+            batch.batch_analyses.objects.all().update(
                 asa_status=AssemblyAnalysisPipelineStatus.PENDING,
                 virify_status=AssemblyAnalysisPipelineStatus.PENDING,
                 map_status=AssemblyAnalysisPipelineStatus.PENDING,
