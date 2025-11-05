@@ -2,10 +2,11 @@ import uuid
 from datetime import timedelta
 from pathlib import Path
 
-from django.conf import settings
 from django.utils.text import slugify
 from prefect import flow, get_run_logger
 from prefect.runtime import flow_run
+
+from activate_django_first import EMG_CONFIG
 
 from analyses.models import Study, Analysis
 from workflows.data_io_utils.schemas import PipelineValidationError
@@ -70,7 +71,7 @@ def run_assembly_analysis_pipeline_batch(
     # Each batch is used to keep track of the pipelines executed.
     assembly_analysis_batch.set_pipeline_version(
         AssemblyAnalysisPipeline.ASA,
-        settings.EMG_CONFIG.assembly_analysis_pipeline.pipeline_git_revision,
+        EMG_CONFIG.assembly_analysis_pipeline.pipeline_git_revision,
     )
 
     # Mark the batch as running (the analyses are marked as RUNNING too)
@@ -108,26 +109,26 @@ def run_assembly_analysis_pipeline_batch(
             (
                 "nextflow",
                 "run",
-                settings.EMG_CONFIG.assembly_analysis_pipeline.pipeline_repo,
+                EMG_CONFIG.assembly_analysis_pipeline.pipeline_repo,
             ),
             (
                 "-r",
-                settings.EMG_CONFIG.assembly_analysis_pipeline.pipeline_git_revision,
+                EMG_CONFIG.assembly_analysis_pipeline.pipeline_git_revision,
             ),
             "-latest",
             (
                 "-c",
-                settings.EMG_CONFIG.assembly_analysis_pipeline.pipeline_config_file,
+                EMG_CONFIG.assembly_analysis_pipeline.pipeline_config_file,
             ),
             (
                 "-profile",
-                settings.EMG_CONFIG.assembly_analysis_pipeline.pipeline_nf_profile,
+                EMG_CONFIG.assembly_analysis_pipeline.pipeline_nf_profile,
             ),
             "-resume",
             ("--input", samplesheet),
             ("--outdir", assembly_analyses_workspace_dir),
             ("-name", f"asa-v6-sheet-{slugify(str(samplesheet))[-10:]}"),
-            settings.EMG_CONFIG.slurm.use_nextflow_tower and "-with-tower",
+            EMG_CONFIG.slurm.use_nextflow_tower and "-with-tower",
             ("-ansi-log", "false"),
         ]
     )
@@ -135,15 +136,15 @@ def run_assembly_analysis_pipeline_batch(
     try:
         env_variables = (
             "ALL,TOWER_WORKSPACE_ID"
-            + f"{',TOWER_ACCESS_TOKEN' if settings.EMG_CONFIG.slurm.use_nextflow_tower else ''} "
+            + f"{',TOWER_ACCESS_TOKEN' if EMG_CONFIG.slurm.use_nextflow_tower else ''} "
         )
         run_cluster_job(
             name=f"Analyse assembly study {mgnify_study.ena_study.accession} via samplesheet {slugify(str(samplesheet))}",
             command=command,
             expected_time=timedelta(
-                days=settings.EMG_CONFIG.assembly_analysis_pipeline.pipeline_time_limit_days
+                days=EMG_CONFIG.assembly_analysis_pipeline.pipeline_time_limit_days
             ),
-            memory=f"{settings.EMG_CONFIG.assembly_analysis_pipeline.nextflow_master_job_memory_gb}G",
+            memory=f"{EMG_CONFIG.assembly_analysis_pipeline.nextflow_master_job_memory_gb}G",
             environment=env_variables,
             input_files_to_hash=[samplesheet],
             working_dir=assembly_analyses_workspace_dir,
