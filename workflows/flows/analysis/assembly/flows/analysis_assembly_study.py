@@ -6,10 +6,11 @@ from prefect import flow, get_run_logger, suspend_flow_run
 from prefect.input import RunInput
 from pydantic import Field
 
+from activate_django_first import EMG_CONFIG
+
 import analyses.models
 import ena.models
 import workflows.models
-from activate_django_first import EMG_CONFIG
 from workflows.ena_utils.ena_api_requests import (
     get_study_from_ena,
     get_study_assemblies_from_ena,
