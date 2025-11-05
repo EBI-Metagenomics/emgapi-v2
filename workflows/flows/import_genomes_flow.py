@@ -2,13 +2,12 @@ import os
 import re
 from pathlib import Path
 
-import django
 from django.db import close_old_connections
 from prefect import task, flow, get_run_logger
 
-from emgapiv2.config import GenomeConfig
+from activate_django_first import EMG_CONFIG
 
-django.setup()
+genome_config = EMG_CONFIG.genomes
 
 from analyses.models import Biome
 from genomes.management.lib.genome_util import (
@@ -36,17 +35,12 @@ def validate_pipeline_version(version: str) -> int:
 
 
 def parse_options(options):
-    options["results_directory"] = os.path.realpath(
-        options["results_directory"].strip()
-    )
     if not os.path.exists(options["results_directory"]):
         raise FileNotFoundError(
             f"Results dir {options['results_directory']} does not exist"
         )
+    options["catalogue_dir"] = os.path.join(options["results_directory"], "website")
 
-    options["catalogue_dir"] = os.path.join(
-        options["results_directory"], options["catalogue_directory"].strip()
-    )
     options["catalogue_name"] = options["catalogue_name"].strip()
     options["catalogue_version"] = options["catalogue_version"].strip()
     options["gold_biome"] = options["gold_biome"].strip()
@@ -72,8 +66,8 @@ def get_catalogue(options):
             "version": options["catalogue_version"],
             "name": f"{options['catalogue_name']} v{options['catalogue_version']}",
             "biome": biome,
-            "result_directory": options["catalogue_dir"],
-            "ftp_url": GenomeConfig.MAGS_FTP_SITE,
+            "result_directory": f"{genome_config.RESULTS_DIRECTORY_ROOT}/{options['results_directory']}",
+            "ftp_url": genome_config.MAGS_FTP_SITE,
             "pipeline_version_tag": options["pipeline_version"],
             "catalogue_biome_label": options["catalogue_biome_label"],
             "catalogue_type": options["catalogue_type"],
@@ -110,7 +104,10 @@ def process_genome_dir(catalogue, genome_dir):
     path = Biome.lineage_to_path(genome_data["gold_biome"])
 
     genome_data["catalogue"] = catalogue
-    genome_data["result_directory"] = get_genome_result_path(genome_dir)
+    genome_results_path = get_genome_result_path(genome_dir)
+    genome_data["result_directory"] = (
+        f"{genome_config.RESULTS_DIRECTORY_ROOT}/{genome_results_path.replace('/website/', '/')}"
+    )
     genome_data["biome"] = Biome.objects.filter(path=path).first()
 
     genome_data = Genome.clean_data(genome_data)
@@ -134,7 +131,6 @@ def process_genome_dir(catalogue, genome_dir):
 @flow(name="import_genomes_flow")
 def import_genomes_flow(
     results_directory: str,
-    catalogue_directory: str,
     catalogue_name: str,
     catalogue_version: str,
     gold_biome: str,
@@ -145,7 +141,6 @@ def import_genomes_flow(
     # Reconstruct options dictionary for backward compatibility with existing functions
     options = {
         "results_directory": results_directory,
-        "catalogue_directory": catalogue_directory,
         "catalogue_name": catalogue_name,
         "catalogue_version": catalogue_version,
         "gold_biome": gold_biome,
@@ -182,7 +177,8 @@ def upload_catalogue_summary(catalogue, catalogue_dir):
         logger.info(f"Uploaded catalogue summary from {summary_file}")
     else:
         catalogue.other_stats = {}
-        logger.error(f"No catalogue summary found at {summary_file}")
+        logger.warning(f"No catalogue summary found at {summary_file}")
+        # logger.error(f"No catalogue summary found at {summary_file}")
     catalogue.save()
 
 
