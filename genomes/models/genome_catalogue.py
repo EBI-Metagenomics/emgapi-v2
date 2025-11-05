@@ -1,9 +1,11 @@
 from django.db import models
+from django.conf import settings
 
 from analyses.base_models.base_models import TimeStampedModel
 from analyses.base_models.with_downloads_models import WithDownloadsModel
 from analyses.models import Biome
-from workflows.data_io_utils.mgnify_v6_utils.amplicon import EMG_CONFIG
+
+EMG_CONFIG = settings.EMG_CONFIG
 
 
 class GenomeCatalogue(WithDownloadsModel, TimeStampedModel):

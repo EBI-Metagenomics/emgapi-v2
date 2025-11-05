@@ -8,9 +8,9 @@ import pytest
 
 from analyses.models import Biome
 from genomes.models import GenomeCatalogue, Genome
-from emgapiv2.config import EMGConfig
+from django.conf import settings
 
-genome_config = EMGConfig().genomes
+genome_config = settings.EMG_CONFIG.genomes
 
 
 @pytest.fixture
