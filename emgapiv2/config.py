@@ -277,6 +277,14 @@ class LogMaskingConfig(BaseModel):
     ]
 
 
+class GenomeConfig(BaseModel):
+    MAGS_FTP_SITE: str = (
+        "http://ftp.ebi.ac.uk/pub/databases/metagenomics/mgnify_genomes/"
+    )
+    LATEST_MAGS_PIPELINE_TAG: str = "v1.2.1"
+    RESULTS_DIRECTORY_ROOT: str = "/nfs/donco/results"
+
+
 class EuropePMCConfig(BaseModel):
     annotations_endpoint: str = Field(
         "https://www.ebi.ac.uk/europepmc/annotations_api/annotationsByArticleIds"
@@ -301,15 +309,9 @@ class EMGConfig(BaseSettings):
     webin: WebinConfig = WebinConfig()
     log_masking: LogMaskingConfig = LogMaskingConfig()
     europe_pmc: EuropePMCConfig = EuropePMCConfig()
+    genomes: GenomeConfig = GenomeConfig()
 
     model_config = {
         "env_prefix": "emg_",
         "env_nested_delimiter": "__",
     }
-
-
-class GenomeConfig:
-    MAGS_FTP_SITE: str = (
-        "http://ftp.ebi.ac.uk/pub/databases/metagenomics/mgnify_genomes/"
-    )
-    LATEST_MAGS_PIPELINE_TAG: str = "v1.2.1"

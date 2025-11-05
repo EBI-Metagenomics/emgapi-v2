@@ -8,6 +8,9 @@ import pytest
 
 from analyses.models import Biome
 from genomes.models import GenomeCatalogue, Genome
+from emgapiv2.config import EMGConfig
+
+genome_config = EMGConfig().genomes
 
 
 @pytest.fixture
@@ -142,7 +145,7 @@ def test_get_catalogue():
         assert catalogue.biome == biome
         assert (
             catalogue.result_directory
-            == "/nfs/public/services/metagenomics/results/genomes/sheep-rumen/1.0"
+            == f"{genome_config.RESULTS_DIRECTORY_ROOT}/genomes/sheep-rumen/1.0"
         )
         assert catalogue.pipeline_version_tag == "v3.0.0dev"
         assert catalogue.catalogue_biome_label == "Sheep Rumen"

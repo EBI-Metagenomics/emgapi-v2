@@ -2,13 +2,12 @@ import os
 import re
 from pathlib import Path
 
-import django
 from django.db import close_old_connections
 from prefect import task, flow, get_run_logger
 
-from emgapiv2.config import GenomeConfig
+from activate_django_first import EMG_CONFIG
 
-django.setup()
+genome_config = EMG_CONFIG.genomes
 
 from analyses.models import Biome
 from genomes.management.lib.genome_util import (
@@ -67,8 +66,8 @@ def get_catalogue(options):
             "version": options["catalogue_version"],
             "name": f"{options['catalogue_name']} v{options['catalogue_version']}",
             "biome": biome,
-            "result_directory": f"/nfs/public/services/metagenomics/results/{options['results_directory']}",
-            "ftp_url": GenomeConfig.MAGS_FTP_SITE,
+            "result_directory": f"{genome_config.RESULTS_DIRECTORY_ROOT}/{options['results_directory']}",
+            "ftp_url": genome_config.MAGS_FTP_SITE,
             "pipeline_version_tag": options["pipeline_version"],
             "catalogue_biome_label": options["catalogue_biome_label"],
             "catalogue_type": options["catalogue_type"],
@@ -107,7 +106,7 @@ def process_genome_dir(catalogue, genome_dir):
     genome_data["catalogue"] = catalogue
     genome_results_path = get_genome_result_path(genome_dir)
     genome_data["result_directory"] = (
-        f"/nfs/public/services/metagenomics/results/{genome_results_path.replace('/website/', '/')}"
+        f"{genome_config.RESULTS_DIRECTORY_ROOT}/{genome_results_path.replace('/website/', '/')}"
     )
     genome_data["biome"] = Biome.objects.filter(path=path).first()
 
