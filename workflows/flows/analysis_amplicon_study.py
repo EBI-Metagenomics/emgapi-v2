@@ -8,15 +8,15 @@ from prefect.runtime import flow_run, deployment
 from pydantic import Field
 
 from activate_django_first import EMG_CONFIG
-from workflows.flows.analyse_study_tasks.copy_v6_pipeline_results import (
+from workflows.flows.analyse_study_tasks.shared.copy_v6_pipeline_results import (
     copy_v6_study_summaries,
 )
 
-from workflows.flows.analyse_study_tasks.create_analyses import create_analyses
-from workflows.flows.analyse_study_tasks.get_analyses_to_attempt import (
+from workflows.flows.analyse_study_tasks.shared.create_analyses import create_analyses
+from workflows.flows.analyse_study_tasks.shared.get_analyses_to_attempt import (
     get_analyses_to_attempt,
 )
-from workflows.flows.analyse_study_tasks.run_amplicon_pipeline_via_samplesheet import (
+from workflows.flows.analyse_study_tasks.amplicon.run_amplicon_pipeline_via_samplesheet import (
     run_amplicon_pipeline_via_samplesheet,
 )
 
@@ -76,7 +76,7 @@ def analysis_amplicon_study(study_accession: str):
 
     read_runs = get_study_readruns_from_ena(
         ena_study.accession,
-        limit=10000,
+        limit=10000,  # TODO: This should be a parameter or config
         raise_on_empty=False,
         filter_library_strategy=library_strategy_policy_to_filter(
             _AMPLICON, policy=ENALibraryStrategyPolicy.ONLY_IF_CORRECT_IN_ENA

@@ -490,7 +490,10 @@ def get_study_assemblies_from_ena(accession: str, limit: int = 10) -> list[str]:
     parameter. Authenticated requests may be sent to fetch private data if the `dcc_auth` is configured
     correctly.
 
-    :param accession: The ENA accession identifier of the study for which to fetch assemblies.
+    The assemblies found on ENA will be stored as analysis.Assemblies objects in the database.
+
+    The returned list of the assembly accessions
+
     An analysis.study must already exist for this accession.
     :type accession: str
     :param limit: The maximum number of assemblies to retrieve. Default is 10.
@@ -529,7 +532,7 @@ def get_study_assemblies_from_ena(accession: str, limit: int = 10) -> list[str]:
         | ENAAnalysisQuery(secondary_study_accession=accession),
     ).get(auth=ena_auth)
 
-    # read-runs may exist in same study as the assemblies
+    # read-runs may exist in the same study as the assemblies
     portal_runs = get_study_readruns_from_ena(
         accession=accession, limit=limit, raise_on_empty=False
     )
@@ -568,8 +571,8 @@ def get_study_assemblies_from_ena(accession: str, limit: int = 10) -> list[str]:
             limit=limit,
         )
 
-    # Build assembly objects
-    assemblies = []
+    assemblies: list[str] = []
+
     for assembly_data in portal_assemblies:
         try:
             # sample may have been made previously, e.g. prior to assembly or by read-run fetchers above
@@ -598,7 +601,7 @@ def get_study_assemblies_from_ena(accession: str, limit: int = 10) -> list[str]:
         )
         assembly.metadata[_.GENERATED_FTP] = assembly_data[_.GENERATED_FTP]
         assembly.save()
-        assemblies.append(assembly)
+        assemblies.append(assembly.first_accession)
     return assemblies
 
 

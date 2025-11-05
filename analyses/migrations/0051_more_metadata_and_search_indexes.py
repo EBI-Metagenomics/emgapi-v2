@@ -5,6 +5,7 @@ import django.contrib.postgres.operations
 import django.db.models.deletion
 from django.conf import settings
 from django.db import migrations, models
+from django.contrib.postgres.operations import AddIndexConcurrently
 
 
 def set_sample_biomes_from_first_study(apps, schema_editor):
@@ -38,6 +39,8 @@ def reverse_sample_biomes(apps, schema_editor):
 
 
 class Migration(migrations.Migration):
+    atomic = False
+
     dependencies = [
         ("analyses", "0050_superstudygenomecatalogue_and_more"),
         ("ena", "0004_alter_sample_additional_accessions_and_more"),
@@ -91,30 +94,6 @@ class Migration(migrations.Migration):
             ),
         ),
         django.contrib.postgres.operations.TrigramExtension(),
-        migrations.AddIndex(
-            model_name="sample",
-            index=django.contrib.postgres.indexes.GinIndex(
-                fields=["sample_title"],
-                name="idx_sample_title_trgm",
-                opclasses=["gin_trgm_ops"],
-            ),
-        ),
-        migrations.AddIndex(
-            model_name="publication",
-            index=django.contrib.postgres.indexes.GinIndex(
-                fields=["title"],
-                name="idx_publication_title_trgm",
-                opclasses=["gin_trgm_ops"],
-            ),
-        ),
-        migrations.AddIndex(
-            model_name="study",
-            index=django.contrib.postgres.indexes.GinIndex(
-                fields=["title"],
-                name="idx_study_title_trgm",
-                opclasses=["gin_trgm_ops"],
-            ),
-        ),
         migrations.AddField(
             model_name="sample",
             name="biome",
@@ -128,5 +107,29 @@ class Migration(migrations.Migration):
         migrations.RunPython(
             code=set_sample_biomes_from_first_study,
             reverse_code=reverse_sample_biomes,
+        ),
+        AddIndexConcurrently(
+            model_name="sample",
+            index=django.contrib.postgres.indexes.GinIndex(
+                fields=["sample_title"],
+                name="idx_sample_title_trgm",
+                opclasses=["gin_trgm_ops"],
+            ),
+        ),
+        AddIndexConcurrently(
+            model_name="publication",
+            index=django.contrib.postgres.indexes.GinIndex(
+                fields=["title"],
+                name="idx_publication_title_trgm",
+                opclasses=["gin_trgm_ops"],
+            ),
+        ),
+        AddIndexConcurrently(
+            model_name="study",
+            index=django.contrib.postgres.indexes.GinIndex(
+                fields=["title"],
+                name="idx_study_title_trgm",
+                opclasses=["gin_trgm_ops"],
+            ),
         ),
     ]
