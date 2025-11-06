@@ -1,5 +1,5 @@
-from pathlib import Path
 import logging
+from pathlib import Path
 
 from django.core.management.base import BaseCommand
 
@@ -9,45 +9,36 @@ logger = logging.getLogger(__name__)
 
 
 class Command(BaseCommand):
-    help = "Validate assembly analysis pipeline results for an assembly.."
+    help = "Validate assembly analysis pipeline results for an assembly."
 
     def add_arguments(self, parser):
         parser.add_argument(
+            "-f",
+            "--folder-path",
             "folder_path",
-            type=str,
+            type=Path,
             help="Path to the folder containing assembly results",
-            nargs="?",  # Make it optional when using --schema-only
+            required=True,
         )
         parser.add_argument(
+            "-a",
+            "--assembly-id",
             "assembly_id",
             type=str,
             help="Assembly ID (e.g. ERZ123456)",
-            nargs="?",  # Make it optional when using --schema-only
+            required=True,
         )
 
     def handle(self, *args, **options):
-
-        # Check if required arguments are provided when not using --schema-only
-        if not options["folder_path"] or not options["assembly_id"]:
-            self.stderr.write(
-                self.style.ERROR(
-                    "Error: folder_path and assembly_id are required when not using --schema-only"
-                )
-            )
-            return
-
-        # Convert folder path to Path object
-        folder_path = Path(options["folder_path"])
-
         try:
             schema = AssemblyResultSchema()
             schema.validate_directory_structure(
-                base_path=folder_path, assembly_id=options["assembly_id"]
+                base_path=options["folder_path"], identifier=options["assembly_id"]
             )
 
             self.stdout.write(
                 self.style.SUCCESS(
-                    f"Validation successful for assembly results in '{folder_path}'"
+                    f"Validation successful for assembly results in '{options["folder_path"]}'"
                 )
             )
 

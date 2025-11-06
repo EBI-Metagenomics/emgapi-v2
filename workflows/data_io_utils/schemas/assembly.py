@@ -64,7 +64,7 @@ class AssemblyResultSchema(PipelineResultSchema):
                     ),
                 ),
                 PipelineFileSchema(
-                    filename_template="{identifier}.tsv",
+                    filename_template="{identifier}_quast_stats.tsv.gz",
                     validation_rules=[FileExistsRule, FileIsNotEmptyRule],
                     download_metadata=DownloadFileMetadata(
                         file_type=DownloadFileType.TSV,

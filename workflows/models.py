@@ -6,6 +6,7 @@ from typing import List, Optional, Union
 from django.conf import settings
 from django.contrib.postgres.indexes import GinIndex
 from django.db import models
+from django.db.models import Exists, OuterRef
 from django.db.models.signals import pre_save
 from django.dispatch import receiver
 from django.utils.timezone import now
@@ -355,8 +356,9 @@ class AssemblyAnalysisBatchManager(models.Manager):
 
         This is the primary entry point for batch creation. It handles:
         - Querying analyses from the study (to be used as the source of truth)
+        - Filtering out analyses already in batches (prevents duplicates on re-runs)
         - Filtering out already-completed analyses
-        - Validating analyses (warns about blocked/failed)
+        - Filtering out blocked/failed analyses (with warning)
         - Enforcing maximum analysis limits
         - Chunking analyses into manageable batch sizes
         - Creating batches
@@ -367,7 +369,7 @@ class AssemblyAnalysisBatchManager(models.Manager):
         :param max_analyses: Maximum total analyses to process (safety cap)
         :param workspace_dir: The workspace directory (default: working dir, each pipeline will have its own subdir)
         :param skip_completed: Skip already-completed analyses (default True)
-        :return: List of created batches
+        :return: List of created batches (or existing batches if no new analyses to batch)
         :raises ValueError: If no valid analyses remain after filtering
         """
         # Apply defaults
@@ -379,8 +381,20 @@ class AssemblyAnalysisBatchManager(models.Manager):
                 settings.EMG_CONFIG.assembly_analysis_pipeline.samplesheet_chunk_size
             )
 
-        # Query analyses from study (single source of truth)
+        # Query analyses from the study (single source of truth)
         analyses_qs = study.analyses.filter(pipeline_version=pipeline)
+
+        # Filter out analyses already in batches for this study
+        # This allows re-running flows without creating duplicate batch-analysis relationships
+        # Using Exists subquery instead of __in to prevent DB performance issues with large studies (>1000 assemblies)
+        # Note: all_objects manager includes disabled relationships to avoid constraint violations
+        batched_analyses_subquery = AssemblyAnalysisBatchAnalysis.all_objects.filter(
+            analysis_id=OuterRef("pk"),
+            batch__study=study,
+            batch__batch_type=StudyAnalysisBatch.BatchType.ASSEMBLY_ANALYSIS,
+        )
+
+        analyses_qs = analyses_qs.exclude(Exists(batched_analyses_subquery))
 
         # Filter out completed analyses
         if skip_completed:
@@ -388,28 +402,34 @@ class AssemblyAnalysisBatchManager(models.Manager):
                 [Analysis.AnalysisStates.ANALYSIS_ANNOTATIONS_IMPORTED]
             )
 
-        # Validate analyses - warns about blocked/failed but doesn't fail
-        blocked_or_failed = analyses_qs.filter_by_statuses(
+        # Filter out blocked/failed analyses and warn
+        analyses_qs = analyses_qs.exclude_by_statuses(
             [
                 Analysis.AnalysisStates.ANALYSIS_BLOCKED,
-                Analysis.AnalysisStates.ANALYSIS_QC_FAILED,
+                Analysis.AnalysisStates.ANALYSIS_QC_FAILED,  # TODO: we may remove this state from the Analysis
             ]
         )
-
-        if blocked_or_failed.exists():
-            blocked_accessions = list(
-                blocked_or_failed.values_list("accession", flat=True)
-            )
-            logger.warning(
-                f"Including {len(blocked_accessions)} blocked/qc-failed analyses in batches: "
-                f"{', '.join(blocked_accessions[:5])}{'...' if len(blocked_accessions) > 5 else ''}"
-            )
 
         analysis_ids = list(analyses_qs.values_list("id", flat=True))
 
         if not analysis_ids:
-            logger.error(f"No pending analyses found for study {study.accession}")
-            return []
+            # Check if there are existing batches for this study
+            existing_batches = list(
+                AssemblyAnalysisBatch.objects.filter(
+                    study=study,
+                    batch_type=StudyAnalysisBatch.BatchType.ASSEMBLY_ANALYSIS,
+                )
+            )
+
+            if existing_batches:
+                logger.info(
+                    f"No new analyses to batch for study {study.accession}. "
+                    f"Returning {len(existing_batches)} existing batches."
+                )
+                return existing_batches
+            else:
+                logger.error(f"No pending analyses found for study {study.accession}")
+                return []
 
         # Apply safety cap if specified
         if max_analyses and len(analysis_ids) > max_analyses:
@@ -486,15 +506,35 @@ class AssemblyAnalysisBatchManager(models.Manager):
 
         logger.info(f"Created batch {batch.id} for {len(analysis_ids)} analyses")
 
-        # Link analysis to batch (bulk update for efficiency)
-        AssemblyAnalysisBatchAnalysis.objects.bulk_create(
-            [
-                AssemblyAnalysisBatchAnalysis(analysis_id=aid, batch=batch)
-                for aid in analysis_ids
-            ]
+        # Filter out analyses already linked to this batch (use all_objects to include disabled ones)
+        existing_analysis_ids = set(
+            AssemblyAnalysisBatchAnalysis.all_objects.filter(
+                batch=batch, analysis_id__in=analysis_ids
+            ).values_list("analysis_id", flat=True)
         )
 
-        logger.info(f"Linked {len(analysis_ids)} analyses to batch {batch.id}")
+        new_analysis_ids = [
+            aid for aid in analysis_ids if aid not in existing_analysis_ids
+        ]
+
+        if existing_analysis_ids:
+            logger.info(
+                f"Skipping {len(existing_analysis_ids)} analyses already linked to batch {batch.id}"
+            )
+
+        # Link analysis to batch (bulk update for efficiency)
+        if new_analysis_ids:
+            AssemblyAnalysisBatchAnalysis.objects.bulk_create(
+                [
+                    AssemblyAnalysisBatchAnalysis(analysis_id=aid, batch=batch)
+                    for aid in new_analysis_ids
+                ]
+            )
+            logger.info(
+                f"Linked {len(new_analysis_ids)} new analyses to batch {batch.id}"
+            )
+        else:
+            logger.info(f"No new analyses to link to batch {batch.id}")
 
         return batch
 

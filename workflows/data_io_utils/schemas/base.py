@@ -6,7 +6,6 @@ from typing import List, Optional, Type
 
 import pandas as pd
 import pandera as pa
-from prefect import get_run_logger
 from pydantic import BaseModel, Field
 
 import analyses.models
@@ -22,6 +21,9 @@ from workflows.data_io_utils.file_rules.base_rules import (
 from workflows.data_io_utils.file_rules.common_rules import DirectoryExistsRule
 from workflows.data_io_utils.file_rules.nodes import Directory, File
 from .exceptions import PipelineValidationError, PipelineImportError
+
+
+logger = logging.getLogger(__name__)
 
 
 class ImportConfig(BaseModel):
@@ -77,7 +79,7 @@ class PipelineFileSchema(BaseModel):
         """
         return self.filename_template.format(identifier=identifier)
 
-    def validate_file(self, path: Path) -> bool:
+    def validate_file(self, path: Path) -> tuple[bool, list[str]]:
         """
         Validate this file using its validation rules and content validator.
 
@@ -86,9 +88,10 @@ class PipelineFileSchema(BaseModel):
         - FileIfExistsIsNotEmptyRule = optional file
 
         :param path: Path to the file to validate
-        :return: True if validation passes
-        :raises PipelineValidationError: If validation fails
+        :return: Tuple of (success, list of error messages)
         """
+        errors = []
+
         # File-level validation rules (existence, size, etc.)
         failed_rules = []
         for rule in self.validation_rules:
@@ -97,18 +100,19 @@ class PipelineFileSchema(BaseModel):
                     failed_rules.append(rule.rule_name)
             except Exception as e:
                 logging.error(f"Error applying rule {rule.rule_name} to {path}: {e}")
-                failed_rules.append(rule.rule_name)
+                failed_rules.append(f"{rule.rule_name} (error: {e})")
 
         if failed_rules:
-            raise PipelineValidationError(
-                f"Validation failed for {path}", failed_rules=failed_rules
-            )
+            errors.append(f"File {path.name}: Failed rules: {', '.join(failed_rules)}")
 
         # Content validation using Pandera schema (only if file exists)
         if path.exists() and self.content_validator is not None:
-            self._validate_content(path)
+            try:
+                self._validate_content(path)
+            except PipelineValidationError as e:
+                errors.append(f"File {path.name}: {str(e)}")
 
-        return True
+        return len(errors) == 0, errors
 
     def _validate_content(self, path: Path) -> None:
         """
@@ -143,20 +147,22 @@ class PipelineFileSchema(BaseModel):
             # Validate using Pandera schema
             self.content_validator.validate(df, lazy=True)
 
-            logging.info(f"Content validation passed: {path.name} ({len(df)} rows)")
+            logger.info(
+                f"Content validation successful for {path.name} ({len(df)} rows)"
+            )
 
         except pa.errors.SchemaErrors as e:
             try:
                 error_details = json.dumps(e.message, indent=2)
             except (TypeError, ValueError):
                 error_details = str(e.message)
-            error_msg = f"Content validation failed for {path}:\n{error_details}"
-            logging.error(error_msg)
+            error_msg = f"Content validation failed:\n{error_details}"
+            logger.error(f"{path}: {error_msg}")
             raise PipelineValidationError(error_msg) from e
 
         except Exception as e:
-            error_msg = f"Unexpected error validating content of {path.name}: {e}"
-            logging.error(error_msg)
+            error_msg = f"Unexpected error validating content: {e}"
+            logger.error(f"{path.name}: {error_msg}")
             raise PipelineValidationError(error_msg) from e
 
 
@@ -182,7 +188,9 @@ class PipelineDirectorySchema(BaseModel):
         default_factory=list, description="Glob validation rules"
     )
 
-    def validate_directory(self, base_path: Path, identifier: str) -> Directory:
+    def validate_directory(
+        self, base_path: Path, identifier: str
+    ) -> tuple[Directory | None, list[str]]:
         """
         Validate this directory and return a validated Directory object.
 
@@ -191,17 +199,17 @@ class PipelineDirectorySchema(BaseModel):
 
         :param base_path: Base path containing the pipeline results
         :param identifier: Pipeline run identifier
-        :return: Validated Directory object
-        :raises PipelineValidationError: If validation fails
+        :return: Tuple of (validated Directory object or None, list of error messages)
         """
         dir_path = base_path / self.folder_name
+        all_errors = []
 
         # Prepare files for validation - create File objects
         files_to_validate = []
         for file_schema in self.files:
             filename = file_schema.get_filename(identifier)
             file_path = dir_path / filename
-            # Create File object with validation rules from schema
+            # Create a File object with validation rules from schema
             try:
                 file_obj = File(
                     path=file_path,
@@ -209,12 +217,13 @@ class PipelineDirectorySchema(BaseModel):
                 )
                 files_to_validate.append(file_obj)
             except ValueError as e:
-                # File validation failed - wrap and re-raise as PipelineValidationError
-                raise PipelineValidationError(
-                    f"Directory validation failed for {dir_path}: {e}"
+                # File validation failed - collect error
+                all_errors.append(
+                    f"Directory {self.folder_name}: File {filename} validation failed: {e}"
                 )
 
-        # Create Directory object with validation
+        # Create a Directory object with validation
+        validated_dir = None
         try:
             validated_dir = Directory(
                 path=dir_path,
@@ -223,21 +232,30 @@ class PipelineDirectorySchema(BaseModel):
                 glob_rules=self.glob_rules,
             )
         except ValueError as e:
-            raise PipelineValidationError(
-                f"Directory validation failed for {dir_path}: {e}"
+            all_errors.append(
+                f"Directory {self.folder_name}: Directory validation failed: {e}"
             )
 
-        # Validate file contents using schema validators
+        # Validate file contents using schema validators - collect all errors
         for file_schema in self.files:
             file_path = dir_path / file_schema.get_filename(identifier)
-            file_schema.validate_file(file_path)
+            success, file_errors = file_schema.validate_file(file_path)
+            if not success:
+                for error in file_errors:
+                    all_errors.append(f"Directory {self.folder_name}: {error}")
 
-        # Validate subdirectories recursively
-        for subdir_schema in self.subdirectories:
-            sub_validated_dir = subdir_schema.validate_directory(dir_path, identifier)
-            validated_dir.files.append(sub_validated_dir)
+        # Validate subdirectories recursively - collect all errors
+        if validated_dir:
+            for subdir_schema in self.subdirectories:
+                sub_validated_dir, subdir_errors = subdir_schema.validate_directory(
+                    dir_path, identifier
+                )
+                if subdir_errors:
+                    all_errors.extend(subdir_errors)
+                if sub_validated_dir:
+                    validated_dir.files.append(sub_validated_dir)
 
-        return validated_dir
+        return validated_dir, all_errors
 
     def import_directory_results(
         self, analysis: analyses.models.Analysis, base_path: Path
@@ -251,7 +269,7 @@ class PipelineDirectorySchema(BaseModel):
         dir_path = base_path / self.folder_name
 
         if not dir_path.exists():
-            # Check if directory is required based on validation rules
+            # Check if a directory is required based on validation rules
             if DirectoryExistsRule in self.validation_rules:
                 from .exceptions import PipelineImportError
 
@@ -295,31 +313,37 @@ class PipelineResultSchema(BaseModel):
         :param base_path: Base path containing the pipeline results
         :param identifier: Pipeline run identifier
         :return: Validated Directory object representing the entire structure
-        :raises PipelineValidationError: If validation fails
+        :raises PipelineValidationError: If validation fails with all collected errors
         """
-        logger = get_run_logger() or logging.getLogger(__name__)
         logger.info(f"Validating {self.pipeline_name} results at {base_path}")
 
-        # Create main directory structure
+        # Create the main directory structure
         main_dir = Directory(path=base_path / identifier)
 
-        failed_validations = []
+        all_errors = []
 
-        # Validate each directory
+        # Validate each directory and collect all errors
         for dir_schema in self.directories:
-            try:
-                validated_subdir = dir_schema.validate_directory(
-                    main_dir.path, identifier
-                )
+            validated_subdir, dir_errors = dir_schema.validate_directory(
+                main_dir.path, identifier
+            )
+            if dir_errors:
+                all_errors.extend(dir_errors)
+            if validated_subdir:
                 main_dir.files.append(validated_subdir)
-            except PipelineValidationError as e:
-                failed_validations.append(f"{dir_schema.folder_name}: {e}")
 
-        if failed_validations:
+        if all_errors:
+            # Format errors for better readability
+            error_count = len(all_errors)
+            error_summary = "\n  - ".join(all_errors)
+            error_message = (
+                f"Pipeline validation failed for {self.pipeline_name} "
+                f"with {error_count} error(s):\n  - {error_summary}"
+            )
             raise PipelineValidationError(
-                f"Pipeline validation failed for {self.pipeline_name}: "
-                + "; ".join(failed_validations),
+                error_message,
                 pipeline_name=self.pipeline_name,
+                failed_rules=[],
             )
 
         logger.info(f"Successfully validated {self.pipeline_name} results")
@@ -334,7 +358,6 @@ class PipelineResultSchema(BaseModel):
         :param analysis: The analysis object to update
         :param base_path: Base path containing the pipeline results
         """
-        logger = get_run_logger() or logging.getLogger(__name__)
         logger.info(f"Importing {self.pipeline_name} results from {base_path}")
 
         identifier = analysis.assembly.first_accession

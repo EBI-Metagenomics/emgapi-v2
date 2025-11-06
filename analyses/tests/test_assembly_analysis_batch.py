@@ -39,21 +39,21 @@ def test_get_or_create_batches_for_study_filters_completed_analyses(
 
 
 @pytest.mark.django_db(transaction=True)
-def test_get_or_create_batches_for_study_warns_about_blocked_analyses(
+def test_get_or_create_batches_for_study_excludes_blocked_analyses(
     assembly_with_analyses, tmp_path
 ):
     """
-    Test that get_or_create_batches_for_study includes blocked/failed analyses but logs a warning.
+    Test that get_or_create_batches_for_study excludes blocked/failed analyses and logs a warning.
     """
     study = assembly_with_analyses[0].study
     analyses_list = list(assembly_with_analyses)
 
-    # Mark first analysis as blocked
+    # Mark the first analysis as blocked
     analyses_list[0].mark_status(
         analyses.models.Analysis.AnalysisStates.ANALYSIS_BLOCKED, set_status_as=True
     )
 
-    # Create batches - should include blocked analysis with warning
+    # Create batches - should exclude blocked analysis with a warning
     batches = (
         workflows.models.AssemblyAnalysisBatch.objects.get_or_create_batches_for_study(
             study=study,
@@ -63,9 +63,9 @@ def test_get_or_create_batches_for_study_warns_about_blocked_analyses(
     )
 
     assert len(batches) == 1
-    assert batches[0].total_analyses == len(analyses_list)
-    # Verify the blocked analysis was included
-    assert batches[0].analyses.filter(id=analyses_list[0].id).exists()
+    assert batches[0].total_analyses == len(analyses_list) - 1
+    # Verify the blocked analysis was excluded
+    assert not batches[0].analyses.filter(id=analyses_list[0].id).exists()
 
 
 @pytest.mark.django_db(transaction=True)
@@ -209,3 +209,107 @@ def test_get_or_create_batches_for_study_returns_empty_on_no_analyses(
     )
 
     assert len(batches) == 0
+
+
+@pytest.mark.django_db(transaction=True)
+def test_get_or_create_batches_for_study_handles_rerun(
+    assembly_with_analyses, tmp_path
+):
+    """
+    Test that get_or_create_batches_for_study handles re-running the same study correctly.
+
+    When re-running this flow for the same study, or retrying a flow:
+    1. Return existing batches
+    2. Not create duplicate batch-analysis relationships
+    """
+    study = assembly_with_analyses[0].study
+    analyses_list = list(assembly_with_analyses)
+
+    batches_first_run = (
+        workflows.models.AssemblyAnalysisBatch.objects.get_or_create_batches_for_study(
+            study=study,
+            pipeline=analyses.models.Analysis.PipelineVersions.v6,
+            workspace_dir=tmp_path,
+        )
+    )
+
+    assert len(batches_first_run) == 1
+    first_batch = batches_first_run[0]
+    assert first_batch.total_analyses == len(analyses_list)
+
+    # Second run, simulate re-running the flow (should return existing batches)
+    batches_second_run = (
+        workflows.models.AssemblyAnalysisBatch.objects.get_or_create_batches_for_study(
+            study=study,
+            pipeline=analyses.models.Analysis.PipelineVersions.v6,
+            workspace_dir=tmp_path,
+        )
+    )
+
+    # Should return the existing batch
+    assert len(batches_second_run) == 1
+    assert batches_second_run[0].id == first_batch.id
+
+    # Should not create duplicate relationships
+    assert first_batch.analyses.count() == len(analyses_list)
+
+    # Verify that it doesn't duplicate AssemblyAnalysisBatchAnalysis records
+    total_batch_analyses = (
+        workflows.models.AssemblyAnalysisBatchAnalysis.all_objects.filter(
+            batch__study=study
+        ).count()
+    )
+    assert total_batch_analyses == len(analyses_list)
+
+
+@pytest.mark.django_db(transaction=True)
+def test_get_or_create_batches_for_study_handles_rerun_with_disabled_relationships(
+    assembly_with_analyses, tmp_path
+):
+    """
+    Test that get_or_create_batches_for_study handles disabled batch-analysis relationships correctly.
+
+    When some batch-analysis relationships are disabled, it should not create duplicates for disabled relationships
+    """
+    study = assembly_with_analyses[0].study
+    analyses_list = list(assembly_with_analyses)
+
+    # First batch
+    batches_first_run = (
+        workflows.models.AssemblyAnalysisBatch.objects.get_or_create_batches_for_study(
+            study=study,
+            pipeline=analyses.models.Analysis.PipelineVersions.v6,
+            workspace_dir=tmp_path,
+        )
+    )
+
+    assert len(batches_first_run) == 1
+    first_batch = batches_first_run[0]
+
+    # Disable one of the batch-analysis relationships
+    batch_analysis = workflows.models.AssemblyAnalysisBatchAnalysis.all_objects.filter(
+        batch=first_batch
+    ).first()
+    batch_analysis.disabled = True
+    batch_analysis.save()
+
+    # Second run: should still return existing batch and not create duplicates
+    batches_second_run = (
+        workflows.models.AssemblyAnalysisBatch.objects.get_or_create_batches_for_study(
+            study=study,
+            pipeline=analyses.models.Analysis.PipelineVersions.v6,
+            workspace_dir=tmp_path,
+        )
+    )
+
+    # Should return the existing batch
+    assert len(batches_second_run) == 1
+    assert batches_second_run[0].id == first_batch.id
+
+    # Should not have created any duplicate relationships (including disabled ones)
+    total_batch_analyses = (
+        workflows.models.AssemblyAnalysisBatchAnalysis.all_objects.filter(
+            batch__study=study
+        ).count()
+    )
+    assert total_batch_analyses == len(analyses_list)
