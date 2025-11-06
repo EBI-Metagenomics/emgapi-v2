@@ -24,6 +24,7 @@ class AssemblyAnalysisBatchAnalysisInline(TabularInline):
     fk_name = "batch"
     extra = 0
     fields = [
+        "batch_link",
         "analysis_link",
         "assembly_link",
         "asa_status",
@@ -33,8 +34,16 @@ class AssemblyAnalysisBatchAnalysisInline(TabularInline):
         "disabled_reason",
         "order",
     ]
-    readonly_fields = ["analysis_link", "assembly_link"]
+    readonly_fields = ["batch_link", "analysis_link", "assembly_link"]
     can_delete = True
+
+    @display(description="Batch")
+    def batch_link(self, obj):
+        """Link to the batch admin page."""
+        url = reverse(
+            "admin:workflows_assemblyanalysisbatch_change", args=[obj.batch.id]
+        )
+        return format_html('<a href="{}">{}</a>', url, str(obj.batch.id)[:8])
 
     @display(description="Analysis")
     def analysis_link(self, obj):

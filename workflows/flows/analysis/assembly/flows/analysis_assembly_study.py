@@ -40,7 +40,10 @@ from workflows.prefect_utils.analyses_models_helpers import (
     name="Run assembly analysis v6 pipeline on a study",
     flow_run_name="Analyse assembly: {study_accession}",
 )
-def analysis_assembly_study(study_accession: str, workspace_dir: str = None):
+def analysis_assembly_study(
+    study_accession: str,
+    workspace_dir: str = EMG_CONFIG.slurm.default_workdir,
+):
     """
     Get a study from ENA (or MGnify), and run assembly-v6 pipeline on its read-runs.
 
@@ -50,7 +53,7 @@ def analysis_assembly_study(study_accession: str, workspace_dir: str = None):
     It keeps track of the batches and their statuses.
 
     :param study_accession: e.g. PRJ or ERP accession
-    :param workspace_dir: Optional path for the workspace dir.
+    :param workspace_dir: Path for the workspace dir. Defaults to the configured SLURM default workdir.
     """
     logger = get_run_logger()
 
@@ -131,7 +134,7 @@ def analysis_assembly_study(study_accession: str, workspace_dir: str = None):
             study=mgnify_study,
             pipeline=analyses.models.Analysis.PipelineVersions.v6,
             max_analyses=EMG_CONFIG.assembly_analysis_pipeline.max_analyses_per_study,
-            workspace_dir=Path(workspace_dir) if workspace_dir else None,
+            workspace_dir=Path(workspace_dir),
         )
     )
 
