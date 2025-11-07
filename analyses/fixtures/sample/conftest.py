@@ -35,7 +35,7 @@ def private_mgnify_sample(webin_private_study, private_ena_sample):
 
 
 @pytest.fixture
-def mgnify_sample_lots_of_metadata(raw_reads_mgnify_sample):
+def mgnify_sample_lots_of_metadata(raw_reads_mgnify_sample, top_level_biomes):
     sample = raw_reads_mgnify_sample[0]
     _ = ENASampleFields
     sample.metadata = {
@@ -52,5 +52,7 @@ def mgnify_sample_lots_of_metadata(raw_reads_mgnify_sample):
         _.CHECKLIST: "ERC000031",
         _.SAMPLE_ALIAS: "ISS-D1",
     }
+    biome = mg_models.Biome.objects.get(biome_name__icontains="engineered")
+    sample.biome = biome
     sample.save()
     return sample
