@@ -26,6 +26,9 @@ def run_virify_batch(assembly_analyses_batch_id: uuid.UUID):
     It expects the analyses to have been completed by ASA at this point. It will select those
     analyses and uses the ASA end-of-run virify samplesheet to pick up the assemblies to execute.
 
+    The flow is idempotent: analyses that are already COMPLETED for VIRify will be skipped.
+    Only analyses with asa_status=COMPLETED and virify_status!=COMPLETED will be processed.
+
     It doesn't validate the results or import them, but the results will be stored in the batch workspace.
 
     :param assembly_analyses_batch_id: Unique identifier for the assembly batch to be
@@ -50,11 +53,27 @@ def run_virify_batch(assembly_analyses_batch_id: uuid.UUID):
         EMG_CONFIG.virify_pipeline.pipeline_git_revision,
     )
 
-    # Mark the batch as virify-in-progress
-    assembly_analysis_batch.set_pipeline_status(
-        AssemblyAnalysisPipeline.VIRIFY,
-        AssemblyAnalysisPipelineStatus.RUNNING,
+    # Check if all analyses are already completed for VIRify
+    # Only process analyses that completed ASA but haven't completed VIRify yet
+    analyses_to_process = assembly_analysis_batch.batch_analyses.filter(
+        asa_status=AssemblyAnalysisPipelineStatus.COMPLETED
+    ).exclude(virify_status=AssemblyAnalysisPipelineStatus.COMPLETED)
+
+    if not analyses_to_process.exists():
+        logger.info(
+            "All ASA-completed analyses already have VIRify COMPLETED status, skipping VIRify execution"
+        )
+        assembly_analysis_batch.update_pipeline_status_counts(
+            AssemblyAnalysisPipeline.VIRIFY
+        )
+        return
+
+    logger.info(
+        f"Processing {analyses_to_process.count()} analyses for VIRify (skipping already-completed)"
     )
+
+    # Mark only the analyses being processed as RUNNING (not the already-completed ones)
+    analyses_to_process.update(virify_status=AssemblyAnalysisPipelineStatus.RUNNING)
 
     # Get ASA output directory to find samplesheet
     assembly_analysis_pipeline_outdir = assembly_analysis_batch.get_pipeline_workspace(
@@ -80,10 +99,9 @@ def run_virify_batch(assembly_analyses_batch_id: uuid.UUID):
         assembly_analysis_batch.batch_analyses.update(
             virify_status=AssemblyAnalysisPipelineStatus.FAILED
         )
-
-        assembly_analysis_batch.set_pipeline_status(
-            AssemblyAnalysisPipeline.VIRIFY,
-            AssemblyAnalysisPipelineStatus.FAILED,
+        # Update counts to reflect failures
+        assembly_analysis_batch.update_pipeline_status_counts(
+            AssemblyAnalysisPipeline.VIRIFY
         )
         return
 
@@ -153,30 +171,31 @@ def run_virify_batch(assembly_analyses_batch_id: uuid.UUID):
         )
         logger.error(f"{error_type} for study {mgnify_study.ena_study.accession}: {e}")
 
-        # Mark batch as failed (VIRify failure doesn't propagate to analyses)
+        # Mark batch as failed
         assembly_analysis_batch.last_error = str(e)
-        assembly_analysis_batch.set_pipeline_status(
-            AssemblyAnalysisPipeline.VIRIFY,
-            AssemblyAnalysisPipelineStatus.FAILED,
-        )
+        # Only mark RUNNING analyses as FAILED (don't overwrite already-COMPLETED ones)
         assembly_analysis_batch.batch_analyses.filter(
-            asa_status=AssemblyAnalysisPipelineStatus.COMPLETED
+            virify_status=AssemblyAnalysisPipelineStatus.RUNNING
         ).update(virify_status=AssemblyAnalysisPipelineStatus.FAILED)
+        # Update counts to reflect failures
+        assembly_analysis_batch.update_pipeline_status_counts(
+            AssemblyAnalysisPipeline.VIRIFY
+        )
     else:
         logger.info("VIRify pipeline completed successfully")
 
-        # Mark analyses that completed ASA as VIRify completed
+        # Mark only RUNNING analyses as VIRify completed (don't overwrite already-COMPLETED ones)
         completed_count = assembly_analysis_batch.batch_analyses.filter(
-            asa_status=AssemblyAnalysisPipelineStatus.COMPLETED
+            virify_status=AssemblyAnalysisPipelineStatus.RUNNING
         ).update(virify_status=AssemblyAnalysisPipelineStatus.COMPLETED)
 
         logger.info(
-            f"Marked {completed_count} ASA completed analyses as VIRify completed "
+            f"Marked {completed_count} analyses as VIRify completed "
             f"(out of {assembly_analysis_batch.total_analyses} total)"
         )
 
-        assembly_analysis_batch.set_pipeline_status(
-            AssemblyAnalysisPipeline.VIRIFY,
-            AssemblyAnalysisPipelineStatus.COMPLETED,
+        # Update counts to reflect completions
+        assembly_analysis_batch.update_pipeline_status_counts(
+            AssemblyAnalysisPipeline.VIRIFY
         )
-        logger.info("VIRify pipeline completed successfully and marked as COMPLETED")
+        logger.info("VIRify pipeline completed successfully, counts updated")

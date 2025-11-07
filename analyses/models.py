@@ -675,6 +675,7 @@ class Analysis(
 
     # TODO: remove all of the abandoned annotations JSON fields and associated logic from this model
     PFAMS = "pfams"
+    INTERPROS = "interpros"
 
     TAXONOMIES = "taxonomies"
     CLOSED_REFERENCE = "closed_reference"
@@ -715,6 +716,7 @@ class Analysis(
         return {
             Analysis.TAXONOMIES: [],
             Analysis.PFAMS: [],
+            Analysis.INTERPROS: [],
         }
 
     # TODO: These fields are part of a previous and abandoned idea of storing annotations and qc in json fields

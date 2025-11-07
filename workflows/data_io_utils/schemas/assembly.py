@@ -4,6 +4,8 @@ from analyses.base_models.with_downloads_models import (
     DownloadFileType,
     DownloadType,
 )
+from typing import Optional
+from pydantic import BaseModel
 
 # Maybe we should put these in a separate schema with stuff
 from mgnify_pipelines_toolkit.schemas.dataframes import (
@@ -15,6 +17,8 @@ from mgnify_pipelines_toolkit.schemas.dataframes import (
     SanntisSummarySchema,
     KEGGModulesSummarySchema,
 )
+
+from analyses.models import Analysis
 from workflows.data_io_utils.file_rules.common_rules import (
     DirectoryExistsRule,
     FileExistsRule,
@@ -29,7 +33,26 @@ from .base import (
     PipelineDirectorySchema,
     PipelineResultSchema,
     DownloadFileMetadata,
+    ImportConfig,
 )
+
+
+class ImportResult(BaseModel):
+    """
+    Result of importing or validating a single analysis.
+
+    :param analysis_id: ID of the analysis
+    :param success: Whether import/validation succeeded
+    :param downloads_count: Number of downloads imported (if successful and import mode)
+    :param error: Error message (if failed)
+    :param validation_only: Whether this was validation-only (no import)
+    """
+
+    analysis_id: int
+    success: bool
+    downloads_count: Optional[int] = None
+    error: Optional[str] = None
+    validation_only: bool = False
 
 
 class AssemblyResultSchema(PipelineResultSchema):
@@ -203,6 +226,10 @@ class AssemblyResultSchema(PipelineResultSchema):
                                 long_description="Table with counts for each InterPro identifier found",
                             ),
                             content_validator=InterProSummarySchema,
+                            import_config=ImportConfig(
+                                annotations_key=Analysis.INTERPROS,
+                                import_as_records=True,
+                            ),
                         ),
                     ],
                 ),
@@ -222,6 +249,10 @@ class AssemblyResultSchema(PipelineResultSchema):
                                 long_description="Table with counts for each Pfam accession found",
                             ),
                             content_validator=PFAMSummarySchema,
+                            import_config=ImportConfig(
+                                annotations_key=Analysis.PFAMS,
+                                import_as_records=True,
+                            ),
                         ),
                     ],
                 ),

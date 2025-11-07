@@ -173,7 +173,7 @@ def test_full_chain_success(
             analysis.save()
 
     mock_set_post_states.side_effect = mock_set_states_side_effect
-    mock_import_analyses.return_value = None  # Import succeeds
+    mock_import_analyses.return_value = []  # Import succeeds
 
     mock_make_samplesheet.return_value = (
         tmp_path / "samplesheet.csv",
@@ -211,18 +211,21 @@ def test_full_chain_success(
 
     # Verify ASA execution
     batch.refresh_from_db()
-    assert batch.asa_status == AssemblyAnalysisPipelineStatus.COMPLETED
+    batch.update_pipeline_status_counts(AssemblyAnalysisPipeline.ASA)
+    assert batch.pipeline_status_counts.asa.completed == batch.total_analyses
     assert batch.asa_flow_run_id == "test_asa_flow_run_id"
     assert mock_asa_cluster_job.called
     assert mock_set_post_states.called
     assert mock_import_analyses.called
 
     # Verify VIRify execution
-    assert batch.virify_status == AssemblyAnalysisPipelineStatus.COMPLETED
+    batch.update_pipeline_status_counts(AssemblyAnalysisPipeline.VIRIFY)
+    assert batch.pipeline_status_counts.virify.completed == batch.total_analyses
     assert mock_virify_cluster_job.called
 
     # Verify MAP execution
-    assert batch.map_status == AssemblyAnalysisPipelineStatus.COMPLETED
+    batch.update_pipeline_status_counts(AssemblyAnalysisPipeline.MAP)
+    assert batch.pipeline_status_counts.map.completed == batch.total_analyses
     assert mock_map_cluster_job.called
 
     # Verify summary generation was called
@@ -293,12 +296,15 @@ def test_asa_failure_stops_chain(
 
     # Verify ASA failed
     batch.refresh_from_db()
-    assert batch.asa_status == AssemblyAnalysisPipelineStatus.FAILED
+    batch.update_pipeline_status_counts(AssemblyAnalysisPipeline.ASA)
+    assert batch.pipeline_status_counts.asa.failed == batch.total_analyses
     assert batch.last_error is not None
 
     # Verify VIRify and MAP were not started
-    assert batch.virify_status == AssemblyAnalysisPipelineStatus.PENDING
-    assert batch.map_status == AssemblyAnalysisPipelineStatus.PENDING
+    batch.update_pipeline_status_counts(AssemblyAnalysisPipeline.VIRIFY)
+    batch.update_pipeline_status_counts(AssemblyAnalysisPipeline.MAP)
+    assert batch.pipeline_status_counts.virify.pending == batch.total_analyses
+    assert batch.pipeline_status_counts.map.pending == batch.total_analyses
 
 
 @pytest.mark.django_db
@@ -396,10 +402,12 @@ def test_virify_failure_partial_results(
 
     # Verify ASA completed
     batch.refresh_from_db()
-    assert batch.asa_status == AssemblyAnalysisPipelineStatus.COMPLETED
+    batch.update_pipeline_status_counts(AssemblyAnalysisPipeline.ASA)
+    assert batch.pipeline_status_counts.asa.completed == batch.total_analyses
 
     # Verify VIRify failed
-    assert batch.virify_status == AssemblyAnalysisPipelineStatus.FAILED
+    batch.update_pipeline_status_counts(AssemblyAnalysisPipeline.VIRIFY)
+    assert batch.pipeline_status_counts.virify.failed == batch.total_analyses
     assert (
         batch.batch_analyses.filter(
             virify_status=AssemblyAnalysisPipelineStatus.FAILED
@@ -408,7 +416,8 @@ def test_virify_failure_partial_results(
     )
 
     # Verify MAP was not started
-    assert batch.map_status == AssemblyAnalysisPipelineStatus.PENDING
+    batch.update_pipeline_status_counts(AssemblyAnalysisPipeline.MAP)
+    assert batch.pipeline_status_counts.map.pending == batch.total_analyses
 
     # Verify summary was still generated (ASA completed)
     assert mock_generate_summary.called
@@ -455,7 +464,7 @@ def test_asa_not_ready_for_virify(
     mock_asa_flow_run.id = "test_asa_flow_run_id"
     mock_asa_cluster_job.return_value = None  # ASA succeeds
     mock_generate_samplesheet.return_value = (tmp_path / "samplesheet.csv", "test_hash")
-    mock_import_analyses.return_value = None
+    mock_import_analyses.return_value = []
 
     # Mock ASA schema validation
     def mock_set_states_side_effect(_, assembly_analyses_ids):
@@ -494,8 +503,11 @@ def test_asa_not_ready_for_virify(
     assert mock_import_analyses.called
 
     batch.refresh_from_db()
-    assert batch.asa_status == AssemblyAnalysisPipelineStatus.COMPLETED
+    batch.update_pipeline_status_counts(AssemblyAnalysisPipeline.ASA)
+    assert batch.pipeline_status_counts.asa.completed == batch.total_analyses
 
     # Verify VIRify and MAP were not run
-    assert batch.virify_status == AssemblyAnalysisPipelineStatus.FAILED
-    assert batch.map_status == AssemblyAnalysisPipelineStatus.PENDING
+    batch.update_pipeline_status_counts(AssemblyAnalysisPipeline.VIRIFY)
+    batch.update_pipeline_status_counts(AssemblyAnalysisPipeline.MAP)
+    assert batch.pipeline_status_counts.virify.failed == batch.total_analyses
+    assert batch.pipeline_status_counts.map.pending == batch.total_analyses

@@ -31,6 +31,9 @@ def run_map_batch(assembly_analyses_batch_id: uuid.UUID):
     It expects the analyses to have been completed with ASA and VIRify at this point. It will select those
     analyses and generate a samplesheet for the MAP pipeline.
 
+    The flow is idempotent: analyses that are already COMPLETED for MAP will be skipped.
+    Only analyses with virify_status=COMPLETED and map_status!=COMPLETED will be processed.
+
     It doesn't validate the results or import them, but the results will be stored in the batch workspace.
 
     This flow won't raise an exception if the MAP pipeline fails unless raise_on_failure is set to True.
@@ -61,24 +64,28 @@ def run_map_batch(assembly_analyses_batch_id: uuid.UUID):
         EMG_CONFIG.map_pipeline.pipeline_git_revision,
     )
 
-    assembly_analysis_batch.set_pipeline_status(
-        AssemblyAnalysisPipeline.MAP,
-        AssemblyAnalysisPipelineStatus.RUNNING,
-    )
-
-    assembly_analyes_for_map = assembly_analysis_batch.batch_analyses.filter(
+    # Check if all analyses are already completed for MAP
+    # Only process analyses that completed VIRify but haven't completed MAP yet
+    analyses_to_process = assembly_analysis_batch.batch_analyses.filter(
         virify_status=AssemblyAnalysisPipelineStatus.COMPLETED
-    )
+    ).exclude(map_status=AssemblyAnalysisPipelineStatus.COMPLETED)
 
-    if assembly_analyes_for_map.count() == 0:
-        logger.info("No analyses to run MAP on")
-        assembly_analysis_batch.set_pipeline_status(
-            AssemblyAnalysisPipeline.MAP,
-            AssemblyAnalysisPipelineStatus.PENDING,
+    if not analyses_to_process.exists():
+        logger.warning(
+            "All VIRify-completed analyses already have MAP COMPLETED status, skipping MAP execution"
+        )
+        # Update counts to reflect current state
+        assembly_analysis_batch.update_pipeline_status_counts(
+            AssemblyAnalysisPipeline.MAP
         )
         return
 
-    assembly_analyes_for_map.update(map_status=AssemblyAnalysisPipelineStatus.RUNNING)
+    logger.info(
+        f"Processing {analyses_to_process.count()} analyses for MAP (skipping already-completed)"
+    )
+
+    # Mark only the analyses being processed as RUNNING (not the already-completed ones)
+    analyses_to_process.update(map_status=AssemblyAnalysisPipelineStatus.RUNNING)
 
     # Create samplesheets directory in the batch workspace
     mgnify_study: Study = assembly_analysis_batch.study
@@ -92,15 +99,18 @@ def run_map_batch(assembly_analyses_batch_id: uuid.UUID):
 
     # Check if the MAP samplesheet exists
     if not map_samplesheet_path.exists():
-        logger.warning(
-            f"MAP samplesheet {map_samplesheet_path} does not exist. Skipping MAP pipeline."
-        )
-        assembly_analysis_batch.last_error = (
-            f"MAP samplesheet not found at {map_samplesheet_path}"
-        )
-        assembly_analysis_batch.set_pipeline_status(
-            AssemblyAnalysisPipeline.MAP,
-            AssemblyAnalysisPipelineStatus.FAILED,
+        # TODO: this chunk of code needs to be simplified, it is repeated downstream and in the makesamplesheet task
+        error = f"MAP samplesheet {map_samplesheet_path} does not exist."
+        logger.error(error)
+        assembly_analysis_batch.last_error = error
+        # Only mark RUNNING analyses as FAILED (don't overwrite already-COMPLETED ones)
+        assembly_analysis_batch.batch_analyses.filter(
+            map_status=AssemblyAnalysisPipelineStatus.RUNNING
+        ).update(map_status=AssemblyAnalysisPipelineStatus.FAILED)
+
+        # Update counts to reflect the issue
+        assembly_analysis_batch.update_pipeline_status_counts(
+            AssemblyAnalysisPipeline.MAP
         )
         return
 
@@ -165,31 +175,31 @@ def run_map_batch(assembly_analyses_batch_id: uuid.UUID):
         )
         logger.error(f"{error_type} for study {mgnify_study.ena_study.accession}: {e}")
 
-        # Mark batch as failed (MAP failure doesn't propagate to analyses)
+        # Mark batch as failed
         assembly_analysis_batch.last_error = str(e)
-        assembly_analysis_batch.set_pipeline_status(
-            AssemblyAnalysisPipeline.MAP,
-            AssemblyAnalysisPipelineStatus.FAILED,
-        )
+        # Only mark RUNNING analyses as FAILED (don't overwrite already-COMPLETED ones)
         assembly_analysis_batch.batch_analyses.filter(
-            virify_status=AssemblyAnalysisPipelineStatus.COMPLETED
+            map_status=AssemblyAnalysisPipelineStatus.RUNNING
         ).update(map_status=AssemblyAnalysisPipelineStatus.FAILED)
+        # Update counts to reflect failures
+        assembly_analysis_batch.update_pipeline_status_counts(
+            AssemblyAnalysisPipeline.MAP
+        )
     else:
         logger.info("MAP pipeline completed successfully")
 
-        # Mark analyses that completed both ASA and VIRify as MAP completed
+        # Mark only RUNNING analyses as MAP completed (don't overwrite already-COMPLETED ones)
         completed_count = assembly_analysis_batch.batch_analyses.filter(
-            virify_status=AssemblyAnalysisPipelineStatus.COMPLETED
+            map_status=AssemblyAnalysisPipelineStatus.RUNNING
         ).update(map_status=AssemblyAnalysisPipelineStatus.COMPLETED)
 
         logger.info(
-            f"Marked {completed_count} ASA and VIRify completed analyses as MAP completed "
+            f"Marked {completed_count} analyses as MAP completed "
             f"(out of {assembly_analysis_batch.total_analyses} total)"
         )
 
-        # No need to propagate to the batch-anlaysis, otherwise it will overwrite the status,
-        # For example, those were VIRIfy failed will be marked as MAP completed (which is not possible)
-        assembly_analysis_batch.set_pipeline_status(
-            AssemblyAnalysisPipeline.MAP, AssemblyAnalysisPipelineStatus.COMPLETED
+        # Update counts to reflect completions
+        assembly_analysis_batch.update_pipeline_status_counts(
+            AssemblyAnalysisPipeline.MAP
         )
-        logger.info("MAP pipeline completed successfully and marked as COMPLETED")
+        logger.info("MAP pipeline completed successfully, counts updated")
