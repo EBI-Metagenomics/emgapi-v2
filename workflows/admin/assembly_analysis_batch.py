@@ -161,7 +161,7 @@ class AssemblyAnalysisBatchAdmin(JSONFieldWidgetOverridesMixin, ModelAdmin):
                 badges.append(
                     (AssemblyAnalysisPipelineStatus.PENDING, str(counts.pending))
                 )
-            return badges if badges else "-"
+            return badges or "-"
         return "-"
 
     @display(
