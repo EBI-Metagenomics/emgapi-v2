@@ -1,5 +1,5 @@
 from contextlib import contextmanager
-from typing import List, Optional, TYPE_CHECKING
+from typing import List, Optional, TYPE_CHECKING, TypedDict
 
 import pymongo
 from django.conf import settings
@@ -54,6 +54,7 @@ class LegacyStudy(LegacyEMGBase):
 
     is_suppressed: Mapped[bool] = mapped_column("IS_SUPPRESSED", Boolean)
     is_private: Mapped[bool] = mapped_column("IS_PRIVATE", Boolean)
+    submission_account_id: Mapped[str] = mapped_column("SUBMISSION_ACCOUNT_ID", String)
 
     analysis_jobs: Mapped[list["LegacyAnalysisJob"]] = relationship(
         back_populates="study"
@@ -285,6 +286,42 @@ def get_taxonomy_from_api_v1_mongo(
         Analysis.TaxonomySources.ITS_ONE_DB.value: mgya_taxonomies.get("itsonedb"),
         Analysis.TaxonomySources.UNITE.value: mgya_taxonomies.get("unite"),
         Analysis.TaxonomySources.PR2.value: None,  # not implemented in v5 pipeline
+    }
+
+
+class FunctionalAnnotationsPartial(TypedDict):
+    pfams: Optional[List[str]]
+    interpros: Optional[List[str]]
+
+
+@task(task_run_name="Get pfam/interpro for {mgya} from legacy mongo")
+def get_functions_from_api_v1_mongo(
+    mgya: str,
+) -> FunctionalAnnotationsPartial:
+    logger = get_run_logger()
+    mongo_dsn = str(settings.EMG_CONFIG.legacy_service.emg_mongo_dsn)
+    mongo_client = pymongo.MongoClient(mongo_dsn)
+    db = mongo_client[settings.EMG_CONFIG.legacy_service.emg_mongo_db]
+
+    pfams_collection: Collection = db.analysis_job_pfam
+
+    mgya_pfams = pfams_collection.find_one({"accession": mgya})
+
+    if not mgya_pfams:
+        logger.warning(f"Did not find {mgya} in legacy mongo pfams")
+
+    interpros_collection: Collection = db.analysis_job_interpro_identifiers
+
+    mgya_interpros = interpros_collection.find_one({"accession": mgya})
+
+    if not mgya_interpros:
+        logger.warning(f"Did not find {mgya} in legacy mongo interpros")
+
+    return {
+        "pfams": mgya_pfams.get("pfam_entries") if mgya_pfams else [],
+        "interpros": (
+            mgya_interpros.get("interpro_identifiers") if mgya_interpros else []
+        ),
     }
 
 

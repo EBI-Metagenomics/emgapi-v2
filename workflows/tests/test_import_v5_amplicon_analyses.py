@@ -40,6 +40,27 @@ def test_mongo_taxonomy_mock(mock_mongo_client_for_taxonomy):
     assert mgya_taxonomies["accession"] == "MGYA00012345"
 
 
+def test_mongo_functional_mock(mock_mongo_client_for_taxonomy_and_protein_functions):
+    # check the mongo mock fixture since it is a bit complicated in itself
+    mongo_client = pymongo.MongoClient("mongodb://anything")
+    db = mongo_client["any_db"]
+    pfams_collection: pymongo.collection.Collection = db.analysis_job_pfam
+    mgya_pfams = pfams_collection.find_one({"accession": "anything"})
+    assert mgya_pfams is not None
+    print(mgya_pfams["accession"])
+    assert mgya_pfams["accession"] == "MGYA00012345"
+    assert mgya_pfams["pfam_entries"][0]["count"] == 50
+
+    interpros_collection: pymongo.collection.Collection = (
+        db.analysis_job_interpro_identifiers
+    )
+    mgya_interpros = interpros_collection.find_one({"accession": "anything"})
+    assert mgya_interpros is not None
+    print(mgya_interpros["accession"])
+    assert mgya_interpros["accession"] == "MGYA00012345"
+    assert mgya_interpros["interpro_identifiers"][0]["count"] == 70
+
+
 @pytest.mark.django_db(transaction=True)
 def test_prefect_import_v5_amplicon_analyses_flow(
     prefect_harness,

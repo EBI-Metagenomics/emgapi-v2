@@ -159,3 +159,38 @@ def mock_mongo_client_for_taxonomy(monkeypatch):
     monkeypatch.setattr(pymongo, "MongoClient", lambda *args, **kwargs: mock_client)
 
     return mock_client
+
+
+@pytest.fixture
+def mock_mongo_client_for_taxonomy_and_protein_functions(
+    mock_mongo_client_for_taxonomy,
+):
+    # Adds functional (pfam and interpro) data to the mock mongo client
+    mock_db = mock_mongo_client_for_taxonomy[0]
+
+    mock_pfam_collection = mock.MagicMock()
+    mock_pfam_collection.find_one.return_value = {
+        "accession": "MGYA00012345",
+        "job_id": "12345",
+        "pipeline_version": "5.0",
+        "pfam_entries": [
+            {"count": 50, "pfam_entry": "PF00005"},
+            {"count": 60, "pfam_entry": "PF00001"},
+        ],
+    }
+
+    mock_db.analysis_job_pfam = mock_pfam_collection
+
+    mock_interpro_collection = mock.MagicMock()
+    mock_interpro_collection.find_one.return_value = {
+        "accession": "MGYA00012345",
+        "job_id": "12345",
+        "pipeline_version": "5.0",
+        "interpro_identifiers": [
+            {"count": 70, "pfam_entry": "IPR003594"},
+            {"count": 80, "pfam_entry": "IPR013785"},
+        ],
+    }
+    mock_db.analysis_job_interpro_identifiers = mock_interpro_collection
+
+    return mock_mongo_client_for_taxonomy
