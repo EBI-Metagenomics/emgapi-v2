@@ -145,19 +145,19 @@ class AssemblyAnalysisBatchAdmin(JSONFieldWidgetOverridesMixin, ModelAdmin):
             counts = obj.pipeline_status_counts.asa
             # TODO: this is repeated 3 times... I'll refactor this (mbc)
             badges = []
-            if counts.completed > 0:
+            if counts.completed:
                 badges.append(
                     (AssemblyAnalysisPipelineStatus.COMPLETED, str(counts.completed))
                 )
-            if counts.failed > 0:
+            if counts.failed:
                 badges.append(
                     (AssemblyAnalysisPipelineStatus.FAILED, str(counts.failed))
                 )
-            if counts.running > 0:
+            if counts.running:
                 badges.append(
                     (AssemblyAnalysisPipelineStatus.RUNNING, str(counts.running))
                 )
-            if counts.pending > 0:
+            if counts.pending:
                 badges.append(
                     (AssemblyAnalysisPipelineStatus.PENDING, str(counts.pending))
                 )
