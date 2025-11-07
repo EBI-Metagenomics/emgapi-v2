@@ -6,11 +6,11 @@ from unfold.contrib.filters.admin import AutocompleteSelectMultipleFilter
 from unfold.decorators import display, action
 
 from analyses.admin.base import JSONFieldWidgetOverridesMixin
-from workflows.admin.utils import STATUS_LABELS
 from workflows.models import (
     AssemblyAnalysisBatch,
     AssemblyAnalysisBatchAnalysis,
     AssemblyAnalysisPipelineStatus,
+    AssemblyAnalysisPipeline,
 )
 
 
@@ -81,17 +81,14 @@ class AssemblyAnalysisBatchAdmin(JSONFieldWidgetOverridesMixin, ModelAdmin):
         "id_short",
         "study_link",
         "total_analyses",
-        "asa_status_display",
-        "virify_status_display",
-        "map_status_display",
+        "asa_counts_display",
+        "virify_counts_display",
+        "map_counts_display",
         "updated_at",
     ]
 
     list_filter = (
         ["study", AutocompleteSelectMultipleFilter],
-        "asa_status",
-        "virify_status",
-        "map_status",
         "created_at",
     )
 
@@ -113,7 +110,12 @@ class AssemblyAnalysisBatchAdmin(JSONFieldWidgetOverridesMixin, ModelAdmin):
 
     inlines = [AssemblyAnalysisBatchAnalysisInline]
 
-    actions = ["mark_for_rerun"]
+    actions = [
+        "mark_for_rerun",
+        "retry_failed_asa",
+        "retry_failed_virify",
+        "retry_failed_map",
+    ]
 
     def id_short(self, obj):
         """Short batch ID for display."""
@@ -129,27 +131,103 @@ class AssemblyAnalysisBatchAdmin(JSONFieldWidgetOverridesMixin, ModelAdmin):
 
     @display(
         description="ASA",
-        label=STATUS_LABELS,
+        label={
+            AssemblyAnalysisPipelineStatus.COMPLETED: "success",
+            AssemblyAnalysisPipelineStatus.FAILED: "danger",
+            AssemblyAnalysisPipelineStatus.RUNNING: "warning",
+            AssemblyAnalysisPipelineStatus.PENDING: "info",
+        },
     )
-    def asa_status_display(self, obj):
-        """Display ASA pipeline status."""
-        return obj.asa_status
+    def asa_counts_display(self, obj):
+        """Display ASA pipeline status counts as badges."""
+        if obj.pipeline_status_counts and hasattr(obj.pipeline_status_counts, "asa"):
+            counts = obj.pipeline_status_counts.asa
+            # TODO: this is repeated 3 times... I'll refactor this (mbc)
+            badges = []
+            if counts.completed > 0:
+                badges.append(
+                    (AssemblyAnalysisPipelineStatus.COMPLETED, str(counts.completed))
+                )
+            if counts.failed > 0:
+                badges.append(
+                    (AssemblyAnalysisPipelineStatus.FAILED, str(counts.failed))
+                )
+            if counts.running > 0:
+                badges.append(
+                    (AssemblyAnalysisPipelineStatus.RUNNING, str(counts.running))
+                )
+            if counts.pending > 0:
+                badges.append(
+                    (AssemblyAnalysisPipelineStatus.PENDING, str(counts.pending))
+                )
+            return badges if badges else "-"
+        return "-"
 
     @display(
         description="VIRify",
-        label=STATUS_LABELS,
+        label={
+            AssemblyAnalysisPipelineStatus.COMPLETED: "success",
+            AssemblyAnalysisPipelineStatus.FAILED: "danger",
+            AssemblyAnalysisPipelineStatus.RUNNING: "warning",
+            AssemblyAnalysisPipelineStatus.PENDING: "info",
+        },
     )
-    def virify_status_display(self, obj):
-        """Display VIRify pipeline status."""
-        return obj.virify_status
+    def virify_counts_display(self, obj):
+        """Display VIRify pipeline status counts as badges."""
+        if obj.pipeline_status_counts and hasattr(obj.pipeline_status_counts, "virify"):
+            counts = obj.pipeline_status_counts.virify
+            badges = []
+            if counts.completed > 0:
+                badges.append(
+                    (AssemblyAnalysisPipelineStatus.COMPLETED, str(counts.completed))
+                )
+            if counts.failed > 0:
+                badges.append(
+                    (AssemblyAnalysisPipelineStatus.FAILED, str(counts.failed))
+                )
+            if counts.running > 0:
+                badges.append(
+                    (AssemblyAnalysisPipelineStatus.RUNNING, str(counts.running))
+                )
+            if counts.pending > 0:
+                badges.append(
+                    (AssemblyAnalysisPipelineStatus.PENDING, str(counts.pending))
+                )
+            return badges if badges else "-"
+        return "-"
 
     @display(
         description="MAP",
-        label=STATUS_LABELS,
+        label={
+            AssemblyAnalysisPipelineStatus.COMPLETED: "success",
+            AssemblyAnalysisPipelineStatus.FAILED: "danger",
+            AssemblyAnalysisPipelineStatus.RUNNING: "warning",
+            AssemblyAnalysisPipelineStatus.PENDING: "info",
+        },
     )
-    def map_status_display(self, obj):
-        """Display MAP pipeline status."""
-        return obj.map_status
+    def map_counts_display(self, obj):
+        """Display MAP pipeline status counts as badges."""
+        if obj.pipeline_status_counts and hasattr(obj.pipeline_status_counts, "map"):
+            counts = obj.pipeline_status_counts.map
+            badges = []
+            if counts.completed > 0:
+                badges.append(
+                    (AssemblyAnalysisPipelineStatus.COMPLETED, str(counts.completed))
+                )
+            if counts.failed > 0:
+                badges.append(
+                    (AssemblyAnalysisPipelineStatus.FAILED, str(counts.failed))
+                )
+            if counts.running > 0:
+                badges.append(
+                    (AssemblyAnalysisPipelineStatus.RUNNING, str(counts.running))
+                )
+            if counts.pending > 0:
+                badges.append(
+                    (AssemblyAnalysisPipelineStatus.PENDING, str(counts.pending))
+                )
+            return badges if badges else "-"
+        return "-"
 
     @action(description="Reset selected batches to PENDING for rerun")
     def mark_for_rerun(self, request, queryset):
@@ -157,23 +235,110 @@ class AssemblyAnalysisBatchAdmin(JSONFieldWidgetOverridesMixin, ModelAdmin):
         Reset selected batches to PENDING status for all pipelines.
         Useful for rerunning failed batches.
         """
-        for batch in queryset:
-            batch.asa_status = AssemblyAnalysisPipelineStatus.PENDING
-            batch.virify_status = AssemblyAnalysisPipelineStatus.PENDING
-            batch.map_status = AssemblyAnalysisPipelineStatus.PENDING
-            batch.save()
+        from workflows.models import AssemblyAnalysisPipeline
 
-            # Reset all batch assembly analyses to PENDING
-            # This doesn't account for the disabled ones.
-            batch.batch_analyses.objects.all().update(
+        for batch in queryset:
+            # Reset all batch-analysis relationships to PENDING (excludes disabled)
+            batch.batch_analyses.update(
                 asa_status=AssemblyAnalysisPipelineStatus.PENDING,
                 virify_status=AssemblyAnalysisPipelineStatus.PENDING,
                 map_status=AssemblyAnalysisPipelineStatus.PENDING,
             )
 
+            # Update counts to reflect a new status
+            batch.update_pipeline_status_counts(AssemblyAnalysisPipeline.ASA)
+            batch.update_pipeline_status_counts(AssemblyAnalysisPipeline.VIRIFY)
+            batch.update_pipeline_status_counts(AssemblyAnalysisPipeline.MAP)
+
         self.message_user(
             request,
             f"Successfully reset {queryset.count()} batch(es) to PENDING status.",
+        )
+
+    @action(description="Retry FAILED ASA analyses only")
+    def retry_failed_asa(self, request, queryset):
+        """
+        Reset only FAILED ASA analyses to PENDING status.
+
+        This allows selective retry of failed ASA analyses without reprocessing
+        successful ones. Useful when:
+        - Transient failures occurred (network, disk space)
+        - Input data was fixed for specific analyses
+        - Validation rules were updated
+
+        TODO: the ASA, MAP and VIRify methods are repeated.. I'll refactor this (mbc)
+
+        :param request: Django admin request
+        :param queryset: Selected AssemblyAnalysisBatch objects
+        """
+        total_reset = 0
+        for batch in queryset:
+            count = batch.batch_analyses.filter(
+                asa_status=AssemblyAnalysisPipelineStatus.FAILED
+            ).update(asa_status=AssemblyAnalysisPipelineStatus.PENDING)
+            total_reset += count
+
+            batch.update_pipeline_status_counts(AssemblyAnalysisPipeline.ASA)
+
+        self.message_user(
+            request,
+            f"Reset {total_reset} FAILED ASA analysis/analyses to PENDING across {queryset.count()} batch(es).",
+        )
+
+    @action(description="Retry FAILED VIRify analyses only")
+    def retry_failed_virify(self, request, queryset):
+        """
+        Reset only FAILED VIRify analyses to PENDING status.
+
+        This allows selective retry of failed VIRify analyses without reprocessing
+        successful ones. Useful when:
+        - Transient failures occurred (network, disk space)
+        - Input data was fixed for specific analyses
+        - Validation rules were updated
+
+        :param request: Django admin request
+        :param queryset: Selected AssemblyAnalysisBatch objects
+        """
+        total_reset = 0
+        for batch in queryset:
+            count = batch.batch_analyses.filter(
+                virify_status=AssemblyAnalysisPipelineStatus.FAILED
+            ).update(virify_status=AssemblyAnalysisPipelineStatus.PENDING)
+            total_reset += count
+
+            batch.update_pipeline_status_counts(AssemblyAnalysisPipeline.VIRIFY)
+
+        self.message_user(
+            request,
+            f"Reset {total_reset} FAILED VIRify analysis/analyses to PENDING across {queryset.count()} batch(es).",
+        )
+
+    @action(description="Retry FAILED MAP analyses only")
+    def retry_failed_map(self, request, queryset):
+        """
+        Reset only FAILED MAP analyses to PENDING status.
+
+        This allows selective retry of failed MAP analyses without reprocessing
+        successful ones. Useful when:
+        - Transient failures occurred (network, disk space)
+        - Input data was fixed for specific analyses
+        - Validation rules were updated
+
+        :param request: Django admin request
+        :param queryset: Selected AssemblyAnalysisBatch objects
+        """
+        total_reset = 0
+        for batch in queryset:
+            count = batch.batch_analyses.filter(
+                map_status=AssemblyAnalysisPipelineStatus.FAILED
+            ).update(map_status=AssemblyAnalysisPipelineStatus.PENDING)
+            total_reset += count
+
+            batch.update_pipeline_status_counts(AssemblyAnalysisPipeline.MAP)
+
+        self.message_user(
+            request,
+            f"Reset {total_reset} FAILED MAP analysis/analyses to PENDING across {queryset.count()} batch(es).",
         )
 
     fieldsets = (
@@ -190,11 +355,19 @@ class AssemblyAnalysisBatchAdmin(JSONFieldWidgetOverridesMixin, ModelAdmin):
             },
         ),
         (
+            "Pipeline Status Counts",
+            {
+                "classes": ["tab"],
+                "fields": [
+                    "pipeline_status_counts",
+                ],
+            },
+        ),
+        (
             "ASA Pipeline",
             {
                 "classes": ["tab"],
                 "fields": [
-                    "asa_status",
                     "asa_samplesheet_path",
                 ],
             },
@@ -204,7 +377,6 @@ class AssemblyAnalysisBatchAdmin(JSONFieldWidgetOverridesMixin, ModelAdmin):
             {
                 "classes": ["tab"],
                 "fields": [
-                    "virify_status",
                     "virify_samplesheet_path",
                 ],
             },
@@ -214,7 +386,6 @@ class AssemblyAnalysisBatchAdmin(JSONFieldWidgetOverridesMixin, ModelAdmin):
             {
                 "classes": ["tab"],
                 "fields": [
-                    "map_status",
                     "map_samplesheet_path",
                 ],
             },
@@ -234,6 +405,7 @@ class AssemblyAnalysisBatchAdmin(JSONFieldWidgetOverridesMixin, ModelAdmin):
                 "classes": ["tab"],
                 "fields": [
                     "last_error",
+                    "error_log",
                 ],
             },
         ),

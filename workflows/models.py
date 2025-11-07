@@ -6,7 +6,8 @@ from typing import List, Optional, Union
 from django.conf import settings
 from django.contrib.postgres.indexes import GinIndex
 from django.db import models
-from django.db.models import Exists, OuterRef
+from django.utils import timezone
+from django.db.models import Count, Q, Exists, OuterRef
 from django.db.models.signals import pre_save
 from django.dispatch import receiver
 from django.utils.timezone import now
@@ -248,27 +249,60 @@ class AssemblyAnalysisPipelineStatus(models.TextChoices):
     FAILED = "failed", "Failed"
 
 
+class PipelineStatusCounts(BaseModel):
+    """Status counts for a single pipeline, with fields matching AssemblyAnalysisPipelineStatus."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    total: int = Field(0, ge=0)
+    disabled: int = Field(0, ge=0)
+    pending: int = Field(0, ge=0)
+    running: int = Field(0, ge=0)
+    completed: int = Field(0, ge=0)
+    failed: int = Field(0, ge=0)
+
+
+class AssemblyAnalysisBatchStatusCounts(BaseModel):
+    """
+    Status counts for all pipelines in a batch.
+
+    Fields are named after AssemblyAnalysisPipeline enum values (asa, virify, map).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    asa: PipelineStatusCounts = Field(default_factory=PipelineStatusCounts)
+    virify: PipelineStatusCounts = Field(default_factory=PipelineStatusCounts)
+    map: PipelineStatusCounts = Field(default_factory=PipelineStatusCounts)
+
+
 class AssemblyAnalysisPipelineBaseModel(models.Model):
-    """Base models with the basic fields to track the Assembly Analysis pipelines"""
+    """
+    Base model with status fields to track individual analysis progress through pipelines.
+
+    Note: The batch-level aggregate status is now tracked via pipeline_status_counts JSONField.
+    These fields track per-analysis status in the through table (AssemblyAnalysisBatchAnalysis).
+    """
 
     asa_status = models.CharField(
         max_length=20,
-        choices=AssemblyAnalysisPipelineStatus.choices,
+        choices=AssemblyAnalysisPipelineStatus,
         default=AssemblyAnalysisPipelineStatus.PENDING,
-        help_text="Assembly Analysis status for the batch",
+        help_text="Assembly Analysis status for this individual analysis",
     )
 
     virify_status = models.CharField(
         max_length=20,
-        choices=AssemblyAnalysisPipelineStatus.choices,
+        choices=AssemblyAnalysisPipelineStatus,
         default=AssemblyAnalysisPipelineStatus.PENDING,
-        help_text="VIRIfy status for the batch",
+        help_text="VIRIfy status for this individual analysis",
     )
+
     map_status = models.CharField(
         max_length=20,
-        choices=AssemblyAnalysisPipelineStatus.choices,
+        choices=AssemblyAnalysisPipelineStatus,
         default=AssemblyAnalysisPipelineStatus.PENDING,
-        help_text="Mobilome Annotation Pipeline status for the batch",
+        help_text="Mobilome Annotation Pipeline status for this individual analysis",
     )
 
     class Meta:
@@ -539,8 +573,13 @@ class AssemblyAnalysisBatchManager(models.Manager):
         return batch
 
 
-class AssemblyAnalysisBatch(StudyAnalysisBatch, AssemblyAnalysisPipelineBaseModel):
-    """Batch for assembly analyses (ASA -> VIRify -> MAP)."""
+class AssemblyAnalysisBatch(StudyAnalysisBatch):
+    """
+    Batch for assembly analyses (ASA -> VIRify -> MAP).
+
+    Status tracking is done via pipeline_status_counts JSONField which aggregates
+    the individual analysis statuses from the AssemblyAnalysisBatchAnalysis through table.
+    """
 
     objects = AssemblyAnalysisBatchManager()
 
@@ -569,104 +608,31 @@ class AssemblyAnalysisBatch(StudyAnalysisBatch, AssemblyAnalysisPipelineBaseMode
 
     last_error = models.TextField(null=True, blank=True)
 
+    # Error log - it records of all (or as many as possible) errors
+    error_log = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="Chronological log of errors encountered during processing. "
+        "Each entry contains: timestamp, pipeline, analysis_id, error_type, message",
+    )
+
     # Pipeline versions
     pipeline_versions = models.JSONField(default=dict, blank=True)
+
+    # Pipeline status counts
+    pipeline_status_counts: AssemblyAnalysisBatchStatusCounts = JSONFieldWithSchema(
+        schema=AssemblyAnalysisBatchStatusCounts,
+        default=dict,
+        blank=True,
+        help_text="Count of analyses in each status per pipeline (asa/virify/map)",
+    )
 
     class Meta:
         verbose_name = "Assembly Analysis Batch"
         verbose_name_plural = "Assembly Analysis Batches"
-        indexes = [
-            models.Index(fields=["asa_status"]),
-            models.Index(fields=["virify_status"]),
-            models.Index(fields=["map_status"]),
-        ]
 
     def __str__(self):
         return f"Assembly_AnalysisBatch {self.id}: {self.total_analyses} analyses"
-
-    def set_pipeline_status(
-        self,
-        pipeline_type: AssemblyAnalysisPipeline,
-        status: AssemblyAnalysisPipelineStatus,
-    ) -> "AssemblyAnalysisBatch":
-        """
-        Update the pipeline status for a batch and optionally propagate to batch-analysis relations.
-
-        This method:
-        1. Updates the batch-level pipeline status field (asa_status, virify_status, map_status)
-        2. Validates state transitions
-        3. Optionally updates batch-analysis relations (with filtering to avoid overriding)
-
-        :param batch: The AssemblyAnalysisBatch to update
-        :param pipeline_type: The pipeline (ASA, VIRify, MAP)
-        :param status: The new status (PENDING, RUNNING, COMPLETED, FAILED)
-        :return: The updated batch
-        :raises ValueError: If the state transition is invalid
-        """
-        # Get the current status for validation
-        current_status = None
-        if pipeline_type == AssemblyAnalysisPipeline.ASA:
-            current_status = self.asa_status
-            self.asa_status = status
-        elif pipeline_type == AssemblyAnalysisPipeline.VIRIFY:
-            current_status = self.virify_status
-            self.virify_status = status
-        elif pipeline_type == AssemblyAnalysisPipeline.MAP:
-            current_status = self.map_status
-            self.map_status = status
-        else:
-            raise ValueError(f"Unknown pipeline type: {pipeline_type}")
-
-        # Validate state transition
-        self._validate_state_transition(pipeline_type, current_status, status)
-
-        self.save()
-
-        return self
-
-    def _validate_state_transition(
-        self,
-        pipeline_type: AssemblyAnalysisPipeline,
-        from_status: str,
-        to_status: str,
-    ):
-        """
-        Validate that a state transition is allowed.
-
-        Terminal states (COMPLETED, FAILED)
-        cannot transition to active states (RUNNING, SCHEDULED).
-
-        :param pipeline_type: The pipeline being transitioned
-        :param from_status: Current state
-        :param to_status: Desired new state
-        :raises ValueError: If transition is not allowed
-        """
-
-        # Terminal states that should not transition to active states
-        terminal_states = {
-            AssemblyAnalysisPipelineStatus.COMPLETED,
-            AssemblyAnalysisPipelineStatus.FAILED,
-        }
-
-        # Active states
-        active_states = {
-            AssemblyAnalysisPipelineStatus.RUNNING,
-        }
-
-        # Allow same-state transitions (idempotent)
-        if from_status == to_status:
-            return
-
-        # Allow terminal -> terminal transitions (e.g., COMPLETED -> FAILED)
-        # Allow active -> terminal transitions (normal flow)
-        # Allow active -> active transitions (e.g., SCHEDULED -> RUNNING)
-
-        # Prevent terminal -> active transitions
-        if from_status in terminal_states and to_status in active_states:
-            raise ValueError(
-                f"Invalid state transition for {pipeline_type.value}: "
-                f"Cannot transition from terminal state '{from_status}' to active state '{to_status}'"
-            )
 
     def set_pipeline_version(
         self, pipeline_type: AssemblyAnalysisPipeline, version: str, save: bool = True
@@ -717,3 +683,129 @@ class AssemblyAnalysisBatch(StudyAnalysisBatch, AssemblyAnalysisPipelineBaseMode
         """
         self.total_analyses = self.analyses.count()
         self.save()
+
+    def update_pipeline_status_counts(
+        self, pipeline_type: AssemblyAnalysisPipeline
+    ) -> "AssemblyAnalysisBatch":
+        """
+        Update status counts for a specific pipeline by aggregating from batch_analyses.
+
+        Uses a single optimized query with conditional aggregation for efficiency.
+        This should be called at the end of each pipeline execution to reflect current state.
+
+        TODO: this method should be called from a Django model hook... I'm still experimenting (mbc)
+
+        :param pipeline_type: The pipeline (ASA, VIRify, MAP)
+        :return: The updated batch
+        """
+        pipeline_key = pipeline_type.value  # "asa", "virify", "map"
+        status_field = f"{pipeline_key}_status"
+
+        # Single query with conditional aggregation - counts all statuses at once
+        result = AssemblyAnalysisBatchAnalysis.all_objects.filter(batch=self).aggregate(
+            total_count=Count("id"),
+            disabled_count=Count("id", filter=Q(disabled=True)),
+            pending_count=Count(
+                "id",
+                filter=Q(
+                    **{
+                        status_field: AssemblyAnalysisPipelineStatus.PENDING,
+                        "disabled": False,
+                    }
+                ),
+            ),
+            running_count=Count(
+                "id",
+                filter=Q(
+                    **{
+                        status_field: AssemblyAnalysisPipelineStatus.RUNNING,
+                        "disabled": False,
+                    }
+                ),
+            ),
+            completed_count=Count(
+                "id",
+                filter=Q(
+                    **{
+                        status_field: AssemblyAnalysisPipelineStatus.COMPLETED,
+                        "disabled": False,
+                    }
+                ),
+            ),
+            failed_count=Count(
+                "id",
+                filter=Q(
+                    **{
+                        status_field: AssemblyAnalysisPipelineStatus.FAILED,
+                        "disabled": False,
+                    }
+                ),
+            ),
+        )
+
+        # Initialize if needed
+        if not self.pipeline_status_counts:
+            self.pipeline_status_counts = AssemblyAnalysisBatchStatusCounts()
+
+        # Map the query result to PipelineStatusCounts field names
+        counts = PipelineStatusCounts(
+            total=result["total_count"],
+            disabled=result["disabled_count"],
+            pending=result["pending_count"],
+            running=result["running_count"],
+            completed=result["completed_count"],
+            failed=result["failed_count"],
+        )
+        setattr(self.pipeline_status_counts, pipeline_key, counts)
+        self.save()
+        return self
+
+    def log_error(
+        self,
+        pipeline_type: AssemblyAnalysisPipeline,
+        error_type: str,
+        message: str,
+        analysis_id: Optional[int] = None,
+        save: bool = True,
+    ) -> "AssemblyAnalysisBatch":
+        """
+        Add an error entry to the error log.
+
+        Creates a timestamped error record that can be reviewed in the admin interface.
+        This provides a complete audit trail of all errors encountered during batch processing.
+
+        # TODO: this one could use some more types.. for example in error_type.
+
+        :param pipeline_type: The pipeline where the error occurred (ASA, VIRify, MAP)
+        :param error_type: Type of error (e.g., "validation", "import", "pipeline_execution")
+        :param message: Error message (will be truncated to 500 chars if longer)
+        :param analysis_id: ID of the affected analysis (optional for batch-level errors)
+        :param save: Save the batch after logging (default: True)
+        :return: The updated batch
+        """
+        if not isinstance(self.error_log, list):
+            self.error_log = []
+
+        # Truncate long messages
+        truncated_message = message[:500] + "..." if len(message) > 500 else message
+
+        error_entry = {
+            "timestamp": timezone.now().isoformat(),
+            "pipeline": pipeline_type.value,
+            "error_type": error_type,
+            "message": truncated_message,
+        }
+
+        if analysis_id:
+            error_entry["analysis_id"] = analysis_id
+
+        self.error_log.append(error_entry)
+
+        # Keep only last 100 errors to prevent unbounded growth
+        if len(self.error_log) > 100:
+            self.error_log = self.error_log[-100:]
+
+        if save:
+            self.save()
+
+        return self

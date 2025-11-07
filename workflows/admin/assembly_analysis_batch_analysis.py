@@ -8,6 +8,9 @@ from unfold.decorators import display, action
 from workflows.admin.utils import STATUS_LABELS
 from workflows.models import (
     AssemblyAnalysisBatchAnalysis,
+    AssemblyAnalysisPipelineStatus,
+    AssemblyAnalysisPipeline,
+    AssemblyAnalysisBatch,
 )
 
 
@@ -60,7 +63,14 @@ class AssemblyAnalysisBatchAnalysisAdmin(ModelAdmin):
 
     ordering = ["-created_at"]
 
-    actions = ["disable_selected_relations", "enable_selected_relations"]
+    actions = [
+        "disable_selected_relations",
+        "enable_selected_relations",
+        "reset_asa_to_pending",
+        "reset_virify_to_pending",
+        "reset_map_to_pending",
+        "reset_all_pipelines_to_pending",
+    ]
 
     def get_queryset(self, request):
         """
@@ -196,4 +206,108 @@ class AssemblyAnalysisBatchAnalysisAdmin(ModelAdmin):
         self.message_user(
             request,
             f"Successfully enabled {count} batch assembly analysis/analyses.",
+        )
+
+    @action(description="Reset ASA status to PENDING")
+    def reset_asa_to_pending(self, request, queryset):
+        """
+        Reset ASA status to PENDING for selected analyses.
+
+        Use this to retry specific analyses that failed ASA processing.
+        The analyses will be reprocessed on the next flow run.
+
+        TODO: these utility commands were created by Claude, they look OK to me but I need to refactor them (mbc)
+              They are quite destructive, so probably should have some warnings or disabled them directly
+
+        :param request: Django admin request
+        :param queryset: Selected AssemblyAnalysisBatchAnalysis objects
+        """
+        count = queryset.update(asa_status=AssemblyAnalysisPipelineStatus.PENDING)
+
+        # Update counts for affected batches
+        affected_batches = set(queryset.values_list("batch_id", flat=True))
+        for batch_id in affected_batches:
+            batch = AssemblyAnalysisBatch.objects.get(id=batch_id)
+            batch.update_pipeline_status_counts(AssemblyAnalysisPipeline.ASA)
+
+        self.message_user(
+            request,
+            f"Reset ASA status to PENDING for {count} analysis/analyses.",
+        )
+
+    @action(description="Reset VIRify status to PENDING")
+    def reset_virify_to_pending(self, request, queryset):
+        """
+        Reset VIRify status to PENDING for selected analyses.
+
+        Use this to retry specific analyses that failed VIRify processing.
+        The analyses will be reprocessed on the next flow run.
+
+        :param request: Django admin request
+        :param queryset: Selected AssemblyAnalysisBatchAnalysis objects
+        """
+        count = queryset.update(virify_status=AssemblyAnalysisPipelineStatus.PENDING)
+
+        # Update counts for affected batches
+        affected_batches = set(queryset.values_list("batch_id", flat=True))
+        for batch_id in affected_batches:
+            batch = AssemblyAnalysisBatch.objects.get(id=batch_id)
+            batch.update_pipeline_status_counts(AssemblyAnalysisPipeline.VIRIFY)
+
+        self.message_user(
+            request,
+            f"Reset VIRify status to PENDING for {count} analysis/analyses.",
+        )
+
+    @action(description="Reset MAP status to PENDING")
+    def reset_map_to_pending(self, request, queryset):
+        """
+        Reset MAP status to PENDING for selected analyses.
+
+        Use this to retry specific analyses that failed MAP processing.
+        The analyses will be reprocessed on the next flow run.
+
+        :param request: Django admin request
+        :param queryset: Selected AssemblyAnalysisBatchAnalysis objects
+        """
+        count = queryset.update(map_status=AssemblyAnalysisPipelineStatus.PENDING)
+
+        # Update counts for affected batches
+        affected_batches = set(queryset.values_list("batch_id", flat=True))
+        for batch_id in affected_batches:
+            batch = AssemblyAnalysisBatch.objects.get(id=batch_id)
+            batch.update_pipeline_status_counts(AssemblyAnalysisPipeline.MAP)
+
+        self.message_user(
+            request,
+            f"Reset MAP status to PENDING for {count} analysis/analyses.",
+        )
+
+    @action(description="Reset ALL pipeline statuses to PENDING")
+    def reset_all_pipelines_to_pending(self, request, queryset):
+        """
+        Reset all pipeline statuses (ASA, VIRify, MAP) to PENDING for selected analyses.
+
+        Use this to completely reprocess selected analyses from scratch.
+
+        :param request: Django admin request
+        :param queryset: Selected AssemblyAnalysisBatchAnalysis objects
+        """
+        count = queryset.update(
+            asa_status=AssemblyAnalysisPipelineStatus.PENDING,
+            virify_status=AssemblyAnalysisPipelineStatus.PENDING,
+            map_status=AssemblyAnalysisPipelineStatus.PENDING,
+        )
+
+        # Update counts for affected batches
+        affected_batches = set(queryset.values_list("batch_id", flat=True))
+        for batch_id in affected_batches:
+            batch = AssemblyAnalysisBatch.objects.get(id=batch_id)
+            batch.update_pipeline_status_counts(AssemblyAnalysisPipeline.ASA)
+            batch.update_pipeline_status_counts(AssemblyAnalysisPipeline.VIRIFY)
+            batch.update_pipeline_status_counts(AssemblyAnalysisPipeline.MAP)
+
+        self.message_user(
+            request,
+            f"Reset all pipeline statuses to PENDING for {count} analysis/analyses.",
         )

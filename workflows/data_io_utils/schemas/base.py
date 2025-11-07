@@ -202,7 +202,7 @@ class PipelineDirectorySchema(BaseModel):
         :return: Tuple of (validated Directory object or None, list of error messages)
         """
         dir_path = base_path / self.folder_name
-        all_errors = []
+        errors = []
 
         # Prepare files for validation - create File objects
         files_to_validate = []
@@ -218,7 +218,7 @@ class PipelineDirectorySchema(BaseModel):
                 files_to_validate.append(file_obj)
             except ValueError as e:
                 # File validation failed - collect error
-                all_errors.append(
+                errors.append(
                     f"Directory {self.folder_name}: File {filename} validation failed: {e}"
                 )
 
@@ -232,7 +232,7 @@ class PipelineDirectorySchema(BaseModel):
                 glob_rules=self.glob_rules,
             )
         except ValueError as e:
-            all_errors.append(
+            errors.append(
                 f"Directory {self.folder_name}: Directory validation failed: {e}"
             )
 
@@ -242,7 +242,7 @@ class PipelineDirectorySchema(BaseModel):
             success, file_errors = file_schema.validate_file(file_path)
             if not success:
                 for error in file_errors:
-                    all_errors.append(f"Directory {self.folder_name}: {error}")
+                    errors.append(f"Directory {self.folder_name}: {error}")
 
         # Validate subdirectories recursively - collect all errors
         if validated_dir:
@@ -251,11 +251,11 @@ class PipelineDirectorySchema(BaseModel):
                     dir_path, identifier
                 )
                 if subdir_errors:
-                    all_errors.extend(subdir_errors)
+                    errors.extend(subdir_errors)
                 if sub_validated_dir:
                     validated_dir.files.append(sub_validated_dir)
 
-        return validated_dir, all_errors
+        return validated_dir, errors
 
     def import_directory_results(
         self, analysis: analyses.models.Analysis, base_path: Path
@@ -320,22 +320,22 @@ class PipelineResultSchema(BaseModel):
         # Create the main directory structure
         main_dir = Directory(path=base_path / identifier)
 
-        all_errors = []
+        errors = []
 
         # Validate each directory and collect all errors
         for dir_schema in self.directories:
             validated_subdir, dir_errors = dir_schema.validate_directory(
                 main_dir.path, identifier
             )
-            if dir_errors:
-                all_errors.extend(dir_errors)
             if validated_subdir:
                 main_dir.files.append(validated_subdir)
+            if dir_errors:
+                errors.extend(dir_errors)
 
-        if all_errors:
+        if errors:
             # Format errors for better readability
-            error_count = len(all_errors)
-            error_summary = "\n  - ".join(all_errors)
+            error_count = len(errors)
+            error_summary = "\n  - ".join(errors)
             error_message = (
                 f"Pipeline validation failed for {self.pipeline_name} "
                 f"with {error_count} error(s):\n  - {error_summary}"

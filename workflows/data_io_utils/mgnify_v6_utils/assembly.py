@@ -190,7 +190,7 @@ class AssemblyResultImporter(BasePipelineResultImporter):
         for dir_schema in schema.directories:
             downloads_count += self._generate_downloads_from_directory(
                 dir_schema,
-                base_path / identifier,
+                base_path,
                 identifier,
                 results_base_path=base_path,
             )
