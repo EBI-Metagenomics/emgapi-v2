@@ -183,11 +183,11 @@ fileignoreconfig:
 - filename: workflows/models.py
   checksum: 487ca9d7edb707de28311b4154ce86a9b10269d29f2951f010db5c17af88d9ae
 
-- filename: workflows/flows/analysis/assembly/flows/run_assembly_analysis_pipeline_batch.py
-  checksum: e08d76e258134d12109ac6ade34614f8901c42a449e74f58482c3bef123fe179
-
 - filename: workflows/tests/test_assembly_analysis_batch_results_importer.py
   checksum: cc0bc943f33aeac170673cb07d5e3b9b284d772fab495ec63de88974a41d22de
+
+- filename: workflows/flows/analysis/assembly/flows/run_assembly_analysis_pipeline_batch.py
+  checksum: f4d17e99ffa7780ec7082ed9782cc1dac32f6611cae4fa4f1d3412ea2e963cb0
 
 allowed_patterns:
 - cache_key_fn

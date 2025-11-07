@@ -348,135 +348,133 @@ def run_assembly_analysis_pipeline_batch(
             else:
                 logger.warning("No ASA analyses passed validation, skipping import")
 
-        ##################
-        # === VIRify === #
-        ##################
-        logger.info("Starting VIRify pipeline")
-        run_virify_batch(
-            assembly_analyses_batch_id=assembly_analysis_batch.id,
+    ##################
+    # === VIRify === #
+    ##################
+    logger.info("Starting VIRify pipeline")
+    run_virify_batch(
+        assembly_analyses_batch_id=assembly_analysis_batch.id,
+    )
+    # Note: run_virify_batch updates counts internally
+
+    # Refresh batch to get updates from run_virify_batch
+    assembly_analysis_batch.refresh_from_db()
+
+    # Import results if any analyses completed
+    completed_virify_analyses_count = assembly_analysis_batch.batch_analyses.filter(
+        virify_status=AssemblyAnalysisPipelineStatus.COMPLETED
+    ).count()
+
+    if completed_virify_analyses_count:
+        logger.info(
+            f"Validating results for {completed_virify_analyses_count} VIRify completed analyses"
         )
-        # Note: run_virify_batch updates counts internally
+        # First validate
+        validation_results = assembly_analysis_batch_results_importer(
+            assembly_analyses_batch_id=assembly_analysis_batch_id,
+            pipeline_type=AssemblyAnalysisPipeline.VIRIFY,
+            validation_only=True,
+        )
+        process_import_results(
+            validation_results,
+            assembly_analysis_batch,
+            AssemblyAnalysisPipeline.VIRIFY,
+        )
 
-        # Refresh batch to get updates from run_virify_batch
-        assembly_analysis_batch.refresh_from_db()
-
-        # Import results if any analyses completed
-        completed_virify_analyses_count = assembly_analysis_batch.batch_analyses.filter(
-            virify_status=AssemblyAnalysisPipelineStatus.COMPLETED
-        ).count()
-
-        if completed_virify_analyses_count:
+        # Then import successful validations
+        successful_validations = [r for r in validation_results if r.success]
+        if successful_validations:
             logger.info(
-                f"Validating results for {completed_virify_analyses_count} VIRify completed analyses"
+                f"Importing {len(successful_validations)} validated VIRify analyses..."
             )
-            # First validate
-            validation_results = assembly_analysis_batch_results_importer(
+            import_results = assembly_analysis_batch_results_importer(
                 assembly_analyses_batch_id=assembly_analysis_batch_id,
                 pipeline_type=AssemblyAnalysisPipeline.VIRIFY,
-                validation_only=True,
+                validation_only=False,
             )
             process_import_results(
-                validation_results,
+                import_results,
                 assembly_analysis_batch,
                 AssemblyAnalysisPipeline.VIRIFY,
             )
-
-            # Then import successful validations
-            successful_validations = [r for r in validation_results if r.success]
-            if successful_validations:
-                logger.info(
-                    f"Importing {len(successful_validations)} validated VIRify analyses..."
-                )
-                import_results = assembly_analysis_batch_results_importer(
-                    assembly_analyses_batch_id=assembly_analysis_batch_id,
-                    pipeline_type=AssemblyAnalysisPipeline.VIRIFY,
-                    validation_only=False,
-                )
-                process_import_results(
-                    import_results,
-                    assembly_analysis_batch,
-                    AssemblyAnalysisPipeline.VIRIFY,
-                )
-            else:
-                logger.warning("No VIRify analyses passed validation, skipping import")
         else:
-            logger.info("No VIRify analyses completed, skipping result import")
+            logger.warning("No VIRify analyses passed validation, skipping import")
+    else:
+        logger.info("No VIRify analyses completed, skipping result import")
 
-        ###############
-        # === MAP === #
-        ###############
-        logger.info("Starting MAP pipeline")
-        run_map_batch(
-            assembly_analyses_batch_id=assembly_analysis_batch.id,
+    ###############
+    # === MAP === #
+    ###############
+    logger.info("Starting MAP pipeline")
+    run_map_batch(
+        assembly_analyses_batch_id=assembly_analysis_batch.id,
+    )
+
+    # Refresh batch to get updates from run_map_batch
+    assembly_analysis_batch.refresh_from_db()
+
+    # Import results if any analyses completed
+    completed_map_analyses_count = assembly_analysis_batch.batch_analyses.filter(
+        map_status=AssemblyAnalysisPipelineStatus.COMPLETED
+    ).count()
+
+    if completed_map_analyses_count:
+        logger.info(
+            f"Validating results for {completed_map_analyses_count} MAP completed analyses"
+        )
+        # First validate
+        validation_results = assembly_analysis_batch_results_importer(
+            assembly_analyses_batch_id=assembly_analysis_batch_id,
+            pipeline_type=AssemblyAnalysisPipeline.MAP,
+            validation_only=True,
+        )
+        process_import_results(
+            validation_results,
+            assembly_analysis_batch,
+            AssemblyAnalysisPipeline.MAP,
         )
 
-        # Refresh batch to get updates from run_map_batch
-        assembly_analysis_batch.refresh_from_db()
-
-        # Import results if any analyses completed
-        completed_map_analyses_count = assembly_analysis_batch.batch_analyses.filter(
-            map_status=AssemblyAnalysisPipelineStatus.COMPLETED
-        ).count()
-
-        if completed_map_analyses_count:
+        # Then import successful validations
+        successful_validations = [r for r in validation_results if r.success]
+        if successful_validations:
             logger.info(
-                f"Validating results for {completed_map_analyses_count} MAP completed analyses"
+                f"Importing {len(successful_validations)} validated MAP analyses..."
             )
-            # First validate
-            validation_results = assembly_analysis_batch_results_importer(
+            import_results = assembly_analysis_batch_results_importer(
                 assembly_analyses_batch_id=assembly_analysis_batch_id,
                 pipeline_type=AssemblyAnalysisPipeline.MAP,
-                validation_only=True,
+                validation_only=False,
             )
             process_import_results(
-                validation_results,
+                import_results,
                 assembly_analysis_batch,
                 AssemblyAnalysisPipeline.MAP,
             )
-
-            # Then import successful validations
-            successful_validations = [r for r in validation_results if r.success]
-            if successful_validations:
-                logger.info(
-                    f"Importing {len(successful_validations)} validated MAP analyses..."
-                )
-                import_results = assembly_analysis_batch_results_importer(
-                    assembly_analyses_batch_id=assembly_analysis_batch_id,
-                    pipeline_type=AssemblyAnalysisPipeline.MAP,
-                    validation_only=False,
-                )
-                process_import_results(
-                    import_results,
-                    assembly_analysis_batch,
-                    AssemblyAnalysisPipeline.MAP,
-                )
-            else:
-                logger.warning("No MAP analyses passed validation, skipping import")
         else:
-            logger.info("No MAP analyses completed, skipping result import")
+            logger.warning("No MAP analyses passed validation, skipping import")
+    else:
+        logger.info("No MAP analyses completed, skipping result import")
 
-        # At this point, the batch is completed and all analyses are in the DB. #
+    # At this point, the batch is completed and all analyses are in the DB. #
 
-        #######################################
-        # === Study summary for the batch === #
-        #######################################
-        # The study summary is generated from the ASA results, VIRIfy and MAP results are layered on top of the GFF
-        # Only generate a summary if there are successfully imported ASA analyses, which mbc thing is a good idea
-        # as it will allow us to have some results on the website...
-        # TODO: review this decision
-        assembly_analysis_batch.refresh_from_db()
-        successfully_imported_asa_count = assembly_analysis_batch.batch_analyses.filter(
-            asa_status=AssemblyAnalysisPipelineStatus.COMPLETED
-        ).count()
+    #######################################
+    # === Study summary for the batch === #
+    #######################################
+    # The study summary is generated from the ASA results, VIRIfy and MAP results are layered on top of the GFF
+    # Only generate a summary if there are successfully imported ASA analyses, which mbc thing is a good idea
+    # as it will allow us to have some results on the website...
+    # TODO: review this decision
+    assembly_analysis_batch.refresh_from_db()
+    successfully_imported_asa_count = assembly_analysis_batch.batch_analyses.filter(
+        asa_status=AssemblyAnalysisPipelineStatus.COMPLETED
+    ).count()
 
-        if successfully_imported_asa_count > 0:
-            logger.info(
-                f"Generating study summary for {successfully_imported_asa_count} successfully imported ASA analyses"
-            )
-            generate_assembly_analysis_pipeline_batch_summary(
-                assembly_analysis_batch_id
-            )
-        else:
-            logger.warning(
-                "No successfully imported ASA analyses, skipping study summary generation"
-            )
+    if successfully_imported_asa_count > 0:
+        logger.info(
+            f"Generating study summary for {successfully_imported_asa_count} successfully imported ASA analyses"
+        )
+        generate_assembly_analysis_pipeline_batch_summary(assembly_analysis_batch_id)
+    else:
+        logger.warning(
+            "No successfully imported ASA analyses, skipping study summary generation"
+        )
