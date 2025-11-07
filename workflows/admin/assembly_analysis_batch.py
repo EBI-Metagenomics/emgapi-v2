@@ -178,19 +178,19 @@ class AssemblyAnalysisBatchAdmin(JSONFieldWidgetOverridesMixin, ModelAdmin):
         if obj.pipeline_status_counts and hasattr(obj.pipeline_status_counts, "virify"):
             counts = obj.pipeline_status_counts.virify
             badges = []
-            if counts.completed > 0:
+            if counts.completed:
                 badges.append(
                     (AssemblyAnalysisPipelineStatus.COMPLETED, str(counts.completed))
                 )
-            if counts.failed > 0:
+            if counts.failed:
                 badges.append(
                     (AssemblyAnalysisPipelineStatus.FAILED, str(counts.failed))
                 )
-            if counts.running > 0:
+            if counts.running:
                 badges.append(
                     (AssemblyAnalysisPipelineStatus.RUNNING, str(counts.running))
                 )
-            if counts.pending > 0:
+            if counts.pending:
                 badges.append(
                     (AssemblyAnalysisPipelineStatus.PENDING, str(counts.pending))
                 )
