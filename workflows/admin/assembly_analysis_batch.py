@@ -104,6 +104,7 @@ class AssemblyAnalysisBatchAdmin(JSONFieldWidgetOverridesMixin, ModelAdmin):
         "id",
         "batch_type",
         "total_analyses",
+        "error_log",
         "created_at",
         "updated_at",
     ]
@@ -235,8 +236,6 @@ class AssemblyAnalysisBatchAdmin(JSONFieldWidgetOverridesMixin, ModelAdmin):
         Reset selected batches to PENDING status for all pipelines.
         Useful for rerunning failed batches.
         """
-        from workflows.models import AssemblyAnalysisPipeline
-
         for batch in queryset:
             # Reset all batch-analysis relationships to PENDING (excludes disabled)
             batch.batch_analyses.update(
