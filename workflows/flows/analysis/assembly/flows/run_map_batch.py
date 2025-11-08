@@ -124,6 +124,10 @@ def run_map_batch(assembly_analyses_batch_id: uuid.UUID):
 
     logger.info(f"Using output dir {map_outdir} for MAP pipeline")
 
+    # TODO: we need to standardize pipelines params
+    #       i.e. VIRIfy output => outdir
+    #       i.e. MAP samplesheet => input
+
     # Build the command to run the MAP pipeline
     command = cli_command(
         [
@@ -143,7 +147,7 @@ def run_map_batch(assembly_analyses_batch_id: uuid.UUID):
             ),
             ("-config", EMG_CONFIG.map_pipeline.pipeline_config_file),
             "-resume",
-            ("--samplesheet", map_samplesheet_path),
+            ("--input", map_samplesheet_path),
             ("--outdir", map_outdir),
             EMG_CONFIG.slurm.use_nextflow_tower and "-with-tower",
             ("-ansi-log", "false"),
