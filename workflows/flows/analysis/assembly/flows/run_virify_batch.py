@@ -140,7 +140,7 @@ def run_virify_batch(assembly_analyses_batch_id: uuid.UUID):
             ("-config", EMG_CONFIG.virify_pipeline.pipeline_config_file),
             "-resume",
             ("--samplesheet", virify_samplesheet_path),
-            ("--outdir", virify_outdir),
+            ("--output", virify_outdir),
             EMG_CONFIG.slurm.use_nextflow_tower and "-with-tower",
             ("-ansi-log", "false"),
         ]
