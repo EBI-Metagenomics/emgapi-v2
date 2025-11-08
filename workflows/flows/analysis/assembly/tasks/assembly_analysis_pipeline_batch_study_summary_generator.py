@@ -73,7 +73,7 @@ def generate_assembly_analysis_pipeline_batch_summary(
                     / "analysed_assemblies.csv"
                 ).absolute(),
                 study_dir=Path(asa_workspace).absolute(),
-                outdir=study.results_dir,
+                outdir=Path(study.results_dir).absolute(),
             )
 
     generated_files = list(

@@ -33,14 +33,15 @@ class MapResultSchema(PipelineResultSchema):
             files=[
                 PipelineFileSchema(
                     # TODO: this one needs an index
-                    filename_template="mobilome_prokka.gff.gz",
+                    filename_template="{identifier}_user_mobilome_full.gff.gz",
                     validation_rules=[FileExistsRule, FileIsNotEmptyRule],
                     download_metadata=DownloadFileMetadata(
                         file_type=DownloadFileType.GFF,
                         download_type=DownloadType.FUNCTIONAL_ANALYSIS,
                         download_group=analyses.models.Analysis.MAP,
                         short_description="Mobilome annotations",
-                        long_description="Mobilome annotation from MAP (Mobilome Annotation Pipeline)",
+                        # TODO: I don't like this description (mbc)
+                        long_description="Mobilome annotations along with any features present in the user's protein input",
                     ),
                 ),
             ],

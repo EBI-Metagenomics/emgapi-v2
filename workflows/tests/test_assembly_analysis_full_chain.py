@@ -104,7 +104,7 @@ def setup_map_output_helpers(map_outdir: Path, assembly_accession: str):
     gff_dir.mkdir(parents=True, exist_ok=True)
 
     # Create MAP GFF file in the gff subdirectory to match schema expectation
-    map_gff = gff_dir / "mobilome_prokka.gff.gz"
+    map_gff = gff_dir / f"{assembly_accession}_user_mobilome_full.gff.gz"
     with gzip.open(map_gff, "wt") as f:
         f.write("##gff-version 3\n# Mock MAP GFF content")
 

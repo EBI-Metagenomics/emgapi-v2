@@ -333,8 +333,10 @@ def setup_map_batch_fixtures(
     gff_dir.mkdir(parents=True, exist_ok=True)
 
     # Create a placeholder GFF file to satisfy schema validation
-    # MAP expects a mobilome_prokka.gff.gz file in the gff subdirectory
-    placeholder_gff = gff_dir / "mobilome_prokka.gff.gz"
+    # MAP expects a {identifier}_user_mobilome_full.gff.gz file in the gff subdirectory
+    placeholder_gff = (
+        gff_dir / f"{scenario.assembly_accession_success}_user_mobilome_full.gff.gz"
+    )
     if not placeholder_gff.exists():
         with gzip.open(placeholder_gff, "wt") as f:
             f.write("##gff-version 3\n# Placeholder MAP output\n")
@@ -618,7 +620,7 @@ def test_prefect_analyse_assembly_flow(
         map_workspace
         / assembly_test_scenario.assembly_accession_success
         / EMG_CONFIG.map_pipeline.final_gff_folder
-        / "mobilome_prokka.gff.gz"
+        / f"{assembly_test_scenario.assembly_accession_success}_user_mobilome_full.gff.gz"
     )
     assert map_gff.exists()
     # Verify batch-analysis relation reflects all three pipelines
