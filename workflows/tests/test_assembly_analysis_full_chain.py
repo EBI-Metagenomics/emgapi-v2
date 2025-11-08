@@ -104,8 +104,9 @@ def setup_map_output_helpers(map_outdir: Path, assembly_accession: str):
     gff_dir.mkdir(parents=True, exist_ok=True)
 
     # Create MAP GFF file in the gff subdirectory to match schema expectation
-    map_gff = gff_dir / "mobilome_prokka.gff"
-    map_gff.write_text("##gff-version 3\n# Mock MAP GFF content")
+    map_gff = gff_dir / "mobilome_prokka.gff.gz"
+    with gzip.open(map_gff, "wt") as f:
+        f.write("##gff-version 3\n# Mock MAP GFF content")
 
 
 @pytest.mark.django_db

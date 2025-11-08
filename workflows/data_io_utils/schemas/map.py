@@ -32,7 +32,8 @@ class MapResultSchema(PipelineResultSchema):
             validation_rules=[DirectoryExistsRule],
             files=[
                 PipelineFileSchema(
-                    filename_template="mobilome_prokka.gff",
+                    # TODO: this one needs an index
+                    filename_template="mobilome_prokka.gff.gz",
                     validation_rules=[FileExistsRule, FileIsNotEmptyRule],
                     download_metadata=DownloadFileMetadata(
                         file_type=DownloadFileType.GFF,
