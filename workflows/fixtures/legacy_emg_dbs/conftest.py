@@ -43,6 +43,7 @@ def in_memory_legacy_emg_db():
         study_name="Bugs on mars",
         ext_study_id="ERP1",
         is_private=False,
+        submission_account_id="Weeble-1",
         project_id="PRJ1",
         is_suppressed=False,
         biome_id=1,

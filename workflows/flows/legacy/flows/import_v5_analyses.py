@@ -60,7 +60,9 @@ def import_v5_analyses(mgys: str):
         legacy_biome = legacy_study.biome
 
         study = make_study_from_legacy_emg_db(
-            legacy_study, legacy_biome, is_private=legacy_study.is_private
+            legacy_study,
+            legacy_biome,
+            is_private=legacy_study.is_private or False,  # null is_private -> false
         )
 
         for legacy_analysis in legacy_study.analysis_jobs:

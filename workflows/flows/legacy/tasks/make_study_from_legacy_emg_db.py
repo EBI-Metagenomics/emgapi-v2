@@ -17,7 +17,7 @@ def make_study_from_legacy_emg_db(
             "is_private": is_private,
             "webin_submitter": legacy_study.submission_account_id,
         },
-        creating_fields={
+        create_defaults={
             "accession": legacy_study.ext_study_id,
             "additional_accessions": [legacy_study.project_id],
             "title": legacy_study.study_name,

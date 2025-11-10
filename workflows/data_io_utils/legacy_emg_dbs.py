@@ -54,7 +54,9 @@ class LegacyStudy(LegacyEMGBase):
 
     is_suppressed: Mapped[bool] = mapped_column("IS_SUPPRESSED", Boolean)
     is_private: Mapped[bool] = mapped_column("IS_PRIVATE", Boolean)
-    submission_account_id: Mapped[str] = mapped_column("SUBMISSION_ACCOUNT_ID", String)
+    submission_account_id: Mapped[str] = mapped_column(
+        "SUBMISSION_ACCOUNT_ID", String, nullable=True
+    )
 
     analysis_jobs: Mapped[list["LegacyAnalysisJob"]] = relationship(
         back_populates="study"
