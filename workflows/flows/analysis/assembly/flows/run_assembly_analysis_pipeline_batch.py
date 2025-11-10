@@ -470,6 +470,7 @@ def run_assembly_analysis_pipeline_batch(
     ).count()
 
     if successfully_imported_asa_count > 0:
+        # TODO: it would be very useful to keep track of this statys (analysis done - moving to summaries...)
         logger.info(
             f"Generating study summary for {successfully_imported_asa_count} successfully imported ASA analyses"
         )
