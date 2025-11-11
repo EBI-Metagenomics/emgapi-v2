@@ -2,9 +2,7 @@ from pathlib import Path
 
 from prefect import task, get_run_logger
 
-import django
-
-django.setup()
+import activate_django_first  # noqa
 
 from analyses.base_models.with_downloads_models import (
     DownloadFile,
@@ -32,7 +30,7 @@ def add_assembly_study_summaries_to_downloads(
     study = Study.objects.get(accession=mgnify_study_accession)
 
     if not study.results_dir:
-        logger.warning(
+        logger.error(
             f"Study {study} has no results_dir, cannot add study summaries to downloads"
         )
         return 0
@@ -50,7 +48,10 @@ def add_assembly_study_summaries_to_downloads(
         logger.info(
             f"Cleared {removed_count} existing study_summary downloads from {study} for idempotent retry"
         )
-        study.save()
+
+    # Always save to ensure a clean state before adding new downloads
+    study.save()
+    study.refresh_from_db()
 
     # Find all study summary files matching the study accession
     summary_files = list(
@@ -58,7 +59,7 @@ def add_assembly_study_summaries_to_downloads(
     )
 
     if not summary_files:
-        logger.info(f"No study summary files found in {study.results_dir}")
+        logger.error(f"No study summary files found in {study.results_dir}")
         return 0
 
     logger.info(

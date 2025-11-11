@@ -4,6 +4,7 @@ from analyses.base_models.with_downloads_models import (
     DownloadFileType,
     DownloadType,
 )
+from enum import Enum
 from typing import Optional, List
 from pathlib import Path
 from pydantic import BaseModel, Field
@@ -666,10 +667,10 @@ class StudySummary(BaseModel):
 
         Expected pattern: {study_accession}_{source}_study_summary.tsv
         """
-        return f"_{self.source}_study_summary.tsv" in file_path.name
+        return file_path.name.endswith(f"_{self.source}_study_summary.tsv")
 
 
-class AssemblyStudySummary:
+class AssemblyStudySummary(Enum):
     """Registry of assembly study summary types."""
 
     TAXONOMY = StudySummary(
@@ -715,12 +716,5 @@ class AssemblyStudySummary:
 
     @classmethod
     def all_types(cls) -> List[StudySummary]:
-        """Get all registered summary types.
-
-        This is useful to iterate over all summary types
-        """
-        return [
-            getattr(cls, attr)
-            for attr in dir(cls)
-            if isinstance(getattr(cls, attr), StudySummary)
-        ]
+        """Get all registered summary types."""
+        return [member.value for member in cls]

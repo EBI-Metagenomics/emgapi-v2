@@ -100,3 +100,34 @@ class TestAddAssemblyStudySummariesToDownloads:
         )
         (tmp_path / "empty").mkdir()
         assert add_assembly_study_summaries_to_downloads(study2.accession) == 0
+
+    def test_first_run_persists_to_db(self, prefect_harness, tmp_path):
+        """Test that first run (starting from zero) correctly persists downloads to DB."""
+        ena_study = ENAStudy.objects.create(accession="PRJEB12345", title="Test Study")
+        study = Study.objects.create(
+            ena_study=ena_study, title="Test Study", results_dir=str(tmp_path)
+        )
+        study.inherit_accessions_from_related_ena_object("ena_study")
+
+        # Verify starting with no downloads
+        assert len(study.downloads) == 0
+
+        # Create summary files
+        (tmp_path / f"{study.first_accession}_taxonomy_study_summary.tsv").write_text(
+            "data\n"
+        )
+        (tmp_path / f"{study.first_accession}_ko_study_summary.tsv").write_text(
+            "data\n"
+        )
+
+        # Run the task
+        added_count = add_assembly_study_summaries_to_downloads(study.accession)
+        assert added_count == 2
+
+        # Refresh from DB and verify persistence
+        study.refresh_from_db()
+        assert len(study.downloads) == 2
+
+        # Verify the downloads are actually in the database by fetching fresh instance
+        fresh_study = Study.objects.get(accession=study.accession)
+        assert len(fresh_study.downloads) == 2
