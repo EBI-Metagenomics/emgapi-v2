@@ -36,6 +36,13 @@ def add_assembly_study_summaries_to_downloads(
         return 0
 
     # Clear existing study_summary downloads for idempotency
+    # TODO: Potential issue in the long run
+    # If a study is analysed for amplicon runs in 2025, then the NFS study results dir
+    # is cleaned or archived (since results are on FTP now), then in 2027 the same study is analysed
+    # for assemblies, the idempotency here removes both the 2025-amplicon and 2027-assembly study
+    # summary downloads. If amplicon study summaries are no longer on disk, they are erroneously deleted.
+    # This means we basically can never clean/archive the internal study dirs.
+    # This could be fine (probably good?) but we should at least keep this in mind.
     original_count = len(study.downloads)
     study.downloads = [
         dl

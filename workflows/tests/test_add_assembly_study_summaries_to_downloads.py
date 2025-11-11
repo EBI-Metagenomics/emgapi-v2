@@ -29,7 +29,7 @@ class TestAddAssemblyStudySummariesToDownloads:
 
         added_count = add_assembly_study_summaries_to_downloads(study.accession)
 
-        # Verify count and downloads
+        # Verify the count and downloads
         assert added_count == 3
         study.refresh_from_db()
         assert len(study.downloads_as_objects) == 3
