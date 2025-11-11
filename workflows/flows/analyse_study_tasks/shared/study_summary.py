@@ -222,6 +222,18 @@ def merge_study_summaries(
 
 @task
 def add_study_summaries_to_downloads(mgnify_study_accession: str):
+    """
+    Adds study summary files to the download list of a specified study.
+
+    This task processes all summary files available in the study's `results_dir`, matching
+    the study's accession and a specific file pattern for study summaries. For each
+    summary file found, it determines the database or region being summarized and attempts
+    to add the summary file to the available downloads of the study. If a file already
+    exists in the downloads list, it skips re-adding the file. The task updates and logs
+    the changes for the study downloads once all processing is complete.
+
+    :param mgnify_study_accession: The accession identifier for the study to process.
+    """
     logger = get_run_logger()
     study = Study.objects.get(accession=mgnify_study_accession)
     if not study.results_dir:
