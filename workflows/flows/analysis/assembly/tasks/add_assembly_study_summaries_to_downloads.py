@@ -35,31 +35,6 @@ def add_assembly_study_summaries_to_downloads(
         )
         return 0
 
-    # Clear existing study_summary downloads for idempotency
-    # TODO: Potential issue in the long run
-    # If a study is analysed for amplicon runs in 2025, then the NFS study results dir
-    # is cleaned or archived (since results are on FTP now), then in 2027 the same study is analysed
-    # for assemblies, the idempotency here removes both the 2025-amplicon and 2027-assembly study
-    # summary downloads. If amplicon study summaries are no longer on disk, they are erroneously deleted.
-    # This means we basically can never clean/archive the internal study dirs.
-    # This could be fine (probably good?) but we should at least keep this in mind.
-    original_count = len(study.downloads)
-    study.downloads = [
-        dl
-        for dl in study.downloads
-        if not dl.get("download_group", "").startswith("study_summary")
-    ]
-
-    removed_count = original_count - len(study.downloads)
-    if removed_count > 0:
-        logger.info(
-            f"Cleared {removed_count} existing study_summary downloads from {study} for idempotent retry"
-        )
-
-    # Always save to ensure a clean state before adding new downloads
-    study.save()
-    study.refresh_from_db()
-
     # Find all study summary files matching the study accession
     summary_files = list(
         Path(study.results_dir).glob(f"{study.first_accession}*_study_summary.tsv")
@@ -72,6 +47,24 @@ def add_assembly_study_summaries_to_downloads(
     logger.info(
         f"Found {len(summary_files)} study summary files in {study.results_dir}"
     )
+
+    # Clear existing downloads that match the aliases of files we're about to add
+    # This makes the task idempotent by removing only what will be re-added
+    file_aliases = {f.name for f in summary_files}
+    original_count = len(study.downloads)
+    study.downloads = [
+        dl for dl in study.downloads if dl.get("alias") not in file_aliases
+    ]
+
+    removed_count = original_count - len(study.downloads)
+    if removed_count > 0:
+        logger.info(
+            f"Cleared {removed_count} existing downloads with matching aliases for idempotent retry"
+        )
+
+    # Save to ensure a clean state before adding new downloads
+    study.save()
+    study.refresh_from_db()
 
     added_count = 0
     for summary_file in summary_files:
