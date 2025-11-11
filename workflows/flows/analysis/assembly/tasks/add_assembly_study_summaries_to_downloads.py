@@ -97,14 +97,9 @@ def add_assembly_study_summaries_to_downloads(
             alias=summary_file.name,
         )
 
-        try:
-            study.add_download(download_file)
-            logger.info(f"Added {summary_file.name} to downloads of {study}")
-            added_count += 1
-        except FileExistsError:
-            logger.warning(
-                f"File {summary_file} already exists in downloads list, skipping"
-            )
+        study.add_download(download_file)
+        logger.info(f"Added {summary_file.name} to downloads of {study}")
+        added_count += 1
 
     study.save()
     logger.info(f"Added {added_count} study summaries.")
