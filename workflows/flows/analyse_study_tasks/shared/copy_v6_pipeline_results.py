@@ -248,6 +248,8 @@ def _copy_single_analysis_results(
         Path(target_root)
         / accession_prefix_separated_dir_path(study_accession, -3)
         / accession_prefix_separated_dir_path(assembly_accession, -3)
+        / analysis.pipeline_version
+        / Analysis.ExperimentTypes.ASSEMBLY.label.lower()
     )
 
     logger.info(
@@ -319,9 +321,11 @@ def _copy_single_analysis_results(
             f"MAP not completed or results not found for {assembly_accession} at {map_source}"
         )
 
-    # Update analysis external_results_dir
+    # Update analysis and study external_results_dir
     analysis.external_results_dir = target_base.relative_to(target_root)
     analysis.save()
+    analysis.study.external_results_dir = target_base.parent.relative_to(target_root)
+    analysis.study.save()
 
     logger.info(
         f"Analysis {analysis.accession} now has results at {analysis.external_results_dir} in {target_root}"

@@ -177,7 +177,7 @@ class AssemblyResultImporter(BasePipelineResultImporter):
         """
         Generate downloads from the pipeline schema.
 
-        :param schema: PipelineResultSchema defining the pipeline structure
+        :param schema: PipelineResultSchema defining the pipeline results
         :param base_path: Base path containing the pipeline results
         :type base_path: Path
         :param identifier: Pipeline run identifier
@@ -187,12 +187,15 @@ class AssemblyResultImporter(BasePipelineResultImporter):
         """
         downloads_count = 0
 
+        # Files are stored under base_path/identifier/qc/... etc.
+        # But we want the relative path to start from base_path/identifier (not base_path)
+        # so the path becomes qc/... instead of identifier/qc/...
         for dir_schema in schema.directories:
             downloads_count += self._generate_downloads_from_directory(
                 dir_schema,
-                base_path,
+                base_path / identifier,
                 identifier,
-                results_base_path=base_path,
+                results_base_path=base_path / identifier,
             )
 
         return downloads_count
