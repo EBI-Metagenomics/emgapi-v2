@@ -3,6 +3,10 @@ from unittest.mock import Mock, patch
 import pytest
 
 from analyses.models import Analysis
+from workflows.flows.analyse_study_tasks.shared.copy_v6_pipeline_results import (
+    _copy_single_analysis_results,
+)
+from workflows.data_io_utils.filenames import accession_prefix_separated_dir_path
 from workflows.data_io_utils.schemas import PipelineValidationError
 from workflows.flows.analysis.assembly.flows.run_assembly_analysis_pipeline_batch import (
     process_import_results,
@@ -1187,3 +1191,81 @@ class TestIdempotentImports:
             f"Cleared 3 existing ASA downloads from {analysis.accession} for idempotent retry"
             in caplog.text
         )
+
+    @patch(
+        "workflows.flows.analyse_study_tasks.shared.copy_v6_pipeline_results.move_data"
+    )
+    def test_download_paths_no_duplicate_identifier(
+        self,
+        mock_move_data,
+        raw_reads_mgnify_study,
+        raw_reads_mgnify_sample,
+        mgnify_assemblies,
+        tmp_path,
+        prefect_harness,
+    ):
+        """Test that download paths don't contain duplicate assembly identifiers."""
+        assembly_id = mgnify_assemblies[0].first_accession
+
+        # Create batch and analysis
+        batch = AssemblyAnalysisBatch.objects.create(
+            study=raw_reads_mgnify_study,
+            workspace_dir=str(tmp_path / "workspace"),
+            batch_type="assembly_analysis",
+        )
+        analysis = Analysis.objects.create(
+            study=raw_reads_mgnify_study,
+            sample=raw_reads_mgnify_sample[0],
+            ena_study=raw_reads_mgnify_study.ena_study,
+            assembly=mgnify_assemblies[0],
+            pipeline_version=Analysis.PipelineVersions.v6,
+            experiment_type=Analysis.ExperimentTypes.ASSEMBLY,
+        )
+        batch_analysis = AssemblyAnalysisBatchAnalysis.objects.create(
+            batch=batch,
+            analysis=analysis,
+            asa_status=AssemblyAnalysisPipelineStatus.COMPLETED,
+        )
+
+        # Create source files in the batch workspace
+        asa_workspace = tmp_path / "workspace" / "asa"
+        test_qc_dir = asa_workspace / assembly_id / "qc"
+        test_qc_dir.mkdir(parents=True)
+        (test_qc_dir / "multiqc_report.html").write_text("<html>test</html>")
+
+        # Mock get_pipeline_workspace
+        batch.get_pipeline_workspace = lambda pipeline: asa_workspace
+
+        # Copy results using actual function
+        target_root = tmp_path / "ftp"
+        logger = Mock()
+        _copy_single_analysis_results(
+            analysis=analysis,
+            batch_analysis_relation=batch_analysis,
+            batch=batch,
+            target_root=str(target_root),
+            logger=logger,
+        )
+
+        # Verify external_results_dir was set correctly
+        analysis.refresh_from_db()
+        assert analysis.external_results_dir
+
+        # Verify no duplicate assembly identifier in external_results_dir
+        assert f"/{assembly_id}/{assembly_id}/" not in str(
+            analysis.external_results_dir
+        )
+
+        # Verify V6/assembly is in the path
+        assert "/V6/assembly" in str(analysis.external_results_dir)
+
+        # Verify expected path structure
+        study_accession = raw_reads_mgnify_study.first_accession
+        expected_base = (
+            target_root
+            / accession_prefix_separated_dir_path(study_accession, -3)
+            / accession_prefix_separated_dir_path(assembly_id, -3)
+            / "V6"
+            / "assembly"
+        )
+        assert f"/{assembly_id}/{assembly_id}/" not in str(expected_base)
