@@ -66,8 +66,8 @@ def get_catalogue(options):
             "version": options["catalogue_version"],
             "name": f"{options['catalogue_name']} v{options['catalogue_version']}",
             "biome": biome,
-            "result_directory": f"{genome_config.RESULTS_DIRECTORY_ROOT}/{options['results_directory']}",
-            "ftp_url": genome_config.MAGS_FTP_SITE,
+            "result_directory": f"{genome_config.results_directory_root}/{options['results_directory']}",
+            "ftp_url": genome_config.mags_ftp_site,
             "pipeline_version_tag": options["pipeline_version"],
             "catalogue_biome_label": options["catalogue_biome_label"],
             "catalogue_type": options["catalogue_type"],
@@ -106,7 +106,7 @@ def process_genome_dir(catalogue, genome_dir):
     genome_data["catalogue"] = catalogue
     genome_results_path = get_genome_result_path(genome_dir)
     genome_data["result_directory"] = (
-        f"{genome_config.RESULTS_DIRECTORY_ROOT}/{genome_results_path.replace('/website/', '/')}"
+        f"{genome_config.results_directory_root}/{genome_results_path.replace('/website/', '/')}"
     )
     genome_data["biome"] = Biome.objects.filter(path=path).first()
 
