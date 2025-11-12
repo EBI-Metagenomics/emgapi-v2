@@ -84,7 +84,7 @@ def add_assembly_study_summaries_to_downloads(
         is_taxonomy = matched_type.source == "taxonomy"
 
         download_file = DownloadFile(
-            path=summary_file.relative_to(study.results_dir),
+            path=Path("study-summaries") / summary_file.name,
             download_type=(
                 DownloadType.TAXONOMIC_ANALYSIS
                 if is_taxonomy
