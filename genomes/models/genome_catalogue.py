@@ -42,12 +42,12 @@ class GenomeCatalogue(WithDownloadsModel, TimeStampedModel):
         help_text="Total number of genomes in the catalogue (including cluster reps and members)",
     )
     ftp_url = models.CharField(
-        db_column="ftp_url", max_length=200, default=EMG_CONFIG.genomes.MAGS_FTP_SITE
+        db_column="ftp_url", max_length=200, default=EMG_CONFIG.genomes.mags_ftp_site
     )
     pipeline_version_tag = models.CharField(
         db_column="pipeline_version_tag",
         max_length=20,
-        default=EMG_CONFIG.genomes.LATEST_MAGS_PIPELINE_TAG,
+        default=EMG_CONFIG.genomes.latest_mags_pipeline_tag,
     )
     catalogue_biome_label = models.CharField(
         db_column="catalogue_biome_label",
