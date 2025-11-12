@@ -278,11 +278,11 @@ class LogMaskingConfig(BaseModel):
 
 
 class GenomeConfig(BaseModel):
-    MAGS_FTP_SITE: str = (
+    mags_ftp_site: str = (
         "http://ftp.ebi.ac.uk/pub/databases/metagenomics/mgnify_genomes/"
     )
-    LATEST_MAGS_PIPELINE_TAG: str = "v1.2.1"
-    RESULTS_DIRECTORY_ROOT: str = "/nfs/donco/results"
+    latest_mags_pipeline_tag: str = "v1.2.1"
+    results_directory_root: str = "/nfs/donco/results"
 
 
 class EuropePMCConfig(BaseModel):
