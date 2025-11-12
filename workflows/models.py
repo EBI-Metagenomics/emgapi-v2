@@ -254,6 +254,7 @@ class PipelineStatusCounts(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
+    # TODO: I need to remove total and disabled
     total: int = Field(0, ge=0)
     disabled: int = Field(0, ge=0)
     pending: int = Field(0, ge=0)
@@ -703,8 +704,6 @@ class AssemblyAnalysisBatch(StudyAnalysisBatch):
 
         # Single query with conditional aggregation - counts all statuses at once
         result = AssemblyAnalysisBatchAnalysis.all_objects.filter(batch=self).aggregate(
-            total_count=Count("id"),
-            disabled_count=Count("id", filter=Q(disabled=True)),
             pending_count=Count(
                 "id",
                 filter=Q(
@@ -749,8 +748,6 @@ class AssemblyAnalysisBatch(StudyAnalysisBatch):
 
         # Map the query result to PipelineStatusCounts field names
         counts = PipelineStatusCounts(
-            total=result["total_count"],
-            disabled=result["disabled_count"],
             pending=result["pending_count"],
             running=result["running_count"],
             completed=result["completed_count"],

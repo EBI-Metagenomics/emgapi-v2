@@ -80,10 +80,11 @@ class AssemblyAnalysisBatchAdmin(JSONFieldWidgetOverridesMixin, ModelAdmin):
     list_display = [
         "id_short",
         "study_link",
-        "total_analyses",
-        "asa_counts_display",
-        "virify_counts_display",
-        "map_counts_display",
+        "total_count",
+        "completed_count",
+        "pending_count",
+        "running_count",
+        "failed_count",
         "updated_at",
     ]
 
@@ -103,7 +104,6 @@ class AssemblyAnalysisBatchAdmin(JSONFieldWidgetOverridesMixin, ModelAdmin):
     readonly_fields = [
         "id",
         "batch_type",
-        "total_analyses",
         "error_log",
         "created_at",
         "updated_at",
@@ -118,11 +118,10 @@ class AssemblyAnalysisBatchAdmin(JSONFieldWidgetOverridesMixin, ModelAdmin):
         "retry_failed_map",
     ]
 
+    @display(description="Batch ID")
     def id_short(self, obj):
         """Short batch ID for display."""
         return str(obj.id)[:8]
-
-    id_short.short_description = "Batch ID"
 
     @display(description="Study")
     def study_link(self, obj):
@@ -130,107 +129,84 @@ class AssemblyAnalysisBatchAdmin(JSONFieldWidgetOverridesMixin, ModelAdmin):
         url = reverse("admin:analyses_study_change", args=[obj.study.accession])
         return format_html('<a href="{}">{}</a>', url, obj.study.accession)
 
-    @display(
-        description="ASA",
-        label={
-            AssemblyAnalysisPipelineStatus.COMPLETED: "success",
-            AssemblyAnalysisPipelineStatus.FAILED: "danger",
-            AssemblyAnalysisPipelineStatus.RUNNING: "warning",
-            AssemblyAnalysisPipelineStatus.PENDING: "info",
-        },
-    )
-    def asa_counts_display(self, obj):
-        """Display ASA pipeline status counts as badges."""
-        if obj.pipeline_status_counts and hasattr(obj.pipeline_status_counts, "asa"):
-            counts = obj.pipeline_status_counts.asa
-            # TODO: this is repeated 3 times... I'll refactor this (mbc)
-            badges = []
-            if counts.completed:
-                badges.append(
-                    (AssemblyAnalysisPipelineStatus.COMPLETED, str(counts.completed))
-                )
-            if counts.failed:
-                badges.append(
-                    (AssemblyAnalysisPipelineStatus.FAILED, str(counts.failed))
-                )
-            if counts.running:
-                badges.append(
-                    (AssemblyAnalysisPipelineStatus.RUNNING, str(counts.running))
-                )
-            if counts.pending:
-                badges.append(
-                    (AssemblyAnalysisPipelineStatus.PENDING, str(counts.pending))
-                )
-            return badges or "-"
-        return "-"
+    @display(description="Completed")
+    def completed_count(self, obj):
+        """
+        Display completed count per pipeline (ASA, VIRify, MAP).
+        """
+        if not obj.pipeline_status_counts:
+            return "-"
 
-    @display(
-        description="VIRify",
-        label={
-            AssemblyAnalysisPipelineStatus.COMPLETED: "success",
-            AssemblyAnalysisPipelineStatus.FAILED: "danger",
-            AssemblyAnalysisPipelineStatus.RUNNING: "warning",
-            AssemblyAnalysisPipelineStatus.PENDING: "info",
-        },
-    )
-    def virify_counts_display(self, obj):
-        """Display VIRify pipeline status counts as badges."""
-        if obj.pipeline_status_counts and hasattr(obj.pipeline_status_counts, "virify"):
-            counts = obj.pipeline_status_counts.virify
-            badges = []
-            if counts.completed:
-                badges.append(
-                    (AssemblyAnalysisPipelineStatus.COMPLETED, str(counts.completed))
-                )
-            if counts.failed:
-                badges.append(
-                    (AssemblyAnalysisPipelineStatus.FAILED, str(counts.failed))
-                )
-            if counts.running:
-                badges.append(
-                    (AssemblyAnalysisPipelineStatus.RUNNING, str(counts.running))
-                )
-            if counts.pending:
-                badges.append(
-                    (AssemblyAnalysisPipelineStatus.PENDING, str(counts.pending))
-                )
-            return badges or "-"
-        return "-"
+        asa = obj.pipeline_status_counts.asa.completed
+        virify = obj.pipeline_status_counts.virify.completed
+        map_count = obj.pipeline_status_counts.map.completed
 
-    @display(
-        description="MAP",
-        label={
-            AssemblyAnalysisPipelineStatus.COMPLETED: "success",
-            AssemblyAnalysisPipelineStatus.FAILED: "danger",
-            AssemblyAnalysisPipelineStatus.RUNNING: "warning",
-            AssemblyAnalysisPipelineStatus.PENDING: "info",
-        },
-    )
-    def map_counts_display(self, obj):
-        """Display MAP pipeline status counts as badges."""
-        if obj.pipeline_status_counts and hasattr(obj.pipeline_status_counts, "map"):
-            counts = obj.pipeline_status_counts.map
-            badges = []
-            if counts.completed > 0:
-                badges.append(
-                    (AssemblyAnalysisPipelineStatus.COMPLETED, str(counts.completed))
-                )
-            if counts.failed > 0:
-                badges.append(
-                    (AssemblyAnalysisPipelineStatus.FAILED, str(counts.failed))
-                )
-            if counts.running > 0:
-                badges.append(
-                    (AssemblyAnalysisPipelineStatus.RUNNING, str(counts.running))
-                )
-            if counts.pending > 0:
-                badges.append(
-                    (AssemblyAnalysisPipelineStatus.PENDING, str(counts.pending))
-                )
-            return badges if badges else "-"
-        return "-"
+        return f"A:{asa} V:{virify} M:{map_count}"
 
-    @action(description="Reset selected batches to PENDING for rerun")
+    @display(description="Failed")
+    def failed_count(self, obj):
+        """
+        Display failed count per pipeline (A:ASA V:VIRify M:MAP).
+        """
+        if not obj.pipeline_status_counts:
+            return "-"
+
+        asa = obj.pipeline_status_counts.asa.failed
+        virify = obj.pipeline_status_counts.virify.failed
+        map_count = obj.pipeline_status_counts.map.failed
+
+        return f"A:{asa} V:{virify} M:{map_count}"
+
+    @display(description="Running")
+    def running_count(self, obj):
+        """
+        Display running count per pipeline (A:ASA V:VIRify M:MAP).
+        """
+        if not obj.pipeline_status_counts:
+            return "-"
+
+        asa = obj.pipeline_status_counts.asa.running
+        virify = obj.pipeline_status_counts.virify.running
+        map_count = obj.pipeline_status_counts.map.running
+
+        return f"A:{asa} V:{virify} M:{map_count}"
+
+    @display(description="Pending")
+    def pending_count(self, obj):
+        """
+        Display pending count per pipeline (A:ASA V:VIRify M:MAP).
+        """
+        if not obj.pipeline_status_counts:
+            return "-"
+
+        asa = obj.pipeline_status_counts.asa.pending
+        virify = obj.pipeline_status_counts.virify.pending
+        map_count = obj.pipeline_status_counts.map.pending
+
+        return f"A:{asa} V:{virify} M:{map_count}"
+
+    @display(description="Total")
+    def total_count(self, obj):
+        """
+        Display sum of all statuses across all pipelines.
+        """
+        if not obj.pipeline_status_counts:
+            return 0
+
+        # Sum all statuses (completed, failed, running, pending) across all pipelines (ASA, VIRify, MAP)
+        total = 0
+        for pipeline in [
+            obj.pipeline_status_counts.asa,
+            obj.pipeline_status_counts.virify,
+            obj.pipeline_status_counts.map,
+        ]:
+            total += pipeline.completed
+            total += pipeline.failed
+            total += pipeline.running
+            total += pipeline.pending
+        return total
+
+    @action(description="Reset selected batches to PENDING")
     def mark_for_rerun(self, request, queryset):
         """
         Reset selected batches to PENDING status for all pipelines.
@@ -254,6 +230,32 @@ class AssemblyAnalysisBatchAdmin(JSONFieldWidgetOverridesMixin, ModelAdmin):
             f"Successfully reset {queryset.count()} batch(es) to PENDING status.",
         )
 
+    def _retry_failed_pipeline(
+        self, request, queryset, pipeline: AssemblyAnalysisPipeline, pipeline_name: str
+    ):
+        """
+        Generic method to retry failed analyses for a specific pipeline.
+
+        :param request: Django admin request
+        :param queryset: Selected AssemblyAnalysisBatch objects
+        :param pipeline: Pipeline enum value (ASA, VIRIFY, MAP)
+        :param pipeline_name: Human-readable pipeline name
+        """
+        status_field = f"{pipeline_name.lower()}_status"
+        total_reset = 0
+
+        for batch in queryset:
+            count = batch.batch_analyses.filter(
+                **{status_field: AssemblyAnalysisPipelineStatus.FAILED}
+            ).update(**{status_field: AssemblyAnalysisPipelineStatus.PENDING})
+            total_reset += count
+            batch.update_pipeline_status_counts(pipeline)
+
+        self.message_user(
+            request,
+            f"Reset {total_reset} FAILED {pipeline_name} analysis/analyses to PENDING across {queryset.count()} batch(es).",
+        )
+
     @action(description="Retry FAILED ASA analyses only")
     def retry_failed_asa(self, request, queryset):
         """
@@ -265,23 +267,11 @@ class AssemblyAnalysisBatchAdmin(JSONFieldWidgetOverridesMixin, ModelAdmin):
         - Input data was fixed for specific analyses
         - Validation rules were updated
 
-        TODO: the ASA, MAP and VIRify methods are repeated.. I'll refactor this (mbc)
-
         :param request: Django admin request
         :param queryset: Selected AssemblyAnalysisBatch objects
         """
-        total_reset = 0
-        for batch in queryset:
-            count = batch.batch_analyses.filter(
-                asa_status=AssemblyAnalysisPipelineStatus.FAILED
-            ).update(asa_status=AssemblyAnalysisPipelineStatus.PENDING)
-            total_reset += count
-
-            batch.update_pipeline_status_counts(AssemblyAnalysisPipeline.ASA)
-
-        self.message_user(
-            request,
-            f"Reset {total_reset} FAILED ASA analysis/analyses to PENDING across {queryset.count()} batch(es).",
+        self._retry_failed_pipeline(
+            request, queryset, AssemblyAnalysisPipeline.ASA, "ASA"
         )
 
     @action(description="Retry FAILED VIRify analyses only")
@@ -298,18 +288,8 @@ class AssemblyAnalysisBatchAdmin(JSONFieldWidgetOverridesMixin, ModelAdmin):
         :param request: Django admin request
         :param queryset: Selected AssemblyAnalysisBatch objects
         """
-        total_reset = 0
-        for batch in queryset:
-            count = batch.batch_analyses.filter(
-                virify_status=AssemblyAnalysisPipelineStatus.FAILED
-            ).update(virify_status=AssemblyAnalysisPipelineStatus.PENDING)
-            total_reset += count
-
-            batch.update_pipeline_status_counts(AssemblyAnalysisPipeline.VIRIFY)
-
-        self.message_user(
-            request,
-            f"Reset {total_reset} FAILED VIRify analysis/analyses to PENDING across {queryset.count()} batch(es).",
+        self._retry_failed_pipeline(
+            request, queryset, AssemblyAnalysisPipeline.VIRIFY, "VIRify"
         )
 
     @action(description="Retry FAILED MAP analyses only")
@@ -326,18 +306,8 @@ class AssemblyAnalysisBatchAdmin(JSONFieldWidgetOverridesMixin, ModelAdmin):
         :param request: Django admin request
         :param queryset: Selected AssemblyAnalysisBatch objects
         """
-        total_reset = 0
-        for batch in queryset:
-            count = batch.batch_analyses.filter(
-                map_status=AssemblyAnalysisPipelineStatus.FAILED
-            ).update(map_status=AssemblyAnalysisPipelineStatus.PENDING)
-            total_reset += count
-
-            batch.update_pipeline_status_counts(AssemblyAnalysisPipeline.MAP)
-
-        self.message_user(
-            request,
-            f"Reset {total_reset} FAILED MAP analysis/analyses to PENDING across {queryset.count()} batch(es).",
+        self._retry_failed_pipeline(
+            request, queryset, AssemblyAnalysisPipeline.MAP, "MAP"
         )
 
     fieldsets = (
