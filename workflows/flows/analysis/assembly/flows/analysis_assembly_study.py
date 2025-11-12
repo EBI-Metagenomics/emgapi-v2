@@ -21,10 +21,12 @@ from workflows.flows.analyse_study_tasks.shared.copy_v6_pipeline_results import 
 )
 from workflows.flows.analyse_study_tasks.shared.study_summary import (
     merge_assembly_study_summaries,
-    add_study_summaries_to_downloads,
 )
 from workflows.flows.analysis.assembly.flows.run_assembly_analysis_pipeline_batch import (
     run_assembly_analysis_pipeline_batch,
+)
+from workflows.flows.analysis.assembly.tasks.add_assembly_study_summaries_to_downloads import (
+    add_assembly_study_summaries_to_downloads,
 )
 from workflows.flows.analysis.assembly.tasks.create_analyses_for_assemblies import (
     create_analyses_for_assemblies,
@@ -45,7 +47,7 @@ def analysis_assembly_study(
     workspace_dir: str = EMG_CONFIG.slurm.default_workdir,
 ):
     """
-    Get a study from ENA (or MGnify), and run assembly-v6 pipeline on its read-runs.
+    Get a study from ENA (or MGnify), and run assembly analysis the assemblies of the study.
 
     This then chains the Assembly Analysis Pipeline, VIRIfy and the Mobilome Annotation Pipeline using
     batches of assemblies to analise.
@@ -161,7 +163,10 @@ def analysis_assembly_study(
         cleanup_partials=True,
     )
 
-    add_study_summaries_to_downloads(mgnify_study.accession)
+    #####################################
+    # === Download files summaries === #
+    ###################################
+    add_assembly_study_summaries_to_downloads(mgnify_study.accession)
 
     copy_v6_study_summaries(mgnify_study.accession)
 
