@@ -253,7 +253,7 @@ def add_study_summaries_to_downloads(mgnify_study_accession: str):
         try:
             study.add_download(
                 DownloadFile(
-                    path=summary_file.relative_to(study.results_dir),
+                    path=Path("study-summaries") / summary_file.name,
                     download_type=DownloadType.TAXONOMIC_ANALYSIS,
                     download_group="study_summary",
                     file_type=DownloadFileType.TSV,
@@ -297,7 +297,7 @@ def _get_download_file(
 ) -> Union[DownloadFile, None]:
     if analysis_source in EMG_CONFIG.rawreads_pipeline.taxonomy_analysis_sources:
         return DownloadFile(
-            path=summary_file.relative_to(study.results_dir),
+            path=Path("study-summaries") / summary_file.name,
             download_type=DownloadType.TAXONOMIC_ANALYSIS,
             download_group=f"study_summary.{analysis_source}",
             file_type=DownloadFileType.TSV,
@@ -307,7 +307,7 @@ def _get_download_file(
         )
     if analysis_source in EMG_CONFIG.rawreads_pipeline.function_analysis_sources:
         return DownloadFile(
-            path=summary_file.relative_to(study.results_dir),
+            path=Path("study-summaries") / summary_file.name,
             download_type=DownloadType.FUNCTIONAL_ANALYSIS,
             download_group=(
                 f"study_summary.{analysis_source}"
