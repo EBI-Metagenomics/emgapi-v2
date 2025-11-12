@@ -503,7 +503,7 @@ class Assembly(InferredMetadataMixin, TimeStampedModel, ENADerivedModel):
         ordering = ["id"]
 
     def __str__(self):
-        return f"Assembly {self.id} | {self.first_accession or 'unaccessioned'} (Run {self.run.first_accession})"
+        return f"Assembly {self.id} | {self.first_accession or 'unaccessioned'} (Run {self.run.first_accession if self.run else '-'})"
 
 
 class AssemblyAnalysisRequest(TimeStampedModel):
