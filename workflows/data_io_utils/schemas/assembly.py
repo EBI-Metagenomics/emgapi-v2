@@ -4,8 +4,10 @@ from analyses.base_models.with_downloads_models import (
     DownloadFileType,
     DownloadType,
 )
-from typing import Optional
-from pydantic import BaseModel
+from enum import Enum
+from typing import Optional, List
+from pathlib import Path
+from pydantic import BaseModel, Field
 
 # Maybe we should put these in a separate schema with stuff
 from mgnify_pipelines_toolkit.schemas.dataframes import (
@@ -650,3 +652,69 @@ class AssemblyResultSchema(PipelineResultSchema):
                 annotation_summary_dir,
             ],
         )
+
+
+class StudySummary(BaseModel):
+    """Schema for study summary files."""
+
+    source: str = Field(..., description="Analysis source identifier")
+    short_description: str
+    long_description: str
+
+    def matches_file(self, file_path: Path) -> bool:
+        """
+        Check if a file path matches this summary type.
+
+        Expected pattern: {study_accession}_{source}_study_summary.tsv
+        """
+        return file_path.name.endswith(f"_{self.source}_study_summary.tsv")
+
+
+class AssemblyStudySummary(Enum):
+    """Registry of assembly study summary types."""
+
+    TAXONOMY = StudySummary(
+        source="taxonomy",
+        short_description="Summary of the taxonomic assignments.",
+        long_description="Summary of the taxonomic assignments across all assemblies in the study.",
+    )
+    KO = StudySummary(
+        source="ko",
+        short_description="Summary of the KEGG Orthology annotations.",
+        long_description="Summary of the KEGG Orthology annotations across all assemblies in the study.",
+    )
+    ANTISMASH = StudySummary(
+        source="antismash",
+        short_description="Summary of the antiSMASH biosynthetic gene clusters.",
+        long_description="Summary of the antiSMASH biosynthetic gene clusters across all assemblies in the study.",
+    )
+    GO = StudySummary(
+        source="go",
+        short_description="Summary of the GO annotations.",
+        long_description="Summary of the GO annotations across all assemblies in the study.",
+    )
+    GOSLIM = StudySummary(
+        source="goslim",
+        short_description="Summary of the GO slim annotations.",
+        long_description="Summary of the GO slim annotations across all assemblies in the study.",
+    )
+    PFAM = StudySummary(
+        source="pfam",
+        short_description="Summary of the Pfam protein families.",
+        long_description="Summary of the Pfam protein families across all assemblies in the study.",
+    )
+    INTERPRO = StudySummary(
+        source="interpro",
+        short_description="Summary of the InterPro matches.",
+        long_description="Summary of the InterPro matches across all assemblies in the study.",
+    )
+    KEGG_MODULES = StudySummary(
+        source="kegg_modules",
+        short_description="Summary of the KEGG modules.",
+        long_description="Summary of the KEGG modules across all assemblies in the study.",
+    )
+
+    @classmethod
+    def all_types(cls) -> List[StudySummary]:
+        """Get all registered summary types."""
+        return [member.value for member in cls]
