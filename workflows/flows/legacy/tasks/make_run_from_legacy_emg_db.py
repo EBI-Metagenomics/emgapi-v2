@@ -1,14 +1,14 @@
 from prefect import task, get_run_logger
 
 from analyses.models import Study, Run, Sample
-from workflows.data_io_utils.legacy_emg_dbs import LegacyRun
+from workflows.data_io_utils.legacy_emg_dbs import LegacyRun, LEGACY_EXPERIMENT_TYPE_MAP
 
 
 @task
 def make_run_from_legacy_emg_db(legacy_run: LegacyRun, study: Study) -> Run:
     assert (
-        legacy_run.experiment_type_id == 3
-    ), f"Legacy run {legacy_run.run_id} is not amplicon. Experiment type is {legacy_run.experiment_type_id}"
+        legacy_run.experiment_type_id in LEGACY_EXPERIMENT_TYPE_MAP.keys()
+    ), f"Legacy run {legacy_run.run_id} is not known. Experiment type is {legacy_run.experiment_type_id}. Known experiment types are {LEGACY_EXPERIMENT_TYPE_MAP.keys()}"
 
     logger = get_run_logger()
 
@@ -20,7 +20,7 @@ def make_run_from_legacy_emg_db(legacy_run: LegacyRun, study: Study) -> Run:
         ena_study=study.ena_study,
         study=study,
         sample=sample,
-        experiment_type=Run.ExperimentTypes.AMPLICON,
+        experiment_type=LEGACY_EXPERIMENT_TYPE_MAP[legacy_run.experiment_type_id],
         ena_accessions=list(
             {legacy_run.accession, legacy_run.secondary_accession}
         ),  # dedupes

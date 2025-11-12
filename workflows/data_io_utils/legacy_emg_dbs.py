@@ -15,6 +15,7 @@ from sqlalchemy.orm import (
 )
 
 from analyses.base_models.with_downloads_models import DownloadFileType, DownloadType
+from analyses.base_models.with_experiment_type_models import WithExperimentTypeModel
 
 if TYPE_CHECKING:
     import analyses.models
@@ -260,6 +261,17 @@ LEGACY_DOWNLOAD_TYPE_MAP = {
     14: DownloadType.FUNCTIONAL_ANALYSIS,
     15: DownloadType.TAXONOMIC_ANALYSIS,
     16: DownloadType.RO_CRATE,
+}
+
+LEGACY_EXPERIMENT_TYPE_MAP = {
+    1: WithExperimentTypeModel.ExperimentTypes.METATRANSCRIPTOMIC,
+    2: WithExperimentTypeModel.ExperimentTypes.METAGENOMIC,
+    3: WithExperimentTypeModel.ExperimentTypes.AMPLICON,
+    4: WithExperimentTypeModel.ExperimentTypes.ASSEMBLY,
+    5: WithExperimentTypeModel.ExperimentTypes.METABARCODING,
+    6: WithExperimentTypeModel.ExperimentTypes.UNKNOWN,
+    7: WithExperimentTypeModel.ExperimentTypes.HYBRID_ASSEMBLY,
+    8: WithExperimentTypeModel.ExperimentTypes.LONG_READ_ASSEMBLY,
 }
 
 

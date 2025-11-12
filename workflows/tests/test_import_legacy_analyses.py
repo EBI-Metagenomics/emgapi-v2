@@ -68,10 +68,10 @@ def test_mongo_functional_mock(mock_mongo_client_for_taxonomy_and_protein_functi
 
 @pytest.mark.httpx_mock(should_mock=should_not_mock_httpx_requests_to_prefect_server)
 @pytest.mark.django_db(transaction=True)
-def test_prefect_import_v5_amplicon_analyses_flow(
+def test_prefect_import_v5_analyses_flow(
     prefect_harness,
     mock_legacy_emg_db_session,
-    mock_mongo_client_for_taxonomy,
+    mock_mongo_client_for_taxonomy_and_protein_functions,
     ninja_api_client,
     ena_any_sample_metadata,
     httpx_mock,

@@ -57,7 +57,7 @@ def in_memory_legacy_emg_db():
     )
     session.add(sample)
 
-    run = LegacyRun(
+    amplicon_run = LegacyRun(
         run_id=1001,
         sample_id=1000,
         accession="ERR1000",
@@ -67,33 +67,33 @@ def in_memory_legacy_emg_db():
         instrument_model="Box",
         study_id=5000,
     )
-    session.add(run)
+    session.add(amplicon_run)
 
-    analysis = LegacyAnalysisJob(
+    amplicon_analysis = LegacyAnalysisJob(
         job_id=12345,
         sample_id=1000,
         run_id=1001,
         study_id=5000,
-        pipeline_id=6,  # 6 is v6.0 in legacy EMG DB
+        pipeline_id=6,  # 6 is v5.0 in legacy EMG DB
         result_directory="some/dir/in/results",
         external_run_ids="ERR1000",
         secondary_accession="ERR1000",
-        experiment_type_id=2,  # amplicon
+        experiment_type_id=3,  # amplicon
         analysis_status_id=3,  # completed
     )
-    session.add(analysis)
+    session.add(amplicon_analysis)
 
-    download_description = LegacyDownloadDescription(
+    amplicon_download_description = LegacyDownloadDescription(
         id=17,
         description="OTUs and taxonomic assignments for SSU rRNA",
         description_label="OTUs, counts and taxonomic assignments for SSU rRNA",  # usually shorter, just not in this case
     )
-    session.add(download_description)
+    session.add(amplicon_download_description)
 
-    download_subdir = LegacyDownloadSubdir(id=1, subdir="tax/ssu_tax")
-    session.add(download_subdir)
+    amplicon_download_subdir = LegacyDownloadSubdir(id=1, subdir="tax/ssu_tax")
+    session.add(amplicon_download_subdir)
 
-    download = LegacyAnalysisJobDownload(
+    amplicon_download = LegacyAnalysisJobDownload(
         job_id=12345,
         id=1,
         real_name="BUGS_SSU.fasta.mseq_hdf5.biom",
@@ -103,7 +103,57 @@ def in_memory_legacy_emg_db():
         format_id=6,  # biom
         group_id=3,  # taxonomic analysis of some sort
     )
-    session.add(download)
+    session.add(amplicon_download)
+
+    assembly_run = LegacyRun(
+        run_id=2001,
+        sample_id=1000,
+        accession="ERR2000",
+        experiment_type_id=4,
+        secondary_accession="ERR2000",  # yes, they are usually duplicated in legacy db
+        instrument_platform="Sequencer",
+        instrument_model="Box",
+        study_id=5000,
+    )
+    session.add(assembly_run)
+
+    assembly_analysis = LegacyAnalysisJob(
+        job_id=54321,
+        sample_id=1000,
+        run_id=2001,
+        study_id=5000,
+        pipeline_id=6,  # 6 is v5.0 in legacy EMG DB
+        result_directory="some/dir/in/results",
+        external_run_ids="ERR2000",
+        secondary_accession="ERR2000",
+        experiment_type_id=4,  # assembly
+        analysis_status_id=3,  # completed
+    )
+    session.add(assembly_analysis)
+
+    assembly_download_description = LegacyDownloadDescription(
+        id=20,
+        description="InterPro matches (TSV)",
+        description_label="InterPro matches",
+    )
+    session.add(assembly_download_description)
+
+    assembly_download_subdir = LegacyDownloadSubdir(
+        id=24, subdir="functional-annotation"
+    )
+    session.add(assembly_download_subdir)
+
+    assembly_download = LegacyAnalysisJobDownload(
+        job_id=54321,
+        id=2,
+        real_name="bugs_proteins.ipr.tsv.gz",
+        alias="bugs_proteins.ipr.tsv.gz",
+        description_id=20,
+        subdir_id=24,
+        format_id=1,  # tsv.gz
+        group_id=2,  # functional analysis of some sort
+    )
+    session.add(assembly_download)
 
     session.commit()
 
