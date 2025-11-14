@@ -228,7 +228,11 @@ class AssemblyResultImporter(BasePipelineResultImporter):
 
         for file_schema in dir_schema.files:
             download_file = DownloadFile.from_pipeline_file_schema(
-                file_schema, self.analysis, dir_path, results_base_path
+                file_schema,
+                self.analysis,
+                dir_path,
+                results_base_path,
+                file_identifier_lookup_string="assembly.first_accession",
             )
             if download_file:
                 self.analysis.add_download(download_file)

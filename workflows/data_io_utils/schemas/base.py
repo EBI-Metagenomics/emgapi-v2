@@ -12,16 +12,20 @@ import analyses.models
 from analyses.base_models.with_downloads_models import (
     DownloadFile,
     DownloadFileMetadata,
+    DownloadFileIndexFileMetadata,
+    DownloadFileIndexFile,
 )
 from workflows.data_io_utils.file_rules.base_rules import (
     FileRule,
     DirectoryRule,
     GlobRule,
 )
-from workflows.data_io_utils.file_rules.common_rules import DirectoryExistsRule
+from workflows.data_io_utils.file_rules.common_rules import (
+    DirectoryExistsRule,
+    FileExistsRule,
+)
 from workflows.data_io_utils.file_rules.nodes import Directory, File
 from .exceptions import PipelineValidationError, PipelineImportError
-
 
 logger = logging.getLogger(__name__)
 
@@ -69,6 +73,10 @@ class PipelineFileSchema(BaseModel):
     content_validator: Optional[Type[pa.DataFrameModel]] = Field(
         None, description="Pandera schema for validating file contents"
     )
+    index_files: Optional[list[DownloadFileIndexFileMetadata]] = Field(
+        None,
+        description="List of index file types (e.g. a .gzi) that should exist for this file",
+    )
 
     def get_filename(self, identifier: str) -> str:
         """
@@ -81,7 +89,7 @@ class PipelineFileSchema(BaseModel):
 
     def validate_file(self, path: Path) -> tuple[bool, list[str]]:
         """
-        Validate this file using its validation rules and content validator.
+        Validate this file using its validation rules, content validator, and expected index files.
 
         File existence is determined by validation rules:
         - FileExistsRule = required file
@@ -111,6 +119,17 @@ class PipelineFileSchema(BaseModel):
                 self._validate_content(path)
             except PipelineValidationError as e:
                 errors.append(f"File {path.name}: {str(e)}")
+
+        # Index file validation
+        if self.index_files and FileExistsRule in self.validation_rules:
+            for index_file_meta in self.index_files:
+                index_file = DownloadFileIndexFile.from_indexed_file_path_and_metadata(
+                    path, index_file_meta
+                )
+                if not Path(index_file.path).exists():
+                    errors.append(
+                        f"File {path.name}: Missing index file {index_file.path}"
+                    )
 
         return len(errors) == 0, errors
 
@@ -413,9 +432,16 @@ class PipelineResultSchema(BaseModel):
             return downloads
 
         # Generate downloads for files in this directory
+        identifier_lookup = (
+            "assembly.first_accession" if analysis.assembly else "run.first_accession"
+        )
+
         for file_schema in dir_schema.files:
             download = DownloadFile.from_pipeline_file_schema(
-                file_schema, analysis, dir_path.parent
+                file_schema,
+                analysis,
+                dir_path.parent,
+                file_identifier_lookup_string=identifier_lookup,
             )
             if download:
                 downloads.append(download)
