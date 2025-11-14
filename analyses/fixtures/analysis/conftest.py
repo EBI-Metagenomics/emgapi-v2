@@ -1,4 +1,5 @@
 from pathlib import Path
+from unittest.mock import patch
 
 import django
 import pytest
@@ -96,3 +97,26 @@ def private_analysis_with_download(webin_private_study, private_run):
         )
     )
     return private_analysis
+
+
+@pytest.fixture
+@patch("workflows.flows.analyse_study_tasks.shared.copy_v6_pipeline_results.move_data")
+def assembly_analysis_with_downloads(mock_copy_flow, mgnify_assemblies_completed):
+    assem = mgnify_assemblies_completed[0]
+    assem.add_erz_accession(
+        "ERZ857107"
+    )  # n.b. does not correspond to this run in real ena
+
+    study = assem.reads_study
+    sample = assem.sample
+
+    analysis = mg_models.Analysis.objects.create(
+        ena_study=study.ena_study,
+        study=study,
+        experiment_type=mg_models.Run.ExperimentTypes.ASSEMBLY,
+        sample=sample,
+        assembly=assem,
+    )
+    analysis.mark_status(analysis.AnalysisStates.ANALYSIS_COMPLETED)
+    analysis.results_dir = "/app/data/tests/assembly_v6_output/ERP106708/ERZ857107"
+    analysis.save()

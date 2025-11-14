@@ -182,7 +182,7 @@ def assembly_analysis_batch_results_importer(
                     )
                 )
         except PipelineValidationError as e:
-            logger.error(f"Validation failed for {analysis}: {e}")
+            logger.exception(f"Validation failed for {analysis}: {e}")
             results.append(
                 ImportResult(
                     analysis_id=analysis.id,
@@ -192,7 +192,7 @@ def assembly_analysis_batch_results_importer(
                 )
             )
         except Exception as e:
-            logger.error(
+            logger.exception(
                 f"Unexpected error {'validating' if validation_only else 'importing'} {analysis}: {e}"
             )
             results.append(
