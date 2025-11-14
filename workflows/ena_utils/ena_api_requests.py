@@ -470,7 +470,7 @@ def sync_privacy_state_of_ena_study_and_derived_objects(
         )
         ena_study.is_suppressed = True
     else:
-        ena_study.is_private = private
+        ena_study.is_private = private or False  # null private -> false
     ena_study.save()
 
 

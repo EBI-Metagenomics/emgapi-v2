@@ -7,6 +7,7 @@ from prefect.input import RunInput
 from prefect.runtime import flow_run, deployment
 from pydantic import Field
 
+import analyses.base_models.with_experiment_type_models
 from activate_django_first import EMG_CONFIG
 from workflows.flows.analyse_study_tasks.shared.copy_v6_pipeline_results import (
     copy_v6_study_summaries,
@@ -164,7 +165,7 @@ def analysis_amplicon_study(study_accession: str):
     # get or create Analysis for runs
     create_analyses(
         mgnify_study,
-        for_experiment_type=analyses.models.WithExperimentTypeModel.ExperimentTypes.AMPLICON,
+        for_experiment_type=analyses.base_models.with_experiment_type_models.WithExperimentTypeModel.ExperimentTypes.AMPLICON,
         pipeline=analyses.models.Analysis.PipelineVersions.v6,
         ena_library_strategy_policy=analyse_study_input.library_strategy_policy,
     )
@@ -172,7 +173,7 @@ def analysis_amplicon_study(study_accession: str):
 
     analyses_to_attempt = get_analyses_to_attempt(
         mgnify_study,
-        for_experiment_type=analyses.models.WithExperimentTypeModel.ExperimentTypes.AMPLICON,
+        for_experiment_type=analyses.base_models.with_experiment_type_models.WithExperimentTypeModel.ExperimentTypes.AMPLICON,
         ena_library_strategy_policy=analyse_study_input.library_strategy_policy,
     )
 
