@@ -40,8 +40,6 @@ def parse_options(options):
             f"Results dir {options['results_directory']} does not exist"
         )
     options["catalogue_dir"] = os.path.join(options["results_directory"], "website")
-    logger = get_run_logger()
-    logger.info(f"Using catalogue directory: {options['catalogue_dir']}")
 
     options["catalogue_name"] = options["catalogue_name"].strip()
     options["catalogue_version"] = options["catalogue_version"].strip()
