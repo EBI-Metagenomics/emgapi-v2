@@ -40,6 +40,8 @@ def parse_options(options):
             f"Results dir {options['results_directory']} does not exist"
         )
     options["catalogue_dir"] = os.path.join(options["results_directory"], "website")
+    logger = get_run_logger()
+    logger.info(f"Using catalogue directory: {options['catalogue_dir']}")
 
     options["catalogue_name"] = options["catalogue_name"].strip()
     options["catalogue_version"] = options["catalogue_version"].strip()
@@ -59,6 +61,9 @@ def get_catalogue(options):
     if not biome:
         raise Biome.DoesNotExist()
 
+    catalogue_dirname = os.path.basename(os.path.dirname(os.path.normpath(options["results_directory"])))
+    results_path_to_save = f"{EMG_CONFIG.service_urls.transfer_services_url_root}{catalogue_dirname}/{options['catalogue_version']}"
+
     catalogue_id = f"{options['catalogue_name'].replace(' ', '-')}-v{options['catalogue_version'].replace('.', '-')}".lower()
     catalogue, _ = GenomeCatalogue.objects.get_or_create(
         catalogue_id=catalogue_id,
@@ -66,7 +71,7 @@ def get_catalogue(options):
             "version": options["catalogue_version"],
             "name": f"{options['catalogue_name']} v{options['catalogue_version']}",
             "biome": biome,
-            "result_directory": f"{genome_config.results_directory_root}/{options['results_directory']}",
+            "result_directory": results_path_to_save,
             "ftp_url": genome_config.mags_ftp_site,
             "pipeline_version_tag": options["pipeline_version"],
             "catalogue_biome_label": options["catalogue_biome_label"],
