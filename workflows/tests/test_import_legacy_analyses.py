@@ -52,7 +52,6 @@ def test_mongo_functional_mock(mock_mongo_client_for_taxonomy_and_protein_functi
     pfams_collection: pymongo.collection.Collection = db.analysis_job_pfam
     mgya_pfams = pfams_collection.find_one({"accession": "anything"})
     assert mgya_pfams is not None
-    print(mgya_pfams["accession"])
     assert mgya_pfams["accession"] == "MGYA00012345"
     assert mgya_pfams["pfam_entries"][0]["count"] == 50
 
