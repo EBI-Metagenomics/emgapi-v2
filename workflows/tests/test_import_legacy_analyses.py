@@ -60,7 +60,6 @@ def test_mongo_functional_mock(mock_mongo_client_for_taxonomy_and_protein_functi
     )
     mgya_interpros = interpros_collection.find_one({"accession": "anything"})
     assert mgya_interpros is not None
-    print(mgya_interpros["accession"])
     assert mgya_interpros["accession"] == "MGYA00012345"
     assert mgya_interpros["interpro_identifiers"][0]["count"] == 70
 
