@@ -247,7 +247,6 @@ LEGACY_FILE_FORMATS_MAP = {
 
 LEGACY_DOWNLOAD_TYPE_MAP = {
     # simple map of data from the legacy DOWNLOAD_GROUP_TYPE table, mapped to this codebase's Enums
-    1: DownloadFileType.TSV,
     1: DownloadType.SEQUENCE_DATA,
     2: DownloadType.FUNCTIONAL_ANALYSIS,
     3: DownloadType.TAXONOMIC_ANALYSIS,
