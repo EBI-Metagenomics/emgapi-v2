@@ -61,7 +61,9 @@ def get_catalogue(options):
     if not biome:
         raise Biome.DoesNotExist()
 
-    catalogue_dirname = os.path.basename(os.path.dirname(os.path.normpath(options["results_directory"])))
+    catalogue_dirname = os.path.basename(
+        os.path.dirname(os.path.normpath(options["results_directory"]))
+    )
     results_path_to_save = f"{EMG_CONFIG.service_urls.transfer_services_url_root}/genomes/{catalogue_dirname}/{options['catalogue_version']}"
 
     catalogue_id = f"{options['catalogue_name'].replace(' ', '-')}-v{options['catalogue_version'].replace('.', '-')}".lower()
