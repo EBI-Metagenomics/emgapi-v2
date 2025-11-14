@@ -232,6 +232,7 @@ class LegacyAnalysisJobDownload(LegacyEMGBase):
 # Maps to convert legacy download metadata to new schema:
 
 LEGACY_FILE_FORMATS_MAP = {
+    # simple map of data from the legacy FILE_FORMAT table, mapped to this codebase's Enums
     1: DownloadFileType.TSV,
     2: DownloadFileType.TSV,
     3: DownloadFileType.CSV,
@@ -245,6 +246,8 @@ LEGACY_FILE_FORMATS_MAP = {
 }
 
 LEGACY_DOWNLOAD_TYPE_MAP = {
+    # simple map of data from the legacy DOWNLOAD_GROUP_TYPE table, mapped to this codebase's Enums
+    1: DownloadFileType.TSV,
     1: DownloadType.SEQUENCE_DATA,
     2: DownloadType.FUNCTIONAL_ANALYSIS,
     3: DownloadType.TAXONOMIC_ANALYSIS,
@@ -264,6 +267,7 @@ LEGACY_DOWNLOAD_TYPE_MAP = {
 }
 
 LEGACY_EXPERIMENT_TYPE_MAP = {
+    # simple map of data from the legacy EXPERIMENT_TYPE table, mapped to this codebase's Enums
     1: WithExperimentTypeModel.ExperimentTypes.METATRANSCRIPTOMIC,
     2: WithExperimentTypeModel.ExperimentTypes.METAGENOMIC,
     3: WithExperimentTypeModel.ExperimentTypes.AMPLICON,
