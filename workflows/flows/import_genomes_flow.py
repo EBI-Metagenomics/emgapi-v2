@@ -63,8 +63,6 @@ def get_catalogue(options):
 
     catalogue_dirname = os.path.basename(os.path.dirname(os.path.normpath(options["results_directory"])))
     results_path_to_save = f"{EMG_CONFIG.service_urls.transfer_services_url_root}/genomes/{catalogue_dirname}/{options['catalogue_version']}"
-    logger = get_run_logger()
-    logger.info(f"MGS Catalogue results will be saved to: {results_path_to_save}")
 
     catalogue_id = f"{options['catalogue_name'].replace(' ', '-')}-v{options['catalogue_version'].replace('.', '-')}".lower()
     catalogue, _ = GenomeCatalogue.objects.get_or_create(
