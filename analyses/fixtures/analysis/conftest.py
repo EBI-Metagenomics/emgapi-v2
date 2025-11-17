@@ -10,6 +10,8 @@ from analyses.base_models.with_downloads_models import (
     DownloadFileType,
 )
 from workflows.data_io_utils.mgnify_v6_utils.amplicon import import_qc, import_taxonomy
+from workflows.data_io_utils.mgnify_v6_utils.assembly import AssemblyResultImporter
+from workflows.data_io_utils.schemas import AssemblyResultSchema, MapResultSchema
 
 django.setup()
 
@@ -101,7 +103,7 @@ def private_analysis_with_download(webin_private_study, private_run):
 
 @pytest.fixture
 @patch("workflows.flows.analyse_study_tasks.shared.copy_v6_pipeline_results.move_data")
-def assembly_analysis_with_downloads(mock_copy_flow, mgnify_assemblies_completed):
+def assembly_analysis(mock_copy_flow, mgnify_assemblies_completed):
     assem = mgnify_assemblies_completed[0]
     assem.add_erz_accession(
         "ERZ857107"
@@ -120,3 +122,26 @@ def assembly_analysis_with_downloads(mock_copy_flow, mgnify_assemblies_completed
     analysis.mark_status(analysis.AnalysisStates.ANALYSIS_COMPLETED)
     analysis.results_dir = "/app/data/tests/assembly_v6_output/ERP106708/ERZ857107"
     analysis.save()
+    return analysis
+
+
+@pytest.fixture
+@patch("workflows.flows.analyse_study_tasks.shared.copy_v6_pipeline_results.move_data")
+def assembly_analysis_with_downloads(
+    mock_copy_flow, prefect_harness, assembly_analysis
+):
+    schema = AssemblyResultSchema()
+    importer = AssemblyResultImporter(assembly_analysis)
+    importer.import_results(
+        schema=schema,
+        base_path=Path(assembly_analysis.results_dir).parent,
+        validate_first=True,
+    )
+
+    schema = MapResultSchema()
+    importer.import_results(
+        schema=schema,
+        base_path=Path(assembly_analysis.results_dir).parent / "map",
+        validate_first=True,
+    )
+    return assembly_analysis

@@ -13,9 +13,7 @@ from workflows.data_io_utils.schemas import PipelineFileSchema
 
 
 @pytest.mark.django_db
-def test_pipeline_file_schema_conversion_to_download_file(
-    assembly_analysis_with_downloads, tmp_path
-):
+def test_pipeline_file_schema_conversion_to_download_file(assembly_analysis, tmp_path):
     mgya: Analysis = Analysis.objects.first()
     erz = mgya.assembly.first_accession
     gff = tmp_path / f"{erz}_data.gff.gz"

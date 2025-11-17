@@ -1,5 +1,6 @@
 import logging
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pandas as pd
 
@@ -10,6 +11,12 @@ from workflows.data_io_utils.file_rules.common_rules import (
     DirectoryExistsRule,
     FileExistsRule,
 )
+
+if TYPE_CHECKING:
+    from workflows.data_io_utils.schemas import (
+        PipelineResultSchema,
+        PipelineDirectorySchema,
+    )
 
 logger = logging.getLogger(__name__)
 
@@ -66,7 +73,10 @@ class AssemblyResultImporter(BasePipelineResultImporter):
     """
 
     def import_results(
-        self, schema, base_path: Path, validate_first: bool = True
+        self,
+        schema: "PipelineResultSchema",
+        base_path: Path,
+        validate_first: bool = True,
     ) -> int:
         """
         Complete assembly analysis results importer.
@@ -172,7 +182,7 @@ class AssemblyResultImporter(BasePipelineResultImporter):
             self._import_from_directory(subdir_schema, dir_path, identifier)
 
     def _generate_downloads_from_schema(
-        self, schema, base_path: Path, identifier: str
+        self, schema: "PipelineResultSchema", base_path: Path, identifier: str
     ) -> int:
         """
         Generate downloads from the pipeline schema.
@@ -202,7 +212,7 @@ class AssemblyResultImporter(BasePipelineResultImporter):
 
     def _generate_downloads_from_directory(
         self,
-        dir_schema,
+        dir_schema: "PipelineDirectorySchema",
         base_path: Path,
         identifier: str,
         results_base_path: Path,
@@ -233,6 +243,7 @@ class AssemblyResultImporter(BasePipelineResultImporter):
                 dir_path,
                 results_base_path,
                 file_identifier_lookup_string="assembly.first_accession",
+                override_dirs_from_base=dir_schema.external_folder_name,
             )
             if download_file:
                 self.analysis.add_download(download_file)

@@ -29,6 +29,7 @@ class MapResultSchema(PipelineResultSchema):
         # Main mobilome annotation directory (root of MAP output)
         mobilome_annotation_dir = PipelineDirectorySchema(
             folder_name=EMG_CONFIG.map_pipeline.final_gff_folder,
+            external_folder_name="mobilome-annotation/gff",
             validation_rules=[DirectoryExistsRule],
             files=[
                 PipelineFileSchema(
