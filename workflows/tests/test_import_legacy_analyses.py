@@ -1,11 +1,16 @@
+import re
+
 import pymongo
 import pytest
 from sqlalchemy import select
 
 from analyses.models import Analysis
 from workflows.data_io_utils.legacy_emg_dbs import LegacyStudy, legacy_emg_db_session
-from workflows.flows.import_v5_amplicon_analyses import import_v5_amplicon_analyses
-from workflows.prefect_utils.testing_utils import run_flow_and_capture_logs
+from workflows.flows.legacy.flows.import_v5_analyses import import_v5_analyses
+from workflows.prefect_utils.testing_utils import (
+    run_flow_and_capture_logs,
+    should_not_mock_httpx_requests_to_prefect_server,
+)
 
 
 def test_legacy_db(in_memory_legacy_emg_db):
@@ -40,15 +45,45 @@ def test_mongo_taxonomy_mock(mock_mongo_client_for_taxonomy):
     assert mgya_taxonomies["accession"] == "MGYA00012345"
 
 
+def test_mongo_functional_mock(mock_mongo_client_for_taxonomy_and_protein_functions):
+    # check the mongo mock fixture since it is a bit complicated in itself
+    mongo_client = pymongo.MongoClient("mongodb://anything")
+    db = mongo_client["any_db"]
+    pfams_collection: pymongo.collection.Collection = db.analysis_job_pfam
+    mgya_pfams = pfams_collection.find_one({"accession": "anything"})
+    assert mgya_pfams is not None
+    assert mgya_pfams["accession"] == "MGYA00012345"
+    assert mgya_pfams["pfam_entries"][0]["count"] == 50
+
+    interpros_collection: pymongo.collection.Collection = (
+        db.analysis_job_interpro_identifiers
+    )
+    mgya_interpros = interpros_collection.find_one({"accession": "anything"})
+    assert mgya_interpros is not None
+    assert mgya_interpros["accession"] == "MGYA00012345"
+    assert mgya_interpros["interpro_identifiers"][0]["count"] == 70
+
+
+@pytest.mark.httpx_mock(should_mock=should_not_mock_httpx_requests_to_prefect_server)
 @pytest.mark.django_db(transaction=True)
-def test_prefect_import_v5_amplicon_analyses_flow(
+def test_prefect_import_v5_analyses_flow(
     prefect_harness,
     mock_legacy_emg_db_session,
-    mock_mongo_client_for_taxonomy,
+    mock_mongo_client_for_taxonomy_and_protein_functions,
     ninja_api_client,
+    ena_any_sample_metadata,
+    httpx_mock,
 ):
+    httpx_mock.add_response(
+        url=re.compile(
+            r".*result=study.*ERP1.*"  # any query for ERP1, like checking public availability
+        ),
+        json=[{"study_accession": "ERP1"}],
+        is_reusable=True,
+        is_optional=False,
+    )
     importer_flow_run = run_flow_and_capture_logs(
-        import_v5_amplicon_analyses,
+        import_v5_analyses,
         mgys="MGYS00005000",
     )
 

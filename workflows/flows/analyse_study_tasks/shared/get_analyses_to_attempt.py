@@ -3,6 +3,7 @@ from typing import List, Union
 from django.db.models import Q
 from prefect import task
 
+import analyses.base_models.with_experiment_type_models
 import analyses.models
 from workflows.ena_utils.ena_api_requests import ENALibraryStrategyPolicy
 
@@ -13,8 +14,10 @@ from workflows.ena_utils.ena_api_requests import ENALibraryStrategyPolicy
 def get_analyses_to_attempt(
     study: analyses.models.Study,
     for_experiment_type: Union[
-        analyses.models.WithExperimentTypeModel.ExperimentTypes,
-        List[analyses.models.WithExperimentTypeModel.ExperimentTypes],
+        analyses.base_models.with_experiment_type_models.WithExperimentTypeModel.ExperimentTypes,
+        List[
+            analyses.base_models.with_experiment_type_models.WithExperimentTypeModel.ExperimentTypes
+        ],
     ],
     ena_library_strategy_policy: ENALibraryStrategyPolicy = ENALibraryStrategyPolicy.ONLY_IF_CORRECT_IN_ENA,
 ) -> List[Union[str, int]]:
@@ -49,7 +52,7 @@ def get_analyses_to_attempt(
         analyses_worth_trying = analyses_worth_trying.filter(
             Q(experiment_type__in=[v.value for v in for_experiment_type_])
             | Q(
-                experiment_type=analyses.models.WithExperimentTypeModel.ExperimentTypes.UNKNOWN.value
+                experiment_type=analyses.base_models.with_experiment_type_models.WithExperimentTypeModel.ExperimentTypes.UNKNOWN.value
             )
         )
 
