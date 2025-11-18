@@ -345,6 +345,11 @@ def setup_map_batch_fixtures(
         with gzip.open(placeholder_gff, "wt") as f:
             f.write("##gff-version 3\n# Placeholder MAP output\n")
         print(f"Created placeholder MAP GFF at {placeholder_gff}")
+    gzi = placeholder_gff.with_suffix(".gz.gzi")
+    gzi.touch(exist_ok=True)
+
+    csi = placeholder_gff.with_suffix(".gz.csi")
+    csi.touch(exist_ok=True)
 
     print(f"Set up MAP fixtures in batch workspace: {map_workspace}")
 

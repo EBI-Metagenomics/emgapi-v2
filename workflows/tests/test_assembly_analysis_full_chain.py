@@ -108,6 +108,12 @@ def setup_map_output_helpers(map_outdir: Path, assembly_accession: str):
     with gzip.open(map_gff, "wt") as f:
         f.write("##gff-version 3\n# Mock MAP GFF content")
 
+    gzi = map_gff.with_suffix(".gz.gzi")
+    gzi.touch(exist_ok=True)
+
+    csi = map_gff.with_suffix(".gz.csi")
+    csi.touch(exist_ok=True)
+
 
 @pytest.mark.django_db
 @patch(

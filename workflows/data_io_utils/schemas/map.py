@@ -3,6 +3,7 @@ from activate_django_first import EMG_CONFIG
 from analyses.base_models.with_downloads_models import (
     DownloadFileType,
     DownloadType,
+    DownloadFileIndexFileMetadata,
 )
 from workflows.data_io_utils.file_rules.common_rules import (
     DirectoryExistsRule,
@@ -33,7 +34,6 @@ class MapResultSchema(PipelineResultSchema):
             validation_rules=[DirectoryExistsRule],
             files=[
                 PipelineFileSchema(
-                    # TODO: this one needs an index
                     filename_template="{identifier}_user_mobilome_full.gff.gz",
                     validation_rules=[FileExistsRule, FileIsNotEmptyRule],
                     download_metadata=DownloadFileMetadata(
@@ -44,6 +44,10 @@ class MapResultSchema(PipelineResultSchema):
                         # TODO: I don't like this description (mbc)
                         long_description="Mobilome annotations along with any features present in the user's protein input",
                     ),
+                    index_files=[
+                        DownloadFileIndexFileMetadata(index_type="gzi"),
+                        DownloadFileIndexFileMetadata(index_type="csi"),
+                    ],
                 ),
             ],
         )
