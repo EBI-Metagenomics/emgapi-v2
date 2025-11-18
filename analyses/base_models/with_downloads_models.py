@@ -58,13 +58,17 @@ class DownloadFileIndexFile(DownloadFileIndexFileMetadata):
         return value
 
     @classmethod
+    def index_path_from_file_path(
+        cls, file_path: Path, index_type: Literal["fai", "gzi", "csi"]
+    ):
+        return file_path.with_suffix(f"{file_path.suffix}.{index_type}")
+
+    @classmethod
     def from_indexed_file_path_and_metadata(
         cls, indexed_file_path: Path, metadata: DownloadFileIndexFileMetadata
     ):
         return cls(
-            path=indexed_file_path.with_suffix(
-                f"{indexed_file_path.suffix}.{metadata.index_type}"
-            ),
+            path=cls.index_path_from_file_path(indexed_file_path, metadata.index_type),
             **metadata.model_dump(),
         )
 
@@ -168,9 +172,11 @@ class DownloadFile(DownloadFileMetadata):
                 raise FileNotFoundError(f"Required file {file_path} not found")
             return None
 
-        path = file_path.relative_to(base_path)
+        internal_path = file_path.relative_to(base_path)
         if override_dirs_from_base:
-            path = Path(override_dirs_from_base) / path.name
+            path = Path(override_dirs_from_base) / internal_path.name
+        else:
+            path = internal_path
         download_file = cls(
             path=path,
             file_type=schema.download_metadata.file_type,
@@ -191,7 +197,12 @@ class DownloadFile(DownloadFileMetadata):
         )
         for index in download_file.index_file:
             if (
-                not (index_full_path := base_path / index.path).exists()
+                not (
+                    index_full_path := base_path
+                    / DownloadFileIndexFile.index_path_from_file_path(
+                        internal_path, index.index_type
+                    )
+                ).exists()
                 and FileExistsRule in schema.validation_rules
             ):
                 raise FileNotFoundError(
