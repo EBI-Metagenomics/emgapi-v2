@@ -8,9 +8,7 @@ import pandas as pd
 import pandera as pa
 from pydantic import BaseModel, Field
 
-import analyses.models
 from analyses.base_models.with_downloads_models import (
-    DownloadFile,
     DownloadFileMetadata,
     DownloadFileIndexFileMetadata,
     DownloadFileIndexFile,
@@ -21,11 +19,10 @@ from workflows.data_io_utils.file_rules.base_rules import (
     GlobRule,
 )
 from workflows.data_io_utils.file_rules.common_rules import (
-    DirectoryExistsRule,
     FileExistsRule,
 )
 from workflows.data_io_utils.file_rules.nodes import Directory, File
-from .exceptions import PipelineValidationError, PipelineImportError
+from .exceptions import PipelineValidationError
 
 logger = logging.getLogger(__name__)
 
@@ -194,6 +191,11 @@ class PipelineDirectorySchema(BaseModel):
     """
 
     folder_name: str = Field(..., description="Name of the folder")
+    external_folder_name: str = Field(
+        None,
+        description="External name of the folder (if different)",
+        examples=["pretty-subdir/gff"],
+    )
     files: List[PipelineFileSchema] = Field(
         default_factory=list, description="Files in this directory"
     )
@@ -276,37 +278,6 @@ class PipelineDirectorySchema(BaseModel):
 
         return validated_dir, errors
 
-    def import_directory_results(
-        self, analysis: analyses.models.Analysis, base_path: Path
-    ) -> None:
-        """
-        Import all results from this directory.
-
-        :param analysis: The analysis object to update
-        :param base_path: Base path containing the pipeline results
-        """
-        dir_path = base_path / self.folder_name
-
-        if not dir_path.exists():
-            # Check if a directory is required based on validation rules
-            if DirectoryExistsRule in self.validation_rules:
-                from .exceptions import PipelineImportError
-
-                raise PipelineImportError(
-                    f"Required directory {dir_path} not found for import"
-                )
-            return
-
-        # Import files in this directory
-        for file_schema in self.files:
-            identifier = analysis.assembly.first_accession
-            file_path = dir_path / file_schema.get_filename(identifier)
-            analysis.import_from_pipeline_file_schema(file_schema, file_path)
-
-        # Import from subdirectories recursively
-        for subdir_schema in self.subdirectories:
-            subdir_schema.import_directory_results(analysis, dir_path)
-
 
 class PipelineResultSchema(BaseModel):
     """
@@ -367,92 +338,6 @@ class PipelineResultSchema(BaseModel):
 
         logger.info(f"Successfully validated {self.pipeline_name} results")
         return main_dir
-
-    def import_results(
-        self, analysis: analyses.models.Analysis, base_path: Path
-    ) -> None:
-        """
-        Import all pipeline results into the analysis.
-
-        :param analysis: The analysis object to update
-        :param base_path: Base path containing the pipeline results
-        """
-        logger.info(f"Importing {self.pipeline_name} results from {base_path}")
-
-        identifier = analysis.assembly.first_accession
-
-        for dir_schema in self.directories:
-            try:
-                dir_schema.import_directory_results(analysis, base_path / identifier)
-            except PipelineImportError as e:
-                logger.error(f"Failed to import from {dir_schema.folder_name}: {e}")
-
-        logger.info(f"Completed importing {self.pipeline_name} results")
-
-    def generate_downloads(
-        self, analysis: analyses.models.Analysis, base_path: Path
-    ) -> List[DownloadFile]:
-        """
-        Generate all DownloadFile objects for this pipeline's results.
-
-        :param analysis: The analysis object
-        :param base_path: Base path containing the pipeline results
-        :return: List of DownloadFile objects
-        """
-        downloads = []
-        identifier = analysis.assembly.first_accession
-
-        for dir_schema in self.directories:
-            downloads.extend(
-                self._generate_directory_downloads(
-                    analysis, base_path / identifier, dir_schema
-                )
-            )
-
-        return downloads
-
-    def _generate_directory_downloads(
-        self,
-        analysis: analyses.models.Analysis,
-        base_path: Path,
-        dir_schema: PipelineDirectorySchema,
-    ) -> List[DownloadFile]:
-        """
-        Generate downloads for a specific directory.
-
-        :param analysis: The analysis object
-        :param base_path: Base path containing the pipeline results
-        :param dir_schema: Directory schema to process
-        :return: List of DownloadFile objects
-        """
-        downloads = []
-        dir_path = base_path / dir_schema.folder_name
-
-        if not dir_path.exists():
-            return downloads
-
-        # Generate downloads for files in this directory
-        identifier_lookup = (
-            "assembly.first_accession" if analysis.assembly else "run.first_accession"
-        )
-
-        for file_schema in dir_schema.files:
-            download = DownloadFile.from_pipeline_file_schema(
-                file_schema,
-                analysis,
-                dir_path.parent,
-                file_identifier_lookup_string=identifier_lookup,
-            )
-            if download:
-                downloads.append(download)
-
-        # Generate downloads for subdirectories
-        for subdir_schema in dir_schema.subdirectories:
-            downloads.extend(
-                self._generate_directory_downloads(analysis, dir_path, subdir_schema)
-            )
-
-        return downloads
 
 
 # Allow forward references

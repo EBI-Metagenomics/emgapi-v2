@@ -134,6 +134,7 @@ class DownloadFile(DownloadFileMetadata):
         base_path: Path,
         file_identifier_lookup_string: str = "accession",
         parent_identifier_lookup_string: str = "accession",
+        override_dirs_from_base: str = None,
     ) -> Optional["DownloadFile"]:
         """
         Factory method to create a DownloadFile from a PipelineFileSchema.
@@ -153,6 +154,8 @@ class DownloadFile(DownloadFileMetadata):
         :type file_identifier_lookup_string: str, optional
         :param parent_identifier_lookup_string: The attribute name to use to get the parent identifier from the parent object, defaults to "accession", but can be anything e.g. "id" or "other.accession"
         :type parent_identifier_lookup_string: str, optional
+        :param override_dirs_from_base: An optional new folder-name (or path partial) for the download file on external filesystem, relative to base_path
+        :type override_dirs_from_base: str, optional
         :return: DownloadFile object or None if file doesn't exist and isn't required
         :rtype: Optional[DownloadFile]
         """
@@ -166,6 +169,8 @@ class DownloadFile(DownloadFileMetadata):
             return None
 
         path = file_path.relative_to(base_path)
+        if override_dirs_from_base:
+            path = Path(override_dirs_from_base) / path.name
         download_file = cls(
             path=path,
             file_type=schema.download_metadata.file_type,
