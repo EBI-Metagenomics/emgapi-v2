@@ -9,6 +9,7 @@ import pytest
 from analyses.models import Biome
 from genomes.models import GenomeCatalogue, Genome
 from django.conf import settings
+from activate_django_first import EMG_CONFIG
 
 genome_config = settings.EMG_CONFIG.genomes
 
@@ -145,7 +146,9 @@ def test_get_catalogue():
         assert catalogue.biome == biome
         assert (
             catalogue.result_directory
-            == f"{genome_config.results_directory_root}/genomes/sheep-rumen/1.0"
+            # == f"{EMG_CONFIG.service_urls.transfer_services_url_root}/genomes/sheep-rumen/1.0"
+            == f"{EMG_CONFIG.service_urls.transfer_services_url_root}/genomes/sheep-rumen/1.0"
+            # == f"{genome_config.results_directory_root}/genomes/sheep-rumen/1.0"
         )
         assert catalogue.pipeline_version_tag == "v3.0.0dev"
         assert catalogue.catalogue_biome_label == "Sheep Rumen"

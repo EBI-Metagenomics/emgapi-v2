@@ -32,6 +32,7 @@ from analyses.base_models.base_models import (
 )
 from analyses.base_models.mgnify_accessioned_models import MGnifyAccessionField
 from analyses.base_models.with_downloads_models import WithDownloadsModel
+from analyses.base_models.with_experiment_type_models import WithExperimentTypeModel
 from analyses.base_models.with_status_models import SelectByStatusManagerMixin
 from analyses.base_models.with_watchers_models import WithWatchersModel
 from emgapiv2.async_utils import anysync_property
@@ -251,27 +252,6 @@ class Sample(InferredMetadataMixin, ENADerivedModel, TimeStampedModel):
             ),
             # Fast fulltext (ish) search on the sample name.
         ]
-
-
-class WithExperimentTypeModel(models.Model):
-    class ExperimentTypes(models.TextChoices):
-        METATRANSCRIPTOMIC = "METAT", "Metatranscriptomic"
-        METAGENOMIC = "METAG", "Metagenomic"
-        AMPLICON = "AMPLI", "Amplicon"
-        ASSEMBLY = "ASSEM", "Assembly"
-        HYBRID_ASSEMBLY = "HYASS", "Hybrid assembly"
-        LONG_READ_ASSEMBLY = "LRASS", "Long-read assembly"
-
-        # legacy
-        METABARCODING = "METAB", "Metabarcoding"
-        UNKNOWN = "UNKNO", "Unknown"
-
-    experiment_type = models.CharField(
-        choices=ExperimentTypes, max_length=5, default=ExperimentTypes.UNKNOWN
-    )
-
-    class Meta:
-        abstract = True
 
 
 class PublicRunManager(PrivacyFilterManagerMixin, models.Manager): ...
@@ -503,7 +483,7 @@ class Assembly(InferredMetadataMixin, TimeStampedModel, ENADerivedModel):
         ordering = ["id"]
 
     def __str__(self):
-        return f"Assembly {self.id} | {self.first_accession or 'unaccessioned'} (Run {self.run.first_accession})"
+        return f"Assembly {self.id} | {self.first_accession or 'unaccessioned'} (Run {self.run.first_accession if self.run else '-'})"
 
 
 class AssemblyAnalysisRequest(TimeStampedModel):

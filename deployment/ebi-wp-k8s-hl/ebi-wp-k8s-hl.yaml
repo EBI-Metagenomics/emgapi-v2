@@ -455,6 +455,9 @@ items:
                     optional: true
                 - configMapRef:
                     name: webclient-nginx-config
+              env:
+                - name: VITE_BASE_URL
+                  value: "/metagenomics/v6-early-data-release"
               command: ["/bin/sh"]
               args:
                 - -c
@@ -642,7 +645,7 @@ items:
                 claimName: private-data-volume-claim
             - name: nginx-config
               configMap:
-                name: webclient-nginx-config
+                name: private-data-nginx-config
           containers:
             - name: private-data-server
               image: openresty/openresty:1.25.3.2-5-alpine-fat
@@ -650,8 +653,14 @@ items:
               command: ["/bin/sh", "-c", "opm get jkeys089/lua-resty-hmac && openresty -g 'daemon off;'"]
 
               envFrom:
-                - secretRef:
-                    name: emgapi-secret
+                - configMapRef:
+                    name: proxy-config
+              env:
+                - name: SECURE_LINK_SECRET
+                  valueFrom:
+                    secretKeyRef:
+                      name: emgapi-secret
+                      key: PRIVATE_DATA_SECURE_LINK_SECRET_KEY
               ports:
                 - containerPort: 80
               resources:

@@ -3,6 +3,7 @@ from typing import List, Union
 from django.db.models import Q
 from prefect import task
 
+import analyses.base_models.with_experiment_type_models
 import analyses.models
 from workflows.ena_utils.ena_api_requests import ENALibraryStrategyPolicy
 
@@ -13,8 +14,10 @@ from workflows.ena_utils.ena_api_requests import ENALibraryStrategyPolicy
 def create_analyses(
     study: analyses.models.Study,
     for_experiment_type: Union[
-        analyses.models.WithExperimentTypeModel.ExperimentTypes,
-        List[analyses.models.WithExperimentTypeModel.ExperimentTypes],
+        analyses.base_models.with_experiment_type_models.WithExperimentTypeModel.ExperimentTypes,
+        List[
+            analyses.base_models.with_experiment_type_models.WithExperimentTypeModel.ExperimentTypes
+        ],
     ],
     pipeline: analyses.models.Analysis.PipelineVersions = analyses.models.Analysis.PipelineVersions.v6,
     ena_library_strategy_policy: ENALibraryStrategyPolicy = ENALibraryStrategyPolicy.ONLY_IF_CORRECT_IN_ENA,
@@ -42,7 +45,7 @@ def create_analyses(
         runs = runs.filter(
             Q(experiment_type__in=[v.value for v in for_experiment_type_])
             | Q(
-                experiment_type=analyses.models.WithExperimentTypeModel.ExperimentTypes.UNKNOWN.value
+                experiment_type=analyses.base_models.with_experiment_type_models.WithExperimentTypeModel.ExperimentTypes.UNKNOWN.value
             )
         )
     for run in runs:

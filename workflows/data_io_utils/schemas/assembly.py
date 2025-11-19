@@ -1,13 +1,6 @@
-from activate_django_first import EMG_CONFIG
-import analyses.models
-from analyses.base_models.with_downloads_models import (
-    DownloadFileType,
-    DownloadType,
-)
 from enum import Enum
-from typing import Optional, List
 from pathlib import Path
-from pydantic import BaseModel, Field
+from typing import Optional, List
 
 # Maybe we should put these in a separate schema with stuff
 from mgnify_pipelines_toolkit.schemas.dataframes import (
@@ -19,7 +12,15 @@ from mgnify_pipelines_toolkit.schemas.dataframes import (
     SanntisSummarySchema,
     KEGGModulesSummarySchema,
 )
+from pydantic import BaseModel, Field
 
+import analyses.models
+from activate_django_first import EMG_CONFIG
+from analyses.base_models.with_downloads_models import (
+    DownloadFileType,
+    DownloadType,
+    DownloadFileIndexFileMetadata,
+)
 from analyses.models import Analysis
 from workflows.data_io_utils.file_rules.common_rules import (
     DirectoryExistsRule,
@@ -635,6 +636,10 @@ class AssemblyResultSchema(PipelineResultSchema):
                         short_description="Annotation summary GFF",
                         long_description="Comprehensive annotation summary in GFF format",
                     ),
+                    index_files=[
+                        DownloadFileIndexFileMetadata(index_type="gzi"),
+                        DownloadFileIndexFileMetadata(index_type="csi"),
+                    ],
                 ),
             ],
         )

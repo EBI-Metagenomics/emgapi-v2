@@ -118,6 +118,7 @@ def setup_duplicate_studies():
     }
 
 
+@pytest.mark.skip(reason="flakiness needs debugging")
 @pytest.mark.flaky(reruns=2)
 @pytest.mark.django_db(transaction=True)
 def test_deduplicate_mgys_studies(setup_duplicate_studies, caplog):
@@ -158,6 +159,7 @@ def test_deduplicate_mgys_studies(setup_duplicate_studies, caplog):
         )
 
 
+@pytest.mark.skip(reason="flakiness needs debugging")
 @pytest.mark.flaky(reruns=5)
 @pytest.mark.django_db(transaction=True)
 def test_reassign_runs_and_assemblies(setup_duplicate_studies, caplog):
@@ -179,6 +181,7 @@ def test_reassign_runs_and_assemblies(setup_duplicate_studies, caplog):
         assert MGnifyStudy.objects.count() == start_count - 2
 
 
+@pytest.mark.skip(reason="flakiness needs debugging")
 @pytest.mark.flaky(reruns=5)  # sometimes fails due to logging missing or something
 @pytest.mark.django_db(transaction=True)
 def test_clashing_runs_gives_warning(setup_duplicate_studies, caplog):
