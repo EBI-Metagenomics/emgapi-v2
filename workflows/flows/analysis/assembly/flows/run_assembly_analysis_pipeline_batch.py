@@ -249,7 +249,6 @@ def run_assembly_analysis_pipeline_batch(
                 "-resume",
                 ("--input", samplesheet),
                 ("--outdir", assembly_analyses_workspace_dir),
-                ("-name", f"asa-v6-sheet-{slugify(str(samplesheet))[-10:]}"),
                 EMG_CONFIG.slurm.use_nextflow_tower and "-with-tower",
                 ("-ansi-log", "false"),
             ]
