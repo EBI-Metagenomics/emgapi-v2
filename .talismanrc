@@ -189,6 +189,9 @@ fileignoreconfig:
 - filename: workflows/flows/analysis/assembly/flows/run_assembly_analysis_pipeline_batch.py
   checksum: f4d17e99ffa7780ec7082ed9782cc1dac32f6611cae4fa4f1d3412ea2e963cb0
 
+- filename: deployment/ebi-wp-k8s-hl/start_prefect_slurm_worker.sh
+  checksum: c98eedfe5ad3c85b8e623344b151d2926cd148e98c199431f41c6bc52c866e6e
+
 allowed_patterns:
 - cache_key_fn
 - CommonMetadataKeys
