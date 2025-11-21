@@ -1,5 +1,5 @@
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import patch, Mock
 
 import django
 import pytest
@@ -102,13 +102,15 @@ def private_analysis_with_download(webin_private_study, private_run):
 
 
 @pytest.fixture
-@patch("workflows.flows.analyse_study_tasks.shared.copy_v6_pipeline_results.move_data")
-def assembly_analysis(mock_copy_flow, mgnify_assemblies_completed):
+@patch(
+    "workflows.flows.analyse_study_tasks.shared.copy_v6_pipeline_results.run_deployment"
+)
+def assembly_analysis(mock_run_deployment, mgnify_assemblies_completed):
     assem = mgnify_assemblies_completed[0]
     assem.add_erz_accession(
         "ERZ857107"
     )  # n.b. does not correspond to this run in real ena
-
+    mock_run_deployment.return_value = Mock(id="mock-flow-run-id")
     study = assem.reads_study
     sample = assem.sample
 
@@ -126,11 +128,14 @@ def assembly_analysis(mock_copy_flow, mgnify_assemblies_completed):
 
 
 @pytest.fixture
-@patch("workflows.flows.analyse_study_tasks.shared.copy_v6_pipeline_results.move_data")
+@patch(
+    "workflows.flows.analyse_study_tasks.shared.copy_v6_pipeline_results.run_deployment"
+)
 def assembly_analysis_with_downloads(
-    mock_copy_flow, prefect_harness, assembly_analysis
+    mock_run_deployment, prefect_harness, assembly_analysis
 ):
     schema = AssemblyResultSchema()
+    mock_run_deployment.return_value = Mock(id="mock-flow-run-id")
     importer = AssemblyResultImporter(assembly_analysis)
     importer.import_results(
         schema=schema,
