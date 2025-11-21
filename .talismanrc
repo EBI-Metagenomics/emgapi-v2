@@ -24,7 +24,7 @@ fileignoreconfig:
   allowed_patterns: [password="password123"]
 
 - filename: deployment/ebi-wp-k8s-hl/ebi-wp-k8s-hl.yaml
-  checksum: 49e072dbf746db641ec20c344fb0ae2143610d82ba09ff1cf6895b7a92561713
+  checksum: 016b1063a04a27b3147c54bcd4e34d5dc52bd4c5526e911c8fa6098334704c5c
 
 - filename: deployment/ebi-wp-k8s-hl/README.md
   allowed_patterns: [kubectl create secret generic nginx-private-data-config-secret --from-file=private-data-nginx.conf -n emgapiv2-hl-exp]
@@ -188,6 +188,9 @@ fileignoreconfig:
 
 - filename: workflows/flows/analysis/assembly/flows/run_assembly_analysis_pipeline_batch.py
   checksum: f4d17e99ffa7780ec7082ed9782cc1dac32f6611cae4fa4f1d3412ea2e963cb0
+
+- filename: deployment/ebi-wp-k8s-hl/start_prefect_slurm_worker.sh
+  checksum: c98eedfe5ad3c85b8e623344b151d2926cd148e98c199431f41c6bc52c866e6e
 
 allowed_patterns:
 - cache_key_fn

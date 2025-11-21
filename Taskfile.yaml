@@ -103,7 +103,9 @@ tasks:
       - docker compose run app python manage.py shell -c "a=Analysis.objects.get(accession='MGYA00000004'); a.external_results_dir='PRJNA398/PRJNA398089/SRR1111/SRR1111111/V6/amplicon'; a.save()"
       # make results for assembly available
       - mkdir -p slurm-dev-environment/fs/nfs/ftp/public/databases/metagenomics/mgnify_results/PRJNA398/PRJNA398089/ERZ857/ERZ857107/V6/
-      - cp -r slurm-dev-environment/fs/nfs/public/tests/assembly_v6_output/ERZ857107/ERZ857107 slurm-dev-environment/fs/nfs/ftp/public/databases/metagenomics/mgnify_results/PRJNA398/PRJNA398089/ERZ857/ERZ857107/V6/assembly
+      - cp -r slurm-dev-environment/fs/nfs/public/tests/assembly_v6_output/ERP106708/ERZ857107 slurm-dev-environment/fs/nfs/ftp/public/databases/metagenomics/mgnify_results/PRJNA398/PRJNA398089/ERZ857/ERZ857107/V6/assembly
+      - cp -r slurm-dev-environment/fs/nfs/public/tests/assembly_v6_output/ERP106708/map/ERZ857107 slurm-dev-environment/fs/nfs/ftp/public/databases/metagenomics/mgnify_results/PRJNA398/PRJNA398089/ERZ857/ERZ857107/V6/assembly/mobilome-annotation
+      - docker compose run app python manage.py shell -c "a=Analysis.objects.get(accession='MGYA00000002'); a.external_results_dir='PRJNA398/PRJNA398089/ERZ857/ERZ857107/V6/assembly'; a.save()"
       # make workdir
       - mkdir -p slurm-dev-environment/fs/nfs/production/dev-slurm-work-dir
       - chmod -R o+w slurm-dev-environment/fs

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from operator import attrgetter
 from pathlib import Path
 from typing import List, Optional, Union, Literal, TYPE_CHECKING
 
@@ -11,7 +12,6 @@ from workflows.data_io_utils.file_rules.common_rules import FileExistsRule
 
 if TYPE_CHECKING:
     from workflows.data_io_utils.schemas.base import PipelineFileSchema
-    import analyses.models
 
 
 class DownloadType(FutureStrEnum):
@@ -40,12 +40,15 @@ class DownloadFileType(FutureStrEnum):
     OTHER = "other"
 
 
-class DownloadFileIndexFile(BaseModel):
+class DownloadFileIndexFileMetadata(BaseModel):
+    index_type: Literal["fai", "gzi", "csi"]
+
+
+class DownloadFileIndexFile(DownloadFileIndexFileMetadata):
     """
     An index file (e.g., a .fai for a FASTA file of .gzi for a bgzip file) of a DownloadFile.
     """
 
-    index_type: Literal["fai", "gzi", "csi"]
     path: Union[str, Path]
 
     @field_validator("path", mode="before")
@@ -53,6 +56,21 @@ class DownloadFileIndexFile(BaseModel):
         if isinstance(value, Path):
             return str(value)
         return value
+
+    @classmethod
+    def index_path_from_file_path(
+        cls, file_path: Path, index_type: Literal["fai", "gzi", "csi"]
+    ):
+        return file_path.with_suffix(f"{file_path.suffix}.{index_type}")
+
+    @classmethod
+    def from_indexed_file_path_and_metadata(
+        cls, indexed_file_path: Path, metadata: DownloadFileIndexFileMetadata
+    ):
+        return cls(
+            path=cls.index_path_from_file_path(indexed_file_path, metadata.index_type),
+            **metadata.model_dump(),
+        )
 
 
 class DownloadFileMetadata(BaseModel):
@@ -115,9 +133,12 @@ class DownloadFile(DownloadFileMetadata):
     def from_pipeline_file_schema(
         cls,
         schema: "PipelineFileSchema",
-        analysis: "analyses.models.Analysis",
+        parent_object: "WithDownloadsModel",
         directory_path: Path,
         base_path: Path,
+        file_identifier_lookup_string: str = "accession",
+        parent_identifier_lookup_string: str = "accession",
+        override_dirs_from_base: str = None,
     ) -> Optional["DownloadFile"]:
         """
         Factory method to create a DownloadFile from a PipelineFileSchema.
@@ -127,34 +148,67 @@ class DownloadFile(DownloadFileMetadata):
 
         :param schema: The pipeline file schema
         :type schema: PipelineFileSchema
-        :param analysis: The analysis object
-        :type analysis: analyses.models.Analysis
+        :param parent_object: The pipeline output object that is the parent of the file, e.g. an Analysis or Genome
+        :type parent_object: any concrete model of the abstract WithDownloadsModel
         :param directory_path: Full path to the directory containing the file
         :type directory_path: Path
         :param base_path: Base path for computing relative file paths (e.g., batch workspace or analysis.results_dir)
         :type base_path: Path
+        :param file_identifier_lookup_string: The attribute name to use to get the file identifier from the parent object, defaults to "accession", but can be a relation e.g. "assembly.first_accession"
+        :type file_identifier_lookup_string: str, optional
+        :param parent_identifier_lookup_string: The attribute name to use to get the parent identifier from the parent object, defaults to "accession", but can be anything e.g. "id" or "other.accession"
+        :type parent_identifier_lookup_string: str, optional
+        :param override_dirs_from_base: An optional new folder-name (or path partial) for the download file on external filesystem, relative to base_path
+        :type override_dirs_from_base: str, optional
         :return: DownloadFile object or None if file doesn't exist and isn't required
         :rtype: Optional[DownloadFile]
         """
-        identifier = analysis.assembly.first_accession
-        file_path = directory_path / schema.get_filename(identifier)
+        file_identifier = attrgetter(file_identifier_lookup_string)(parent_object)
+        file_path = directory_path / schema.get_filename(file_identifier)
 
         if not file_path.exists():
             # Check if a file is required based on validation rules
             if FileExistsRule in schema.validation_rules:
-                raise ValueError(f"Required file {file_path} not found")
+                raise FileNotFoundError(f"Required file {file_path} not found")
             return None
 
-        return cls(
-            path=file_path.relative_to(base_path),
+        internal_path = file_path.relative_to(base_path)
+        if override_dirs_from_base:
+            path = Path(override_dirs_from_base) / internal_path.name
+        else:
+            path = internal_path
+        download_file = cls(
+            path=path,
             file_type=schema.download_metadata.file_type,
             alias=file_path.name,
             download_type=schema.download_metadata.download_type,
             download_group=schema.download_metadata.download_group,
-            parent_identifier=analysis.accession,
+            parent_identifier=attrgetter(parent_identifier_lookup_string)(
+                parent_object
+            ),
             short_description=schema.download_metadata.short_description,
             long_description=schema.download_metadata.long_description,
+            index_file=[
+                DownloadFileIndexFile.from_indexed_file_path_and_metadata(
+                    path, metadata
+                )
+                for metadata in schema.index_files or []
+            ],
         )
+        for index in download_file.index_file:
+            if (
+                not (
+                    index_full_path := base_path
+                    / DownloadFileIndexFile.index_path_from_file_path(
+                        internal_path, index.index_type
+                    )
+                ).exists()
+                and FileExistsRule in schema.validation_rules
+            ):
+                raise FileNotFoundError(
+                    f"Required index file {index_full_path} not found"
+                )
+        return download_file
 
 
 class WithDownloadsModel(models.Model):

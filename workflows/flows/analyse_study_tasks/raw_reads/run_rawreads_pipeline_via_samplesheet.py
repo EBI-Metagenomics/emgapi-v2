@@ -79,7 +79,6 @@ def run_rawreads_pipeline_via_samplesheet(
             ("--samplesheet", samplesheet),
             ("--outdir", rawreads_current_outdir),
             EMG_CONFIG.slurm.use_nextflow_tower and "-with-tower",
-            ("-name", f"rawreads-v6-sheet-{slugify(samplesheet)[-10:]}"),
             ("-work-dir", workdir),
             ("-ansi-log", "false"),
         ]

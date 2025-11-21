@@ -147,6 +147,7 @@ class StudyAdmin(ENABrowserLinkMixin, JSONFieldWidgetOverridesMixin, ModelAdmin)
                 ],
             },
         ),
+        ("Metadata", {"classes": ["tab"], "fields": ["metadata"]}),
         (
             "Files",
             {

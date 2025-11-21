@@ -15,7 +15,7 @@ from workflows.prefect_utils.slurm_flow import run_cluster_job
     name="Nexflow hello-world example",
     log_prints=True,
 )
-def hello_nextflow(with_trace_flag: True):
+def hello_nextflow(with_trace_flag: bool = True):
     command = "nextflow run hello -ansi-log false"
 
     workdir = Path(EMG_CONFIG.slurm.default_workdir) / "hello-nextflow"
