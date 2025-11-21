@@ -543,8 +543,7 @@ def get_study_assemblies_from_ena(accession: str, limit: int = 10) -> list[str]:
         reads_study = study.assemblies_assembly.first().reads_study
     elif (
         reads_study_accession := extract_study_accession_from_study_title(study.title)
-        and not portal_runs
-    ):
+    ) and not portal_runs:
         # Looks like a TPA study – no read-runs within it, and an accession in the study title
         # e.g. "This is a TPA Study of PRJ123"
         ena_reads_study = ena.models.Study.objects.get_ena_study(reads_study_accession)
