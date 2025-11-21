@@ -88,7 +88,7 @@ def copy_v6_pipeline_results(analysis_accession: str, timeout: int = 14400):
     flowrun = run_deployment(
         name="move-data/move_data_deployment",
         parameters={
-            "command": command,
+            "move_command": command,
             "source": source,
             "target": target,
         },
@@ -145,7 +145,7 @@ def copy_v6_study_summaries(study_accession: str, timeout: int = 14400):
     flowrun = run_deployment(
         name="move-data/move_data_deployment",
         parameters={
-            "command": command,
+            "move_command": command,
             "source": source,
             "target": target,
             "make_target": True,
@@ -310,7 +310,7 @@ def _copy_single_analysis_results(
         flowrun = run_deployment(
             name="move-data/move_data_deployment",
             parameters={
-                "command": command,
+                "move_command": command,
                 "source": trailing_slash_ensured_dir(str(asa_source)),
                 "target": str(target_base),
                 "make_target": True,
@@ -340,7 +340,7 @@ def _copy_single_analysis_results(
         flowrun = run_deployment(
             name="move-data/move_data_deployment",
             parameters={
-                "command": command,
+                "move_command": command,
                 "source": trailing_slash_ensured_dir(str(virify_source)),
                 "target": str(virify_target),
                 "make_target": True,
@@ -368,7 +368,7 @@ def _copy_single_analysis_results(
         flowrun = run_deployment(
             name="move-data/move_data_deployment",
             parameters={
-                "command": command,
+                "move_command": command,
                 "source": trailing_slash_ensured_dir(str(map_source)),
                 "target": str(map_target),
                 "make_target": True,

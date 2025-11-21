@@ -53,11 +53,10 @@ def test_copy_amplicon_pipeline_results(raw_read_analyses, prefect_harness):
         expected_target = "/".join(str(part) for part in expected_target_parts)
         assert expected_target in parameters["target"]
 
-        # Verify command structure
-        command: str = parameters["command"]
+        # Verify the move_command parameter
+        move_command: str = parameters["move_command"]
 
-        # Check basic command structure
-        assert "rsync" in command
+        assert "rsync" in move_command
 
         # Check all extensions are included
         expected_extensions = {
@@ -74,8 +73,8 @@ def test_copy_amplicon_pipeline_results(raw_read_analyses, prefect_harness):
             "csv",
         }
         for ext in expected_extensions:
-            assert f"--include=*.{ext}" in command
-        assert command.endswith(
+            assert f"--include=*.{ext}" in move_command
+        assert move_command.endswith(
             "'--exclude=*'"
         )  # excludes anything not explicitly included
 
@@ -106,7 +105,7 @@ def test_copy_amplicon_pipeline_results_disallowed_extensions(
 
         # Get the command from the parameters
         parameters = mock_run_deployment.call_args.kwargs["parameters"]
-        command = parameters["command"]
+        move_command = parameters["move_command"]
 
         # List of sample extensions that should NOT be included
         disallowed_extensions = {
@@ -129,5 +128,5 @@ def test_copy_amplicon_pipeline_results_disallowed_extensions(
         # Check that none of the disallowed extensions are in the find command
         for ext in disallowed_extensions:
             assert (
-                f"--include='*.{ext}'" not in command
+                f"--include='*.{ext}'" not in move_command
             ), f"Found disallowed extension: {ext}"
