@@ -1193,11 +1193,11 @@ class TestIdempotentImports:
         )
 
     @patch(
-        "workflows.flows.analyse_study_tasks.shared.copy_v6_pipeline_results.move_data"
+        "workflows.flows.analyse_study_tasks.shared.copy_v6_pipeline_results.run_deployment"
     )
     def test_download_paths_no_duplicate_identifier(
         self,
-        mock_move_data,
+        mock_run_deployment,
         raw_reads_mgnify_study,
         raw_reads_mgnify_sample,
         mgnify_assemblies,
@@ -1205,6 +1205,9 @@ class TestIdempotentImports:
         prefect_harness,
     ):
         """Test that download paths don't contain duplicate assembly identifiers."""
+        # Mock run_deployment to prevent actual deployment execution
+        mock_run_deployment.return_value = Mock(id="mock-flow-run-id")
+
         assembly_id = mgnify_assemblies[0].first_accession
 
         # Create batch and analysis
@@ -1246,6 +1249,9 @@ class TestIdempotentImports:
             target_root=str(target_root),
             logger=logger,
         )
+
+        # Verify run_deployment was called once (only ASA is COMPLETED)
+        assert mock_run_deployment.call_count == 1
 
         # Verify external_results_dir was set correctly
         analysis.refresh_from_db()
