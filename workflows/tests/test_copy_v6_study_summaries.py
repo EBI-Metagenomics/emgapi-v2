@@ -1,5 +1,5 @@
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import patch, Mock
 
 import pytest
 
@@ -15,10 +15,10 @@ class TestCopyV6StudySummaries:
     """Test that study summaries are copied to the correct subdirectory."""
 
     @patch(
-        "workflows.flows.analyse_study_tasks.shared.copy_v6_pipeline_results.move_data"
+        "workflows.flows.analyse_study_tasks.shared.copy_v6_pipeline_results.run_deployment"
     )
     def test_copies_files_to_study_summaries_subdirectory(
-        self, mock_move_data, prefect_harness, tmp_path
+        self, mock_run_deployment, prefect_harness, tmp_path
     ):
         """
         Test that copy_v6_study_summaries copies files from results_dir root
@@ -26,6 +26,9 @@ class TestCopyV6StudySummaries:
 
         This is to prevent regressions in this behavior as the code is a bit fragile (scatter in different places)
         """
+        # Mock run_deployment to prevent actual deployment execution
+        mock_run_deployment.return_value = Mock(id="mock-flow-run-id")
+
         ena_study = ENAStudy.objects.create(accession="PRJEB12345", title="Test Study")
         study = Study.objects.create(
             ena_study=ena_study,
@@ -47,14 +50,21 @@ class TestCopyV6StudySummaries:
         # Go Go Task
         copy_v6_study_summaries(study.accession)
 
-        assert mock_move_data.call_count == 1
+        assert mock_run_deployment.call_count == 1
+
+        # Verify the deployment was called with correct parameters
+        call_kwargs = mock_run_deployment.call_args.kwargs
+        assert call_kwargs["name"] == "move-data/move_data_deployment"
 
         # Verify the target path ends with /study-summaries/
-        call_args = mock_move_data.call_args
-        target_path = call_args[0][1]  # The second positional arg is the target path
+        parameters = call_kwargs["parameters"]
+        target_path = parameters["target"]
         assert target_path.endswith(
             "/study-summaries/"
         ), f"Expected target to end with /study-summaries/ but got {target_path}"
+
+        # Verify timeout was passed
+        assert call_kwargs["timeout"] == 14400  # 4 hours default
 
         study.refresh_from_db()
         assert study.external_results_dir is not None
@@ -62,11 +72,17 @@ class TestCopyV6StudySummaries:
             study.external_results_dir
         ), "external_results_dir should point to parent, not include study-summaries"
 
-    def test_skips_when_no_results_dir(self, prefect_harness):
+    @patch(
+        "workflows.flows.analyse_study_tasks.shared.copy_v6_pipeline_results.run_deployment"
+    )
+    def test_skips_when_no_results_dir(self, mock_run_deployment, prefect_harness):
         """Test that copy_v6_study_summaries handles missing results_dir gracefully."""
 
         # I'm not sure if this whole thing is a good idea, as not having a results_dir would be a problem
         # TODO: maybe we should just crash the thing instead of gracefully this
+
+        # Mock run_deployment (even though it shouldn't be called)
+        mock_run_deployment.return_value = Mock(id="mock-flow-run-id")
 
         ena_study = ENAStudy.objects.create(accession="PRJEB99999", title="No Results")
         study = Study.objects.create(
@@ -76,6 +92,9 @@ class TestCopyV6StudySummaries:
 
         # Should not raise an exception
         copy_v6_study_summaries(study.accession)
+
+        # Verify run_deployment was NOT called (since there's no results_dir)
+        mock_run_deployment.assert_not_called()
 
         # Verify external_results_dir was not set
         study.refresh_from_db()

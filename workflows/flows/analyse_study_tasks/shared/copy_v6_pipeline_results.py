@@ -2,6 +2,7 @@ import uuid
 from pathlib import Path
 
 from prefect import task, get_run_logger
+from prefect.deployments import run_deployment
 
 from activate_django_first import EMG_CONFIG
 from analyses.models import Analysis, Study
@@ -17,20 +18,21 @@ from workflows.models import (
     AssemblyAnalysisPipeline,
 )
 from workflows.prefect_utils.build_cli_command import cli_command
-from workflows.prefect_utils.datamovers import move_data
 
 
 @task(
     name="Copy V6 Pipeline Results",
     task_run_name="Copy V6 Pipeline Results for {analysis_accession}",
 )
-def copy_v6_pipeline_results(analysis_accession: str):
+def copy_v6_pipeline_results(analysis_accession: str, timeout: int = 14400):
     """
     Copies pipeline result files for a given analysis to a designated directory based
     on the privacy level of the analysis and study. The function ensures the correct
     destination is identified, filters files by specified extensions, and synchronizes
     data securely.
+
     :param analysis_accession: The accession of the analysis to copy results for.
+    :param timeout: Timeout in seconds for the move operation (default: 4 hours)
     """
     # TODO: should we reconsider this as run in bulk for several analyses? (or a batch).
     logger = get_run_logger()
@@ -83,7 +85,19 @@ def copy_v6_pipeline_results(analysis_accession: str):
         + ["--exclude=*"]
     )
 
-    move_data(source, target, command)
+    flowrun = run_deployment(
+        name="move-data/move_data_deployment",
+        parameters={
+            "command": command,
+            "source": source,
+            "target": target,
+        },
+        job_variables={
+            "partition": EMG_CONFIG.slurm.datamover_paritition,
+        },
+        timeout=timeout,
+    )
+    logger.info(f"Mover flowrun is {flowrun}")
 
     analysis.external_results_dir = Path(target).relative_to(target_root)
 
@@ -95,8 +109,13 @@ def copy_v6_pipeline_results(analysis_accession: str):
 
 
 @task(name="Copy V6 Study Summaries")
-def copy_v6_study_summaries(study_accession: str):
-    """Copy study summaries from v6 pipeline results to external results dir"""
+def copy_v6_study_summaries(study_accession: str, timeout: int = 14400):
+    """
+    Copy study summaries from v6 pipeline results to external results dir
+
+    :param study_accession: The accession of the study to copy summaries for
+    :param timeout: Timeout in seconds for the move operation (default: 4 hours)
+    """
     logger = get_run_logger()
 
     study = Study.objects.get(accession=study_accession)
@@ -123,7 +142,20 @@ def copy_v6_study_summaries(study_accession: str):
     )
     target = f"{target_root}/{accession_prefix_separated_dir_path(study.first_accession, -3)}/study-summaries/"
 
-    move_data(source, target, command, make_target=True)
+    flowrun = run_deployment(
+        name="move-data/move_data_deployment",
+        parameters={
+            "command": command,
+            "source": source,
+            "target": target,
+            "make_target": True,
+        },
+        job_variables={
+            "partition": EMG_CONFIG.slurm.datamover_paritition,
+        },
+        timeout=timeout,
+    )
+    logger.info(f"Mover flowrun is {flowrun}")
 
     study.external_results_dir = Path(target).parent.relative_to(target_root)
     study.save()
@@ -137,7 +169,7 @@ def copy_v6_study_summaries(study_accession: str):
     name="Copy Assembly Batch Results",
     task_run_name="Copy Assembly Batch Results for batch {batch_id}",
 )
-def copy_assembly_batch_results(batch_id: uuid.UUID):
+def copy_assembly_batch_results(batch_id: uuid.UUID, timeout: int = 14400):
     """
     Copy results from all three assembly analysis pipelines (ASA, VIRify, MAP) for all
     analyses in a batch to external results directories.
@@ -148,6 +180,7 @@ def copy_assembly_batch_results(batch_id: uuid.UUID):
     - {target_root}/{study_path}/{assembly_accession}/mobilome-annotation/ - MAP results
 
     :param batch_id: The UUID of the AssemblyAnalysisBatch to copy results for
+    :param timeout: Timeout in seconds for each move operation (default: 4 hours)
     """
     logger = get_run_logger()
 
@@ -176,12 +209,14 @@ def copy_assembly_batch_results(batch_id: uuid.UUID):
     copy_failed_analysis_ids = []
     for batch_analysis_relation in asa_completed_relations:
         try:
+            # TODO: This is calls another flow, which feels too nested. We should review this
             _copy_single_analysis_results(
                 analysis=batch_analysis_relation.analysis,
                 batch_analysis_relation=batch_analysis_relation,
                 batch=batch,
                 target_root=target_root,
                 logger=logger,
+                timeout=timeout,
             )
         except Exception as e:
             copy_failed_analysis_ids.append(batch_analysis_relation.analysis.id)
@@ -229,6 +264,7 @@ def _copy_single_analysis_results(
     batch: AssemblyAnalysisBatch,
     target_root: str,
     logger,
+    timeout: int = 14400,
 ):
     """
     Copy results for a single analysis from the batch workspace to external results.
@@ -238,6 +274,7 @@ def _copy_single_analysis_results(
     :param batch: The batch containing the analysis
     :param target_root: The root directory for external results
     :param logger: Prefect logger
+    :param timeout: Timeout in seconds for each move operation (default: 4 hours)
     """
     # Get assembly accession
     assembly_accession = analysis.assembly_or_run.first_accession
@@ -269,12 +306,22 @@ def _copy_single_analysis_results(
     asa_source = asa_workspace / assembly_accession
     if asa_source.exists():
         logger.info(f"Copying ASA results: {asa_source} -> {target_base}")
-        move_data(
-            trailing_slash_ensured_dir(str(asa_source)),
-            str(target_base),
-            command,
-            make_target=True,
+
+        flowrun = run_deployment(
+            name="move-data/move_data_deployment",
+            parameters={
+                "command": command,
+                "source": trailing_slash_ensured_dir(str(asa_source)),
+                "target": str(target_base),
+                "make_target": True,
+            },
+            job_variables={
+                "partition": EMG_CONFIG.slurm.datamover_paritition,
+            },
+            timeout=timeout,
         )
+        logger.info(f"ASA mover flowrun is {flowrun}")
+
     else:
         logger.warning(
             f"ASA results not found for {assembly_accession} at {asa_source}"
@@ -290,12 +337,20 @@ def _copy_single_analysis_results(
         and virify_source.exists()
     ):
         logger.info(f"Copying VIRify results: {virify_source} -> {virify_target}")
-        move_data(
-            trailing_slash_ensured_dir(str(virify_source)),
-            str(virify_target),
-            command,
-            make_target=True,
+        flowrun = run_deployment(
+            name="move-data/move_data_deployment",
+            parameters={
+                "command": command,
+                "source": trailing_slash_ensured_dir(str(virify_source)),
+                "target": str(virify_target),
+                "make_target": True,
+            },
+            job_variables={
+                "partition": EMG_CONFIG.slurm.datamover_paritition,
+            },
+            timeout=timeout,
         )
+        logger.info(f"VIRify mover flowrun is {flowrun}")
     else:
         logger.info(
             f"VIRify not completed or results not found for {assembly_accession} at {virify_source}"
@@ -310,12 +365,20 @@ def _copy_single_analysis_results(
         and map_source.exists()
     ):
         logger.info(f"Copying MAP results: {map_source} -> {map_target}")
-        move_data(
-            trailing_slash_ensured_dir(str(map_source)),
-            str(map_target),
-            command,
-            make_target=True,
+        flowrun = run_deployment(
+            name="move-data/move_data_deployment",
+            parameters={
+                "command": command,
+                "source": trailing_slash_ensured_dir(str(map_source)),
+                "target": str(map_target),
+                "make_target": True,
+            },
+            job_variables={
+                "partition": EMG_CONFIG.slurm.datamover_paritition,
+            },
+            timeout=timeout,
         )
+        logger.info(f"MAP mover flowrun is {flowrun}")
     else:
         logger.info(
             f"MAP not completed or results not found for {assembly_accession} at {map_source}"

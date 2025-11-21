@@ -6,7 +6,7 @@ import os
 from enum import Enum
 from pathlib import Path
 from typing import List, Optional
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import pytest
 from django.conf import settings
@@ -347,10 +347,14 @@ MockFileIsNotEmptyRule = FileRule(
     "workflows.data_io_utils.mgnify_v6_utils.rawreads.FileIsNotEmptyRule",
     MockFileIsNotEmptyRule,
 )
+@patch(
+    "workflows.flows.analyse_study_tasks.shared.copy_v6_pipeline_results.run_deployment"
+)
 @pytest.mark.parametrize(
     "mock_suspend_flow_run", ["workflows.flows.analysis_rawreads_study"], indirect=True
 )
 def test_prefect_analyse_rawreads_flow(
+    mock_run_deployment,
     mock_queryset_hash_for_rawreads,
     prefect_harness,
     httpx_mock,
@@ -368,6 +372,9 @@ def test_prefect_analyse_rawreads_flow(
     Create analysis for assembly runs and launch it with samplesheet.
     One assembly has all results, one assembly failed
     """
+    # Mock run_deployment to prevent actual deployment execution
+    mock_run_deployment.return_value = Mock(id="mock-flow-run-id")
+
     os.environ["USER"] = "testuser"
     mock_queryset_hash_for_rawreads.return_value = "abc123"
 

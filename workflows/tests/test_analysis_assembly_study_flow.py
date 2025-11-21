@@ -6,7 +6,7 @@ import uuid
 from enum import Enum
 from pathlib import Path
 from typing import List
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import pytest
 from django.conf import settings
@@ -395,12 +395,16 @@ def setup_study_summary_fixtures(study: Study):
 @patch(
     "workflows.flows.analysis.assembly.tasks.make_samplesheet_assembly.queryset_hash"
 )
+@patch(
+    "workflows.flows.analyse_study_tasks.shared.copy_v6_pipeline_results.run_deployment"
+)
 @pytest.mark.parametrize(
     "mock_suspend_flow_run",
     ["workflows.flows.analysis.assembly.flows.analysis_assembly_study"],
     indirect=True,
 )
 def test_prefect_analyse_assembly_flow(
+    mock_run_deployment,
     mock_queryset_hash,
     assembly_test_scenario,
     httpx_mock,
@@ -434,6 +438,9 @@ def test_prefect_analyse_assembly_flow(
     - Expected state: ANALYSIS_ANNOTATIONS_IMPORTED
     - Biome: root.engineered
     """
+    # Mock run_deployment to prevent actual deployment execution
+    mock_run_deployment.return_value = Mock(id="mock-flow-run-id")
+
     mock_queryset_hash.return_value = "abc123"
 
     # Set upside effect to copy fixtures when a cluster job completes
@@ -757,12 +764,16 @@ def test_prefect_analyse_assembly_flow(
 @patch(
     "workflows.flows.analysis.assembly.flows.run_assembly_analysis_pipeline_batch.run_virify_batch"
 )
+@patch(
+    "workflows.flows.analyse_study_tasks.shared.copy_v6_pipeline_results.run_deployment"
+)
 @pytest.mark.parametrize(
     "mock_suspend_flow_run",
     ["workflows.flows.analysis.assembly.flows.analysis_assembly_study"],
     indirect=True,
 )
 def test_prefect_analyse_assembly_flow_missing_directory(
+    mock_run_deployment,
     mock_queryset_hash,
     mock_run_virify_batch,
     httpx_mock,
@@ -794,6 +805,9 @@ def test_prefect_analyse_assembly_flow_missing_directory(
     - Assembly: ERZ857107 (with missing interpro directory)
     - Expected state: ANALYSIS_QC_FAILED
     """
+    # Mock run_deployment to prevent actual deployment execution
+    mock_run_deployment.return_value = Mock(id="mock-flow-run-id")
+
     # Use same study as original test but different hash for workspace isolation
     scenario = AssemblyTestScenario(
         study_accession="PRJEB24849",
@@ -925,12 +939,16 @@ def test_prefect_analyse_assembly_flow_missing_directory(
 @patch(
     "workflows.flows.analysis.assembly.flows.run_assembly_analysis_pipeline_batch.run_virify_batch"
 )
+@patch(
+    "workflows.flows.analyse_study_tasks.shared.copy_v6_pipeline_results.run_deployment"
+)
 @pytest.mark.parametrize(
     "mock_suspend_flow_run",
     ["workflows.flows.analysis.assembly.flows.analysis_assembly_study"],
     indirect=True,
 )
 def test_prefect_analyse_assembly_flow_invalid_schema(
+    mock_run_deployment,
     mock_queryset_hash,
     mock_run_virify_batch,
     httpx_mock,
@@ -963,6 +981,9 @@ def test_prefect_analyse_assembly_flow_invalid_schema(
     - Invalid data: XIPR027417 (should match IPR######)
     - Expected state: ANALYSIS_QC_FAILED
     """
+    # Mock run_deployment to prevent actual deployment execution
+    mock_run_deployment.return_value = Mock(id="mock-flow-run-id")
+
     # Use same study as original test but different hash for workspace isolation
     scenario = AssemblyTestScenario(
         study_accession="PRJEB24849",

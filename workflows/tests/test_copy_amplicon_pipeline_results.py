@@ -14,27 +14,31 @@ def test_copy_amplicon_pipeline_results(raw_read_analyses, prefect_harness):
     """Test copying amplicon pipeline results with a real Analysis fixture"""
     analysis = raw_read_analyses[0]  # Get the first analysis that has results
 
-    # Create a mock that returns a synchronous result
-    mock_move_data = Mock(return_value="mock_job_id")
+    # Mock run_deployment instead of move_data
+    mock_run_deployment = Mock(return_value=Mock(id="mock-flow-run-id"))
 
-    # Make sure we're patching the correct path
-    # You might need to adjust this path based on your actual import structure
     with patch(
-        "workflows.flows.analyse_study_tasks.shared.copy_v6_pipeline_results.move_data",
-        mock_move_data,
+        "workflows.flows.analyse_study_tasks.shared.copy_v6_pipeline_results.run_deployment",
+        mock_run_deployment,
     ):
-        # Call the function synchronously using .fn()
+        # Call the function synchronously
         copy_v6_pipeline_results(analysis.accession)
 
-        # Verify move_data was called
-        mock_move_data.assert_called_once()
+        # Verify run_deployment was called
+        mock_run_deployment.assert_called_once()
 
-        # Get the arguments that move_data was called with
-        call_args = mock_move_data.call_args[0]
+        # Get the call arguments
+        call_kwargs = mock_run_deployment.call_args.kwargs
+
+        # Verify deployment name
+        assert call_kwargs["name"] == "move-data/move_data_deployment"
+
+        # Check parameters
+        parameters = call_kwargs["parameters"]
 
         # Check source path
         expected_source = trailing_slash_ensured_dir(analysis.results_dir)
-        assert call_args[0] == expected_source
+        assert parameters["source"] == expected_source
 
         # Check target path structure
         expected_target_parts = [
@@ -47,10 +51,10 @@ def test_copy_amplicon_pipeline_results(raw_read_analyses, prefect_harness):
             analysis.experiment_type.lower(),
         ]
         expected_target = "/".join(str(part) for part in expected_target_parts)
-        assert expected_target in call_args[1]
+        assert expected_target in parameters["target"]
 
         # Verify command structure
-        command: str = call_args[2]
+        command: str = parameters["command"]
 
         # Check basic command structure
         assert "rsync" in command
@@ -75,6 +79,11 @@ def test_copy_amplicon_pipeline_results(raw_read_analyses, prefect_harness):
             "'--exclude=*'"
         )  # excludes anything not explicitly included
 
+        # Verify job_variables for partition
+        job_variables = call_kwargs["job_variables"]
+        assert "partition" in job_variables
+        assert job_variables["partition"] == EMG_CONFIG.slurm.datamover_paritition
+
 
 @pytest.mark.django_db(transaction=True)
 def test_copy_amplicon_pipeline_results_disallowed_extensions(
@@ -82,19 +91,22 @@ def test_copy_amplicon_pipeline_results_disallowed_extensions(
 ):
     """Test that files with disallowed extensions are not included in the copy command"""
     analysis = raw_read_analyses[0]
-    mock_move_data = Mock(return_value="mock_job_id")
+
+    # Mock run_deployment instead of move_data
+    mock_run_deployment = Mock(return_value=Mock(id="mock-flow-run-id"))
 
     with patch(
-        "workflows.flows.analyse_study_tasks.shared.copy_v6_pipeline_results.move_data",
-        mock_move_data,
+        "workflows.flows.analyse_study_tasks.shared.copy_v6_pipeline_results.run_deployment",
+        mock_run_deployment,
     ):
         copy_v6_pipeline_results(analysis.accession)
 
-        # Verify move_data was called
-        mock_move_data.assert_called_once()
+        # Verify run_deployment was called
+        mock_run_deployment.assert_called_once()
 
-        # Get the command from the call arguments
-        command = mock_move_data.call_args[0][2]
+        # Get the command from the parameters
+        parameters = mock_run_deployment.call_args.kwargs["parameters"]
+        command = parameters["command"]
 
         # List of sample extensions that should NOT be included
         disallowed_extensions = {

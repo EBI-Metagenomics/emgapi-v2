@@ -4,7 +4,7 @@ import shutil
 from pathlib import Path
 from textwrap import dedent
 from typing import List, Optional
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import pytest
 from django.conf import settings
@@ -27,7 +27,6 @@ from workflows.prefect_utils.testing_utils import (
     run_flow_and_capture_logs,
     write_empty_fasta_file,
 )
-from workflows.prefect_utils.pyslurm_patch import JobSubmitDescription
 
 EMG_CONFIG = settings.EMG_CONFIG
 
@@ -501,10 +500,14 @@ def analysis_study_input_mocker(biome_choices, user_choices):
     "workflows.data_io_utils.mgnify_v6_utils.amplicon.FileIsNotEmptyRule",
     MockFileIsNotEmptyRule,
 )
+@patch(
+    "workflows.flows.analyse_study_tasks.shared.copy_v6_pipeline_results.run_deployment"
+)
 @pytest.mark.parametrize(
     "mock_suspend_flow_run", ["workflows.flows.analysis_amplicon_study"], indirect=True
 )
 def test_prefect_analyse_amplicon_flow(
+    mock_run_deployment,
     mock_queryset_hash_for_amplicon,
     prefect_harness,
     httpx_mock,
@@ -525,6 +528,8 @@ def test_prefect_analyse_amplicon_flow(
     Create analysis for amplicon runs and launch it with samplesheet.
     One run has all results, one run failed
     """
+    # Mock run_deployment to prevent actual deployment execution
+    mock_run_deployment.return_value = Mock(id="mock-flow-run-id")
 
     EMG_CONFIG.amplicon_pipeline.allow_non_insdc_run_names = True
 
@@ -916,10 +921,14 @@ def test_prefect_analyse_amplicon_flow(
     "workflows.data_io_utils.mgnify_v6_utils.amplicon.FileIsNotEmptyRule",
     MockFileIsNotEmptyRule,
 )
+@patch(
+    "workflows.flows.analyse_study_tasks.shared.copy_v6_pipeline_results.run_deployment"
+)
 @pytest.mark.parametrize(
     "mock_suspend_flow_run", ["workflows.flows.analysis_amplicon_study"], indirect=True
 )
 def test_prefect_analyse_amplicon_flow_private_data(
+    mock_run_deployment,
     mock_queryset_hash_for_amplicon,
     prefect_harness,
     httpx_mock,
@@ -939,6 +948,8 @@ def test_prefect_analyse_amplicon_flow_private_data(
     Create analysis for amplicon runs and launch it with samplesheet.
     One run has all results, one run failed
     """
+    # Mock run_deployment to prevent actual deployment execution
+    mock_run_deployment.return_value = Mock(id="mock-flow-run-id")
 
     study_accession = "PRJNA398088"
 
@@ -1204,15 +1215,21 @@ def test_prefect_analyse_amplicon_flow_private_data(
     assert study.runs.filter(is_private=True).count() == 1
     assert study.runs.exclude(is_private=True).count() == 0
 
-    for cluster_job_start_call in mock_start_cluster_job.call_args_list:
-        args, kwargs = cluster_job_start_call
+    # Verify run_deployment was called for move operation with private results dir
+    assert (
+        mock_run_deployment.called
+    ), "run_deployment should be called for move operation"
 
-        job_submit_description: JobSubmitDescription = kwargs.get(
-            "job_submit_description"
-        )
-        name: str = kwargs.get("name")
-        if name.startswith("Move"):
-            assert EMG_CONFIG.slurm.private_results_dir in job_submit_description.script
-            break
-    else:
-        assert False, "No Move cluster job submitted"
+    # Check that at least one call used the private results directory
+    move_to_private_found = False
+    for call in mock_run_deployment.call_args_list:
+        args, kwargs = call
+        if "parameters" in kwargs and "target" in kwargs["parameters"]:
+            target = kwargs["parameters"]["target"]
+            if EMG_CONFIG.slurm.private_results_dir in target:
+                move_to_private_found = True
+                break
+
+    assert (
+        move_to_private_found
+    ), "No move operation found targeting private results directory"
