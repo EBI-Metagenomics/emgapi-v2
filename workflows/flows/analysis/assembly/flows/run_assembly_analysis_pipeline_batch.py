@@ -247,6 +247,7 @@ def run_assembly_analysis_pipeline_batch(
                     EMG_CONFIG.assembly_analysis_pipeline.pipeline_nf_profile,
                 ),
                 "-resume",
+                "--use_fire_download",
                 ("--input", samplesheet),
                 ("--outdir", assembly_analyses_workspace_dir),
                 EMG_CONFIG.slurm.use_nextflow_tower and "-with-tower",

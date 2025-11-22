@@ -66,7 +66,7 @@ def make_samplesheet_assembly(
                 lookup_string=f"metadata__{ENAAnalysisFields.GENERATED_FTP}",
                 renderer=lambda ftp_path: (
                     # convert_ena_ftp_to_fire_fastq(ftp_path) if ftp_path else ""  # TODO: once ASA supports FIRE
-                    "http://"
+                    "https://"
                     + ftp_path
                 ),
             ),
