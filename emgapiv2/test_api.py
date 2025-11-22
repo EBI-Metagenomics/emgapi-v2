@@ -200,7 +200,7 @@ def test_api_assemblies_list(mgnify_assemblies, ninja_api_client):
         assembly.save()
 
     items = call_endpoint_and_get_data(
-        ninja_api_client, "/analyses/assemblies/", count=len(mgnify_assemblies)
+        ninja_api_client, "/assemblies/", count=len(mgnify_assemblies)
     )
     assert items[0]["accession"] in [a.first_accession for a in mgnify_assemblies]
 
@@ -217,7 +217,7 @@ def test_api_assembly_detail(mgnify_assemblies, ninja_api_client):
 
     assembly_detail = call_endpoint_and_get_data(
         ninja_api_client,
-        f"/analyses/assemblies/{assembly.ena_accessions[0]}",
+        f"/assemblies/{assembly.ena_accessions[0]}",
         getter=_whole_object,
     )
     assert assembly_detail["accession"] == assembly.first_accession
@@ -225,3 +225,58 @@ def test_api_assembly_detail(mgnify_assemblies, ninja_api_client):
     assert assembly_detail["sample_accession"] == assembly.sample.ena_sample.accession
     assert assembly_detail["reads_study_accession"] == assembly.reads_study.accession
     assert assembly_detail["assembler_name"] == assembly.assembler.name
+
+
+@pytest.mark.django_db
+def test_api_assembly_genome_links_empty(mgnify_assemblies, ninja_api_client):
+    # Ensure an accession is set for the first assembly
+    assembly = mgnify_assemblies[0]
+    assembly.ena_accessions = ["ERZ1001"]
+    assembly.save()
+
+    items = call_endpoint_and_get_data(
+        ninja_api_client,
+        f"/assemblies/{assembly.ena_accessions[0]}/genome-links",
+        count=0,
+    )
+    assert isinstance(items, list)
+    assert items == []
+
+
+@pytest.mark.django_db
+def test_api_assembly_genome_links_with_data(mgnify_assemblies, genomes, ninja_api_client):
+    from genomes.models import GenomeAssemblyLink
+
+    # Prepare assembly and genome
+    assembly = mgnify_assemblies[0]
+    assembly.ena_accessions = ["ERZ2001"]
+    assembly.save()
+
+    genome = genomes[0]
+
+    # Create a link
+    GenomeAssemblyLink.objects.create(
+        genome=genome,
+        assembly=assembly,
+        species_rep="GCA_123456789.1",
+        mag_accession="MAGS12345",
+    )
+
+    items = call_endpoint_and_get_data(
+        ninja_api_client,
+        f"/assemblies/{assembly.ena_accessions[0]}/genome-links",
+        count=1,
+    )
+
+    assert isinstance(items, list)
+    assert len(items) == 1
+    item = items[0]
+
+    # Fields on the link
+    assert item["species_rep"] == "GCA_123456789.1"
+    assert item["mag_accession"] == "MAGS12345"
+
+    # Nested genome fields provided by GenomeSchema
+    assert item["genome"]["accession"] == genome.accession
+    # catalogue_version is resolved from genome.catalogue.version by the schema
+    assert item["genome"]["catalogue_version"] == genome.catalogue.version

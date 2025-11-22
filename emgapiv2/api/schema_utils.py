@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from typing import Optional
 
 from django.db.models import Q
@@ -61,6 +63,21 @@ def make_links_section(links: dict, response_code: int = 200) -> dict:
         }
     }
 
+def make_child_link(
+    operation_id: str,
+    child_name: str,
+    self_object_name: str,
+    path_param: str = "accession",
+    description: str | None = None,
+) -> dict:
+    link_name = f"Get{child_name.capitalize().replace('-', '')}For{self_object_name.capitalize()}"
+    return {
+        link_name: {
+            "operationId": operation_id,
+            "parameters": {path_param: "$request.path.accession"},
+            **({"description": description} if description else {}),
+        }
+    }
 
 class BiomeFilter(FilterSchema):
     biome_lineage: Optional[str] = Field(

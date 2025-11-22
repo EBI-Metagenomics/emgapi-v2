@@ -5,9 +5,10 @@ from ninja.pagination import RouterPaginated
 import analyses.models
 from analyses.schemas import (
     Assembly,
-    AssemblyDetail, MGnifyAnalysis,
+    AssemblyDetail, MGnifyAnalysis, GenomeAssemblyLinkSchema,
 )
-from emgapiv2.api.schema_utils import make_links_section, make_related_detail_link
+from emgapiv2.api.schema_utils import make_links_section, make_related_detail_link, make_child_link
+from genomes.models import GenomeAssemblyLink
 
 router = RouterPaginated()
 
@@ -46,23 +47,51 @@ def list_assemblies(request):
                 self_object_name="analysis",
                 related_id_in_response="study_accession",
             ),
+            **make_child_link(
+                operation_id="list_genome_links_for_assembly",
+                child_name="genome-links",
+                self_object_name="assembly",
+                description="Genome/MAG links for this assembly",
+            )
         }
     ),
 )
 def get_assembly(request, accession: str):
     assembly = get_object_or_404(
         analyses.models.Assembly.public_objects
-        .select_related("run", "sample", "reads_study", "assembly_study", "assembler")
-        .prefetch_related("genome_links__genome__catalogue"),
+        .select_related("run", "sample", "reads_study", "assembly_study", "assembler"),
         ena_accessions__contains=[accession],
     )
-    # assembly = get_object_or_404(
-    #     analyses.models.Assembly.public_objects.select_related(
-    #         "run", "sample", "reads_study", "assembly_study", "assembler"
-    #     ).prefetch_related("genome_links__genome"),
-    #     ena_accessions__contains=[accession],
-    # )
     return assembly
+
+
+@router.get(
+    "/{accession}/genome-links",
+    response=List[GenomeAssemblyLinkSchema],
+    summary="List genome/MAG links for an assembly",
+    description=(
+        "Return genome links (e.g. MAG associations) for a specific assembly.\n"
+        "Accessible at `/assemblies/{accession}/genome-links`."
+    ),
+    operation_id="list_genome_links_for_assembly",
+)
+def list_genome_links_for_assembly(request, accession: str):
+    # Ensure assembly exists and is public
+    assembly = get_object_or_404(
+        analyses.models.Assembly.public_objects,
+        ena_accessions__contains=[accession],
+    )
+
+    # Keep query efficient: only load what the schema needs
+    qs = (
+        GenomeAssemblyLink.objects
+        .select_related("genome", "genome__catalogue")
+        .filter(assembly=assembly)
+    )
+
+    return qs
+
+
 
 @router.get(
     "/{accession}/analyses",

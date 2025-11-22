@@ -223,8 +223,6 @@ class GenomeSchema(Schema):
 
 
 class GenomeAssemblyLinkSchema(Schema):
-    """Schema for GenomeAssemblyLink model."""
-
     genome: GenomeSchema
     species_rep: Optional[str] = Field(
         None,
@@ -255,19 +253,6 @@ class AssemblyDetail(Assembly):
         None,
         description="Status information for the assembly",
         examples=[{"assembly_completed": True, "assembly_uploaded": True}],
-    )
-    genome_links: Optional[List[GenomeAssemblyLinkSchema]] = Field(
-        None,
-        description="Links to genomes associated with this assembly",
-        examples=[
-            [
-                {
-                    "genome": {"accession": "MGYG000000001"},
-                    "species_rep": "GCA_123456789.1",
-                    "mag_accession": "MAGS12345",
-                }
-            ]
-        ],
     )
 
     @staticmethod
@@ -452,10 +437,3 @@ class MGnifyFunctionalAnalysisAnnotationType(FutureStrEnum):
 class StudyAnalysisIntent(Schema):
     study_accession: str
 
-
-# AnalysisSchema = create_model()
-
-
-# class MGnifyAnalysisWithTypedAnnotations(Schema):
-#     accession: str
-#     annotations_list = List[MGnifyAnalysisTypedAnnotation]
