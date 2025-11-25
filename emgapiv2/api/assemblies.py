@@ -16,7 +16,7 @@ router = RouterPaginated()
 @router.get(
     "/",
     response=List[Assembly],
-    summary="List all assemblies available from MGnify",
+    summary="List all assemblies available in MGnify",
     description="Each assembly represents a metagenome assembly created from raw reads. "
     "This endpoint is accessible at `/analyses/assemblies/`.",
     operation_id="list_assemblies",
