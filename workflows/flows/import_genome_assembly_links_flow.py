@@ -124,16 +124,6 @@ def process_tsv_records(records: List[Dict[str, str]]) -> List[Dict[str, str]]:
     validated_records = []
 
     for i, record in enumerate(records, 1):
-        # Check for required fields
-        if not record.get("primary_assembly"):
-            logger.warning(f"Row {i}: Missing primary_assembly, skipping")
-            continue
-
-        if not record.get("genome"):
-            logger.warning(f"Row {i}: Missing genome, skipping")
-            continue
-
-        # Clean up the record
         cleaned_record = {
             "primary_assembly": record["primary_assembly"].strip(),
             "genome": record["genome"].strip(),
