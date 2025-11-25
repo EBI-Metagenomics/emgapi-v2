@@ -13,8 +13,8 @@ from prefect import flow
 from analyses.models import Assembly, Biome, Run, Sample, Study
 from ena.models import Study as ENAStudy, Sample as ENASample
 from genomes.models import Genome, GenomeAssemblyLink, GenomeCatalogue
-from workflows.flows.import_genome_assembly_links import (
-    import_genome_assembly_links,
+from workflows.flows.import_genome_assembly_links_flow import (
+    import_genome_assembly_links_flow,
     validate_tsv_file,
     read_tsv_file,
     process_tsv_records,
@@ -607,7 +607,7 @@ def test_import_genome_assembly_links_flow(mock_tsv_file):
 
         # Run the flow
         logged_flow_run = run_flow_and_capture_logs(
-            import_genome_assembly_links,
+            import_genome_assembly_links_flow,
             mock_tsv_file,
         )
 

@@ -226,11 +226,11 @@ class GenomeAssemblyLinkSchema(Schema):
     genome: GenomeSchema
     species_rep: Optional[str] = Field(
         None,
-        description="Arbitrary genome accession for species representative",
+        description="Deposition database accession for species representative",
         examples=["GCA_123456789.1"],
     )
     mag_accession: Optional[str] = Field(
-        None, description="Arbitrary accession for MAG", examples=["MAGS12345"]
+        None, description="Deposition database for MAG", examples=["MGYG000000001"]
     )
 
     class Config:

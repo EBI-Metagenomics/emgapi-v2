@@ -10,10 +10,8 @@ This flow accepts a path to a TSV file with the following columns:
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
-import django
+from activate_django_first import EMG_CONFIG
 from prefect import flow, task, get_run_logger
-
-django.setup()
 
 from django.db import transaction
 from django.core.exceptions import ObjectDoesNotExist
@@ -26,6 +24,11 @@ from workflows.data_io_utils.csv.csv_comment_handler import (
     CSVDelimiter,
 )
 
+from workflows.data_io_utils.file_rules.nodes import File
+from workflows.data_io_utils.file_rules.common_rules import (
+    FileExistsRule,
+    FileIsNotEmptyRule,
+)
 
 @task(name="Validate TSV file")
 def validate_tsv_file(tsv_path: str) -> str:
@@ -40,6 +43,7 @@ def validate_tsv_file(tsv_path: str) -> str:
 
     Raises:
         FileNotFoundError: If the TSV file does not exist
+        ValueError: If the path is not a file
     """
     logger = get_run_logger()
     path = Path(tsv_path)
@@ -51,6 +55,15 @@ def validate_tsv_file(tsv_path: str) -> str:
     if not path.is_file():
         logger.error(f"Path is not a file: {tsv_path}")
         raise ValueError(f"Path is not a file: {tsv_path}")
+
+    # Additional validation using shared rules
+    File(
+        path=path,
+        rules=[
+            FileExistsRule,
+            FileIsNotEmptyRule,
+        ],
+    )
 
     logger.info(f"TSV file validated: {tsv_path}")
     return tsv_path
@@ -147,7 +160,8 @@ def find_objects(
     records: List[Dict[str, str]]
 ) -> List[Tuple[Dict[str, str], Optional[Genome], Optional[Assembly]]]:
     """
-    Finds the Genome and Assembly objects for each record.
+    Finds the Genome and Assembly objects for each record using batched lookups
+    to reduce database round trips.
 
     Args:
         records: List of validated and cleaned records
@@ -158,24 +172,53 @@ def find_objects(
     logger = get_run_logger()
     results = []
 
-    for record in records:
-        genome = None
-        assembly = None
+    if not records:
+        return results
 
-        # Find the Genome
-        try:
-            genome = Genome.objects.get(accession=record["genome"])
-        except ObjectDoesNotExist:
-            logger.warning(f"Genome not found: {record['genome']}")
+    genome_accessions = {r["genome"] for r in records if r.get("genome")}
+    assembly_accessions = {r["primary_assembly"] for r in records if r.get("primary_assembly")}
 
-        # Find the Assembly
+    genomes_map = {
+        g.accession: g
+        for g in Genome.objects.filter(accession__in=list(genome_accessions)).only("id", "accession")
+    }
+
+    # Assembly has custom manager method get_by_accession for single, but here we batch by ena_accessions or similar.
+    # Prefer a generic filter that supports accession lookup via a field used by get_by_accession.
+    # Fallback: use get_by_accession per accession if bulk filter is not straightforward.
+    assemblies_map: Dict[str, Assembly] = {}
+    missing_for_bulk: set = set()
+    try:
+        # Try common fields first
+        assemblies_qs = Assembly.objects.filter(ena_accessions__overlap=list(assembly_accessions))
+        for a in assemblies_qs.only("id", "ena_accessions"):
+            for acc in a.ena_accessions or []:
+                if acc in assembly_accessions and acc not in assemblies_map:
+                    assemblies_map[acc] = a
+        # Track those not resolved by overlap
+        missing_for_bulk = {acc for acc in assembly_accessions if acc not in assemblies_map}
+    except Exception:
+        # If model doesn't support this lookup, fall back to per-accession method
+        missing_for_bulk = assembly_accessions
+
+    # Resolve any remaining via get_by_accession individually
+    for acc in list(missing_for_bulk):
         try:
-            assembly = Assembly.objects.get_by_accession(record["primary_assembly"])
+            a = Assembly.objects.get_by_accession(acc)
+            assemblies_map[acc] = a
         except (ObjectDoesNotExist, Assembly.MultipleObjectsReturned):
-            logger.warning(
-                f"Assembly not found or multiple found: {record['primary_assembly']}"
-            )
+            # Log later per record
+            continue
 
+    for record in records:
+        genome = genomes_map.get(record.get("genome"))
+        assembly = assemblies_map.get(record.get("primary_assembly"))
+        if genome is None:
+            logger.warning(f"Genome not found: {record.get('genome')}")
+        if assembly is None:
+            logger.warning(
+                f"Assembly not found or multiple found: {record.get('primary_assembly')}"
+            )
         results.append((record, genome, assembly))
 
     logger.info(f"Found objects for {len(results)} records")
@@ -184,65 +227,91 @@ def find_objects(
 
 @task(name="Create GenomeAssemblyLink objects")
 def create_links(
-    objects: List[Tuple[Dict[str, str], Optional[Genome], Optional[Assembly]]]
+    objects: List[Tuple[Dict[str, str], Optional[Genome], Optional[Assembly]]],
+    chunk_size: int = 10000,
 ) -> int:
     """
-    Creates GenomeAssemblyLink objects for each valid record.
+    Creates or updates GenomeAssemblyLink objects for each valid record using
+    chunked bulk operations for scalability.
 
     Args:
         objects: List of tuples containing the record, Genome object, and Assembly object
+        chunk_size: Number of valid rows per DB transaction/batch
 
     Returns:
-        Number of GenomeAssemblyLink objects created
+        Number of GenomeAssemblyLink objects created or updated
     """
     logger = get_run_logger()
+
+    def chunker(seq, size):
+        for i in range(0, len(seq), size):
+            yield seq[i : i + size]
+
     created_count = 0
     updated_count = 0
     skipped_count = 0
 
-    with transaction.atomic():
-        for record, genome, assembly in objects:
-            if not genome or not assembly:
-                skipped_count += 1
-                continue
+    # Only keep rows where both FKs resolved
+    valid_rows = [t for t in objects if t[1] is not None and t[2] is not None]
+    skipped_count += len(objects) - len(valid_rows)
 
-            # Check if the link already exists
-            link, created = GenomeAssemblyLink.objects.get_or_create(
-                genome=genome,
-                assembly=assembly,
-                defaults={
-                    "species_rep": record["species_rep"],
-                    "mag_accession": record["mag_accession"],
-                },
+    for batch in chunker(valid_rows, chunk_size):
+        # Build key list and maps
+        key_to_record = {}
+        genome_ids = set()
+        assembly_ids = set()
+        for record, genome, assembly in batch:
+            key = (genome.id, assembly.id)
+            key_to_record[key] = record
+            genome_ids.add(genome.id)
+            assembly_ids.add(assembly.id)
+
+        with transaction.atomic():
+            # Fetch existing links for this batch
+            existing_links = (
+                GenomeAssemblyLink.objects.filter(genome_id__in=genome_ids, assembly_id__in=assembly_ids)
+                .only("id", "genome_id", "assembly_id", "species_rep", "mag_accession")
             )
+            existing_map = {(gl.genome_id, gl.assembly_id): gl for gl in existing_links}
 
-            if created:
-                created_count += 1
-                logger.info(
-                    f"Created link between {genome.accession} and {assembly.id}"
-                )
-            else:
-                # Update the link if it already exists
-                updated = False
-                if record["species_rep"] and record["species_rep"] != link.species_rep:
-                    link.species_rep = record["species_rep"]
-                    updated = True
+            to_create = []
+            to_update = []
 
-                if (
-                    record["mag_accession"]
-                    and record["mag_accession"] != link.mag_accession
-                ):
-                    link.mag_accession = record["mag_accession"]
-                    updated = True
-
-                if updated:
-                    link.save()
-                    updated_count += 1
-                    logger.info(
-                        f"Updated link between {genome.accession} and {assembly.id}"
+            for (genome_id, assembly_id), rec in key_to_record.items():
+                existing = existing_map.get((genome_id, assembly_id))
+                if existing is None:
+                    to_create.append(
+                        GenomeAssemblyLink(
+                            genome_id=genome_id,
+                            assembly_id=assembly_id,
+                            species_rep=rec.get("species_rep"),
+                            mag_accession=rec.get("mag_accession"),
+                        )
                     )
                 else:
-                    skipped_count += 1
+                    changed = False
+                    species_rep = rec.get("species_rep")
+                    mag_accession = rec.get("mag_accession")
+                    if species_rep and species_rep != existing.species_rep:
+                        existing.species_rep = species_rep
+                        changed = True
+                    if mag_accession and mag_accession != existing.mag_accession:
+                        existing.mag_accession = mag_accession
+                        changed = True
+                    if changed:
+                        to_update.append(existing)
+
+            if to_create:
+                # ignore_conflicts because unique_together(genome, assembly)
+                GenomeAssemblyLink.objects.bulk_create(
+                    to_create, ignore_conflicts=True, batch_size=chunk_size
+                )
+                created_count += len(to_create)
+            if to_update:
+                GenomeAssemblyLink.objects.bulk_update(
+                    to_update, ["species_rep", "mag_accession"], batch_size=chunk_size
+                )
+                updated_count += len(to_update)
 
     logger.info(
         f"Created {created_count} links, updated {updated_count} links, skipped {skipped_count} links"
@@ -250,8 +319,8 @@ def create_links(
     return created_count + updated_count
 
 
-@flow(name="import_genome_assembly_links")
-def import_genome_assembly_links(tsv_path: str) -> Dict[str, int]:
+@flow(name="import_genome_assembly_links_flow")
+def import_genome_assembly_links_flow(tsv_path: str) -> Dict[str, int]:
     """
     Imports data from a TSV file into the GenomeAssemblyLink model.
 
@@ -295,9 +364,9 @@ if __name__ == "__main__":
     import sys
 
     if len(sys.argv) != 2:
-        print("Usage: python import_genome_assembly_links.py <tsv_path>")
+        print("Usage: python import_genome_assembly_links_flow.py <tsv_path>")
         sys.exit(1)
 
     tsv_path = sys.argv[1]
-    result = import_genome_assembly_links(tsv_path)
+    result = import_genome_assembly_links_flow(tsv_path)
     print(f"Import completed: {result}")
