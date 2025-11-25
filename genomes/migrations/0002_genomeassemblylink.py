@@ -28,7 +28,7 @@ class Migration(migrations.Migration):
                     "species_rep",
                     models.CharField(
                         blank=True,
-                        help_text="Arbitrary genome accession for species representative",
+                        help_text="Genome accession for species representative",
                         max_length=100,
                         null=True,
                     ),
@@ -37,7 +37,7 @@ class Migration(migrations.Migration):
                     "mag_accession",
                     models.CharField(
                         blank=True,
-                        help_text="Arbitrary accession for MAG",
+                        help_text="Accession for MAG",
                         max_length=100,
                         null=True,
                     ),

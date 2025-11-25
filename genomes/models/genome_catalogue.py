@@ -75,11 +75,11 @@ class GenomeCatalogue(WithDownloadsModel):
         choices=CATALOGUE_TYPE_CHOICES,
         max_length=20,
     )
+    # other_stats can store various additional statistics coming from the catalogue_summary.json file
     other_stats = models.JSONField(db_column="other_stats_json", blank=True, null=True)
 
     class Meta:
         unique_together = ("catalogue_biome_label", "version", "catalogue_type")
-        # db_table = "genome_catalogue"
 
     def __str__(self):
         return self.name

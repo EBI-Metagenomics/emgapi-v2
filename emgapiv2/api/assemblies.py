@@ -82,14 +82,7 @@ def list_genome_links_for_assembly(request, accession: str):
         ena_accessions__contains=[accession],
     )
 
-    # Keep query efficient: only load what the schema needs
-    qs = (
-        GenomeAssemblyLink.objects
-        .select_related("genome", "genome__catalogue")
-        .filter(assembly=assembly)
-    )
-
-    return qs
+    return analyses.models.Assembly.public_objects.all()
 
 
 
