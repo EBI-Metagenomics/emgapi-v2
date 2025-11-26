@@ -433,7 +433,7 @@ class AssemblyResultSchema(PipelineResultSchema):
                     files=[
                         PipelineFileSchema(
                             filename_template="{identifier}_antismash.gbk.gz",
-                            validation_rules=[FileExistsRule, FileIsNotEmptyRule],
+                            validation_rules=[FileIfExistsIsNotEmptyRule],
                             download_metadata=DownloadFileMetadata(
                                 file_type=DownloadFileType.OTHER,
                                 download_type=DownloadType.FUNCTIONAL_ANALYSIS,
@@ -444,7 +444,7 @@ class AssemblyResultSchema(PipelineResultSchema):
                         ),
                         PipelineFileSchema(
                             filename_template="{identifier}_antismash.gff.gz",
-                            validation_rules=[FileExistsRule, FileIsNotEmptyRule],
+                            validation_rules=[FileIfExistsIsNotEmptyRule],
                             download_metadata=DownloadFileMetadata(
                                 file_type=DownloadFileType.GFF,
                                 download_type=DownloadType.FUNCTIONAL_ANALYSIS,
@@ -455,7 +455,7 @@ class AssemblyResultSchema(PipelineResultSchema):
                         ),
                         PipelineFileSchema(
                             filename_template="{identifier}_antismash_summary.tsv.gz",
-                            validation_rules=[FileExistsRule, FileIsNotEmptyRule],
+                            validation_rules=[FileIfExistsIsNotEmptyRule],
                             download_metadata=DownloadFileMetadata(
                                 file_type=DownloadFileType.TSV,
                                 download_type=DownloadType.FUNCTIONAL_ANALYSIS,
