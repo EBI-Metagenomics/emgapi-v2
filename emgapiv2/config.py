@@ -155,6 +155,9 @@ class AssemblyAnalysisPipelineConfig(MGnifyPipelineConfig):
     max_analyses_per_study: int = None  # Safety cap, None = unlimited
     nextflow_master_job_memory_gb: int = 1
 
+    # Workdir
+    workdir_root: str = "/nfs/public/wd"
+
     # End-of-run reports
     completed_assemblies_csv: str = "analysed_assemblies.csv"
     qc_failed_assemblies: str = "qc_failed_assemblies.csv"

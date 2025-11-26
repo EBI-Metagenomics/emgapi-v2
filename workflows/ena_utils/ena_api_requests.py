@@ -546,10 +546,14 @@ def get_study_assemblies_from_ena(accession: str, limit: int = 10) -> list[str]:
     ) and not portal_runs:
         # Looks like a TPA study – no read-runs within it, and an accession in the study title
         # e.g. "This is a TPA Study of PRJ123"
+        logger.info(
+            f"Study {accession} looks like a TPA study, getting the accession with the raw reads from the title"
+        )
         ena_reads_study = ena.models.Study.objects.get_ena_study(reads_study_accession)
         if not ena_reads_study:
             ena_reads_study = get_study_from_ena(reads_study_accession)
             ena_reads_study.refresh_from_db()
+
         reads_study: analyses.models.Study = (
             analyses.models.Study.objects.get_or_create_for_ena_study(
                 reads_study_accession
