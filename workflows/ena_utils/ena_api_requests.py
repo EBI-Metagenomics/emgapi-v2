@@ -298,9 +298,7 @@ def get_study_readruns_from_ena(
     logger = get_run_logger()
     logger.info(f"Will fetch Read Runs from ENA Portal API for Study {accession}")
 
-    mgys_study = analyses.models.Study.objects.get(
-        ena_study__accession__contains=accession
-    )
+    mgys_study = analyses.models.Study.objects.get_by_accession(accession)
 
     ena_auth = dcc_auth if mgys_study.is_private else None
 
