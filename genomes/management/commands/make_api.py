@@ -14,7 +14,6 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         model_name = options["model"]
         app = options["app"]
-        fields = options["fields"] or []
 
         # Convert model_name to PascalCase for class name
         model_class_name = "".join(
