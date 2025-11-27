@@ -921,7 +921,7 @@ def test_prefect_analyse_assembly_flow_missing_directory(
     # Verify analysis marked as QC failed (validation happens during sanity check)
     assert analysis.status[analysis.AnalysisStates.ANALYSIS_QC_FAILED]
     assert (
-        "ASA Validation error: Pipeline validation failed for Assembly with 5 error"
+        "ASA Validation error: Pipeline validation failed for Assembly with 6 error"
         in analysis.status[f"{analysis.AnalysisStates.ANALYSIS_QC_FAILED}__reason"]
     )
 
