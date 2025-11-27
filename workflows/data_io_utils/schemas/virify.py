@@ -2,6 +2,7 @@ from activate_django_first import EMG_CONFIG
 import analyses.models
 from analyses.base_models.with_downloads_models import (
     DownloadFileMetadata,
+    DownloadFileIndexFileMetadata,
     DownloadFileType,
     DownloadType,
 )
@@ -33,7 +34,7 @@ class VirifyResultSchema(PipelineResultSchema):
             validation_rules=[DirectoryExistsRule],
             files=[
                 PipelineFileSchema(
-                    filename_template="{identifier}_virify.gff",
+                    filename_template="{identifier}_virify.gff.gz",
                     validation_rules=[FileExistsRule, FileIsNotEmptyRule],
                     download_metadata=DownloadFileMetadata(
                         file_type=DownloadFileType.GFF,
@@ -42,6 +43,10 @@ class VirifyResultSchema(PipelineResultSchema):
                         short_description="Viral annotations",
                         long_description="VIRify viral annotation in GFF format",
                     ),
+                    index_files=[
+                        DownloadFileIndexFileMetadata(index_type="gzi"),
+                        DownloadFileIndexFileMetadata(index_type="csi"),
+                    ],
                 ),
             ],
         )
