@@ -628,7 +628,6 @@ def test_import_genome_assembly_links_flow(mock_tsv_file):
         assert link2.species_rep == "GCA_987654321.1"
         assert link2.mag_accession == "MAGS67890"
 
-        # Check the logs
         assert "Starting import of genome assembly links" in logged_flow_run.logs
         assert "TSV file validated" in logged_flow_run.logs
         assert "Read 5 records from TSV file" in logged_flow_run.logs
