@@ -6,13 +6,15 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('genomes', '0003_genomeassemblylink'),
+        ("genomes", "0003_genomeassemblylink"),
     ]
 
     operations = [
         migrations.AlterField(
-            model_name='genomeassemblylink',
-            name='mag_accession',
-            field=models.CharField(blank=True, help_text='Accession for MAG', max_length=100, null=True),
+            model_name="genomeassemblylink",
+            name="mag_accession",
+            field=models.CharField(
+                blank=True, help_text="Accession for MAG", max_length=100, null=True
+            ),
         ),
     ]
