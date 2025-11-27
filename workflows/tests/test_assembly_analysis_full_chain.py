@@ -115,7 +115,7 @@ def setup_map_output_helpers(map_outdir: Path, assembly_accession: str):
     csi.touch(exist_ok=True)
 
 
-@pytest.mark.django_db
+@pytest.mark.django_db(transaction=True)
 @patch(
     "workflows.flows.analysis.assembly.flows.run_assembly_analysis_pipeline_batch.make_samplesheet_assembly"
 )
@@ -239,7 +239,7 @@ def test_full_chain_success(
     assert mock_generate_summary.called
 
 
-@pytest.mark.django_db
+@pytest.mark.django_db(transaction=True)
 @patch(
     "workflows.flows.analysis.assembly.flows.run_assembly_analysis_pipeline_batch.make_samplesheet_assembly"
 )
@@ -314,7 +314,7 @@ def test_asa_failure_stops_chain(
     assert batch.pipeline_status_counts.map.pending == batch.total_analyses
 
 
-@pytest.mark.django_db
+@pytest.mark.django_db(transaction=True)
 @patch(
     "workflows.flows.analysis.assembly.flows.run_assembly_analysis_pipeline_batch.make_samplesheet_assembly"
 )
@@ -430,7 +430,7 @@ def test_virify_failure_partial_results(
     assert mock_generate_summary.called
 
 
-@pytest.mark.django_db
+@pytest.mark.django_db(transaction=True)
 @patch(
     "workflows.flows.analysis.assembly.flows.run_assembly_analysis_pipeline_batch.make_samplesheet_assembly"
 )

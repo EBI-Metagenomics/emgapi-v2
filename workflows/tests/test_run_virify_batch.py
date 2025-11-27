@@ -49,7 +49,7 @@ def mock_assembly_pipeline_outdir(tmp_path):
     return tmp_path
 
 
-@pytest.mark.django_db
+@pytest.mark.django_db(transaction=True)
 @patch("workflows.flows.analysis.assembly.flows.run_virify_batch.run_cluster_job")
 @patch("workflows.flows.analysis.assembly.flows.run_virify_batch.flow_run")
 def test_run_virify_batch_success(
@@ -118,7 +118,7 @@ def test_run_virify_batch_success(
     assert batch.pipeline_status_counts.virify.completed == batch.total_analyses
 
 
-@pytest.mark.django_db
+@pytest.mark.django_db(transaction=True)
 @patch("workflows.flows.analysis.assembly.flows.run_virify_batch.run_cluster_job")
 @patch("workflows.flows.analysis.assembly.flows.run_virify_batch.flow_run")
 def test_run_virify_batch_cluster_job_failed(
@@ -189,7 +189,7 @@ def test_run_virify_batch_cluster_job_failed(
     assert batch.pipeline_status_counts.virify.failed == batch.total_analyses
 
 
-@pytest.mark.django_db
+@pytest.mark.django_db(transaction=True)
 def test_run_virify_batch_no_samplesheet(
     prefect_harness,
     tmp_path,
