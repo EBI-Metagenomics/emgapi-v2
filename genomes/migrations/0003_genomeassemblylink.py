@@ -7,25 +7,55 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('analyses', '0051_more_metadata_and_search_indexes'),
-        ('genomes', '0002_alter_genome_type'),
+        ("analyses", "0051_more_metadata_and_search_indexes"),
+        ("genomes", "0002_alter_genome_type"),
     ]
 
     operations = [
         migrations.CreateModel(
-            name='GenomeAssemblyLink',
+            name="GenomeAssemblyLink",
             fields=[
-                ('id', models.AutoField(primary_key=True, serialize=False)),
-                ('created_at', models.DateTimeField(auto_now=True)),
-                ('updated_at', models.DateTimeField(auto_now=True)),
-                ('species_rep', models.CharField(blank=True, help_text='Genome accession for species representative', max_length=100, null=True)),
-                ('mag_accession', models.CharField(blank=True, help_text='Genome accession for MAG', max_length=100, null=True)),
-                ('assembly', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='genome_links', to='analyses.assembly')),
-                ('genome', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='assembly_links', to='genomes.genome')),
+                ("id", models.AutoField(primary_key=True, serialize=False)),
+                ("created_at", models.DateTimeField(auto_now=True)),
+                ("updated_at", models.DateTimeField(auto_now=True)),
+                (
+                    "species_rep",
+                    models.CharField(
+                        blank=True,
+                        help_text="Genome accession for species representative",
+                        max_length=100,
+                        null=True,
+                    ),
+                ),
+                (
+                    "mag_accession",
+                    models.CharField(
+                        blank=True,
+                        help_text="Genome accession for MAG",
+                        max_length=100,
+                        null=True,
+                    ),
+                ),
+                (
+                    "assembly",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="genome_links",
+                        to="analyses.assembly",
+                    ),
+                ),
+                (
+                    "genome",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="assembly_links",
+                        to="genomes.genome",
+                    ),
+                ),
             ],
             options={
-                'db_table': 'genome_assembly_link',
-                'unique_together': {('genome', 'assembly')},
+                "db_table": "genome_assembly_link",
+                "unique_together": {("genome", "assembly")},
             },
         ),
     ]

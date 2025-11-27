@@ -10,7 +10,6 @@ This flow accepts a path to a TSV file with the following columns:
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
-from activate_django_first import EMG_CONFIG
 from prefect import flow, task, get_run_logger
 
 from django.db import transaction
@@ -29,6 +28,7 @@ from workflows.data_io_utils.file_rules.common_rules import (
     FileExistsRule,
     FileIsNotEmptyRule,
 )
+
 
 @task(name="Validate TSV file")
 def validate_tsv_file(tsv_path: str) -> str:
@@ -147,7 +147,7 @@ def process_tsv_records(records: List[Dict[str, str]]) -> List[Dict[str, str]]:
 
 @task(name="Find Genome and Assembly objects")
 def find_objects(
-    records: List[Dict[str, str]]
+    records: List[Dict[str, str]],
 ) -> List[Tuple[Dict[str, str], Optional[Genome], Optional[Assembly]]]:
     """
     Finds the Genome and Assembly objects for each record using batched lookups
@@ -166,11 +166,15 @@ def find_objects(
         return results
 
     genome_accessions = {r["genome"] for r in records if r.get("genome")}
-    assembly_accessions = {r["primary_assembly"] for r in records if r.get("primary_assembly")}
+    assembly_accessions = {
+        r["primary_assembly"] for r in records if r.get("primary_assembly")
+    }
 
     genomes_map = {
         g.accession: g
-        for g in Genome.objects.filter(accession__in=list(genome_accessions)).only("id", "accession")
+        for g in Genome.objects.filter(accession__in=list(genome_accessions)).only(
+            "id", "accession"
+        )
     }
 
     # Assembly has custom manager method get_by_accession for single, but here we batch by ena_accessions or similar.
@@ -180,13 +184,17 @@ def find_objects(
     missing_for_bulk: set = set()
     try:
         # Try common fields first
-        assemblies_qs = Assembly.objects.filter(ena_accessions__overlap=list(assembly_accessions))
+        assemblies_qs = Assembly.objects.filter(
+            ena_accessions__overlap=list(assembly_accessions)
+        )
         for a in assemblies_qs.only("id", "ena_accessions"):
             for acc in a.ena_accessions or []:
                 if acc in assembly_accessions and acc not in assemblies_map:
                     assemblies_map[acc] = a
         # Track those not resolved by overlap
-        missing_for_bulk = {acc for acc in assembly_accessions if acc not in assemblies_map}
+        missing_for_bulk = {
+            acc for acc in assembly_accessions if acc not in assemblies_map
+        }
     except Exception:
         # If model doesn't support this lookup, fall back to per-accession method
         missing_for_bulk = assembly_accessions
@@ -258,10 +266,9 @@ def create_links(
 
         with transaction.atomic():
             # Fetch existing links for this batch
-            existing_links = (
-                GenomeAssemblyLink.objects.filter(genome_id__in=genome_ids, assembly_id__in=assembly_ids)
-                .only("id", "genome_id", "assembly_id", "species_rep", "mag_accession")
-            )
+            existing_links = GenomeAssemblyLink.objects.filter(
+                genome_id__in=genome_ids, assembly_id__in=assembly_ids
+            ).only("id", "genome_id", "assembly_id", "species_rep", "mag_accession")
             existing_map = {(gl.genome_id, gl.assembly_id): gl for gl in existing_links}
 
             to_create = []

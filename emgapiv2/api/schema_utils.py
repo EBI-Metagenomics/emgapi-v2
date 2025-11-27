@@ -69,6 +69,7 @@ def make_links_section(links: dict, response_code: int = 200) -> dict:
         }
     }
 
+
 def make_child_link(
     operation_id: str,
     child_name: str,
@@ -84,6 +85,7 @@ def make_child_link(
             **({"description": description} if description else {}),
         }
     }
+
 
 class BiomeFilter(FilterSchema):
     LOOKUP_STRING: ClassVar[str] = (

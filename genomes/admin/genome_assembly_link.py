@@ -16,4 +16,6 @@ class GenomeAssemblyLinkAdmin(admin.ModelAdmin):
 
     def assembly(self, obj):
         return obj.assembly.name if obj.assembly else "N/A"
+
+
 admin.site.register(GenomeAssemblyLink, GenomeAssemblyLinkAdmin)

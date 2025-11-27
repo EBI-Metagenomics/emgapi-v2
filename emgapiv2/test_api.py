@@ -425,7 +425,9 @@ def test_api_assembly_genome_links_empty(mgnify_assemblies, ninja_api_client):
 
 
 @pytest.mark.django_db
-def test_api_assembly_genome_links_with_data(mgnify_assemblies, genomes, ninja_api_client):
+def test_api_assembly_genome_links_with_data(
+    mgnify_assemblies, genomes, ninja_api_client
+):
     from genomes.models import GenomeAssemblyLink
 
     # Prepare assembly and genome

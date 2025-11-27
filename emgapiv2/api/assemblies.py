@@ -93,11 +93,9 @@ class AssemblyController(UnauthorisedIsUnfoundController):
             ena_accessions__contains=[accession],
         )
 
-        genome_links_query_set = (
-            GenomeAssemblyLink.objects.select_related("genome", "genome__catalogue").filter(
-                assembly=assembly
-            )
-        )
+        genome_links_query_set = GenomeAssemblyLink.objects.select_related(
+            "genome", "genome__catalogue"
+        ).filter(assembly=assembly)
 
         return genome_links_query_set
 
@@ -118,9 +116,7 @@ class AssemblyController(UnauthorisedIsUnfoundController):
             analyses.models.Assembly.public_objects,
             ena_accessions__contains=[accession],
         )
-        qs = (
-            analyses.models.Analysis.public_objects.select_related(
-                "study", "sample", "run", "assembly"
-            ).filter(assembly__ena_accessions__contains=[accession])
-        )
+        qs = analyses.models.Analysis.public_objects.select_related(
+            "study", "sample", "run", "assembly"
+        ).filter(assembly__ena_accessions__contains=[accession])
         return qs
