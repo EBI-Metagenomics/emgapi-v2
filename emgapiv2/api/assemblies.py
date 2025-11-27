@@ -76,13 +76,18 @@ def get_assembly(request, accession: str):
     operation_id="list_genome_links_for_assembly",
 )
 def list_genome_links_for_assembly(request, accession: str):
-    # Ensure assembly exists and is public
     assembly = get_object_or_404(
         analyses.models.Assembly.public_objects,
         ena_accessions__contains=[accession],
     )
 
-    return analyses.models.Assembly.public_objects.all()
+    genome_links_query_set = (
+        GenomeAssemblyLink.objects
+        .select_related("genome", "genome__catalogue")
+        .filter(assembly=assembly)
+    )
+
+    return genome_links_query_set
 
 
 
