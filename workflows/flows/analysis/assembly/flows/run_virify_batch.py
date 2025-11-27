@@ -1,5 +1,6 @@
 import uuid
 from datetime import timedelta
+from pathlib import Path
 
 from django.db import close_old_connections
 from prefect import flow, get_run_logger
@@ -140,6 +141,12 @@ def run_virify_batch(assembly_analyses_batch_id: uuid.UUID):
             ),
             ("-config", EMG_CONFIG.virify_pipeline.pipeline_config_file),
             "-resume",
+            (
+                "-work-dir",
+                Path(EMG_CONFIG.assembly_analysis_pipeline.workdir_root)
+                / mgnify_study.first_accession
+                / "virify",
+            ),
             ("--samplesheet", virify_samplesheet_path),
             ("--output", virify_outdir),
             EMG_CONFIG.slurm.use_nextflow_tower and "-with-tower",
