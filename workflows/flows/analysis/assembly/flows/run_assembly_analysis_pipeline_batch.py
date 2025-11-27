@@ -247,6 +247,12 @@ def run_assembly_analysis_pipeline_batch(
                     EMG_CONFIG.assembly_analysis_pipeline.pipeline_nf_profile,
                 ),
                 "-resume",
+                (
+                    "-work-dir",
+                    Path(EMG_CONFIG.assembly_analysis_pipeline.workdir_root)
+                    / mgnify_study.first_accession
+                    / "asa",
+                ),
                 "--use_fire_download",
                 ("--input", samplesheet),
                 ("--outdir", assembly_analyses_workspace_dir),
