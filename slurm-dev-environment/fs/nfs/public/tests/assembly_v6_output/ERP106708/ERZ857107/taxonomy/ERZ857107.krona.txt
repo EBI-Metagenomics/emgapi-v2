@@ -1,0 +1,15 @@
+189	sk__Bacteria
+49	unclassified
+37	sk__Bacteria	k__Bacillati	p__Bacillota	c__Bacilli
+35	sk__Bacteria	k__Bacillati	p__Bacillota	c__Bacilli	o__Lactobacillales	f__Enterococcaceae	g__Enterococcus
+14	sk__Bacteria	k__Bacillati	p__Bacillota
+12	sk__Bacteria	k__Pseudomonadati	p__Pseudomonadota	c__Gammaproteobacteria
+10	sk__Bacteria	k__Pseudomonadati	p__Pseudomonadota	c__Gammaproteobacteria	o__Enterobacterales	f__Enterobacteriaceae
+9	sk__Bacteria	k__Pseudomonadati	p__Pseudomonadota	c__Gammaproteobacteria	o__Enterobacterales
+9	sk__Bacteria	k__Bacillati	p__Bacillota	c__Bacilli	o__Lactobacillales
+5	sk__Bacteria	k__Pseudomonadati	p__Pseudomonadota
+3	sk__Bacteria	k__Pseudomonadati	p__Pseudomonadota	c__Gammaproteobacteria	o__Enterobacterales	f__Enterobacteriaceae	g__Klebsiella
+1	sk__Bacteria	k__Bacillati	p__Bacillota	c__Bacilli	o__Lactobacillales	f__Enterococcaceae
+1	sk__	k__	p__	c__	o__	f__	g__	s__human gut metagenome
+1	sk__Bacteria	k__Bacillati
+1	sk__Bacteria	k__Pseudomonadati	p__Pseudomonadota	c__Gammaproteobacteria	o__Enterobacterales	f__Enterobacteriaceae	g__Escherichia	s__Escherichia coli

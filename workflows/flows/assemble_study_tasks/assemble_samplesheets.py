@@ -17,20 +17,20 @@ from workflows.data_io_utils.filenames import (
     accession_prefix_separated_dir_path,
     file_path_shortener,
 )
-from workflows.prefect_utils.analyses_models_helpers import task_mark_assembly_status
+from workflows.prefect_utils.analyses_models_helpers import mark_assembly_status
 from workflows.prefect_utils.slurm_flow import (
     ClusterJobFailedException,
     run_cluster_job,
 )
 from workflows.prefect_utils.slurm_policies import (
-    ResubmitWithCleanedNextflowIfFailedPolicy,
+    ResubmitIfFailedPolicy,
 )
 
-
+# TODO: move to a constants file
 HOST_TAXON_TO_REFERENCE_GENOME = {
     "9031": "chicken.fna",  # Gallus gallus
     "8030": "salmon.fna",  # Salmo salar
-    "8049": "cod.fna",  #  Gadus morhua
+    "8049": "cod.fna",  # Gadus morhua
     "9823": "pig.fna",  # Sus scrofa
     "9913": "cow.fna",  # Bos taurus
     "10090": "mouse.fna",  # Mus musculus
@@ -39,7 +39,7 @@ HOST_TAXON_TO_REFERENCE_GENOME = {
     "8022": "rainbow_trout.fna",  # Oncorhynchus mykiss
     "9940": "sheep.fna",  # Ovis aries
     "3847": "soybean.fna",  # Glycine max
-    "7955": "zebrafish.fna",  #  Danio rerio
+    "7955": "zebrafish.fna",  # Danio rerio
     "Gallus gallus": "chicken.fna",
     "Salmo salar": "salmon.fna",
     "Gadus morhua": "cod.fna",
@@ -136,48 +136,56 @@ def update_assembly_metadata(
 
 
 @task
-def update_assemblies_assemblers_from_samplesheet(
+def update_assemblers_and_contaminant_ref_of_assemblies_from_samplesheet(
     samplesheet_df: pd.DataFrame,
 ):
     """
-    Updates the assemblers associated with each assembly, based on what is in the samplesheet.
+    Updates the assemblers and contaminant reference associated with each assembly, based on what is in the samplesheet.
     This is done because a samplesheet CSV may have been edited since first created.
     :param samplesheet_df: Pandas dataframe of the samplesheet content
     :return:
     """
     logger = get_run_logger()
     for _, assembly_row in samplesheet_df.iterrows():
-        try:
-            latest_assembly = (
-                analyses.models.Assembly.objects.filter(
-                    run__ena_accessions__0=assembly_row["reads_accession"]
-                )
-                .order_by("-created_at")
-                .first()
+        latest_assembly: analyses.models.Assembly = (
+            analyses.models.Assembly.objects.filter(
+                run__ena_accessions__0=assembly_row["reads_accession"]
             )
-        except analyses.models.Assembly.DoesNotExist:
-            logger.warning(
-                f"Could not find unique assembly for {assembly_row['reads_accession']}"
-            )
-            continue
+            .order_by("-created_at")
+            .first()
+        )
         if not latest_assembly:
             logger.warning(
                 f"Could not find unique assembly for {assembly_row['reads_accession']}"
             )
             continue
+
+        update = False
         try:
             assembler_in_samplesheet = assembly_row["assembler"]
+            latest_assembly.assembler = (
+                analyses.models.Assembler.objects.filter(
+                    name__iexact=assembler_in_samplesheet
+                )
+                .order_by("-version")
+                .first()
+            )
+            update = True
         except KeyError:
             logger.warning("Could not find assembler in samplesheet")
-            continue
-        latest_assembly.assembler = (
-            analyses.models.Assembler.objects.filter(
-                name__iexact=assembler_in_samplesheet
-            )
-            .order_by("-version")
-            .first()
-        )
-        latest_assembly.save()
+
+        try:
+            contaminant_reference = assembly_row.get("contaminant_reference")
+            if contaminant_reference and not pd.isna(contaminant_reference):
+                latest_assembly.metadata[
+                    analyses.models.Assembly.CommonMetadataKeys.CONTAMINANT_REFERENCE
+                ] = contaminant_reference
+                update = True
+        except KeyError:
+            logger.warning("Could not find contaminant reference in samplesheet")
+
+        if update:
+            latest_assembly.save()
 
 
 @flow(flow_run_name="Assemble {samplesheet_csv}", persist_result=True)
@@ -190,13 +198,13 @@ def run_assembler_for_samplesheet(
             run__ena_accessions__0__in=samplesheet_df["reads_accession"]
         )
     )
+    logger = get_run_logger()
 
-    update_assemblies_assemblers_from_samplesheet(samplesheet_df)
-    host_reference = get_reference_genome(mgnify_study)
+    update_assemblers_and_contaminant_ref_of_assemblies_from_samplesheet(samplesheet_df)
 
     for assembly in assemblies:
         # Mark assembly as started
-        task_mark_assembly_status(
+        mark_assembly_status(
             assembly,
             status=assembly.AssemblyStates.ASSEMBLY_STARTED,
             unset_statuses=[
@@ -210,23 +218,20 @@ def run_assembler_for_samplesheet(
         / f"{mgnify_study.ena_study.accession}_miassembler"
         / samplesheet_hash
     )
+    assembled_runs_csv = miassembler_outdir / Path("assembled_runs.csv")
 
     command = cli_command(
         [
-            ("nextflow", "run", EMG_CONFIG.assembler.assembly_pipeline_repo),
-            ("-r", EMG_CONFIG.assembler.miassemebler_git_revision),
+            ("nextflow", "run", EMG_CONFIG.assembler.pipeline_repo),
+            ("-r", EMG_CONFIG.assembler.pipeline_git_revision),
             "-latest",  # Pull changes from GitHub
-            ("-profile", EMG_CONFIG.assembler.miassembler_nf_profile),
+            ("-profile", EMG_CONFIG.assembler.pipeline_nf_profile),
+            ("-config", EMG_CONFIG.assembler.pipeline_config_file),
             "-resume",
             ("--samplesheet", samplesheet_csv),
             mgnify_study.is_private and "--private_study",
             ("--outdir", miassembler_outdir),
             EMG_CONFIG.slurm.use_nextflow_tower and "-with-tower",
-            host_reference and ("--reference_genome", host_reference),
-            (
-                "-name",
-                f"miassembler-samplesheet-{file_path_shortener(samplesheet_csv, 1, 15, True)}",
-            ),
         ]
     )
 
@@ -234,18 +239,16 @@ def run_assembler_for_samplesheet(
         run_cluster_job(
             name=f"Assemble study {mgnify_study.ena_study.accession} via samplesheet {file_path_shortener(samplesheet_csv, 1, 15, True)}",
             command=command,
-            expected_time=timedelta(
-                days=EMG_CONFIG.assembler.assembly_pipeline_time_limit_days
-            ),
-            memory=f"{EMG_CONFIG.assembler.assembly_nextflow_master_job_memory_gb}G",
+            expected_time=timedelta(days=EMG_CONFIG.assembler.pipeline_time_limit_days),
+            memory=f"{EMG_CONFIG.assembler.nextflow_master_job_memory_gb}G",
             environment="ALL,TOWER_ACCESS_TOKEN,TOWER_WORKSPACE_ID",
             input_files_to_hash=[samplesheet_csv],
-            resubmit_policy=ResubmitWithCleanedNextflowIfFailedPolicy,
+            resubmit_policy=ResubmitIfFailedPolicy,
             working_dir=miassembler_outdir,
         )
     except ClusterJobFailedException:
         for assembly in assemblies:
-            task_mark_assembly_status(
+            mark_assembly_status(
                 assembly, status=analyses.models.Assembly.AssemblyStates.ASSEMBLY_FAILED
             )
     else:
@@ -265,12 +268,11 @@ def run_assembler_for_samplesheet(
                     run_accession, fail_reason = row
                     qc_failed_runs[run_accession] = fail_reason
 
-        assembled_runs_csv = miassembler_outdir / Path("assembled_runs.csv")
         assembled_runs = set()
 
         if not assembled_runs_csv.is_file():
             for assembly in assemblies:
-                task_mark_assembly_status(
+                mark_assembly_status(
                     assembly,
                     status=analyses.models.Assembly.AssemblyStates.ASSEMBLY_FAILED,
                     reason=f"The miassembler output is missing the {assembled_runs_csv} file.",
@@ -286,23 +288,48 @@ def run_assembler_for_samplesheet(
 
         for assembly in assemblies:
             if assembly.run.first_accession in qc_failed_runs:
-                task_mark_assembly_status(
+                mark_assembly_status(
                     assembly,
                     status=analyses.models.Assembly.AssemblyStates.PRE_ASSEMBLY_QC_FAILED,
                     reason=qc_failed_runs[assembly.run.first_accession],
                 )
             elif assembly.run.first_accession in assembled_runs:
-                task_mark_assembly_status(
+                mark_assembly_status(
                     assembly,
                     status=analyses.models.Assembly.AssemblyStates.ASSEMBLY_COMPLETED,
-                    unset_statuses=[
-                        analyses.models.Assembly.AssemblyStates.ASSEMBLY_FAILED
-                    ],
+                    unset_statuses=[assembly.AssemblyStates.ASSEMBLY_FAILED],
                 )
                 update_assembly_metadata(miassembler_outdir, assembly)
             else:
-                task_mark_assembly_status(
+                mark_assembly_status(
                     assembly,
                     status=analyses.models.Assembly.AssemblyStates.ASSEMBLY_FAILED,
                     reason="The assembly is missing from the pipeline end-of-run reports",
                 )
+    finally:
+        # output list of assembled runs
+        assembled_runs = []
+        if assembled_runs_csv.is_file():
+            with assembled_runs_csv.open(mode="r") as file_handle:
+                for row in csv.reader(file_handle, delimiter=","):
+                    run_accession, assembler_software, assembler_version = row
+                    assembled_runs.append(run_accession)
+        logger.info("Assembled runs: " + ",".join(assembled_runs))
+
+
+@flow(flow_run_name="Assemble {samplesheet_csv} without parent", persist_result=True)
+def run_standalone_assembler_for_samplesheet(
+    mgys_study_accession: str, samplesheet_csv: Path, samplesheet_hash: str
+):
+    """
+    This flow is designed to be deployed as a top-level flow, to run an arbitrary samplesheet.
+    It will assemble the samplesheet and update the DB metadata.
+    It acts as if the samplesheet were being assembled within a parent flow.
+
+    :param mgys_study_accession: E.g. MGYS000001
+    :param samplesheet_csv: E.g. /nfs/my/dir/samplesheet2_abcd1234.csv
+    :param samplesheet_hash: E.g. abcd1234 – this hash is used by other parts of automation e.g. the workdir
+    :return: None
+    """
+    study = analyses.models.Study.objects.get(accession=mgys_study_accession)
+    run_assembler_for_samplesheet(study, samplesheet_csv, samplesheet_hash)

@@ -12,15 +12,13 @@ This `include`s the `docker-compose.yaml` file in this `slurm` dir.
 ## What you get
 It starts:
 * `slurm_db`: a Maria DB host for the `slurm` database. Port `3306` is mapped to your host machine, so you can inspect the Slurm Job DB at `mariadb://slurm:slurm@localhost:3306/slurm` (see e.g. `donco_job_table`).
-* `slurm_node`: a container running the slurm database daemon, controller, and a worker node (see below).
-* The alternative setup (profile `slurm_full`, not started by default) separates these into separate containers for a more realistic setup:
-  * `slurm_db_daemon`: a container running the [Slurm database daemon](https://slurm.schedmd.com/slurmdbd.html). This is the interface between Slurm and the above DB.
-  * `slurm_controller`: a container running the [Slurm controller / central manager daemon](https://slurm.schedmd.com/slurmctld.html). This is the node workers poll for jobs.
-  * `slurm_worker`: a container running the [Slurm compute node daemon](https://slurm.schedmd.com/slurmd.html). This container executes jobs in the queue.
-  * Note the difference in `congigs/` and `entrypoints/` for these single node vs. full setups.
+* `slurm_node`: a container running the slurm database daemon, controller, worker node, and the rest api (see below).
+  * [Slurm database daemon](https://slurm.schedmd.com/slurmdbd.html). This is the interface between Slurm and the above DB.
+  * [Slurm controller / central manager daemon](https://slurm.schedmd.com/slurmctld.html). This is the node workers poll for jobs.
+  * [Slurm compute node daemon](https://slurm.schedmd.com/slurmd.html). Acts as a node that executes jobs in the queue.
+  * [Slurm rest api daemon](https://slurm.schedmd.com/slurmrestd.html). Listens for requests on port `6820`.
 
-Other than the Maria DB container, the others share a common Ubuntu-based image from `Dockerfile`.
-The `*-entrypoint.sh` scripts start the respective daemons in the respective containers.
+The `entrypoint.sh` scripts start the respective daemons.
 
 `submitter-entrypoint.sh` is not used by any of these containers, but can be used to make a "submission node" (AKA "login node").
 That means a node that has a Slurm installation and still runs [munged](https://linux.die.net/man/8/munged) so that the submission node can submit jobs, but it doesn't do work.
@@ -31,6 +29,8 @@ This is used by the parent docker-compose setup, to submit Slurm jobs from Prefe
 `slurm_prolog.sh` and `slurm_epilog.sh` are scripts that execute before and after a job, respectively.
 We are using them to pretend that `/nfs/public` is only available to jobs running in the `datamover` partition.
 This is to help with writing jobs for EBI Codon Slurm infrastructure, which looks a bit like this.
+
+`jwt_hs256.key` is the key used for generating jwt tokens. Changing this will make your previous tokens invalid.
 
 ### Data and filesystems
 There are dummy HPS and NFS filesystems at `/hps` and `/nfs/production`. On a `datamover` partitioned job, there is also `/nfs/public`.
@@ -67,3 +67,22 @@ From the parent dir, where there is a Taskfile:
 `task sbatch -- --wait -t 00:00:30 --mem 10M --wrap="ls" -o listing.txt` will dispatch a job directly.
 
 Use e.g. `docker logs slurm_node -f` to see the job execute.
+
+
+### Via the REST API
+Generate a token with `task token username=<username> [duration=<seconds>]`
+```shell
+user@host:/# task token username=slurm duration=86400
+task: [token] docker exec slurm_node bash -c "scontrol token username=slurm lifespan=86400"
+SLURM_JWT=<generated-jwt-token>
+```
+
+Submit a request using curl or Postman
+```shell
+curl --location 'localhost:6820/slurm/v0.0.40/ping' \
+--header 'X-SLURM-USER-NAME: slurm' \
+--header 'X-SLURM-USER-TOKEN: <generated-jwt-token>'
+```
+
+Note: SLURM REST API comes in different versions, `v0.0.40` is used in this example.
+More info [here](https://slurm.schedmd.com/rest.html).

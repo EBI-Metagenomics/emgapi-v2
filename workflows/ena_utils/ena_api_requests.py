@@ -1,7 +1,8 @@
+import logging
 import operator
 from datetime import timedelta
 from functools import reduce
-from typing import List, Optional, Type, Union
+from typing import List, Optional, Type, Union, Literal
 
 from django.conf import settings
 from httpx import Auth
@@ -12,7 +13,7 @@ import analyses.models
 import ena.models
 from emgapiv2.dict_utils import some
 from emgapiv2.enum_utils import FutureStrEnum
-from workflows.ena_utils.abstract import ENAPortalResultType, ENAPortalDataPortal
+from workflows.ena_utils.abstract import ENAPortalResultType
 from workflows.ena_utils.analysis import ENAAnalysisFields, ENAAnalysisQuery
 from workflows.ena_utils.ena_accession_matching import (
     extract_all_accessions,
@@ -21,6 +22,7 @@ from workflows.ena_utils.ena_accession_matching import (
 from workflows.ena_utils.ena_auth import dcc_auth
 from workflows.ena_utils.read_run import ENAReadRunFields, ENAReadRunQuery
 from workflows.ena_utils.requestors import ENAAPIRequest, ENAAvailabilityException
+from workflows.ena_utils.sample import ENASampleFields, ENASampleQuery
 from workflows.ena_utils.study import ENAStudyQuery, ENAStudyFields
 
 ALLOWED_LIBRARY_SOURCE: list = ["METAGENOMIC", "METATRANSCRIPTOMIC"]
@@ -34,7 +36,14 @@ RETRIES = EMG_CONFIG.ena.portal_search_api_max_retries
 RETRY_DELAY = EMG_CONFIG.ena.portal_search_api_retry_delay_seconds
 
 
+base_logger = logging.getLogger(__name__)
+
+
 class ENALibraryStrategyPolicy(FutureStrEnum):
+    """
+    Each policy determines a trust vs. override level for the library strategy metadata in ENA.
+    """
+
     ONLY_IF_CORRECT_IN_ENA = "only_if_correct_in_ena"
     ASSUME_OTHER_ALSO_MATCHES = "assume_other_also_matches"
     OVERRIDE_ALL = "override_all"
@@ -53,17 +62,6 @@ def library_strategy_policy_to_filter(
     elif policy == ENALibraryStrategyPolicy.ASSUME_OTHER_ALSO_MATCHES:
         return [primary_library_strategy] + other_library_strategies + ["OTHER"]
     return []
-
-
-def create_ena_api_request(result_type, query, limit, fields, result_format="json"):
-    return (
-        f"{EMG_CONFIG.ena.portal_search_api}?"
-        f"result={result_type}&"
-        f"query={query}&"
-        f"limit={limit}&"
-        f"format={result_format}&"
-        f"fields={fields}"
-    )
 
 
 @task(
@@ -100,7 +98,6 @@ def get_study_from_ena(accession: str, limit: int = 10) -> ena.models.Study:
         limit=limit,
         query=ENAStudyQuery(study_accession=accession)
         | ENAStudyQuery(secondary_study_accession=accession),
-        data_portal=ENAPortalDataPortal.METAGENOME,
     ).get(auth=ena_auth)
 
     s = portal[0]
@@ -141,53 +138,69 @@ def get_study_from_ena(accession: str, limit: int = 10) -> ena.models.Study:
 
 def check_reads_fastq(
     fastq: list[str], run_accession: str, library_layout: str
-) -> list[str] | None:
-    logger = get_run_logger()
+) -> tuple[List[str] | None, Literal["SINGLE", "PAIRED", None]]:
+    """
+    Analyses and validates a list of FASTQ files for a given run accession and
+    specified library layout. Ensures the FASTQ files align with the expected
+    library layout, such as single-end or paired-end sequencing data.
+
+    :param fastq: A list of FASTQ file paths associated with the sequencing run.
+    :param run_accession: The unique identifier for the sequencing run.
+    :param library_layout: The specified library layout for the data. This should
+        indicate whether the data is single-end ("SINGLE") or paired-end ("PAIRED").
+    :return: A tuple containing the sorted FASTQ file paths and the inferred library
+        layout as "SINGLE" or "PAIRED", or None if validation fails or no valid FASTQ
+        files are provided.
+    """
+    logger = get_run_logger()  # TODO: make this method okay to use outside of prefect
     sorted_fastq = sorted(fastq)  # to keep order [_1, _2, _3(?)]
-    if not len(sorted_fastq):
-        logger.warning(f"No fastq files for run {run_accession}")
-        return None
     # potential single end
-    elif len(sorted_fastq) == 1:
+    if len(sorted_fastq) == 1:
+        if not sorted_fastq[0]:
+            # if it's an empty string
+            logger.warning(f"No fastq files for run {run_accession}")
+            return None, None
+        if "_2.f" in sorted_fastq[0]:
+            # we accept _1 be in SE fastq path
+            logger.warning(f"Single fastq file contains _2 for run {run_accession}")
+            return None, None
         if library_layout == PAIRED_END_LIBRARY_LAYOUT:
             logger.warning(
                 f"Incorrect library_layout for {run_accession} having one fastq file"
             )
-            return None
-        if "_2.f" in sorted_fastq[0]:
-            # we accept _1 be in SE fastq path
-            logger.warning(f"Single fastq file contains _2 for run {run_accession}")
-            return None
+            return sorted_fastq, "SINGLE"
         else:
             logger.info(f"One fastq for {run_accession}: {sorted_fastq}")
-            return sorted_fastq
+            return sorted_fastq, "SINGLE"
     # potential paired end
-    elif len(sorted_fastq) == 2:
-        if library_layout == SINGLE_END_LIBRARY_LAYOUT:
-            logger.warning(
-                f"Incorrect library_layout for {run_accession} having two fastq files"
-            )
-            return None
-        if "_1.f" in sorted_fastq[0] and "_2.f" in sorted_fastq[1]:
+    elif len(sorted_fastq) >= 2:
+        match_1 = next((f for f in sorted_fastq if "_1" in f), None)
+        match_2 = next((f for f in sorted_fastq if "_2" in f), None)
+        if match_1 and match_2:
             logger.info(f"Two fastqs for {run_accession}: {sorted_fastq}")
-            return sorted_fastq
+            return [match_1, match_2], "PAIRED"
         else:
+            if len(sorted_fastq) > 2:
+                logger.warning(
+                    f"More than 2 fastq files provided for run {run_accession}"
+                )
+            else:
+                logger.warning(
+                    f"Incorrect library_layout for {run_accession} having two fastq files"
+                )
             logger.warning(
                 f"Incorrect names of fastq files for run {run_accession} (${sorted_fastq})"
             )
-            return None
-    elif len(fastq) > 2:
-        logger.info(f"More than 2 fastq files provided for run {run_accession}")
-        return sorted_fastq[:2]
-    return None
+            return None, None
+    return None, None
 
 
 def _make_samples_and_run(
     run_or_assembly_response: dict, study: analyses.models.Study
-) -> (ena.models.Sample, analyses.models.Sample, analyses.models.Run):
+) -> tuple[ena.models.Sample, analyses.models.Sample, analyses.models.Run]:
     _ = ENAReadRunFields  # fields used here are also present on ENAAnalysisFields
 
-    ena_sample, __ = ena.models.Sample.objects.update_or_create(
+    ena_sample, ena_sample_was_created = ena.models.Sample.objects.update_or_create(
         accession__in=[
             run_or_assembly_response[_.SAMPLE_ACCESSION],
             run_or_assembly_response[_.SECONDARY_SAMPLE_ACCESSION],
@@ -248,6 +261,13 @@ def _make_samples_and_run(
         run_or_assembly_response[_.LIBRARY_STRATEGY],
         run_or_assembly_response[_.LIBRARY_SOURCE],
     )
+
+    if ena_sample_was_created:
+        # Also fetch ALL sample metadata from ENA.
+        # Don't re-fetch unless this is first creation, as this triggers another API call per sample.
+        # This propagates to mgnify_sample by hooks.
+        sync_sample_metadata_from_ena(ena_sample)
+
     return ena_sample, mgnify_sample, run
 
 
@@ -278,9 +298,7 @@ def get_study_readruns_from_ena(
     logger = get_run_logger()
     logger.info(f"Will fetch Read Runs from ENA Portal API for Study {accession}")
 
-    mgys_study = analyses.models.Study.objects.get(
-        ena_study__accession__contains=accession
-    )
+    mgys_study = analyses.models.Study.objects.get_by_accession(accession)
 
     ena_auth = dcc_auth if mgys_study.is_private else None
 
@@ -321,7 +339,6 @@ def get_study_readruns_from_ena(
         ],
         limit=limit,
         query=query,
-        data_portal=ENAPortalDataPortal.METAGENOME,
     ).get(auth=ena_auth, raise_on_empty=raise_on_empty)
 
     run_accessions = []
@@ -338,7 +355,7 @@ def get_study_readruns_from_ena(
             continue
 
         # check fastq files order/presence
-        fastq_ftp_reads = check_reads_fastq(
+        fastq_ftp_reads, inferred_library_layout = check_reads_fastq(
             fastq=read_run[_.FASTQ_FTP].split(";"),
             run_accession=read_run[_.RUN_ACCESSION],
             library_layout=read_run[_.LIBRARY_LAYOUT],
@@ -355,6 +372,13 @@ def get_study_readruns_from_ena(
         run.metadata[analyses.models.Run.CommonMetadataKeys.FASTQ_FTPS] = (
             fastq_ftp_reads
         )
+        if not inferred_library_layout == read_run[_.LIBRARY_LAYOUT]:
+            logger.warning(
+                f"Using inferred library layout of {inferred_library_layout} for {read_run[_.RUN_ACCESSION]} instead of metadata-provided {read_run[_.LIBRARY_LAYOUT]}."
+            )
+            run.metadata[
+                analyses.models.Run.CommonMetadataKeys.INFERRED_LIBRARY_LAYOUT
+            ] = inferred_library_layout
         run.save()
 
         run_accessions.append(run.first_accession)
@@ -379,7 +403,6 @@ def is_study_available(accession: str, auth: Optional[Type[Auth]] = None) -> boo
             ),
             format="json",
             fields=[ENAStudyFields.STUDY_ACCESSION],
-            data_portal=ENAPortalDataPortal.METAGENOME,
         ).get(auth=auth)
     except ENAAvailabilityException as e:
         logger.info(f"Looks like an error-free empty response from ENA: {e}")
@@ -413,6 +436,9 @@ def is_ena_study_available_privately(accession: str):
     return is_available_privately
 
 
+# TODO: is_ena_study_available_to_webin_account()
+
+
 @flow
 def sync_privacy_state_of_ena_study_and_derived_objects(
     ena_study: Union[ena.models.Study, str],
@@ -442,7 +468,7 @@ def sync_privacy_state_of_ena_study_and_derived_objects(
         )
         ena_study.is_suppressed = True
     else:
-        ena_study.is_private = private
+        ena_study.is_private = private or False  # null private -> false
     ena_study.save()
 
 
@@ -462,7 +488,10 @@ def get_study_assemblies_from_ena(accession: str, limit: int = 10) -> list[str]:
     parameter. Authenticated requests may be sent to fetch private data if the `dcc_auth` is configured
     correctly.
 
-    :param accession: The ENA accession identifier of the study for which to fetch assemblies.
+    The assemblies found on ENA will be stored as analysis.Assemblies objects in the database.
+
+    The returned list of the assembly accessions
+
     An analysis.study must already exist for this accession.
     :type accession: str
     :param limit: The maximum number of assemblies to retrieve. Default is 10.
@@ -499,10 +528,9 @@ def get_study_assemblies_from_ena(accession: str, limit: int = 10) -> list[str]:
         limit=limit,
         query=ENAAnalysisQuery(study_accession=accession)
         | ENAAnalysisQuery(secondary_study_accession=accession),
-        data_portal=ENAPortalDataPortal.METAGENOME,
     ).get(auth=ena_auth)
 
-    # read-runs may exist in same study as the assemblies
+    # read-runs may exist in the same study as the assemblies
     portal_runs = get_study_readruns_from_ena(
         accession=accession, limit=limit, raise_on_empty=False
     )
@@ -513,14 +541,17 @@ def get_study_assemblies_from_ena(accession: str, limit: int = 10) -> list[str]:
         reads_study = study.assemblies_assembly.first().reads_study
     elif (
         reads_study_accession := extract_study_accession_from_study_title(study.title)
-        and not portal_runs
-    ):
+    ) and not portal_runs:
         # Looks like a TPA study – no read-runs within it, and an accession in the study title
         # e.g. "This is a TPA Study of PRJ123"
+        logger.info(
+            f"Study {accession} looks like a TPA study, getting the accession with the raw reads from the title"
+        )
         ena_reads_study = ena.models.Study.objects.get_ena_study(reads_study_accession)
         if not ena_reads_study:
             ena_reads_study = get_study_from_ena(reads_study_accession)
             ena_reads_study.refresh_from_db()
+
         reads_study: analyses.models.Study = (
             analyses.models.Study.objects.get_or_create_for_ena_study(
                 reads_study_accession
@@ -541,8 +572,8 @@ def get_study_assemblies_from_ena(accession: str, limit: int = 10) -> list[str]:
             limit=limit,
         )
 
-    # Build assembly objects
-    assemblies = []
+    assemblies: list[str] = []
+
     for assembly_data in portal_assemblies:
         try:
             # sample may have been made previously, e.g. prior to assembly or by read-run fetchers above
@@ -571,5 +602,41 @@ def get_study_assemblies_from_ena(accession: str, limit: int = 10) -> list[str]:
         )
         assembly.metadata[_.GENERATED_FTP] = assembly_data[_.GENERATED_FTP]
         assembly.save()
-        assemblies.append(assembly)
+        assemblies.append(assembly.first_accession)
     return assemblies
+
+
+def sync_sample_metadata_from_ena(sample: ena.models.Sample):
+    base_logger.info(f"Syncing sample metadata from ENA for {sample}")
+    # TODO: consider refactoring this, and similar methods, into the ena/ app instead of workflows/
+    portal_sample_response = ENAAPIRequest(
+        result=ENAPortalResultType.SAMPLE,
+        fields=[
+            field.value for field in ENASampleFields
+        ],  # all available sample fields
+        limit=1,
+        query=ENASampleQuery(sample_accession=sample.accession)
+        | ENASampleQuery(secondary_sample_accession=sample.accession),
+    ).get(auth=dcc_auth, raise_on_empty=True)
+    base_logger.debug(f"Got sample metadata from ENA: {len(portal_sample_response)}")
+    if portal_sample := portal_sample_response[0]:
+        sample.metadata = portal_sample
+        sample.save()
+
+
+def sync_study_metadata_from_ena(study: ena.models.Study):
+    base_logger.info(f"Syncing study metadata from ENA for {study}")
+    # TODO: consider refactoring this, and similar methods, into the ena/ app instead of workflows/
+    portal_study_response = ENAAPIRequest(
+        result=ENAPortalResultType.STUDY,
+        fields=[
+            ENAStudyFields[f.upper()] for f in EMG_CONFIG.ena.study_metadata_fields
+        ],
+        limit=1,
+        query=ENAStudyQuery(study_accession=study.accession)
+        | ENAStudyQuery(secondary_study_accession=study.accession),
+    ).get(auth=dcc_auth, raise_on_empty=True)
+    base_logger.debug(f"Got study metadata from ENA: {len(portal_study_response)}")
+    if portal_study := portal_study_response[0]:
+        study.metadata = portal_study
+        study.save()

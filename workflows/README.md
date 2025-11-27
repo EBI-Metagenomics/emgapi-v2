@@ -48,6 +48,24 @@ There are helpers for this process in `prefect_utils/slurm_flow.py`.
 Essentially, look at `flows/realistic_example.py` for the details.
 
 
+## Batch analyses
+For assembly analyses workflows, we process them in batches and we persist the batch state to the database.
+This is particularly important for assembly analyses where we need to run multiple sequential pipelines (ASA → VIRify → MAP) across many assemblies.
+
+The `AssemblyAnalysisBatch` model groups analyses from a single study into manageable chunks.
+Each batch tracks the status of three pipelines (ASA, VIRify, and MAP) independently.
+The through-table `AssemblyAnalysisBatchAnalysis` lets us track per-analysis pipeline states within the batch, and allows selective disabling of specific analyses.
+
+Batches are created via the manager method `AssemblyAnalysisBatch.objects.get_or_create_batches_for_study()`, which handles:
+* Filtering analyses that are ready for processing
+* Chunking into configurable batch sizes
+* Creating workspace directories for pipeline outputs
+* Managing samplesheets for each pipeline stage
+
+This batching approach is experimental and may evolve as we learn more about optimal batch sizes, error handling patterns, and resource utilization on the cluster.
+
+For implementation details, see `workflows/models.py` (batch models) and `workflows/flows/analysis/assembly/` (batch flow orchestration).
+
 ## Triggering flows from models
 A common pattern in production is likely to be triggering a workflow (a Prefect flow) when an object in the EMG
 database changes.

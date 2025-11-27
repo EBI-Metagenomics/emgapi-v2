@@ -1,6 +1,7 @@
 import hashlib
 import logging
 import os
+import subprocess
 import time
 from datetime import timedelta
 from pathlib import Path
@@ -13,15 +14,20 @@ from django.utils.timezone import now
 from prefect import flow, get_run_logger, task
 from prefect.artifacts import create_markdown_artifact
 from prefect.runtime import flow_run
+from prefect_slurm.worker import SlurmWorker
 
 from emgapiv2.log_utils import mask_sensitive_data as safe
 from workflows.models import OrchestratedClusterJob
-from workflows.nextflow_utils.tower import maybe_get_nextflow_tower_browse_url
+from workflows.nextflow_utils.tower import get_nextflow_tower_url
 from workflows.nextflow_utils.trace import maybe_get_nextflow_trace_df
+from workflows.prefect_utils.prefect_worker_utils import (
+    get_prefect_worker_type,
+    make_environment,
+)
 from workflows.prefect_utils.slurm_limits import delay_until_cluster_has_space
 from workflows.prefect_utils.slurm_policies import (
-    _SlurmResubmitPolicy,
     ResubmitAlwaysPolicy,
+    _SlurmResubmitPolicy,
 )
 from workflows.prefect_utils.slurm_status import (
     SlurmStatus,
@@ -34,7 +40,7 @@ if "PYTEST_VERSION" in os.environ:
     import workflows.prefect_utils.pyslurm_patch as pyslurm
 else:
     try:
-        import pyslurm
+        import pyslurm  # type: ignore
     except:  # noqa: E722
         logging.warning("No PySlurm available. Patching.")
         import workflows.prefect_utils.pyslurm_patch as pyslurm
@@ -206,6 +212,7 @@ def start_or_attach_cluster_job(
         """
     )
     logger.info(f"Will run the script ```{safe(script)}```")
+    kwargs["environment"] = make_environment(kwargs.get("environment", None))
     job_submit_description = OrchestratedClusterJob.SlurmJobSubmitDescription(
         name=name,
         time_limit=slurm_timedelta(expected_time),
@@ -270,7 +277,7 @@ def start_or_attach_cluster_job(
         job_submit_description=job_submit_description,
     )
 
-    nf_link = maybe_get_nextflow_tower_browse_url(command)
+    nf_link = get_nextflow_tower_url()
     nf_link_markdown = f"[Watch Nextflow Workflow]({nf_link})" if nf_link else ""
 
     ocj = OrchestratedClusterJob.objects.create(
@@ -296,6 +303,197 @@ def start_or_attach_cluster_job(
             """
         ).replace("<<SCRIPT>>", safe(script)),
     )
+
+    return ocj
+
+
+@task(
+    task_run_name="Job submission (as process): {name}",
+)
+def run_subprocess(
+    name: str,
+    command: str,
+    expected_time: timedelta,
+    memory: Union[int, str],
+    slurm_resubmit_policy: _SlurmResubmitPolicy,
+    workdir: Path,
+    make_workdir_first: bool = True,
+    input_files: Optional[List[Path]] = None,
+    **kwargs,
+) -> OrchestratedClusterJob:
+    """
+    Run a command as a subprocess.
+
+    This task MAY launch a subprocess, otherwise it may return a database object of a previously run job that is considered identical (e.g. the same command was run for the same inputs).
+
+    This allows flows to "reattach" to command that they previously ran,
+    even if the flow has crashed and been restarted. In this case, it could be that the command previously finished successfully, or failed, and is not worth retrying – so by reattach we mean use the previous result. It could also mean that the exact same command is currently running under a different flow, in which case this method MAY currently fail since the `pid` of that currently running job may well be unavailable to this flowrun (if it is on a different slurm node).
+
+    It also allows flows to require a slurm job to have run, but to accept that slurm job may have been run by
+    a previous or different flow.
+    (E.g. if a metagenome assembly is needed by two different analysis pipelines.)
+
+    Note that this task does not use Prefect Caching - it uses OrchestratedClusterJob objects in the django DB,
+    along with logic defined by SlurmResubmitPolicies, to decide whether to submit a new job or not.
+
+    :param name: Name for the job (both on Slurm and Prefect), e.g. "Run analysis pipeline for x"
+    :param command: Shell-level command to run, e.g. "nextflow run my-pipeline.nf --sample x"
+    :param expected_time: A timedelta after which the job will be killed if not done.
+        This affects Prefect's polling interval too. E.g.  `timedelta(minutes=5)`
+    :param memory: Maximum memory the job may use. In MB, or with a prefix. E.g. `100` or `10G`.
+    :param slurm_resubmit_policy: A SlurmResubmitPolicy to determine whether older identical jobs
+        should be used in place of a new one.
+    :param workdir: Work dir for the job (pathlib.Path, or str). Otherwise, a default will be used based on the name.
+    :param make_workdir_first: Make the work dir first, on the SUBMITTER machine.
+        Usually this is desirable, except in cases where you're launching a job to a slurm node which has diff fs mounts.
+    :param input_files: List of input file paths used for this job.
+        The content of these are hashed, as part of the decision about whether a new job should be launched or not.
+    :param kwargs: Extra arguments to be passed to PySlurm's JobSubmitDescription
+    :return: OrchestratedClusterJob submitted or attached.
+    """
+    logger = get_run_logger()
+
+    ### Prepare working directory for job
+    job_workdir = workdir
+    _ensure_absolute_workdir(job_workdir)
+    if make_workdir_first and not job_workdir.exists():
+        job_workdir.mkdir(parents=True)
+    logger.info(f"Will use {job_workdir=}")
+
+    ### Prepare job submission description
+    script = _(
+        f"""\
+        set -euo pipefail
+        {command}
+        """
+    )
+
+    logger.info(f"Will run the script ```{safe(script)}```")
+    job_submit_description = OrchestratedClusterJob.SlurmJobSubmitDescription(
+        name=name,
+        time_limit=slurm_timedelta(expected_time),
+        memory_per_node=memory,
+        script=script,
+        working_directory=str(job_workdir),
+        **kwargs,
+    )
+
+    # check if a job already exists for this
+    input_files = [
+        OrchestratedClusterJob.JobInputFile(
+            path=input_file,
+            hash=compute_hash_of_input_file([input_file]),
+        )
+        for input_file in input_files or []
+    ]
+    logger.info(f"Have hashed {len(input_files)} input files")
+
+    last_submitted_similar_job: Optional[OrchestratedClusterJob] = (
+        OrchestratedClusterJob.objects.get_previous_job(
+            job=job_submit_description,
+            policy=slurm_resubmit_policy,
+            input_file_hashes=input_files,
+        )
+    )
+
+    if last_submitted_similar_job:
+        logger.info(f"A similar job exists in history: {last_submitted_similar_job}")
+        if last_submitted_similar_job.should_resubmit_according_to_policy(
+            slurm_resubmit_policy
+        ):
+            logger.info(
+                f"Policy {slurm_resubmit_policy.policy_name} states we should resubmit the job."
+            )
+        else:
+            logger.info(
+                f"Policy {slurm_resubmit_policy.policy_name} states we should not resubmit the job. Using {last_submitted_similar_job}."
+            )
+            return last_submitted_similar_job
+
+    if (
+        last_submitted_similar_job
+        and slurm_resubmit_policy.resubmit_needs_preparation_command
+    ):
+        logger.info(
+            f"Policy {slurm_resubmit_policy.policy_name} requires a pre-resubmit command: {slurm_resubmit_policy.resubmit_needs_preparation_command}."
+        )
+        run_cluster_job(
+            name=f"Preparation for: {name}",
+            command=slurm_resubmit_policy.resubmit_needs_preparation_command,
+            expected_time=timedelta(hours=1),
+            memory=f"{EMG_CONFIG.slurm.preparation_command_job_memory_gb}G",
+            working_dir=job_workdir,
+            resubmit_policy=ResubmitAlwaysPolicy,
+            environment={},
+        )
+
+    env = make_environment(kwargs.get("environment", None))
+
+    # need to submit new job
+    process = subprocess.Popen(
+        ["/bin/bash", "-e", "-u", "-o", "pipefail", "-c", command],
+        cwd=job_workdir,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        env=env,
+        text=True,
+    )
+
+    nf_link = get_nextflow_tower_url()
+    nf_link_markdown = f"[Watch Nextflow Workflow]({nf_link})" if nf_link else ""
+
+    ocj = OrchestratedClusterJob.objects.create(
+        cluster_job_id=process.pid,
+        flow_run_id=flow_run.id,
+        job_submit_description=job_submit_description,
+        input_files_hashes=input_files,
+    )
+
+    create_markdown_artifact(
+        key="slurm-job-submission",
+        markdown=_(
+            f"""\
+            # Subprocess with pid {process.pid}
+            [Orchestrated Cluster Job {ocj.id}]({EMG_CONFIG.service_urls.app_root}/{reverse("admin:workflows_orchestratedclusterjob_change", kwargs={"object_id": ocj.id})})
+            Submitted a script as a subprocess:
+            ~~~
+            <<SCRIPT>>
+            ~~~
+            It will be terminated if not done in {slurm_timedelta(expected_time)}.
+            Working dir is {job_workdir}.
+            {nf_link_markdown}
+            """
+        ).replace("<<SCRIPT>>", safe(script)),
+    )
+
+    try:
+        _stdout, stderr = process.communicate(timeout=expected_time.total_seconds())
+    except TimeoutError as e:
+        logger.error(f"Failed to run subprocess: {e}")
+        process.kill()
+        process.wait()
+
+        ocj.last_known_state = SlurmStatus.failed
+        ocj.save()
+
+        raise SubprocessFailedException(process.pid, process.returncode, "Timed out")
+
+    if process.returncode == 0:
+        logger.info(f"Job {ocj} finished successfully.")
+
+        ocj.last_known_state = SlurmStatus.completed
+        ocj.save()
+
+        store_nextflow_trace(ocj)
+    else:
+        ocj.last_known_state = SlurmStatus.failed
+        ocj.save()
+
+        error_details = "\n".join(
+            stderr.splitlines()[-EMG_CONFIG.slurm.job_log_failure_tail_lines :]
+        )
+
+        raise SubprocessFailedException(process.pid, process.returncode, error_details)
 
     return ocj
 
@@ -343,6 +541,20 @@ class ClusterJobFailedException(Exception):
 
     def _format_message(self):
         msg = f"Cluster job {self.job_id} failed with state {self.state}"
+        if self.message:
+            msg += f"\nDetails: {self.message}"
+        return msg
+
+
+class SubprocessFailedException(Exception):
+    def __init__(self, pid, exitcode, message=None):
+        self.pid = pid
+        self.exitcode = exitcode
+        self.message = message
+        super().__init__(self._format_message())
+
+    def _format_message(self):
+        msg = f"Subprocess {self.pid} failed with exit code {self.exitcode}"
         if self.message:
             msg += f"\nDetails: {self.message}"
         return msg
@@ -420,6 +632,22 @@ def run_cluster_job(
     _name = name
     for unsafe in SLURM_UNSAFE_CHARS:
         _name = _name.replace(unsafe, "-")
+
+    worker_type = get_prefect_worker_type()
+
+    if worker_type == SlurmWorker.type:
+        return run_subprocess(
+            name=_name,
+            command=command,
+            expected_time=expected_time,
+            memory=memory,
+            input_files=input_files_to_hash,
+            slurm_resubmit_policy=resubmit_policy,
+            workdir=working_dir or Path(settings.EMG_CONFIG.slurm.default_workdir),
+            make_workdir_first=True,
+            environment=environment,
+            **kwargs,
+        )
 
     # Potentially wait some time if our cluster queue is very full
     delay_until_cluster_has_space()

@@ -68,6 +68,18 @@ def test_log_masking():
     """
     )
 
+    script = "./run-command subcommand -flag=okay -password verysecret"
+    assert (
+        mask_sensitive_data(script)
+        == "./run-command subcommand -flag=okay -password *****"
+    )
+
+    script = "./run-command subcommand -flag=okay -password 'verysecret'"
+    assert (
+        mask_sensitive_data(script)
+        == "./run-command subcommand -flag=okay -password '*****'"
+    )
+
 
 @pytest.mark.django_db
 def test_json_field_with_schema():

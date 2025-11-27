@@ -21,8 +21,9 @@ See the deployment/ dir for clues on the production setup.
 `task run`
 
 ## Running the unit test suite
-It needs to be run in docker compose:
+You may run the tests with the command:
 `task test`
+(This will run in docker compose.)
 
 ### Running a single test (e.g. a new one)
 For example for some new test called `test_new_feature_test_1`, use the `testk` task which is basically `pytest -k`:

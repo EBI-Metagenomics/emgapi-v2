@@ -14,6 +14,12 @@ FileIsNotEmptyRule = FileRule(
     rule_name="File should not be empty",
     test=lambda f: f.stat().st_size > 0,
 )
+
+FileIfExistsIsNotEmptyRule = FileRule(
+    rule_name="If the file exists, it shouldn't be empty.",
+    test=lambda f: (not f.exists()) or (f.is_file() and f.stat().st_size > 0),
+)
+
 DirectoryExistsRule = DirectoryRule(
     rule_name="Directory should exist",
     test=lambda f: f.is_dir(),

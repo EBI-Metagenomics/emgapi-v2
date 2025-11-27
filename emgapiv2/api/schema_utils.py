@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-from typing import Optional
+from typing import Optional, ClassVar
 
+from caseconverter import pascalcase, titlecase
 from django.db.models import Q
 from ninja import FilterSchema
 from pydantic import Field
@@ -14,8 +15,11 @@ class ApiSections(FutureStrEnum):
     STUDIES = "Studies"
     SAMPLES = "Samples"
     ANALYSES = "Analyses"
+    PUBLICATIONS = "Publications"
     REQUESTS = "Requests"
     PRIVATE_DATA = "Private Data"
+    MISC = "Miscellaneous"
+    AUTH = "Authentication"
     GENOMES = "Genomes"
     ASSEMBLIES = "Assemblies"
 
@@ -27,6 +31,8 @@ class OpenApiKeywords(FutureStrEnum):
     LINKS = "links"
     OPERATIONID = "operationId"
     PARAMETERS = "parameters"
+    URL = "url"
+    EXTERNAL_DOCS = "externalDocs"
 
 
 def make_related_detail_link(
@@ -39,10 +45,10 @@ def make_related_detail_link(
     from_list_at_path: str = "items/",
 ) -> dict:
     if from_list_to_detail:
-        link_name = f"Get{related_object_name.capitalize()}From{self_object_name.capitalize()}List"
+        link_name = f"Get{pascalcase(related_object_name)}From{pascalcase(self_object_name)}{pascalcase(from_list_at_path).strip('/')}List"
     else:
         link_name = (
-            f"Get{related_object_name.capitalize()}For{self_object_name.capitalize()}"
+            f"Get{pascalcase(related_object_name)}For{pascalcase(self_object_name)}"
         )
     from_list_at_path = from_list_at_path.rstrip("/") + "/"
     return {
@@ -51,7 +57,7 @@ def make_related_detail_link(
             OpenApiKeywords.PARAMETERS.value: {
                 related_lookup_param: f"$response.body#/{from_list_at_path if from_list_to_detail else ''}{'0/' if from_list_to_detail else ''}{related_id_in_response}"
             },
-            OpenApiKeywords.DESCRIPTION.value: f"The {related_id_in_response} is an identifier that can be used to access the {related_object_name} detail",
+            OpenApiKeywords.DESCRIPTION.value: f"The {related_id_in_response} is an identifier that can be used to access the {titlecase(related_object_name)} detail",
         }
     }
 
@@ -80,6 +86,10 @@ def make_child_link(
     }
 
 class BiomeFilter(FilterSchema):
+    LOOKUP_STRING: ClassVar[str] = (
+        "biome__path__descendants"  # e.g. biome__path__descendants if this object's self.biome: Biome
+    )
+
     biome_lineage: Optional[str] = Field(
         None, description="The lineage to match, including all descendant biomes"
     )
@@ -87,4 +97,4 @@ class BiomeFilter(FilterSchema):
     def filter_biome_lineage(self, lineage: str | None) -> Q:
         if not lineage:
             return Q()
-        return Q(biome__path__descendants=Biome.lineage_to_path(lineage))
+        return Q(**{self.LOOKUP_STRING: Biome.lineage_to_path(lineage)})

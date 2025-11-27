@@ -6,12 +6,15 @@ from pydantic import AnyHttpUrl, BaseModel, Field
 from pydantic.networks import MongoDsn, MySQLDsn
 from pydantic_settings import BaseSettings
 
+from workflows.ena_utils.abstract import ENAPortalDataPortal
+
 
 class SlurmConfig(BaseModel):
     default_job_status_checks_limit: int = 10
     default_workdir: str = "/nfs/production/dev-slurm-work-dir"
     pipelines_root_dir: str = "/app/workflows/pipelines"
     ftp_results_dir: str = "/nfs/ftp/public/databases/metagenomics/mgnify_results"
+    private_results_dir: str = "/nfs/public/services/private-data"
     user: str = "root"
 
     incomplete_job_limit: int = 100
@@ -52,32 +55,58 @@ class SlurmConfig(BaseModel):
     # memory for jobs like `nextflow clean ...` or `rm -r ./work` that are run before bigger jobs
 
 
-class AssemblerConfig(BaseModel):
-    assembly_pipeline_repo: str = "ebi-metagenomics/miassembler"
-    assembler_default: str = "metaspades"
-    assembler_version_default: str = "3.15.5"
-    miassemebler_git_revision: str = (
-        "main"  # branch or commit of ebi-metagenomics/miassembler
-    )
-    miassembler_nf_profile: str = "codon_slurm"
-    assembly_pipeline_time_limit_days: int = 5
-    assembly_nextflow_master_job_memory_gb: int = 8
+class MGnifyPipelineConfig(BaseModel):
+    """
+    Base configuration for MGnify Nextflow pipelines.
 
+    Provides common default values for pipeline repository, config file, and profile.
+    Subclasses must override pipeline_repo and pipeline_git_revision.
+    """
+
+    pipeline_repo: str = ...  # Required
+    pipeline_git_revision: str = ...  # Required
+    pipeline_config_file: str = "/nfs/public/donco.config"
+    pipeline_nf_profile: str = "codon"
+
+    # Basic resources
+    pipeline_time_limit_days: int = 1
+    samplesheet_chunk_size: int = 50
+    nextflow_master_job_memory_gb: int = 8
+
+
+class AssemblerConfig(MGnifyPipelineConfig):
+    pipeline_repo: str = "ebi-metagenomics/miassembler"
+    pipeline_git_revision: str = "v3.0.3"
+
+    # Resources
+    pipeline_time_limit_days: int = 5
     assembly_uploader_mem_gb: int = 4
     assembly_uploader_time_limit_hrs: int = 2
 
+    # Settings
+    assembler_default: str = "metaspades"
+    assembler_version_default: str = "3.15.5"
+    suspend_timeout_for_editing_samplesheets_secs: int = 28800  # 8 hrs
 
-class AmpliconPipelineConfig(BaseModel):
-    amplicon_pipeline_repo: str = "ebi-metagenomics/amplicon-pipeline"
-    amplicon_pipeline_git_revision: str = (
-        "main"  # branch or commit of ebi-metagenomics/amplicon-pipeline
-    )
-    amplicon_pipeline_nf_profile: str = "codon_slurm"
+
+class AmpliconPipelineConfig(MGnifyPipelineConfig):
+    pipeline_repo: str = "ebi-metagenomics/amplicon-analysis-pipeline"
+    pipeline_git_revision: str = "v6.0.0"
+
+    # Resources
+    pipeline_time_limit_days: int = 5
     samplesheet_chunk_size: int = 50
-    # results stats
+    nextflow_master_job_memory_gb: int = 1
+
+    # Settings
+    allow_non_insdc_run_names: bool = False
+    keep_study_summary_partials: bool = False
+
+    # End-of-run reports
     completed_runs_csv: str = "qc_passed_runs.csv"
     failed_runs_csv: str = "qc_failed_runs.csv"
-    # results folders
+
+    # Results folders
     qc_folder: str = "qc"
     sequence_categorisation_folder: str = "sequence-categorisation"
     amplified_region_inference_folder: str = "amplified-region-inference"
@@ -85,25 +114,90 @@ class AmpliconPipelineConfig(BaseModel):
     primer_identification_folder: str = "primer-identification"
     taxonomy_summary_folder: str = "taxonomy-summary"
 
-    amplicon_nextflow_master_job_memory_gb: int = 1
-    amplicon_pipeline_time_limit_days: int = 5
 
+class RawReadsPipelineConfig(MGnifyPipelineConfig):
+    pipeline_repo: str = "ebi-metagenomics/raw-reads-analysis-pipeline"
+    pipeline_git_revision: str = "master"
+
+    # Resources
+    pipeline_time_limit_days: int = 5
+    samplesheet_chunk_size: int = 50
+    # TODO: remove this one, it is part of the default pipelines config
+    base_workdir: str = (
+        "/hps/nobackup/rdf/metagenomics/service-team/nextflow-workdir/rawreads-pipeline"
+    )
+
+    # Settings
     allow_non_insdc_run_names: bool = False
     keep_study_summary_partials: bool = False
 
+    # End-of-run reports
+    completed_runs_csv: str = "qc_passed_runs.csv"
+    failed_runs_csv: str = "qc_failed_runs.csv"
 
-class AssemblyAnalysisPipelineConfig(BaseModel):
+    # Results folders
+    qc_folder: str = "qc"
+    taxonomy_summary_folder: str = "taxonomy-summary"
+    function_summary_folder: str = "function-summary"
+
+    # Analysis sources
+    taxonomy_analysis_sources: set = {"silva-ssu", "silva-lsu", "motus"}
+    function_analysis_sources: set = {"pfam"}
+
+
+class AssemblyAnalysisPipelineConfig(MGnifyPipelineConfig):
     pipeline_repo: str = "ebi-metagenomics/assembly-analysis-pipeline"
     pipeline_git_revision: str = "dev"
-    pipeline_nf_config: str = "test.config"
-    pipeline_nf_profile: str = "debug"
     pipeline_time_limit_days: int = 5
+
+    # Resources
     samplesheet_chunk_size: int = 10
+    max_analyses_per_study: int = None  # Safety cap, None = unlimited
     nextflow_master_job_memory_gb: int = 1
-    completed_assemblies_csv: str = "qc_passed_assemblies.csv"
-    failed_assemblies_csv: str = "qc_failed_assemblies.csv"
+
+    # Workdir
+    workdir_root: str = "/nfs/public/wd"
+
+    # End-of-run reports
+    completed_assemblies_csv: str = "analysed_assemblies.csv"
+    qc_failed_assemblies: str = "qc_failed_assemblies.csv"
+
+    # Results folders
+    # TODO: there is some repetition with the Pipeline Schemas used to validate and import results
+    qc_folder: str = "qc"
+    cds_folder: str = "cds"
     taxonomy_folder: str = "taxonomy"
-    functional_folder: str = "functional-annotation"
+    functional_annotation_folder: str = "functional-annotation"
+    pathways_systems_folder: str = "pathways-and-systems"
+    annotation_summary_folder: str = "annotation-summary"
+
+    # Downstream samplesheets
+    downstream_samplesheets_folder: str = "downstream_samplesheets"
+    virify_samplesheet: str = "virify_samplesheet.csv"
+
+
+class VirifyPipelineConfig(MGnifyPipelineConfig):
+    pipeline_repo: str = "ebi-metagenomics/emg-viral-pipeline"
+    pipeline_git_revision: str = "v3.0.0"
+    pipeline_time_limit_days: int = 1
+
+    # Resources
+    nextflow_master_job_memory_gb: int = 8
+
+    # Results folders
+    final_gff_folder: str = "08-final/gff"
+
+
+class MapPipelineConfig(MGnifyPipelineConfig):
+    pipeline_repo: str = "ebi-metagenomics/mobilome-annotation-pipeline"
+    pipeline_git_revision: str = "v4.1.0"
+    pipeline_time_limit_days: int = 1
+
+    # Resources
+    nextflow_master_job_memory_gb: int = 8
+
+    # Results folders
+    final_gff_folder: str = "gff"
 
 
 class WebinConfig(BaseModel):
@@ -113,19 +207,36 @@ class WebinConfig(BaseModel):
     dcc_password: str = None
     submitting_center_name: str = "EMG"
     webin_cli_executor: str = "/usr/bin/webin-cli/webin-cli.jar"
+    aspera_ascp_executor: str = None
     broker_prefix: str = "mg-"
     broker_password: str = None
     webin_cli_retries: int = 6
     webin_cli_retry_delay_seconds: int = 60
+    auth_endpoint: AnyHttpUrl = "https://www.ebi.ac.uk/ena/submit/webin/auth"
+    jwt_secret_key: str = None
+    jwt_expiration_minutes: int = (
+        1440  # TODO: shorten once https://github.com/eadwinCode/django-ninja-jwt/issues/33 is fixed
+    )
+    jwt_refresh_expiration_hours: int = 24
 
 
 class ENAConfig(BaseModel):
     portal_search_api: AnyHttpUrl = "https://www.ebi.ac.uk/ena/portal/api/search"
+    portal_search_api_default_data_portals: list[ENAPortalDataPortal] = [
+        ENAPortalDataPortal.METAGENOME,
+        ENAPortalDataPortal.ENA,
+    ]
     portal_search_api_max_retries: int = 4
     portal_search_api_retry_delay_seconds: int = 15
     browser_view_url_prefix: AnyHttpUrl = "https://www.ebi.ac.uk/ena/browser/view"
     # TODO: migrate to the ENA Handler
-    study_metadata_fields: list[str] = ["study_title", "secondary_study_accession"]
+    study_metadata_fields: list[str] = [
+        "study_title",
+        "study_description",
+        "center_name",
+        "secondary_study_accession",
+        "study_name",
+    ]
 
     ftp_prefix: str = "ftp.sra.ebi.ac.uk/vol1/"
     fire_prefix: str = "s3://era-public/"
@@ -148,10 +259,7 @@ class ServiceURLsConfig(BaseModel):
     transfer_services_url_root: str = (
         "http://localhost:8080/pub/databases/metagenomics/mgnify_results/"
     )
-
-
-class SlackConfig(BaseModel):
-    slack_webhook_prefect_block_name: str = "slack-webhook"
+    private_data_url_root: str = "http://localhost:8081/private-data/"
 
 
 class MaskReplacement(BaseModel):
@@ -172,20 +280,39 @@ class LogMaskingConfig(BaseModel):
     ]
 
 
+class GenomeConfig(BaseModel):
+    mags_ftp_site: str = (
+        "http://ftp.ebi.ac.uk/pub/databases/metagenomics/mgnify_genomes/"
+    )
+    latest_mags_pipeline_tag: str = "v1.2.1"
+    results_directory_root: str = "/nfs/donco/results"
+
+
+class EuropePMCConfig(BaseModel):
+    annotations_endpoint: str = Field(
+        "https://www.ebi.ac.uk/europepmc/annotations_api/annotationsByArticleIds"
+    )
+    annotations_provider: str = Field("Metagenomics")
+
+
 class EMGConfig(BaseSettings):
     amplicon_pipeline: AmpliconPipelineConfig = AmpliconPipelineConfig()
+    rawreads_pipeline: RawReadsPipelineConfig = RawReadsPipelineConfig()
     assembly_analysis_pipeline: AssemblyAnalysisPipelineConfig = (
         AssemblyAnalysisPipelineConfig()
     )
     assembler: AssemblerConfig = AssemblerConfig()
+    virify_pipeline: VirifyPipelineConfig = VirifyPipelineConfig()
+    map_pipeline: MapPipelineConfig = MapPipelineConfig()
     ena: ENAConfig = ENAConfig()
     environment: str = "development"
     legacy_service: LegacyServiceConfig = LegacyServiceConfig()
     service_urls: ServiceURLsConfig = ServiceURLsConfig()
-    slack: SlackConfig = SlackConfig()
     slurm: SlurmConfig = SlurmConfig()
     webin: WebinConfig = WebinConfig()
     log_masking: LogMaskingConfig = LogMaskingConfig()
+    europe_pmc: EuropePMCConfig = EuropePMCConfig()
+    genomes: GenomeConfig = GenomeConfig()
 
     model_config = {
         "env_prefix": "emg_",

@@ -10,6 +10,10 @@ from workflows.data_io_utils.file_rules.base_rules import (
     FileRule,
     GlobRule,
 )
+from workflows.data_io_utils.file_rules.common_rules import (
+    FileExistsRule,
+    FileIsNotEmptyRule,
+)
 
 __all__ = ["File", "Directory"]
 
@@ -46,9 +50,13 @@ class File(BaseModel):
 
 
 class Directory(File):
+
     files: List[File] = Field(
         default_factory=list,
         description="File objects to specifically check in the directory",
+    )
+    subdirectories: List["Directory"] = Field(
+        default_factory=list, description="Subdirectories"
     )
     rules: List[DirectoryRule] = Field(
         default_factory=list,
@@ -60,6 +68,24 @@ class Directory(File):
         description="List of glob rules to be applied to the dir",
         repr=False,
     )
+
+    def add_file(self, *parts, rules=None) -> None:
+        """
+        Create a File object within this directory.
+
+        :params  *parts: Path parts relative to this directory
+        :param   rules: List of rules to apply to the file
+        :return: File object
+        """
+        if rules is None:
+            rules = [FileExistsRule, FileIsNotEmptyRule]
+
+        self.files.append(
+            File(
+                path=self.path.joinpath(*parts),
+                rules=rules,
+            )
+        )
 
     @model_validator(mode="after")
     def passes_all_glob_rules(self):

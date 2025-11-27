@@ -150,7 +150,7 @@ class JSONFieldWithSchema(models.JSONField):
         # Use the Pydantic model for additional validation
         try:
             if self.is_list:
-                if type(value) is not list:
+                if not isinstance(value, list):
                     raise DjValidationError("Value is not a list")
                 [
                     self.schema.model_validate(item, strict=self.is_strict)

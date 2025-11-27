@@ -5,6 +5,8 @@ import sys
 import json
 import csv
 
+from analyses.base_models.with_downloads_models import DownloadFileIndexFile
+
 logger = logging.getLogger(__name__)
 
 EXPECTED_CATALOGUE_FILES = {"phylo_tree.json"}
@@ -730,8 +732,7 @@ def prepare_downloadable_file(
     download_type = download_type_mapping.get(key, DownloadType.OTHER)
     alias = os.path.basename(file_name)
     relative_path = os.path.join(subdir or "", file_name)
-
-    return DownloadFile(
+    download_file = DownloadFile(
         path=relative_path,
         alias=alias,
         download_type=download_type,
@@ -740,6 +741,33 @@ def prepare_downloadable_file(
         short_description=desc_label,
         download_group=group_type or "catalogue",
     )
+    is_fasta = (
+        file_type == DownloadFileType.FASTA
+        or file_format == "fna"
+        or file_format == "faa"
+    )
+
+    if file_format == DownloadFileType.FASTA or file_format == DownloadFileType.OTHER:
+        if not relative_path.endswith((".fasta", ".fna", ".gff", ".faa")):
+            raise ValueError(
+                f"Invalid file format for {relative_path}. Expected .fasta, .fna, or .faa"
+            )
+        download_file.index_file = DownloadFileIndexFile(
+            index_type="fai" if is_fasta else "gzi",
+            path=f"{relative_path}.fai" if is_fasta else f"{relative_path}.gzi",
+        )
+
+    return download_file
+
+    # return DownloadFile(
+    #     path=relative_path,
+    #     alias=alias,
+    #     download_type=download_type,
+    #     file_type=file_type,
+    #     long_description=desc_label,
+    #     short_description=desc_label,
+    #     download_group=group_type or "catalogue",
+    # )
 
 
 def upload_file(

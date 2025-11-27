@@ -1,0 +1,2 @@
+id,assembly,fastq_1,fastq_2,proteins
+ERZ857107,/app/data/tests/assembly_v6_output/ERP106708/ERZ857107/qc/ERZ857107_filtered_contigs.fasta.gz,,"",/app/data/tests/assembly_v6_output/ERP106708/ERZ857107/cds/ERZ857107_predicted_cds.faa.gz

@@ -2,6 +2,7 @@ import json
 from typing import Callable, Optional, TypeVar, Union
 
 import pytest
+from django.conf import settings
 from ninja.testing import TestClient
 
 from analyses.base_models.with_downloads_models import (
@@ -10,9 +11,11 @@ from analyses.base_models.with_downloads_models import (
     DownloadType,
     DownloadFileIndexFile,
 )
-from analyses.models import Analysis
+from analyses.models import Analysis, Sample
 
 R = TypeVar("R")
+
+EMG_CONFIG = settings.EMG_CONFIG
 
 
 def _whole_object(j):
@@ -165,7 +168,7 @@ def test_api_analysis_downloads(raw_read_analyses, ninja_api_client):
         dl_api["url"]
         == f"http://localhost:8080/pub/databases/metagenomics/mgnify_results/analyses/{analysis.accession}/results/taxonomies.tsv.gz"
     )
-    assert dl_api["index_file"]["relative_url"] == "taxonomies.tsv.gz.gzi"
+    assert dl_api["index_files"][0]["relative_url"] == "taxonomies.tsv.gz.gzi"
     assert "path" not in dl_api
 
 
@@ -179,6 +182,35 @@ def test_api_samples_list(raw_reads_mgnify_sample, ninja_api_client):
         s.ena_accessions for s in raw_reads_mgnify_sample
     ]
 
+    # title search should work
+    sample: Sample = raw_reads_mgnify_sample[0]
+    sample.metadata["sample_title"] = "from the space station"
+    sample.save()
+    sample.refresh_from_db()
+    assert sample.sample_title == "from the space station"
+
+    items = call_endpoint_and_get_data(
+        ninja_api_client, "/samples/?search=SPACE", count=1
+    )
+    assert items[0]["accession"] == sample.first_accession
+
+    # accession search should work
+    items = call_endpoint_and_get_data(
+        ninja_api_client, f"/samples/?search={sample.first_accession}", count=1
+    )
+    assert items[0]["accession"] == sample.first_accession
+
+
+@pytest.mark.django_db
+def test_api_study_samples_list(raw_reads_mgnify_sample, ninja_api_client):
+    items = call_endpoint_and_get_data(
+        ninja_api_client,
+        f"/studies/{raw_reads_mgnify_sample[0].studies.first().accession}/samples/",
+        count=len(raw_reads_mgnify_sample),
+    )
+    assert items[0]["accession"] in [s.first_accession for s in raw_reads_mgnify_sample]
+    assert "studies" not in items[0]
+
 
 @pytest.mark.django_db
 def test_api_sample_detail(raw_reads_mgnify_sample, ninja_api_client):
@@ -190,6 +222,155 @@ def test_api_sample_detail(raw_reads_mgnify_sample, ninja_api_client):
     assert sample["ena_accessions"] == db_sample.ena_accessions
     assert len(sample["studies"]) == 1
     assert sample["studies"][0]["accession"] == db_sample.studies.first().accession
+
+
+@pytest.mark.django_db
+def test_api_super_studies_list(super_study, ninja_api_client):
+    items = call_endpoint_and_get_data(ninja_api_client, "/super-studies/", count=1)
+    assert items[0]["slug"] == super_study.slug
+    assert items[0]["title"] == super_study.title
+    assert items[0]["description"] == super_study.description
+
+
+@pytest.mark.django_db
+def test_api_super_study_detail(
+    super_study, raw_reads_mgnify_study, ninja_api_client, client, genome_catalogues
+):
+    super_study_detail = call_endpoint_and_get_data(
+        ninja_api_client, f"/super-studies/{super_study.slug}", getter=_whole_object
+    )
+    assert super_study_detail["slug"] == super_study.slug
+    assert super_study_detail["title"] == super_study.title
+    assert super_study_detail["description"] == super_study.description
+    assert len(super_study_detail["flagship_studies"]) == 1
+    assert (
+        super_study_detail["flagship_studies"][0]["accession"]
+        == raw_reads_mgnify_study.accession
+    )
+    assert len(super_study_detail["related_studies"]) == 0
+    assert (
+        super_study_detail["genome_catalogues"][0]["catalogue_id"]
+        == genome_catalogues[0].catalogue_id
+    )
+    assert super_study_detail["logo_url"].startswith("/fieldfiles/download")
+
+    image = client.get(super_study_detail["logo_url"])
+    assert image.status_code == 200
+    assert image.content is not None
+
+
+@pytest.mark.django_db
+def test_api_genome_list(ninja_api_client, genomes):
+    all_genomes = call_endpoint_and_get_data(ninja_api_client, "/genomes/", count=3)
+    assert all_genomes[0]["accession"].startswith("MGYG")
+
+
+@pytest.mark.django_db
+def test_api_genome_catalogues(ninja_api_client, genomes, genome_catalogues):
+    catalogues = call_endpoint_and_get_data(
+        ninja_api_client, "/genomes/catalogues/", count=2
+    )
+    assert catalogues[0]["catalogue_id"] in [
+        cat.catalogue_id for cat in genome_catalogues
+    ]
+
+    cat_id = "human-gut-prokaryotes"
+    catalogue = call_endpoint_and_get_data(
+        ninja_api_client, f"/genomes/catalogues/{cat_id}", getter=_whole_object
+    )
+    assert catalogue["catalogue_id"] in [cat.catalogue_id for cat in genome_catalogues]
+
+    catalogue_genomes = call_endpoint_and_get_data(
+        ninja_api_client, f"/genomes/catalogues/{cat_id}/genomes/", count=2
+    )
+    assert catalogue_genomes[0]["accession"] == genomes[0].accession
+
+
+@pytest.mark.django_db
+def test_publication_annotations(ninja_api_client, publication, httpx_mock):
+    httpx_mock.add_response(
+        url=f"{EMG_CONFIG.europe_pmc.annotations_endpoint}?articleIds=MED:{publication.pubmed_id}&provider={EMG_CONFIG.europe_pmc.annotations_provider}",
+        json=[
+            {
+                "annotations": [
+                    {
+                        "exact": "urine",
+                        "frequency": 5,
+                        "provider": "Metagenomics",
+                        "tags": [
+                            {
+                                "name": "urine",
+                                "uri": "https://www.ebi.ac.uk/ols/ontologies/UBERON/terms?iri=http%3A%2F%2Fpurl.obolibrary.org%2Fobo%2FUBERON_0001088",
+                            }
+                        ],
+                        "type": "Sample-Material",
+                    },
+                    {
+                        "exact": "muscle cells",
+                        "frequency": 1,
+                        "provider": "Metagenomics",
+                        "tags": [
+                            {
+                                "name": "muscle cells",
+                                "uri": "https://www.ebi.ac.uk/ols/ontologies/CL/terms?iri=http%3A%2F%2Fpurl.obolibrary.org%2Fobo%2FCL_0000187",
+                            }
+                        ],
+                        "type": "Sample-Material",
+                    },
+                    {
+                        "exact": "plasma",
+                        "frequency": 1,
+                        "provider": "Metagenomics",
+                        "tags": [
+                            {
+                                "name": "plasma",
+                                "uri": "https://www.ebi.ac.uk/ols/ontologies/UBERON/terms?iri=http%3A%2F%2Fpurl.obolibrary.org%2Fobo%2FUBERON_0001969",
+                            }
+                        ],
+                        "type": "Sample-Material",
+                    },
+                    {
+                        "exact": "preflight",
+                        "frequency": 2,
+                        "provider": "Metagenomics",
+                        "tags": [
+                            {
+                                "name": "preflight",
+                                "uri": "https://www.ebi.ac.uk/ols/search?q=preflight",
+                            }
+                        ],
+                        "type": "State",
+                    },
+                ]
+            }
+        ],
+    )
+    annotations = call_endpoint_and_get_data(
+        ninja_api_client,
+        f"/publications/{publication.pubmed_id}/annotations",
+        getter=_whole_object,
+    )
+    assert "sample_processing" in annotations
+    assert len(annotations["sample_processing"]) == 0
+    assert len(annotations["other"]) == 2
+    assert (
+        annotations["other"][1]["annotations"][0]["mentions"][0]["exact"] == "preflight"
+    )
+
+
+@pytest.mark.django_db
+def test_biomes_endpoint(ninja_api_client, top_level_biomes):
+    biomes = call_endpoint_and_get_data(ninja_api_client, "/biomes/", count=4)
+    assert biomes[-1]["biome_name"] == "Human"
+    assert biomes[-1]["lineage"] == "root:Host-Associated:Human"
+
+    call_endpoint_and_get_data(
+        ninja_api_client, "/biomes/?biome_lineage=root:Host-Associated", count=2
+    )
+
+    call_endpoint_and_get_data(ninja_api_client, "/biomes/?max_depth=1", count=1)
+    call_endpoint_and_get_data(ninja_api_client, "/biomes/?max_depth=2", count=3)
+    call_endpoint_and_get_data(ninja_api_client, "/biomes/?max_depth=10", count=4)
 
 
 @pytest.mark.django_db

@@ -1,6 +1,12 @@
 fileignoreconfig:
+- filename: slurm-dev-environment/configs/jwt_hs256.key
+  checksum: cf9887754600f97f20b4afb223bcd666c3b0aa47dab9b067669c24997f398c26
+
 - filename: .github/workflows/release_k8s.yml
   checksum: 0e93196d244417801fd40ad6bfa01f53a6bf04257371378a1dc3e14cbc7a04d8
+
+- filename: workflows/tests/test_analysis_rawreads_study_flow.py
+  checksum: 0f7255bdd7303269337a7d9be17d5246bfc32980697ba4135f54be201d13180a
 
 - filename: analyses/base_models/base_models.py
   allowed_patterns: [key]
@@ -14,11 +20,32 @@ fileignoreconfig:
 - filename: analyses/tests/test_models.py
   allowed_patterns: [key]
 
+- filename: conftest.py
+  allowed_patterns: [password="password123"]
+
 - filename: deployment/ebi-wp-k8s-hl/ebi-wp-k8s-hl.yaml
-  checksum: a4476f78908b6e6a9f4801fd21c0c9f034869f088dea9eff7baffa2117693255
+  checksum: 016b1063a04a27b3147c54bcd4e34d5dc52bd4c5526e911c8fa6098334704c5c
+
+- filename: deployment/ebi-wp-k8s-hl/README.md
+  allowed_patterns: [kubectl create secret generic nginx-private-data-config-secret --from-file=private-data-nginx.conf -n emgapiv2-hl-exp]
+
+- filename: docker-compose.yaml
+  allowed_patterns: [EMG_WEBIN__JWT_SECRET_KEY=dummy-key, SECURE_LINK_SECRET=dummy-key]
 
 - filename: emgapiv2/api/__init__.py
   allowed_patterns: [OpenApiKeywords]
+
+- filename: emgapiv2/api/auth.py
+  checksum: c6f5567123aa0ab79412e2244398b2e6355a61635d8c861ab2fd650e0ae0f9bd
+
+- filename: emgapiv2/api/storage.py
+  checksum: be76261cc58f5ccea9a0b0d9179894ff3260cb5672aa69a4cfc66732200fed0d
+
+- filename: emgapiv2/test_auth.py
+  checksum: 0a415d1b95a80e683db7275da1d4e62106863fb5670a7a377161295b9993c973
+
+- filename: emgapiv2/api/token_controller.py
+  checksum: 545749dba1bdae2b79e23d43af01344331b8ff03cc909a730c57502ae016bbae
 
 - filename: emgapiv2/dict_utils.py
   allowed_patterns: [keys]
@@ -27,10 +54,10 @@ fileignoreconfig:
   allowed_patterns: [key]
 
 - filename: emgapiv2/config.py
-  checksum: 1e1a8f41069509ddfe643f09455c5c8a52c98ecfa3e3f467cca9798ef0639030
+  checksum: 3afe465b36e4e141124bd84c8459c5aa81332eedf49b691eff22c74df63a0f18
 
 - filename: emgapiv2/settings.py
-  ignore_detectors: [filename]
+  checksum: 77b72bbe1f9003226068fcbc625fda59178fecb125bd96a5df07f0b0a40895c4
 
 - filename: emgapiv2/settings_test.py
   checksum: ded898400b4eda7e3cf75694af1b66235975a85eb5b8f49f3a2c708163a7aad4
@@ -40,6 +67,9 @@ fileignoreconfig:
 
 - filename: emgapiv2/widgets.py
   allowed_patterns: [key]
+
+- filename: slurm-dev-environment/configs/private-data-nginx.conf
+  checksum: e3bb31e2a0f97c62ee684dd7124e5b72db364c52088ddd98331310909c6a0493
 
 - filename: slurm-dev-environment/fs/nfs/public/tests/amplicon_v6_output/SRR1111111/taxonomy-summary/DADA2-SILVA/SRR1111111_16S-V3-V4.html
   checksum: cbba3d78df18143c2d69885815740506ea76787d481f94748c79627737222ce4
@@ -55,6 +85,27 @@ fileignoreconfig:
 
 - filename: slurm-dev-environment/fs/nfs/public/tests/amplicon_v6_output/SRR6180434/taxonomy-summary/SILVA-SSU/SRR6180434.html
   checksum: be322a6ac4686d8fa31b271a862510603403c2da8dbdce60dbb7ad3877aa7b47
+
+- filename: slurm-dev-environment/fs/nfs/public/tests/assembly_v6_output/ERZ857107/ERZ857107/pathways-and-systems/antismash/ERZ857107_merged.json
+  checksum: ece068d6588a0eb485afe5f33e4a07fb38ba4f4818886d04e602a55a277f08a3
+
+- filename: slurm-dev-environment/fs/nfs/public/tests/assembly_v6_output/ERZ857107/ERZ857107/taxonomy/ERZ857107.html
+  checksum: af7245c07908173f79c9ed103d6c6359ee21098d74144b481fd260c35541413a
+
+- filename: slurm-dev-environment/fs/nfs/public/tests/assembly_v6_output/ERZ857107/multiqc/multiqc_report.html
+  checksum: b5eb08be7ebabc3ea66bd9386fc470ce1bc1a4e134f76e46008db6494390bcaf
+
+- filename: slurm-dev-environment/fs/nfs/public/tests/assembly_v6_output/ERZ857107/ERZ857107/qc/multiqc_report.html
+  checksum: 207ad16d2d80fa615924376559f7dccd2276e153702ffcf8abc0c700795c1124
+
+- filename: slurm-dev-environment/fs/nfs/public/tests/assembly_v6_output/ERZ857107/ERZ857107/functional-annotation/interpro/ERZ857107_interpro_summary_2.tsv
+  checksum: df6cacb1d2d940499067d40d00ae6ccf6b380667722afce4f1526f39d74d90e1
+
+- filename: slurm-dev-environment/fs/nfs/public/tests/assembly_v6_output/ERZ857107/dram-distill/samplesheet_dram_input.tsv
+  checksum: 17031e40bdc3447b7c6f98bf3c8cebf22e39c3e78ec129469ce83af6ca9609ed
+
+- filename: Taskfile.yaml
+  allowed_patterns: [a password in, slurm-dev-environment/fs/nfs/public/tests/assembly_v6_output/ERZ857107/ERZ857107, slurm-dev-environment/fs/nfs/ftp/public/databases/metagenomics/mgnify_results/PRJNA398/PRJNA398089/ERZ857/ERZ857107/V6/assembly]
 
 - filename: workflows/data_io_utils/csv/csv_comment_handler.py
   allowed_patterns: [keys()]
@@ -93,17 +144,53 @@ fileignoreconfig:
   allowed_patterns: [key, InstrumentPlatformKeys]
 
 - filename: workflows/flows/upload_assembly.py
-  allowed_patterns: ["-password='{password}'"]
+  checksum: f82f92058dabd50b9b6caf557d4eadae227ec4f6a0233135653251c20cf3c64b
 
 - filename: workflows/prefect_utils/env_context.py
   checksum: 8f5e11c7e0038bc4a648dc61ec657a679356857f77e557f744e2dd769ad88def
   ignore_detectors: [filename]
+
+- filename: workflows/tests/test_cli_command_utils.py
+  checksum: 3f541206fc17c825cd777704cfce875305fd313475553b95ff764b0f4a0c8f92
 
 - filename: workflows/tests/test_env_context.py
   checksum: 6d3d6b0c08bc5c564a2b7f79c21fb3f10244dc9b770eac0d2344766bdb358fa0
 
 - filename: workflows/tests/test_import_v5_amplicon_analyses.py
   checksum: ac644b851d31913ca9328d5a83516146c4c76874201df0a2d7086df6b60435c8
+
+- filename: workflows/tests/test_analysis_rawreads_study_flow.py
+  checksum: b9fad76ff7a839ac5f88a1aabd5a1c4009db9ac3ed6a6c40c42bd88cc1d1c8b0
+
+- filename: workflows/flows/upload_assembly.py
+  allowed_patterns: [key]
+
+- filename: workflows/prefect_utils/slurm_flow.py
+  allowed_patterns: [key]
+
+- filename: workflows/flows/alternative_realistic_example.py
+  allowed_patterns: [key]
+
+- filename: workflows/data_io_utils/schemas/base.py
+  checksum: 27b03a470da785c58f8294d2aa0aa3ef5f4e5ec5cffd97984ab446a5b8a9f337
+
+- filename: Taskfile.yaml
+  checksum: 592e19dbbafe04c136aa73a4921ac04b2d0473e654416b08d09e81d7544b8b09
+
+- filename: workflows/data_io_utils/schemas/assembly.py
+  checksum: 12b45869a636431bb6e1bfe193f02f301a6b484a0c4503bc793f5450c36c932a
+
+- filename: workflows/models.py
+  checksum: 487ca9d7edb707de28311b4154ce86a9b10269d29f2951f010db5c17af88d9ae
+
+- filename: workflows/tests/test_assembly_analysis_batch_results_importer.py
+  checksum: cc0bc943f33aeac170673cb07d5e3b9b284d772fab495ec63de88974a41d22de
+
+- filename: workflows/flows/analysis/assembly/flows/run_assembly_analysis_pipeline_batch.py
+  checksum: f4d17e99ffa7780ec7082ed9782cc1dac32f6611cae4fa4f1d3412ea2e963cb0
+
+- filename: deployment/ebi-wp-k8s-hl/start_prefect_slurm_worker.sh
+  checksum: c98eedfe5ad3c85b8e623344b151d2926cd148e98c199431f41c6bc52c866e6e
 
 allowed_patterns:
 - cache_key_fn
@@ -117,5 +204,7 @@ allowed_patterns:
 - key1=val1
 - key2=val2
 - KnownMetadataKeys
-- pagination_key
 - primary_key
+- pass_whole_object
+- dictionary key
+- OpenApiKeywords

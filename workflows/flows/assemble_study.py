@@ -1,5 +1,5 @@
 from enum import Enum
-from textwrap import dedent as _
+from textwrap import dedent
 from typing import Optional, List
 
 from django.urls import reverse_lazy
@@ -8,6 +8,9 @@ from prefect.events import emit_event
 from prefect.input import RunInput
 from prefect.runtime import flow_run, deployment
 from pydantic import Field
+from pydantic_core import PydanticUndefined
+
+from workflows.views import encode_samplesheet_path
 
 from emgapiv2.enum_utils import FutureStrEnum
 
@@ -18,7 +21,9 @@ import ena.models
 from workflows.ena_utils.ena_api_requests import (
     get_study_from_ena,
     get_study_readruns_from_ena,
+    ENALibraryStrategyPolicy,
 )
+from workflows.ena_utils.webin_owner_utils import validate_and_set_webin_owner
 from workflows.flows.assemble_study_tasks.assemble_samplesheets import (
     run_assembler_for_samplesheet,
 )
@@ -99,35 +104,51 @@ def assemble_study(
     UserChoices = get_users_as_choices()
 
     class AssembleStudyInput(RunInput):
-        biome: BiomeChoices
-        assembler: AssemblerChoices
+        biome: BiomeChoices = Field(
+            default=(
+                getattr(BiomeChoices, str(mgnify_study.biome.path))
+                if mgnify_study.biome
+                else PydanticUndefined
+            )
+        )
+        assembler: AssemblerChoices = Field(
+            ..., description="Default picked by run data type, unless overridden here."
+        )
         watchers: Optional[List[UserChoices]] = Field(
             None,
             description="Admin users watching this study will get status notifications.",
         )
         webin_owner: Optional[str] = Field(
-            None,
+            default=(
+                mgnify_study.webin_submitter if mgnify_study.webin_submitter else None
+            ),
             description="Webin ID of study owner, if data is private. Can be left as None, if public.",
+        )
+        library_strategy_policy: ENALibraryStrategyPolicy = Field(
+            ENALibraryStrategyPolicy.ONLY_IF_CORRECT_IN_ENA,
+            description="Optionally treat read-runs with incorrect library strategy metadata as assemblable.",
+        )
+        wait_for_samplesheet_editing: bool = Field(
+            False,
+            description="If True, the execution will be suspended after the samplesheets are created, to allow editing.",
         )
 
     assemble_study_input: AssembleStudyInput = suspend_flow_run(
         wait_for_input=AssembleStudyInput.with_initial_data(
             assembler=AssemblerChoices.pipeline_default,
-            description=_(
+            description=dedent(
                 f"""\
                 **MI-Assembler**
                 This will assemble all {len(read_runs)} read-runs of study {ena_study.accession} \
                 using [MI-Assembler](https://www.github.com/ebi-metagenomics/mi-assembler).
 
-                Please pick which assembler tool to use (otherwise a default one will be picked depending on the data type).
-
                 **Biome tagger**
                 Please select a Biome for the entire study \
                 [{ena_study.accession}: {ena_study.title}](https://www.ebi.ac.uk/ena/browser/view/{ena_study.accession}).
 
-                The Biome is important metadata, and will also be used to guess how much memory is needed to assemble this study. \
-                These guesses are determined by the `ComputeResourceHeuristics`, \
-                which you can edit in the [admin panel]({EMG_CONFIG.service_urls.app_root}/{reverse_lazy("admin:index")}).
+                The Biome is also used to guess how much memory is needed to assemble this study. \
+                Guesses are determined by `ComputeResourceHeuristics`, \
+                (can be edited in the [admin panel]({EMG_CONFIG.service_urls.app_root}/{reverse_lazy("admin:index")}).
 
                 **Webin owner**
                 If the study is private, the webin account owner is needed so that assemblies can be brokered into \
@@ -137,11 +158,8 @@ def assemble_study(
         )
     )
 
-    if assemble_study_input.webin_owner:
-        webin_owner = assemble_study_input.webin_owner.title()
-        assert webin_owner.startswith("Webin-")
-    else:
-        webin_owner = None
+    validate_and_set_webin_owner(ena_study, assemble_study_input.webin_owner)
+    mgnify_study.refresh_from_db()
 
     if assemble_study_input.watchers:
         add_study_watchers(mgnify_study, assemble_study_input.watchers)
@@ -165,13 +183,50 @@ def assemble_study(
     )
     # assumes latest version...
 
-    if webin_owner:
-        ena_study.webin_submitter = webin_owner
-        ena_study.save()
+    get_or_create_assemblies_for_runs(
+        mgnify_study.accession,
+        read_runs,
+        library_strategy_policy=assemble_study_input.library_strategy_policy,
+    )
+    samplesheets = make_samplesheets_for_runs_to_assemble(
+        mgnify_study.accession, assembler
+    )
 
-    get_or_create_assemblies_for_runs(mgnify_study, read_runs)
-    samplesheets = make_samplesheets_for_runs_to_assemble(mgnify_study, assembler)
+    # If allow_samplesheet_editing is True, suspend the flow to allow editing
+    if assemble_study_input.wait_for_samplesheet_editing and samplesheets:
+        edit_urls = ""
+        for samplesheet_path, _ in samplesheets:
+            edit_urls += f"* [Edit samplesheet {samplesheet_path.name}]({EMG_CONFIG.service_urls.app_root}/workflows/edit-samplesheet/fetch/{encode_samplesheet_path(samplesheet_path)})\n"
+
+        suspend_message = dedent(
+            f"""\
+            ## Samplesheets are ready for editing
+
+            The following samplesheets have been created and are ready for editing:
+
+            {{EDIT_URLS}}
+
+            **Please edit the samplesheets as needed and then resume ("Submit") this flow.**
+            The flow will fail after {EMG_CONFIG.assembler.suspend_timeout_for_editing_samplesheets_secs / 3600} hours if not resumed.
+            """
+        ).format(EDIT_URLS=edit_urls)
+
+        class ResumeAfterSamplesheetEditingInput(RunInput):
+            okay: bool = Field(
+                True, description="Is a llama your favourite animal?"
+            )  # fake input to make prefect suspend work
+
+        suspend_flow_run(
+            timeout=EMG_CONFIG.assembler.suspend_timeout_for_editing_samplesheets_secs,
+            wait_for_input=ResumeAfterSamplesheetEditingInput.with_initial_data(
+                description=suspend_message
+            ),
+        )
+
+    logger.info("Flow resumed after samplesheet editing")
+
     for samplesheet_path, samplesheet_hash in samplesheets:
+        logger.info(f"Will run assembler for samplesheet {samplesheet_path.name}")
         run_assembler_for_samplesheet(
             mgnify_study,
             samplesheet_path,

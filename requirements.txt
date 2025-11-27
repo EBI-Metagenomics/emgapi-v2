@@ -1,35 +1,51 @@
-django==5.2.1
-django-cors-headers==4.7.0
-django-ninja~=1.4.2
-prefect==3.4.4
+# General
+aenum~=3.1.16  # extendable enums
+case-converter~=1.2.0
+cython<3.0
+Pillow~=11.3.0  # imagefield requirement
+typing_extensions~=4.14.1
+tzdata
+
+# Django and plugins
+django==5.2.7
+django-cors-headers==4.9.0
+dj-database-url==3.0.1
+django-debug-toolbar==5.2.0
+django-json-widget==2.0.4  # for jsonfields in admin panel
+django-ltree-2==0.1.12  # biome hierarchies
+django-ninja~=1.4.3  # api
+django-ninja-jwt~=5.3.9  # api auth
+django-db-file-storage~=0.5.6.1  # logo storage in db
+django-unfold==0.67.0  # admin panel
+
+# Serving
+asgiref~=3.10.0
+gunicorn==23.0.0
+whitenoise==6.11.0
+
+# DB
+psycopg2-binary
+
+# Prefect workflows
+prefect==3.4.19
 prefect-shell==0.3.1
 prefect-slack==0.3.1
-dj-database-url==2.3.0
-psycopg2-binary
-cython<3.0
-pydantic~=2.11.5
-pydantic-settings~=2.9.1
-nextflowpy==0.11.0
-django-unfold==0.59.0
-django-json-widget==2.0.1
-tzdata
-pandas==2.2.3
-django-ltree-2==0.1.12
+prefect-slurm==0.1.1
 
-whitenoise==6.9.0
-gunicorn==23.0.0
-django-debug-toolbar==5.2.0
-django-admin-inline-paginator-plus==0.1.4
+# Pydantic
+pydantic<2.12.0  # TODO upgrade once https://github.com/eadwinCode/django-ninja-jwt/pull/151 is released
+pydantic-settings~=2.11.0
 
+# Data handling
+pandas==2.3.3
 biopython==1.85
+numpy~=2.2.6
 
-pymongo==4.13.0
+# Legacy DB connectors (remove at some point)
+pymongo==4.13.2
 mysql-connector-python
 SQLAlchemy
 
-numpy~=2.2.6
-requests~=2.32.3
+# Outbound network
+requests~=2.32.4
 httpx~=0.28.1
-typing_extensions~=4.13.2
-asgiref~=3.8.1
-case-converter~=1.2.0

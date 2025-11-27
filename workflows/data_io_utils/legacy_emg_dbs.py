@@ -1,5 +1,5 @@
 from contextlib import contextmanager
-from typing import List, Optional, TYPE_CHECKING
+from typing import List, Optional, TYPE_CHECKING, TypedDict
 
 import pymongo
 from django.conf import settings
@@ -15,6 +15,7 @@ from sqlalchemy.orm import (
 )
 
 from analyses.base_models.with_downloads_models import DownloadFileType, DownloadType
+from analyses.base_models.with_experiment_type_models import WithExperimentTypeModel
 
 if TYPE_CHECKING:
     import analyses.models
@@ -54,6 +55,9 @@ class LegacyStudy(LegacyEMGBase):
 
     is_suppressed: Mapped[bool] = mapped_column("IS_SUPPRESSED", Boolean)
     is_private: Mapped[bool] = mapped_column("IS_PRIVATE", Boolean)
+    submission_account_id: Mapped[str] = mapped_column(
+        "SUBMISSION_ACCOUNT_ID", String, nullable=True
+    )
 
     analysis_jobs: Mapped[list["LegacyAnalysisJob"]] = relationship(
         back_populates="study"
@@ -92,6 +96,62 @@ class LegacyRun(LegacyEMGBase):
     study: Mapped["LegacyStudy"] = relationship("LegacyStudy")
 
     experiment_type_id: Mapped[int] = mapped_column("EXPERIMENT_TYPE_ID", Integer)
+
+
+class LegacySuperStudy(LegacyEMGBase):
+    __tablename__ = "SUPER_STUDY"
+
+    study_id: Mapped[int] = mapped_column("STUDY_ID", Integer, primary_key=True)
+    title: Mapped[str] = mapped_column("TITLE", String)
+    description: Mapped[str] = mapped_column("DESCRIPTION", String, nullable=True)
+    url_slug: Mapped[str] = mapped_column("URL_SLUG", String)
+    logo: Mapped[str] = mapped_column("LOGO", String, nullable=True)
+
+    studies: Mapped[list["LegacySuperStudyStudy"]] = relationship(
+        "LegacySuperStudyStudy", back_populates="super_study"
+    )
+
+
+class LegacySuperStudyStudy(LegacyEMGBase):
+    __tablename__ = "SUPER_STUDY_STUDY"
+
+    id: Mapped[int] = mapped_column("id", Integer, primary_key=True)
+    study_id: Mapped[int] = mapped_column("STUDY_ID", ForeignKey("STUDY.STUDY_ID"))
+    super_study_id: Mapped[int] = mapped_column(
+        "SUPER_STUDY_ID", ForeignKey("SUPER_STUDY.STUDY_ID")
+    )
+    is_flagship: Mapped[bool] = mapped_column("is_flagship", Boolean)
+
+    study: Mapped["LegacyStudy"] = relationship("LegacyStudy")
+    super_study: Mapped["LegacySuperStudy"] = relationship(
+        "LegacySuperStudy", back_populates="studies"
+    )
+
+
+class LegacyPublication(LegacyEMGBase):
+    __tablename__ = "PUBLICATION"
+
+    pub_id: Mapped[int] = mapped_column("PUB_ID", primary_key=True)
+    authors: Mapped[str] = mapped_column("AUTHORS", nullable=True)
+    doi: Mapped[str] = mapped_column("DOI", nullable=True)
+    isbn: Mapped[str] = mapped_column("ISBN", nullable=True)
+    iso_journal: Mapped[str] = mapped_column("ISO_JOURNAL", nullable=True)
+    medline_journal: Mapped[str] = mapped_column("MEDLINE_JOURNAL", nullable=True)
+    pubmed_central_id: Mapped[int] = mapped_column("PUBMED_CENTRAL_ID", nullable=True)
+    pubmed_id: Mapped[int] = mapped_column("PUBMED_ID")
+    pub_title: Mapped[str] = mapped_column("PUB_TITLE")
+    raw_pages: Mapped[str] = mapped_column("RAW_PAGES", nullable=True)
+    volume: Mapped[str] = mapped_column("VOLUME", nullable=True)
+    published_year: Mapped[int] = mapped_column("PUBLISHED_YEAR", nullable=True)
+    pub_type: Mapped[str] = mapped_column("PUB_TYPE", nullable=True)
+
+
+class LegacyStudyPublication(LegacyEMGBase):
+    __tablename__ = "STUDY_PUBLICATION"
+
+    id: Mapped[int] = mapped_column("id", primary_key=True)
+    study_id: Mapped[int] = mapped_column("STUDY_ID")
+    pub_id: Mapped[int] = mapped_column("PUB_ID")
 
 
 class LegacyAnalysisJob(LegacyEMGBase):
@@ -172,6 +232,7 @@ class LegacyAnalysisJobDownload(LegacyEMGBase):
 # Maps to convert legacy download metadata to new schema:
 
 LEGACY_FILE_FORMATS_MAP = {
+    # simple map of data from the legacy FILE_FORMAT table, mapped to this codebase's Enums
     1: DownloadFileType.TSV,
     2: DownloadFileType.TSV,
     3: DownloadFileType.CSV,
@@ -185,6 +246,7 @@ LEGACY_FILE_FORMATS_MAP = {
 }
 
 LEGACY_DOWNLOAD_TYPE_MAP = {
+    # simple map of data from the legacy DOWNLOAD_GROUP_TYPE table, mapped to this codebase's Enums
     1: DownloadType.SEQUENCE_DATA,
     2: DownloadType.FUNCTIONAL_ANALYSIS,
     3: DownloadType.TAXONOMIC_ANALYSIS,
@@ -201,6 +263,18 @@ LEGACY_DOWNLOAD_TYPE_MAP = {
     14: DownloadType.FUNCTIONAL_ANALYSIS,
     15: DownloadType.TAXONOMIC_ANALYSIS,
     16: DownloadType.RO_CRATE,
+}
+
+LEGACY_EXPERIMENT_TYPE_MAP = {
+    # simple map of data from the legacy EXPERIMENT_TYPE table, mapped to this codebase's Enums
+    1: WithExperimentTypeModel.ExperimentTypes.METATRANSCRIPTOMIC,
+    2: WithExperimentTypeModel.ExperimentTypes.METAGENOMIC,
+    3: WithExperimentTypeModel.ExperimentTypes.AMPLICON,
+    4: WithExperimentTypeModel.ExperimentTypes.ASSEMBLY,
+    5: WithExperimentTypeModel.ExperimentTypes.METABARCODING,
+    6: WithExperimentTypeModel.ExperimentTypes.UNKNOWN,
+    7: WithExperimentTypeModel.ExperimentTypes.HYBRID_ASSEMBLY,
+    8: WithExperimentTypeModel.ExperimentTypes.LONG_READ_ASSEMBLY,
 }
 
 
@@ -229,6 +303,42 @@ def get_taxonomy_from_api_v1_mongo(
         Analysis.TaxonomySources.ITS_ONE_DB.value: mgya_taxonomies.get("itsonedb"),
         Analysis.TaxonomySources.UNITE.value: mgya_taxonomies.get("unite"),
         Analysis.TaxonomySources.PR2.value: None,  # not implemented in v5 pipeline
+    }
+
+
+class FunctionalAnnotationsPartial(TypedDict):
+    pfams: Optional[List[str]]
+    interpros: Optional[List[str]]
+
+
+@task(task_run_name="Get pfam/interpro for {mgya} from legacy mongo")
+def get_functions_from_api_v1_mongo(
+    mgya: str,
+) -> FunctionalAnnotationsPartial:
+    logger = get_run_logger()
+    mongo_dsn = str(settings.EMG_CONFIG.legacy_service.emg_mongo_dsn)
+    mongo_client = pymongo.MongoClient(mongo_dsn)
+    db = mongo_client[settings.EMG_CONFIG.legacy_service.emg_mongo_db]
+
+    pfams_collection: Collection = db.analysis_job_pfam
+
+    mgya_pfams = pfams_collection.find_one({"accession": mgya})
+
+    if not mgya_pfams:
+        logger.warning(f"Did not find {mgya} in legacy mongo pfams")
+
+    interpros_collection: Collection = db.analysis_job_interpro_identifiers
+
+    mgya_interpros = interpros_collection.find_one({"accession": mgya})
+
+    if not mgya_interpros:
+        logger.warning(f"Did not find {mgya} in legacy mongo interpros")
+
+    return {
+        "pfams": mgya_pfams.get("pfam_entries") if mgya_pfams else [],
+        "interpros": (
+            mgya_interpros.get("interpro_identifiers") if mgya_interpros else []
+        ),
     }
 
 

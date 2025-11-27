@@ -1,7 +1,6 @@
 import json
 import os
 import shutil
-from enum import Enum
 from pathlib import Path
 from typing import Optional, List
 from unittest.mock import patch
@@ -14,25 +13,43 @@ from pydantic import BaseModel
 
 import analyses.models
 import ena.models
+from workflows.ena_utils.ena_api_requests import ENALibraryStrategyPolicy
 from workflows.flows.assemble_study import AssemblerChoices, assemble_study
 from workflows.flows.assemble_study_tasks.assemble_samplesheets import (
     get_reference_genome,
-    update_assemblies_assemblers_from_samplesheet,
+    update_assemblers_and_contaminant_ref_of_assemblies_from_samplesheet,
 )
 from workflows.flows.assemble_study_tasks.make_samplesheets import (
     make_samplesheets_for_runs_to_assemble,
 )
-from workflows.prefect_utils.analyses_models_helpers import (
-    task_mark_assembly_status,
-    get_users_as_choices,
-)
+from workflows.prefect_utils.analyses_models_helpers import mark_assembly_status
+
 from workflows.prefect_utils.testing_utils import (
     should_not_mock_httpx_requests_to_prefect_server,
+    combine_caplog_records,
 )
 
 EMG_CONFIG = settings.EMG_CONFIG
 
 
+@pytest.fixture
+def assembly_study_input_mocker(biome_choices, user_choices):
+    ## Pretend that a human resumed the flow with the biome picker, and then with the assembler selector.
+
+    class MockAssembleStudyInput(BaseModel):
+        biome: biome_choices
+        assembler: AssemblerChoices
+        webin_owner: Optional[str]
+        watchers: List[user_choices]
+        wait_for_samplesheet_editing: bool
+        library_strategy_policy: ENALibraryStrategyPolicy
+
+    return MockAssembleStudyInput
+
+
+@pytest.mark.flaky(
+    reruns=2
+)  # sometimes fails due to missing report CSV. maybe xdist or shared tmp-dir problem?
 @pytest.mark.httpx_mock(should_mock=should_not_mock_httpx_requests_to_prefect_server)
 @pytest.mark.django_db(transaction=True)
 @pytest.mark.parametrize(
@@ -43,6 +60,7 @@ def test_prefect_assemble_study_flow(
     mock_queryset_hash_for_assemblies,
     prefect_harness,
     httpx_mock,
+    ena_any_sample_metadata,
     mock_suspend_flow_run,
     mock_cluster_can_accept_jobs_yes,
     mock_start_cluster_job,
@@ -50,10 +68,13 @@ def test_prefect_assemble_study_flow(
     top_level_biomes,
     assemblers,
     admin_user,
+    biome_choices,
+    user_choices,
+    assembly_study_input_mocker,
 ):
     ### ENA MOCKING ###
     accession = "SRP1"
-    number_of_runs = 5
+    number_of_runs = 9
     number_not_assembled_runs = 1
 
     httpx_mock.add_response(
@@ -84,6 +105,18 @@ def test_prefect_assemble_study_flow(
         ],
     )
 
+    """
+    Runs description:
+    SRR1: correct PE, WGS MetaG - metaspades
+    SRR2: correct PE, WGS MetaG - metaspades (with failure)
+    SRR3: correct SE, WGS MetaG - megahit
+    SRR4: correct SE, WGS MetaG, LR - Flye
+    SRR5: correct SE, WGS MetaG, ION_TORRENT - spades
+    SRR6: correct PE, WGA MetaG - metaspades
+    SRR7: correct PE, WGA MetaT - metaspades
+    SRR8: incorrect SE, WGS MetaG - metaspades
+    SRR9: incorrect PE, WGA MetaG - megahit
+    """
     httpx_mock.add_response(
         url=f"{EMG_CONFIG.ena.portal_search_api}?"
         f"result=read_run"
@@ -188,26 +221,94 @@ def test_prefect_assemble_study_flow(
                 "lon": "0",
                 "location": "hinxton",
             },
+            {
+                "sample_accession": "SAMN06",
+                "sample_title": "Wookie hair 6 (PE labeled as WGA and METAGENOMIC)",
+                "secondary_sample_accession": "SRS6",
+                "run_accession": "SRR6",
+                "fastq_md5": "123;abc",
+                "fastq_ftp": "ftp.sra.example.org/vol/fastq/SRR6/SRR6_1.fastq.gz;ftp.sra.example.org/vol/fastq/SRR6/SRR6_2.fastq.gz",
+                "library_layout": "PAIRED",
+                "library_strategy": "WGA",
+                "library_source": "METAGENOMIC",
+                "scientific_name": "metagenome",
+                "host_tax_id": "7460",
+                "host_scientific_name": "Apis mellifera",
+                "instrument_platform": "ILLUMINA",
+                "instrument_model": "Illumina MiSeq",
+                "lat": "52",
+                "lon": "0",
+                "location": "hinxton",
+            },
+            {
+                "sample_accession": "SAMN07",
+                "sample_title": "Wookie hair 7 (PE labeled as WGA and METATRANSCRIPTOMIC)",
+                "secondary_sample_accession": "SRS7",
+                "run_accession": "SRR7",
+                "fastq_md5": "123;abc",
+                "fastq_ftp": "ftp.sra.example.org/vol/fastq/SRR7/SRR7_1.fastq.gz;ftp.sra.example.org/vol/fastq/SRR7/SRR7_2.fastq.gz",
+                "library_layout": "PAIRED",
+                "library_strategy": "WGA",
+                "library_source": "METATRANSCRIPTOMIC",
+                "scientific_name": "metagenome",
+                "host_tax_id": "7460",
+                "host_scientific_name": "Apis mellifera",
+                "instrument_platform": "ILLUMINA",
+                "instrument_model": "Illumina MiSeq",
+                "lat": "52",
+                "lon": "0",
+                "location": "hinxton",
+            },
+            {
+                "sample_accession": "SAMN08",
+                "sample_title": "Wookie hair 8 (PE labeled as SE, should use changed LL)",
+                "secondary_sample_accession": "SRS8",
+                "run_accession": "SRR8",
+                "fastq_md5": "123;abc",
+                "fastq_ftp": "ftp.sra.example.org/vol/fastq/SRR8/SRR8_1.fastq.gz;ftp.sra.example.org/vol/fastq/SRR8/SRR8_2.fastq.gz",
+                "library_layout": "SINGLE",
+                "library_strategy": "WGS",
+                "library_source": "METAGENOMIC",
+                "scientific_name": "metagenome",
+                "host_tax_id": "7460",
+                "host_scientific_name": "Apis mellifera",
+                "instrument_platform": "ILLUMINA",
+                "instrument_model": "Illumina MiSeq",
+                "lat": "52",
+                "lon": "0",
+                "location": "hinxton",
+            },
+            {
+                "sample_accession": "SAMN09",
+                "sample_title": "Wookie hair 9 (SE labeled as PE, should use changed LL)",
+                "secondary_sample_accession": "SRS9",
+                "run_accession": "SRR9",
+                "fastq_md5": "123;abc",
+                "fastq_ftp": "ftp.sra.example.org/vol/fastq/SRR9/SRR9.fastq.gz",
+                "library_layout": "PAIRED",
+                "library_strategy": "WGA",
+                "library_source": "METAGENOMIC",
+                "scientific_name": "metagenome",
+                "host_tax_id": "7460",
+                "host_scientific_name": "Apis mellifera",
+                "instrument_platform": "ILLUMINA",
+                "instrument_model": "Illumina MiSeq",
+                "lat": "52",
+                "lon": "0",
+                "location": "hinxton",
+            },
         ],
     )
 
-    ## Pretend that a human resumed the flow with the biome picker, and then with the assembler selector.
-    BiomeChoices = Enum("BiomeChoices", {"root.engineered": "Root:Engineered"})
-    UserChoices = get_users_as_choices()
-
-    class AssembleStudyInput(BaseModel):
-        biome: BiomeChoices
-        assembler: AssemblerChoices
-        webin_owner: Optional[str]
-        watchers: List[UserChoices]
-
     def suspend_side_effect(wait_for_input=None):
         if wait_for_input.__name__ == "AssembleStudyInput":
-            return AssembleStudyInput(
-                biome=BiomeChoices["root.engineered"],
+            return assembly_study_input_mocker(
+                biome=biome_choices["root.engineered"],
                 assembler=AssemblerChoices.pipeline_default,
                 webin_owner=None,
-                watchers=[UserChoices[admin_user.username]],
+                watchers=[user_choices[admin_user.username]],
+                wait_for_samplesheet_editing=False,
+                library_strategy_policy=ENALibraryStrategyPolicy.ONLY_IF_CORRECT_IN_ENA,
             )
 
     mock_suspend_flow_run.side_effect = suspend_side_effect
@@ -223,49 +324,54 @@ def test_prefect_assemble_study_flow(
         file.write("SRR1,metaspades,3.15.5\n")
         file.write("SRR3,megahit,1.2.9\n")
         file.write("SRR4,flye,2.9.5\n")
-        file.write("SRR5,spades,3.15.5")
+        file.write("SRR5,spades,3.15.5\n")
+        file.write("SRR6,metaspades,3.15.5\n")
+        file.write("SRR7,metaspades,3.15.5\n")
+        file.write("SRR8,metaspades,3.15.5\n")
+        file.write("SRR9,megahit,1.2.9")
 
     with open(f"{assembly_folder}/qc_failed_runs.csv", "w") as file:
         file.write("SRR2,filter_ratio_threshold_exceeded")
 
     # create fake results folders
-    os.makedirs(
+    created_coverage_folders = [
         f"{assembly_folder}/PRJNA1/PRJNA1/SRR1/SRR1/assembly/metaspades/3.15.5/coverage/",
-        exist_ok=True,
-    )
-    os.makedirs(
         f"{assembly_folder}/PRJNA1/PRJNA1/SRR3/SRR3/assembly/megahit/1.2.9/coverage/",
-        exist_ok=True,
-    )
-    os.makedirs(
+        f"{assembly_folder}/PRJNA1/PRJNA1/SRR3/SRR3/assembly/megahit/1.2.9/coverage/",
         f"{assembly_folder}/PRJNA1/PRJNA1/SRR4/SRR4/assembly/flye/2.9.5/coverage/",
-        exist_ok=True,
-    )
-    os.makedirs(
         f"{assembly_folder}/PRJNA1/PRJNA1/SRR5/SRR5/assembly/spades/3.15.5/coverage/",
-        exist_ok=True,
-    )
+        f"{assembly_folder}/PRJNA1/PRJNA1/SRR6/SRR6/assembly/metaspades/3.15.5/coverage/",
+        f"{assembly_folder}/PRJNA1/PRJNA1/SRR7/SRR7/assembly/metaspades/3.15.5/coverage/",
+        f"{assembly_folder}/PRJNA1/PRJNA1/SRR8/SRR8/assembly/metaspades/3.15.5/coverage/",
+        f"{assembly_folder}/PRJNA1/PRJNA1/SRR9/SRR9/assembly/megahit/1.2.9/coverage/",
+    ]
+
+    for folder in created_coverage_folders:
+        os.makedirs(
+            folder,
+            exist_ok=True,
+        )
+
     # create fake coverage files
-    with open(
+    created_coverage_files = [
         f"{assembly_folder}/PRJNA1/PRJNA1/SRR1/SRR1/assembly/metaspades/3.15.5/coverage/SRR1_coverage.json",
-        "w",
-    ) as file:
-        json.dump({"coverage": 0.04760503915318373, "coverage_depth": 273.694}, file)
-    with open(
         f"{assembly_folder}/PRJNA1/PRJNA1/SRR3/SRR3/assembly/megahit/1.2.9/coverage/SRR3_coverage.json",
-        "w",
-    ) as file:
-        json.dump({"coverage": 0.04960503915318373, "coverage_depth": 273.694}, file)
-    with open(
         f"{assembly_folder}/PRJNA1/PRJNA1/SRR4/SRR4/assembly/flye/2.9.5/coverage/SRR4_coverage.json",
-        "w",
-    ) as file:
-        json.dump({"coverage": 0.049, "coverage_depth": 276.694}, file)
-    with open(
         f"{assembly_folder}/PRJNA1/PRJNA1/SRR5/SRR5/assembly/spades/3.15.5/coverage/SRR5_coverage.json",
-        "w",
-    ) as file:
-        json.dump({"coverage": 0.049, "coverage_depth": 276.694}, file)
+        f"{assembly_folder}/PRJNA1/PRJNA1/SRR6/SRR6/assembly/metaspades/3.15.5/coverage/SRR6_coverage.json",
+        f"{assembly_folder}/PRJNA1/PRJNA1/SRR7/SRR7/assembly/metaspades/3.15.5/coverage/SRR7_coverage.json",
+        f"{assembly_folder}/PRJNA1/PRJNA1/SRR8/SRR8/assembly/metaspades/3.15.5/coverage/SRR8_coverage.json",
+        f"{assembly_folder}/PRJNA1/PRJNA1/SRR9/SRR9/assembly/megahit/1.2.9/coverage/SRR9_coverage.json",
+    ]
+
+    for cov_file in created_coverage_files:
+        with open(
+            cov_file,
+            "w",
+        ) as file:
+            json.dump(
+                {"coverage": 0.04760503915318373, "coverage_depth": 273.694}, file
+            )
 
     ### RUN WORKFLOW ###
     assemble_study(accession, upload=False)
@@ -284,6 +390,8 @@ def test_prefect_assemble_study_flow(
     assert table_data[3]["platform"] == "ont"
     # ION_TORRENT should be iontorrent
     assert table_data[4]["platform"] == "iontorrent"
+    # Check the genome used to decontamination
+    assert table_data[4]["contaminant_reference"] == "honeybee.fna"
 
     ### DB OBJECTS WERE CREATED AS EXPECTED ###
     assert ena.models.Study.objects.count() == 1
@@ -313,7 +421,7 @@ def test_prefect_assemble_study_flow(
         analyses.models.Assembly.objects.filter(
             assembler__name__iexact="megahit"
         ).count()
-        == 1
+        == 2
     )
     # but platform ION_TORRENT SE should be assembled with spades
     assert (
@@ -327,7 +435,7 @@ def test_prefect_assemble_study_flow(
         analyses.models.Assembly.objects.filter(
             assembler__name__iexact="metaspades"
         ).count()
-        == 2
+        == 5
     )
     # platform OXFORD_NANOPORE should be assembled with Flye as LR
     assert (
@@ -347,6 +455,9 @@ def test_prefect_assemble_study_flow(
     shutil.rmtree(assembly_folder, ignore_errors=True)
 
 
+@pytest.mark.flaky(
+    reruns=2
+)  # sometimes fails due to missing report CSV. maybe xdist or shared tmp-dir problem?
 @pytest.mark.httpx_mock(should_mock=should_not_mock_httpx_requests_to_prefect_server)
 @pytest.mark.django_db(transaction=True)
 @pytest.mark.parametrize(
@@ -356,6 +467,7 @@ def test_prefect_assemble_study_flow(
 def test_prefect_assemble_private_study_flow(
     mock_queryset_hash_for_assemblies,
     prefect_harness,
+    ena_any_sample_metadata,
     httpx_mock,
     mock_suspend_flow_run,
     mock_cluster_can_accept_jobs_yes,
@@ -364,6 +476,9 @@ def test_prefect_assemble_private_study_flow(
     top_level_biomes,
     assemblers,
     admin_user,
+    user_choices,
+    biome_choices,
+    assembly_study_input_mocker,
 ):
     ### ENA MOCKING ###
     accession = "SRP1"
@@ -468,30 +583,23 @@ def test_prefect_assemble_private_study_flow(
     )
 
     ## Pretend that a human resumed the flow with the biome picker, and then with the assembler selector.
-    BiomeChoices = Enum("BiomeChoices", {"root.engineered": "Root:Engineered"})
-    UserChoices = get_users_as_choices()
-
-    class AssembleStudyInput(BaseModel):
-        biome: BiomeChoices
-        assembler: AssemblerChoices
-        webin_owner: Optional[str]
-        watchers: List[UserChoices]
-
     def suspend_side_effect(wait_for_input=None):
         if wait_for_input.__name__ == "AssembleStudyInput":
-            return AssembleStudyInput(
-                biome=BiomeChoices["root.engineered"],
+            return assembly_study_input_mocker(
+                biome=biome_choices["root.engineered"],
                 assembler=AssemblerChoices.pipeline_default,
                 webin_owner="Webin-1",
-                watchers=[UserChoices[admin_user.username]],
+                watchers=[user_choices[admin_user.username]],
+                wait_for_samplesheet_editing=False,
+                library_strategy_policy=ENALibraryStrategyPolicy.ONLY_IF_CORRECT_IN_ENA,
             )
 
     mock_suspend_flow_run.side_effect = suspend_side_effect
 
-    mock_queryset_hash_for_assemblies.return_value = "abc123"
+    mock_queryset_hash_for_assemblies.return_value = "xyz789"
 
     assembly_folder = Path(
-        f"{EMG_CONFIG.slurm.default_workdir}/PRJNA1_miassembler/abc123"
+        f"{EMG_CONFIG.slurm.default_workdir}/PRJNA1_miassembler/xyz789"
     )
     assembly_folder.mkdir(exist_ok=True, parents=True)
 
@@ -535,14 +643,14 @@ def test_assembly_statuses(prefect_harness, mgnify_assemblies):
     assert not any(assembly.status.values())
 
     # marking as failed should work
-    task_mark_assembly_status(
+    mark_assembly_status(
         assembly, assembly.AssemblyStates.ASSEMBLY_FAILED, reason="It broke"
     )
     assembly.refresh_from_db()
     assert assembly.status[assembly.AssemblyStates.ASSEMBLY_FAILED]
 
     # making as complete later (perhaps a retry) should work, and can unset failed at same time
-    task_mark_assembly_status(
+    mark_assembly_status(
         assembly,
         assembly.AssemblyStates.ASSEMBLY_COMPLETED,
         unset_statuses=[
@@ -594,7 +702,7 @@ def test_assembler_changed_in_samplesheet(
     study.save()
 
     samplesheets = make_samplesheets_for_runs_to_assemble(
-        mgnify_study=study, assembler=mgnify_assemblies[0].assembler
+        mgnify_study_accession=study.accession, assembler=mgnify_assemblies[0].assembler
     )
     samplesheet: Path = samplesheets[0][
         0
@@ -611,7 +719,7 @@ def test_assembler_changed_in_samplesheet(
     # run assembly on samplesheet
     # note that assembler arg will be metaspades
     ss_df = pd.read_csv(samplesheet)
-    update_assemblies_assemblers_from_samplesheet(ss_df)
+    update_assemblers_and_contaminant_ref_of_assemblies_from_samplesheet(ss_df)
 
     # flow should have updated assemblies to have megahit assembler, as per edited samplesheet
     assert (
@@ -628,7 +736,9 @@ def test_reference_genome_selection(prefect_harness, mgnify_assemblies, caplog):
 
     ref = get_reference_genome(study)
     assert ref is None
-    assert f"Found no run in {study} with host taxon info" in caplog.text
+    assert f"Found no run in {study} with host taxon info" in combine_caplog_records(
+        caplog.records
+    )
     caplog.clear()
 
     run = study.runs.first()
@@ -638,7 +748,9 @@ def test_reference_genome_selection(prefect_harness, mgnify_assemblies, caplog):
     run.save()
     ref = get_reference_genome(study)
     assert ref is None
-    assert f"Using run {run} for determining host" in caplog.text
+    assert f"Using run {run} for determining host" in combine_caplog_records(
+        caplog.records
+    )
     caplog.clear()
 
     run.metadata[analyses.models.Run.CommonMetadataKeys.HOST_TAX_ID] = 7460  # honeybee

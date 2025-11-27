@@ -8,6 +8,9 @@ from workflows.flows.upload_assembly import handle_tpa_study, upload_assembly
 from workflows.prefect_utils.testing_utils import run_flow_and_capture_logs
 
 
+@pytest.mark.flaky(
+    reruns=2
+)  # sometimes fails due to logging on closed file - maybe a race condition with prefect harness?
 @pytest.mark.django_db(transaction=True)
 def test_prefect_assembly_upload_flow_assembly_metaspades(
     prefect_harness,
@@ -119,6 +122,13 @@ def test_prefect_assembly_upload_flow_assembly_metaspades(
     assert (
         mg_models.Assembly.objects.filter(status__assembly_upload_failed=True).count()
         == 0
+    )
+
+    assembly.refresh_from_db()
+    assert round(assembly.metadata[assembly.CommonMetadataKeys.COVERAGE], 4) == 0.0476
+    assert (
+        round(assembly.metadata[assembly.CommonMetadataKeys.COVERAGE_DEPTH], 3)
+        == 273.694
     )
 
 

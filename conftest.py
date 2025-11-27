@@ -3,7 +3,7 @@ from unittest.mock import patch, Mock
 
 import django
 import pytest
-from ninja.testing import TestClient
+from ninja_extra.testing import TestClient
 from prefect.testing.utilities import prefect_test_harness
 
 django.setup()
@@ -22,16 +22,20 @@ pytest_plugins = [
     "analyses.fixtures.run.conftest",
     "analyses.fixtures.sample.conftest",
     "analyses.fixtures.study.conftest",
+    "analyses.fixtures.super_study.conftest",
+    "analyses.fixtures.publication.conftest",
     "workflows.fixtures.legacy_emg_dbs.conftest",
     "workflows.fixtures.slurm.conftest",
+    "workflows.fixtures.flowrun_input.conftest",
     "workflows.nextflow_utils.fixtures.conftest",
+    "workflows.fixtures.ena_utils.conftest",
     "genomes.fixtures.genome.conftest",
 ]
 
 
 @pytest.fixture(scope="session")
 def prefect_harness():
-    with prefect_test_harness():
+    with prefect_test_harness(server_startup_timeout=60):
         yield
 
 
@@ -69,3 +73,10 @@ def django_db_modify_db_settings_for_xdist():
         db_settings = connections.databases[db_name]
         if "NAME" in db_settings:
             db_settings["NAME"] = f"{db_settings['NAME']}_{worker_id}"
+
+
+@pytest.fixture(scope="function", autouse=True)
+def user(django_user_model):
+    return django_user_model.objects.create_user(
+        username="testuser", password="password123"
+    )

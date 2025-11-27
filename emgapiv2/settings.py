@@ -12,6 +12,7 @@ https://docs.djangoproject.com/en/4.1/ref/settings/
 
 import logging
 import os
+from datetime import timedelta
 from pathlib import Path
 
 import dj_database_url
@@ -31,8 +32,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "insecure-dev-key")
 
-# SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = os.getenv("DJANGO_DEBUG", False)
 
 
 def show_toolbar(request):
@@ -63,24 +63,23 @@ INSTALLED_APPS = [
     "unfold.contrib.filters",
     "unfold.contrib.forms",
     "unfold.contrib.inlines",
-    # "unfold.contrib.import_export",  # optional, if django-import-export package is used
-    # "unfold.contrib.guardian",  # optional, if django-guardian package is used
-    # "unfold.contrib.simple_history",  # optional, if django-simple-history package is used
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    "db_file_storage",  ## for storing images as blobs in the db
     "django_ltree",  ## for hierarchical models like Biome
     "debug_toolbar",
-    "django_admin_inline_paginator_plus",
     "django_json_widget",
     "corsheaders",
+    "ninja_extra",
+    "ninja_jwt",
     "ena",
     "analyses",
-    "genomes",
     "workflows",
+    "genomes",
 ]
 
 MIDDLEWARE = [
@@ -118,7 +117,12 @@ CORS_ALLOW_HEADERS = [
     "sentry-trace",
 ]
 
-CSRF_TRUSTED_ORIGINS = ["https://*.ebi.ac.uk"]
+CSRF_TRUSTED_ORIGINS = ["https://*.ebi.ac.uk", "http://localhost:9000"]
+
+if DEBUG:
+    logging.warning("DEBUG mode, allowing insecure CSRF cookies")
+    CSRF_COOKIE_HTTPONLY = False
+CSRF_COOKIE_SECURE = not DEBUG
 
 ROOT_URLCONF = "emgapiv2.urls"
 
@@ -201,6 +205,12 @@ STATIC_ROOT = os.path.join(BASE_DIR, "staticfiles")
 STORAGES = {
     "staticfiles": {
         "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+    },
+    "fieldfiles": {
+        "BACKEND": "db_file_storage.storage.DatabaseFileStorage",
+        "OPTIONS": {
+            "base_url": BASE_URL + "fieldfiles/",
+        },
     },
 }
 
@@ -367,8 +377,23 @@ LOGGING = {
     },
 }
 
-NINJA_PAGINATION_CLASS = "ninja.pagination.PageNumberPagination"
+NINJA_EXTRA = {"PAGINATION_CLASS": "ninja_extra.pagination.PageNumberPagination"}
 
-MAGS_FTP_SITE = "http://ftp.ebi.ac.uk/pub/databases/metagenomics/mgnify_genomes/"
+# Django Ninja JWT settings
+NINJA_JWT = {
+    "SLIDING_TOKEN_LIFETIME": timedelta(
+        minutes=EMG_CONFIG.webin.jwt_expiration_minutes
+    ),
+    "SLIDING_TOKEN_REFRESH_LIFETIME": timedelta(
+        hours=EMG_CONFIG.webin.jwt_refresh_expiration_hours
+    ),
+    "SIGNING_KEY": EMG_CONFIG.webin.jwt_secret_key or SECRET_KEY,
+    "AUTH_HEADER_TYPES": ("Bearer",),
+    "AUTH_TOKEN_CLASSES": ("ninja_jwt.tokens.SlidingToken",),
+    "TOKEN_USER_CLASS": "emgapiv2.api.auth.WebinUser",
+    "USER_ID_CLAIM": "username",
+}
 
-LATEST_MAGS_PIPELINE_TAG = "v1.2.1"
+# Django Nginx Secure Links settings - pre-signed URLs for private data
+SECURE_LINK_SECRET_KEY = os.getenv("PRIVATE_DATA_SECURE_LINK_SECRET_KEY", SECRET_KEY)
+SECURE_LINK_EXPIRATION_SECONDS = 86400

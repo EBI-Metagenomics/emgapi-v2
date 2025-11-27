@@ -19,7 +19,10 @@ from workflows.prefect_utils.slurm_policies import (
     ResubmitIfFailedPolicy,
 )
 from workflows.prefect_utils.slurm_status import SlurmStatus
-from workflows.prefect_utils.testing_utils import run_flow_and_capture_logs
+from workflows.prefect_utils.testing_utils import (
+    run_flow_and_capture_logs,
+    combine_caplog_records,
+)
 
 
 @flow(log_prints=True, retries=2)
@@ -198,7 +201,8 @@ def test_input_file_hash(tmp_path, caplog, prefect_harness):
 
     f3 = tmp_path / "file3.txt"
     hash = compute_hash_of_input_file([f1, f2, f3])
-    assert f"Did not find a file to hash at {f3}." in caplog.text
+    caplog_text = combine_caplog_records(caplog.records)
+    assert f"Did not find a file to hash at {f3}." in caplog_text
     assert hash.startswith("786a02f7")
 
 

@@ -17,8 +17,14 @@ from analyses.base_models.with_downloads_models import (
     DownloadFile,
     DownloadFileIndexFile,
 )
+from emgapiv2.api.storage import private_storage
+from emgapiv2.api.third_party_metadata import EuropePmcAnnotationResponse
 from emgapiv2.enum_utils import FutureStrEnum
+from genomes.schemas.GenomeCatalogue import GenomeCatalogueList
 from workflows.data_io_utils.filenames import trailing_slash_ensured_dir
+from workflows.ena_utils.study import ENAStudyFields
+
+logger = logging.getLogger(__name__)
 
 EMG_CONFIG = settings.EMG_CONFIG
 
@@ -64,6 +70,18 @@ class MGnifyStudy(ModelSchema):
 
 class MGnifyStudyDetail(MGnifyStudy):
     downloads: List[MGnifyStudyDownloadFile] = Field(..., alias="downloads_as_objects")
+    metadata: dict[ENAStudyFields, Any] = Field(
+        ...,
+        examples=[
+            {
+                ENAStudyFields.STUDY_TITLE: "ISS Metagenomes",
+                ENAStudyFields.STUDY_DESCRIPTION: "Dust was taken from a vacuum cleaner on the Internal Space Station.",
+                ENAStudyFields.CENTER_NAME: "NASA",
+            },
+            {ENAStudyFields.STUDY_TITLE: "Healthy stool samples"},
+        ],
+        description="Metadata associated with the study, a partial copy of the ENA Study record.",
+    )
 
     class Meta:
         model = analyses.models.Study
@@ -101,13 +119,38 @@ class MGnifySample(ModelSchema):
     ena_accessions: List[str] = Field(
         ..., examples=[["ERS000001", "SAMEA000000001"], ["ERS000002"]]
     )
+    sample_title: str | None = Field(
+        ..., examples=["space suit expedition sample", "Patient 3 stool"]
+    )
+    biome: Optional[Biome]
 
     class Meta:
         model = analyses.models.Sample
-        fields = ["updated_at"]
+        fields = ["updated_at", "biome"]
 
 
-class MGnifySampleDetail(MGnifySample):
+class MGnifySampleWithMetadata(MGnifySample):
+    # when rendering sample(s) in the context of a study, we don't need the study list on every sample
+    metadata: dict[analyses.models.Sample.CommonMetadataKeys, Any] = Field(
+        ...,
+        examples=[
+            {
+                analyses.models.Sample.CommonMetadataKeys.ALTITUDE: 402317,
+                analyses.models.Sample.CommonMetadataKeys.TEMPERATURE: 19.1,
+                analyses.models.Sample.CommonMetadataKeys.SAMPLE_TITLE: "space suit expedition sample",
+            },
+            {
+                analyses.models.Sample.CommonMetadataKeys.DISEASE: "Flu",
+                analyses.models.Sample.CommonMetadataKeys.SAMPLE_TITLE: "Patient 3 stool",
+            },
+        ],
+        description="Metadata associated with the sample, sourced from the ENA Sample record.",
+    )
+
+    class Meta(MGnifySample.Meta): ...
+
+
+class MGnifySampleDetail(MGnifySampleWithMetadata):
     studies: List[MGnifyStudy]
 
     class Meta(MGnifySample.Meta): ...
@@ -132,7 +175,12 @@ class MGnifyDownloadFileIndexFile(Schema, DownloadFileIndexFile):
 class MGnifyAnalysisDownloadFile(Schema, DownloadFile):
     path: Annotated[str, Field(exclude=True)]
     parent_identifier: Annotated[Union[int, str], Field(exclude=True)]
-    index_file: Optional[MGnifyDownloadFileIndexFile] = None
+    index_files: Optional[list[MGnifyDownloadFileIndexFile]] = Field(
+        None, alias="index_file"
+    )  # only show list of indexes
+    index_file: Optional[Any] = Field(
+        ..., exclude=True
+    )  # hide internal implementation which may be singular
 
     url: str = Field(
         None,
@@ -143,20 +191,30 @@ class MGnifyAnalysisDownloadFile(Schema, DownloadFile):
         ],
     )
 
-    @field_validator("index_file", mode="before")
-    def coerce_index_file(cls, value):
+    @field_validator("index_files", mode="before")
+    def coerce_index_files_to_plural(cls, value):
+        # Ensures even a singular index_file is serialized as a list-of-one
         if isinstance(value, DownloadFileIndexFile):
-            return MGnifyDownloadFileIndexFile.model_validate(value.model_dump())
+            return [MGnifyDownloadFileIndexFile.model_validate(value.model_dump())]
+        if isinstance(value, list):
+            return [
+                MGnifyDownloadFileIndexFile.model_validate(idx.model_dump())
+                for idx in value
+            ]
         return value
 
     @staticmethod
     def resolve_url(obj: MGnifyAnalysisDownloadFile):
         analysis = analyses.models.Analysis.objects.get(accession=obj.parent_identifier)
         if not analysis:
-            logging.warning(
+            logger.warning(
                 f"No parent Analysis object found with identified {obj.parent_identifier}"
             )
             return None
+
+        if analysis.is_private:
+            private_path = Path(analysis.external_results_dir) / obj.path
+            return private_storage.generate_secure_link(private_path)
 
         return urljoin(
             EMG_CONFIG.service_urls.transfer_services_url_root,
@@ -176,10 +234,14 @@ class MGnifyStudyDownloadFile(MGnifyAnalysisDownloadFile):
     def resolve_url(obj: MGnifyStudyDownloadFile):
         study = analyses.models.Study.objects.get(accession=obj.parent_identifier)
         if not study:
-            logging.warning(
+            logger.warning(
                 f"No parent Study object found with identified {obj.parent_identifier}"
             )
             return None
+
+        if study.is_private:
+            private_path = Path(study.external_results_dir) / obj.path
+            return private_storage.generate_secure_link(private_path)
 
         return f"{EMG_CONFIG.service_urls.transfer_services_url_root.rstrip('/')}/{study.external_results_dir}/{obj.path}"
 
@@ -417,12 +479,6 @@ class MGnifyAssemblyAnalysisRequest(ModelSchema):
 
 
 class MGnifyFunctionalAnalysisAnnotationType(FutureStrEnum):
-    genome_properties: str = analyses.models.Analysis.GENOME_PROPERTIES
-    go_terms: str = analyses.models.Analysis.GO_TERMS
-    go_slims: str = analyses.models.Analysis.GO_SLIMS
-    interpro_identifiers: str = analyses.models.Analysis.INTERPRO_IDENTIFIERS
-    kegg_modules: str = analyses.models.Analysis.KEGG_MODULES
-    kegg_orthologs: str = analyses.models.Analysis.KEGG_ORTHOLOGS
     taxonomies_ssu: str = analyses.models.Analysis.TAXONOMIES_SSU
     taxonomies_lsu: str = analyses.models.Analysis.TAXONOMIES_LSU
     taxonomies_itsonedb: str = analyses.models.Analysis.TAXONOMIES_ITS_ONE_DB
@@ -430,10 +486,89 @@ class MGnifyFunctionalAnalysisAnnotationType(FutureStrEnum):
     taxonomies_pr2: str = analyses.models.Analysis.TAXONOMIES_PR2
     taxonomies_dada2_pr2: str = analyses.models.Analysis.TAXONOMIES_DADA2_PR2
     taxonomies_dada2_silva: str = analyses.models.Analysis.TAXONOMIES_DADA2_SILVA
-    antismash_gene_clusters: str = analyses.models.Analysis.ANTISMASH_GENE_CLUSTERS
     pfams: str = analyses.models.Analysis.PFAMS
 
 
 class StudyAnalysisIntent(Schema):
     study_accession: str
 
+
+class SuperStudy(ModelSchema):
+    slug: str = Field(..., examples=["atlanteco"])
+    title: str = Field(..., examples=["AtlantECO"])
+    description: Optional[str] = Field(
+        None, examples=["The Atlantic Ocean and its ecosystem services"]
+    )
+    logo_url: Optional[str] = Field(None, examples=["https://example.com/logo.png"])
+
+    @staticmethod
+    def resolve_logo_url(obj: analyses.models.SuperStudy) -> Optional[str]:
+        if obj.logo:
+            return obj.logo.url
+        return None
+
+    class Meta:
+        model = analyses.models.SuperStudy
+        fields = ["slug", "title", "description"]
+
+
+class SuperStudyDetail(SuperStudy):
+    flagship_studies: List[MGnifyStudy] = Field(...)
+    related_studies: List[MGnifyStudy] = Field(...)
+    genome_catalogues: List[GenomeCatalogueList] = Field(...)
+
+    @staticmethod
+    def resolve_flagship_studies(obj: analyses.models.SuperStudy) -> list[MGnifyStudy]:
+        return [
+            MGnifyStudy.model_validate(sss.study)
+            for sss in analyses.models.SuperStudyStudy.objects.select_related(
+                "study"
+            ).filter(super_study=obj, is_flagship=True)
+        ]
+
+    @staticmethod
+    def resolve_related_studies(obj: analyses.models.SuperStudy) -> list[MGnifyStudy]:
+        return [
+            MGnifyStudy.model_validate(sss.study)
+            for sss in analyses.models.SuperStudyStudy.objects.select_related(
+                "study"
+            ).filter(super_study=obj, is_flagship=False)
+        ]
+
+    class Meta:
+        model = analyses.models.SuperStudy
+        fields = ["slug", "title", "description"]
+
+
+class MGnifyPublication(ModelSchema):
+    pubmed_id: int = Field(None, examples=[12345678])
+    title: str = Field(..., examples=["The Origin of Species"])
+    published_year: Optional[int] = Field(None, examples=[1859])
+    metadata: Dict[str, Any] = Field(
+        ...,
+        examples=[
+            {
+                "authors": "Darwin C",
+                "doi": "10.1017/CBO9780511694295",
+            }
+        ],
+    )
+
+    @staticmethod
+    def resolve_metadata(obj: analyses.models.Publication) -> dict:
+        return obj.metadata.model_dump()
+
+    class Meta:
+        model = analyses.models.Publication
+        fields = ["pubmed_id", "title", "published_year", "metadata"]
+
+
+class MGnifyPublicationDetail(MGnifyPublication):
+    studies: List[MGnifyStudy] = Field(...)
+
+    class Meta:
+        model = analyses.models.Publication
+        fields = ["pubmed_id", "title", "published_year", "metadata"]
+
+
+class PublicationAnnotations(Schema, EuropePmcAnnotationResponse): ...

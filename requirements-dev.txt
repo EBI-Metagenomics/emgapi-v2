@@ -9,3 +9,4 @@ pytest-sugar
 pytest-responses
 pytest-xdist
 mitmproxy
+pytest-rerunfailures

@@ -23,7 +23,7 @@ def move_data(
     target: str,
     move_command: str = "cp",
     make_target: bool = True,
-    **kwargs,
+    kwargs: dict | None = None,
 ):
     """
     Move files on the cluster filesystem.
@@ -37,6 +37,7 @@ def move_data(
         (e.g. expected_time, memory, or other slurm job-description parameters)
     :return: Job ID of the datamover job.
     """
+    kwargs = kwargs or {}
     expected_time = kwargs.pop("expected_time", timedelta(hours=2))
     memory = kwargs.pop("memory", "1G")
 

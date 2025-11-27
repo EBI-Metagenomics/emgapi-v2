@@ -39,8 +39,9 @@ urlpatterns = [
         name="admin_jump_watched_studies",
     ),
     path(f"{BASE_URL}admin/", admin.site.urls),
-    path(BASE_URL, api.urls),
     path(f"{BASE_URL}__debug__/", include("debug_toolbar.urls")),
+    path(f"{BASE_URL}fieldfiles/", include("db_file_storage.urls")),
+    path(BASE_URL, api.urls),
     path(f"{BASE_URL}workflows/", include("workflows.urls")),
 ]
 admin.site.index_title = "EMG DB Administration"

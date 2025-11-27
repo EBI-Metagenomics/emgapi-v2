@@ -20,3 +20,28 @@ def raw_read_ena_sample(raw_read_ena_study):
         )
         sample_objects.append(sample_obj)
     return sample_objects
+
+
+@pytest.fixture
+def private_ena_sample(webin_private_ena_study):
+    sample_obj, _ = ena_models.Sample.objects.get_or_create(
+        study=webin_private_ena_study, accession="SAMN00000001"
+    )
+    return sample_obj
+
+
+@pytest.fixture
+def assembly_analysis_ena_samples(assembly_analysis_ena_study):
+    """
+    Create ENA Sample objects for assembly analysis tests.
+    """
+    sample1, _ = ena_models.Sample.objects.get_or_create(
+        study=assembly_analysis_ena_study,
+        accession="SAMN08514017",
+    )
+    sample2, _ = ena_models.Sample.objects.get_or_create(
+        study=assembly_analysis_ena_study,
+        accession="SAMN08514018",
+    )
+
+    return [sample1, sample2]

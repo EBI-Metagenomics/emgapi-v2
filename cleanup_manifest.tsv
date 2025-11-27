@@ -1,0 +1,5 @@
+# Directory path	Age (%d-%H:%M:%S)
+
+# Deletion manifest. Every row in this file is a directory flagged for deletion.
+# Modify manifest, save with ':w', exit with ':q'
+# Then run python clean_v6_nextflow_workdirs.py delete --manifest_fp cleanup_manifest.tsv

@@ -444,3 +444,26 @@ def test_update_or_create_by_accession(raw_reads_mgnify_study):
     assert set(study.ena_accessions) == {"PRJ4", "ERP4"}
     assert study.title == "Set at create"
     assert study.results_dir == "/has/been/set"
+
+
+@pytest.mark.django_db
+def test_inferred_metadata_mixin(raw_read_run):
+    run = Run.objects.first()
+    run.metadata = {}
+    run.save()
+
+    assert run.metadata == {}
+    assert run.metadata_preferring_inferred == {}
+
+    run.metadata = {"kessel_run": 20, "falcon": "millenium"}
+    run.save()
+    assert run.metadata_preferring_inferred["kessel_run"] == 20
+    assert run.metadata_preferring_inferred["falcon"] == "millenium"
+    run.metadata["inferred_kessel_run"] = "20 parsecs"
+    run.save()
+    run.refresh_from_db()
+    # some process has "inferred" an override value for kessel_run. that should be used instead of the original value,
+    # when metadata is fetched via metadata_preferring_inferred
+    assert run.metadata_preferring_inferred["kessel_run"] == "20 parsecs"
+    assert run.metadata["kessel_run"] == 20
+    assert run.metadata_preferring_inferred["falcon"] == "millenium"

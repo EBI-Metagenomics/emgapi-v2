@@ -2,10 +2,12 @@ import os
 import re
 from pathlib import Path
 
-import django
+from django.db import close_old_connections
 from prefect import task, flow, get_run_logger
 
-django.setup()
+from activate_django_first import EMG_CONFIG
+
+genome_config = EMG_CONFIG.genomes
 
 from analyses.models import Biome
 from genomes.management.lib.genome_util import (
@@ -22,7 +24,7 @@ from genomes.management.lib.genome_util import (
     upload_antismash_geneclusters,
     upload_genome_files,
 )
-from genomes.models import GenomeCatalogue, Genome, GeographicLocation
+from genomes.models import GenomeCatalogue, Genome
 
 
 def validate_pipeline_version(version: str) -> int:
@@ -33,17 +35,12 @@ def validate_pipeline_version(version: str) -> int:
 
 
 def parse_options(options):
-    options["results_directory"] = os.path.realpath(
-        options["results_directory"].strip()
-    )
     if not os.path.exists(options["results_directory"]):
         raise FileNotFoundError(
             f"Results dir {options['results_directory']} does not exist"
         )
+    options["catalogue_dir"] = os.path.join(options["results_directory"], "website")
 
-    options["catalogue_dir"] = os.path.join(
-        options["results_directory"], options["catalogue_directory"].strip()
-    )
     options["catalogue_name"] = options["catalogue_name"].strip()
     options["catalogue_version"] = options["catalogue_version"].strip()
     options["gold_biome"] = options["gold_biome"].strip()
@@ -62,6 +59,11 @@ def get_catalogue(options):
     if not biome:
         raise Biome.DoesNotExist()
 
+    catalogue_dirname = os.path.basename(
+        os.path.dirname(os.path.normpath(options["results_directory"]))
+    )
+    results_path_to_save = f"{EMG_CONFIG.service_urls.transfer_services_url_root}/genomes/{catalogue_dirname}/{options['catalogue_version']}"
+
     catalogue_id = f"{options['catalogue_name'].replace(' ', '-')}-v{options['catalogue_version'].replace('.', '-')}".lower()
     catalogue, _ = GenomeCatalogue.objects.get_or_create(
         catalogue_id=catalogue_id,
@@ -69,8 +71,8 @@ def get_catalogue(options):
             "version": options["catalogue_version"],
             "name": f"{options['catalogue_name']} v{options['catalogue_version']}",
             "biome": biome,
-            "result_directory": options["catalogue_dir"],
-            "ftp_url": "http://ftp.ebi.ac.uk/pub/databases/metagenomics/mgnify_genomes/",
+            "result_directory": results_path_to_save,
+            "ftp_url": genome_config.mags_ftp_site,
             "pipeline_version_tag": options["pipeline_version"],
             "catalogue_biome_label": options["catalogue_biome_label"],
             "catalogue_type": options["catalogue_type"],
@@ -107,15 +109,18 @@ def process_genome_dir(catalogue, genome_dir):
     path = Biome.lineage_to_path(genome_data["gold_biome"])
 
     genome_data["catalogue"] = catalogue
-    genome_data["result_directory"] = get_genome_result_path(genome_dir)
+    genome_results_path = get_genome_result_path(genome_dir)
+    genome_data["result_directory"] = (
+        f"{genome_config.results_directory_root}/{genome_results_path.replace('/website/', '/')}"
+    )
     genome_data["biome"] = Biome.objects.filter(path=path).first()
 
-    genome_data = clean_genome_data(genome_data)
+    genome_data = Genome.clean_data(genome_data)
 
+    close_old_connections()
     genome, _ = Genome.objects.update_or_create(
         accession=accession, defaults=genome_data
     )
-    genome.save()
 
     logger.info(f"Uploaded genome and metadata for {accession}")
 
@@ -128,34 +133,9 @@ def process_genome_dir(catalogue, genome_dir):
     return accession
 
 
-def clean_genome_data(genome_data):
-    """
-    Clean genome data by removing unnecessary fields and ensuring required fields are present.
-    """
-    genome_data.pop("gold_biome", None)
-    if "annotations" not in genome_data:
-        genome_data["annotations"] = Genome.default_annotations()
-
-    geo_origin = genome_data.pop("geographic_origin", None)
-    if geo_origin:
-        genome_data["geo_origin"] = GeographicLocation.objects.get_or_create(
-            name=geo_origin
-        )[0]
-    genome_data.pop("genome_accession", None)
-    genome_data.pop("pangenome", None)
-
-    return genome_data
-
-
-def finalize_catalogue(catalogue):
-    catalogue.calculate_genome_count()
-    catalogue.save()
-
-
 @flow(name="import_genomes_flow")
 def import_genomes_flow(
     results_directory: str,
-    catalogue_directory: str,
     catalogue_name: str,
     catalogue_version: str,
     gold_biome: str,
@@ -166,7 +146,6 @@ def import_genomes_flow(
     # Reconstruct options dictionary for backward compatibility with existing functions
     options = {
         "results_directory": results_directory,
-        "catalogue_directory": catalogue_directory,
         "catalogue_name": catalogue_name,
         "catalogue_version": catalogue_version,
         "gold_biome": gold_biome,
@@ -177,7 +156,6 @@ def import_genomes_flow(
 
     options = parse_options(options)
     catalogue = get_catalogue(options)
-    finalize_catalogue(catalogue)
     upload_catalogue_summary(catalogue, options["catalogue_dir"])
     upload_catalogue_files(catalogue, options["catalogue_dir"])
     genome_dirs = gather_genome_dirs(
@@ -185,6 +163,7 @@ def import_genomes_flow(
     )
     genome_accessions = []
     for genome_dir in genome_dirs:
+        close_old_connections()
         genome_accession = process_genome_dir(catalogue, genome_dir)
         genome_accessions.append(genome_accession)
     logger = get_run_logger()
@@ -204,6 +183,7 @@ def upload_catalogue_summary(catalogue, catalogue_dir):
     else:
         catalogue.other_stats = {}
         logger.warning(f"No catalogue summary found at {summary_file}")
+        # logger.error(f"No catalogue summary found at {summary_file}")
     catalogue.save()
 
 

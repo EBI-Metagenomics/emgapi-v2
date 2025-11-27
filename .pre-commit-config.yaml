@@ -1,26 +1,26 @@
 ---
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v4.6.0
+    rev: v5.0.0
     hooks:
       - id: end-of-file-fixer
       - id: trailing-whitespace
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.9.6
+    rev: v0.11.13
     hooks:
       - id: ruff  # Fixes issues (including unused imports)
         args: ["--fix"]
   - repo: https://github.com/psf/black
-    rev: 24.8.0
+    rev: 25.1.0
     hooks:
       - id: black
   - repo: https://github.com/adrienverge/yamllint
-    rev: v1.35.1
+    rev: v1.37.1
     hooks:
       - id: yamllint
         args: [--format, parsable, --strict, -c=.yamllint]
   - repo: https://github.com/thoughtworks/talisman
-    rev: 'v1.32.0'
+    rev: 'v1.37.0'
     hooks:
       - id: talisman-commit
         entry: cmd --githook pre-commit

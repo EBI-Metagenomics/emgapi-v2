@@ -1,4 +1,5 @@
 import logging
+import gzip
 from pathlib import Path
 from typing import Type, Iterable, Hashable
 
@@ -28,7 +29,12 @@ def generate_csv_schema_file_rule(
     schema_name = row_schema.__name__
 
     def tester(path: Path):
-        with path.open("r") as f:
+        if path.name[-3:] == ".gz":
+            file_opener = gzip.open(path, "rt")
+        else:
+            file_opener = path.open("r")
+
+        with file_opener as f:
             reader = CommentAwareDictReader(
                 f, delimiter=delimiter, none_values=none_values
             )

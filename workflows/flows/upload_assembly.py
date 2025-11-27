@@ -1,7 +1,9 @@
 import gzip
+import json
 import os
 import re
 from datetime import timedelta
+from importlib.resources import files
 from pathlib import Path
 from typing import Optional
 
@@ -11,6 +13,7 @@ from prefect.tasks import task_input_hash
 
 from activate_django_first import EMG_CONFIG
 from workflows.ena_utils.ena_accession_matching import ENA_ASSEMBLY_ACCESSION_REGEX
+from workflows.prefect_utils.build_cli_command import cli_command
 
 from workflows.prefect_utils.env_context import TemporaryEnv, UNSET
 from workflows.prefect_utils.slurm_policies import ResubmitIfFailedPolicy
@@ -20,11 +23,12 @@ from prefect import flow, get_run_logger, task
 
 import analyses.models
 import ena.models
-from workflows.prefect_utils.analyses_models_helpers import task_mark_assembly_status
+from workflows.prefect_utils.analyses_models_helpers import mark_assembly_status
 from workflows.prefect_utils.slurm_flow import (
     ClusterJobFailedException,
     run_cluster_job,
 )
+from workflows import ena_utils
 
 
 OPTIONAL_SPADES_FILES = [
@@ -232,6 +236,38 @@ def handle_tpa_study(
     return assembly_study
 
 
+@task
+def update_assembly_metadata(
+    assembly: analyses.models.Assembly,
+) -> None:
+    """
+    Update assembly with post-assembly coverage field if that is missing in DB.
+    """
+    logger = get_run_logger()
+    run_accession = assembly.run.first_accession
+
+    coverage_report_path = Path(assembly.dir) / Path(
+        f"assembly/{assembly.assembler.name.lower()}/{assembly.assembler.version}/coverage/{run_accession}_coverage.json"
+    )
+    if not coverage_report_path.is_file():
+        raise Exception(f"Assembly coverage file not found at {coverage_report_path}")
+
+    with open(coverage_report_path, "r") as json_file:
+        coverage_report = json.load(json_file)
+
+    for key in [
+        assembly.CommonMetadataKeys.COVERAGE,
+        assembly.CommonMetadataKeys.COVERAGE_DEPTH,
+    ]:
+        if key not in coverage_report:
+            logger.warning(f"No '{key}' found in {coverage_report_path}")
+        assembly.metadata[key] = coverage_report.get(key)
+
+    logger.info(f"Assembly metadata of {assembly} is now {assembly.metadata}")
+
+    assembly.save()
+
+
 @task(
     retries=2,
     task_run_name="Generate csv for upload: {assembly}",
@@ -240,6 +276,9 @@ def generate_assembly_csv(
     metadata_dir: Path, assembly: analyses.models.Assembly, assembly_path: Path
 ):
     logger = get_run_logger()
+
+    if not assembly.metadata.get(assembly.CommonMetadataKeys.COVERAGE_DEPTH):
+        update_assembly_metadata(assembly)
 
     assembly_csv = metadata_dir / Path(f"{assembly.run.first_accession}.csv")
     with open(assembly_csv, "w") as file_out:
@@ -364,17 +403,22 @@ def submit_assembly_slurm(
     logger = get_run_logger()
     xms = int(EMG_CONFIG.assembler.assembly_uploader_mem_gb / 2)
     xmx = int(EMG_CONFIG.assembler.assembly_uploader_mem_gb)
-    command = (
-        f"java -Xms{xms}g -Xmx{xmx}g -jar {EMG_CONFIG.webin.webin_cli_executor} "
-        f"-context=genome "
-        f"-manifest={manifest} "
-        f"-userName='{username}' "
-        f"-password='{password}' "
+    logback_config = files(ena_utils) / "webincli_logback.xml"
+    command = cli_command(
+        [
+            ("java", f"-Dlogback.configurationFile={logback_config}"),
+            f"-Xms{xms}g",
+            f"-Xmx{xmx}g",
+            ("-jar", EMG_CONFIG.webin.webin_cli_executor),
+            ("-context", "genome"),
+            ("-manifest", manifest),
+            ("-userName", username),
+            ("-password", password),
+            EMG_CONFIG.webin.aspera_ascp_executor and "-ascp",
+            dry_run and "-test -validate",
+            not dry_run and "-submit",
+        ]
     )
-    if dry_run:
-        command += "-test -validate "
-    else:
-        command += "-submit "
 
     try:
         run_cluster_job.with_options(
@@ -396,7 +440,7 @@ def submit_assembly_slurm(
         logger.error(
             f"Something went wrong running webin-cli upload for {mgnify_assembly}"
         )
-        task_mark_assembly_status(
+        mark_assembly_status(
             mgnify_assembly,
             status=mgnify_assembly.AssemblyStates.ASSEMBLY_UPLOAD_FAILED,
         )
@@ -404,7 +448,7 @@ def submit_assembly_slurm(
         logger.info(f"Successfully ran webin-cli upload for {mgnify_assembly}")
         if dry_run:
             # no webin.report generated
-            task_mark_assembly_status(
+            mark_assembly_status(
                 mgnify_assembly,
                 status=mgnify_assembly.AssemblyStates.ASSEMBLY_UPLOADED,
                 unset_statuses=[mgnify_assembly.AssemblyStates.ASSEMBLY_UPLOAD_FAILED],
@@ -415,7 +459,7 @@ def submit_assembly_slurm(
             if erz_accession:
                 logger.info(f"Upload completed for {mgnify_assembly}")
                 add_erz_accession(mgnify_assembly, erz_accession)
-                task_mark_assembly_status(
+                mark_assembly_status(
                     mgnify_assembly,
                     status=mgnify_assembly.AssemblyStates.ASSEMBLY_UPLOADED,
                     unset_statuses=[
@@ -424,7 +468,7 @@ def submit_assembly_slurm(
                 )
             else:
                 logger.info(f"Upload failed for {mgnify_assembly}")
-                task_mark_assembly_status(
+                mark_assembly_status(
                     mgnify_assembly,
                     status=mgnify_assembly.AssemblyStates.ASSEMBLY_UPLOAD_FAILED,
                 )
@@ -479,7 +523,7 @@ def upload_assembly(
     if check_assembly(mgnify_assembly, assembly_path):
         logger.info(f"Assembly {mgnify_assembly} passed sanity check")
     else:
-        task_mark_assembly_status(
+        mark_assembly_status(
             mgnify_assembly,
             status=mgnify_assembly.AssemblyStates.POST_ASSEMBLY_QC_FAILED,
         )

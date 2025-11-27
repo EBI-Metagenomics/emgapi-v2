@@ -6,35 +6,12 @@ django.setup()
 from analyses.models import Biome
 from genomes.models.genome import Genome
 from genomes.models.genome_catalogue import GenomeCatalogue
-from genomes.models.geographic_location import GeographicLocation
-
-
-@pytest.fixture
-def geographic_locations():
-    locations_list = [
-        {"name": "Europe"},
-        {"name": "North America"},
-        {"name": "South America"},
-        {"name": "Asia"},
-        {"name": "Africa"},
-        {"name": "Oceania"},
-        {"name": "Antarctica"},
-    ]
-    locations_objects = []
-    for location in locations_list:
-        print(f"creating geographic location {location['name']}")
-        locations_objects.append(
-            GeographicLocation.objects.get_or_create(name=location["name"])[0]
-        )
-    return locations_objects
 
 
 @pytest.fixture
 def genome_catalogues(top_level_biomes):
-    # Get the root biome
     root_biome = Biome.objects.get(path="root")
 
-    # Create a few genome catalogues
     catalogues_list = [
         {
             "catalogue_id": "human-gut-prokaryotes",
@@ -76,8 +53,20 @@ def genome_catalogues(top_level_biomes):
 
 
 @pytest.fixture
+def geographic_locations():
+    return [
+        "Europe",
+        "North America",
+        "South America",
+        "Asia",
+        "Africa",
+        "Oceania",
+        "Antarctica",
+    ]
+
+
+@pytest.fixture
 def genomes(top_level_biomes, genome_catalogues, geographic_locations):
-    # Create a few genomes
     genomes_list = [
         {
             "accession": "MGYG000000001",
@@ -86,7 +75,7 @@ def genomes(top_level_biomes, genome_catalogues, geographic_locations):
             "num_contigs": 100,
             "n_50": 10000,
             "gc_content": 0.5,
-            "type": Genome.MAG,
+            "type": Genome.GenomeType.MAG,
             "completeness": 95.0,
             "contamination": 2.0,
             "trnas": 20.0,
@@ -96,7 +85,7 @@ def genomes(top_level_biomes, genome_catalogues, geographic_locations):
             "ipr_coverage": 75.0,
             "taxon_lineage": "Bacteria;Proteobacteria;Gammaproteobacteria",
             "catalogue": genome_catalogues[0],  # Human Gut Prokaryotes
-            "geo_origin": geographic_locations[0],  # Europe
+            "geographic_origin": geographic_locations[0],  # Europe
         },
         {
             "accession": "MGYG000000002",
@@ -105,7 +94,7 @@ def genomes(top_level_biomes, genome_catalogues, geographic_locations):
             "num_contigs": 200,
             "n_50": 20000,
             "gc_content": 0.6,
-            "type": Genome.MAG,
+            "type": Genome.GenomeType.MAG,
             "completeness": 90.0,
             "contamination": 3.0,
             "trnas": 25.0,
@@ -115,7 +104,7 @@ def genomes(top_level_biomes, genome_catalogues, geographic_locations):
             "ipr_coverage": 70.0,
             "taxon_lineage": "Bacteria;Firmicutes;Bacilli",
             "catalogue": genome_catalogues[0],  # Human Gut Prokaryotes
-            "geo_origin": geographic_locations[1],  # North America
+            "geographic_origin": geographic_locations[1],  # North America
         },
         {
             "accession": "MGYG000000003",
@@ -124,7 +113,7 @@ def genomes(top_level_biomes, genome_catalogues, geographic_locations):
             "num_contigs": 300,
             "n_50": 30000,
             "gc_content": 0.7,
-            "type": Genome.ISOLATE,
+            "type": Genome.GenomeType.ISOLATE,
             "completeness": 98.0,
             "contamination": 1.0,
             "trnas": 30.0,
@@ -134,7 +123,7 @@ def genomes(top_level_biomes, genome_catalogues, geographic_locations):
             "ipr_coverage": 80.0,
             "taxon_lineage": "Bacteria;Cyanobacteria;Cyanobacteriia",
             "catalogue": genome_catalogues[1],  # Ocean Prokaryotes
-            "geo_origin": geographic_locations[5],  # Oceania
+            "geographic_origin": geographic_locations[5],  # Oceania
         },
     ]
 
@@ -145,27 +134,16 @@ def genomes(top_level_biomes, genome_catalogues, geographic_locations):
             accession=genome_data["accession"], defaults=genome_data
         )
 
-        # Add geographic range
         if genome_data["accession"] == "MGYG000000001":
-            genome.pangenome_geographic_range.add(geographic_locations[0])  # Europe
-            genome.pangenome_geographic_range.add(
-                geographic_locations[1]
-            )  # North America
+            genome.geographic_range = ["Europe", "North America"]
+            genome.save()
         elif genome_data["accession"] == "MGYG000000002":
-            genome.pangenome_geographic_range.add(
-                geographic_locations[1]
-            )  # North America
-            genome.pangenome_geographic_range.add(
-                geographic_locations[2]
-            )  # South America
+            genome.geographic_range = ["North America", "South America"]
+            genome.save()
         elif genome_data["accession"] == "MGYG000000003":
-            genome.pangenome_geographic_range.add(geographic_locations[5])  # Oceania
-            genome.pangenome_geographic_range.add(geographic_locations[6])  # Antarctica
+            genome.geographic_range = ["Oceania", "Antarctica"]
+            genome.save()
 
         genomes_objects.append(genome)
-
-    # Update genome counts in catalogues
-    for catalogue in genome_catalogues:
-        catalogue.calculate_genome_count()
 
     return genomes_objects

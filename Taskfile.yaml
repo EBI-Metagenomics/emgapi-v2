@@ -10,23 +10,21 @@ tasks:
   prefect:
     desc: "Run a command on the prefect CLI. E.g. task prefect -- deployment"
     cmds:
-      - docker compose run app prefectcli {{.CLI_ARGS}}
+      - docker compose run app python manage.py prefectcli {{.CLI_ARGS}}
 
   create-pool:
     desc: "Create a Prefect workpool. E.g. NAME=slurm task create-process-pool"
     cmds:
       - docker compose exec -e PREFECT_CLIENT_RETRY_EXTRA_CODES=0 app python manage.py prefectcli work-pool create --type {{.TYPE}} {{.CLI_ARGS}} {{.NAME}}
     vars:
-      TYPE: "process"
-      NAME: "slurm"
+      TYPE: '{{.TYPE | default "process"}}'
+      NAME: '{{.NAME | default "slurm"}}'
 
   deploy-flow:
     desc: "Build and deploy a prefect flow. E.g. FLOW=mgnify_run_pipeline_flow task deploy-flow"
     cmds:
       - docker compose --profile prefect up -d
-      - docker compose run -e PREFECT_CLIENT_RETRY_EXTRA_CODES=0 app prefectcli deploy {{ .FILE | default (list "workflows/flows/" .FLOW ".py" | join "") }}:{{.FLOW}} --name {{.FLOW}}_deployment -p {{.POOL}} --prefect-file workflows/prefect_deployments/prefect-dev-donco.yaml
-    vars:
-      POOL: "slurm"
+      - docker compose run -e PREFECT_CLIENT_RETRY_EXTRA_CODES=0 app python manage.py prefectcli deploy {{ .FILE | default (list "workflows/flows/" .FLOW ".py" | join "") }}:{{.FLOW}} --name {{.FLOW}}_deployment -p {{.POOL | default "slurm"}} --prefect-file workflows/prefect_deployments/prefect-dev-donco.yaml
     requires:
       vars: [FLOW]
 
@@ -48,12 +46,21 @@ tasks:
   manage:
     desc: "Run a management command. E.g. task manage -- migrate"
     cmds:
-      - docker compose run app {{.CLI_ARGS}}
+      - docker compose run app python manage.py {{.CLI_ARGS}}
 
   sbatch:
     desc: "Dispatch a slurm job to the mini slurm cluster. E.g. task sbatch -- --wait -t 0:00:30 --mem=10M --wrap=\"echo 'hello world'\" -o hello-world.out"
     cmds:
-      - docker exec slurm_node "sbatch {{.CLI_ARGS}}"
+      - docker exec slurm_node bash -c "sbatch {{.CLI_ARGS}}"
+
+  token:
+    desc: "Get SLURM token for a user. E.g. task token username=<username> [duration=<seconds|infinite>]"
+    cmds:
+      - docker exec slurm_node bash -c "scontrol token username={{.username}} lifespan={{.duration}}"
+    vars:
+      duration: '{{.duration| default "infinite"}}'
+    requires:
+      vars: [username]
 
   slurm:
     desc: "Connect to the slurm node to run commands there."
@@ -79,21 +86,29 @@ tasks:
 
   make-dev-data:
     desc: "Populate the app database with some demo data for development purposes"
+    prompt: "This asks for a password in a moment, but this IS NOT your computer password. It is a new one (anything you like) just to log into the demo admin panel as emgdev. Okay?"
     cmds:
       - docker compose --profile all down
       - docker volume rm -f emgapiv2_appdb  # force so that no error if volume doesn't exist.
       - docker compose run --entrypoint /bin/bash app -c "pytest -m dev_data_maker --no-cov -s"  # dumps a json to dev-db.json
-      - docker compose run app migrate
-      - docker compose run app loaddata dev-db.json
-      - docker compose run app createsuperuser --username emgdev --email emg@example.org
+      - docker compose run app python manage.py migrate
+      - docker compose run app python manage.py loaddata dev-db.json
+      - docker compose run app python manage.py createsuperuser --username emgdev --email emg@example.org
+      # make results for amplicon available
       - rm -fr slurm-dev-environment/fs/nfs/ftp/public/databases/metagenomics/mgnify_results/PRJNA398
       - mkdir -p slurm-dev-environment/fs/nfs/ftp/public/databases/metagenomics/mgnify_results/PRJNA398/PRJNA398089/SRR1111/SRR1111111/V6/
       - cp -r slurm-dev-environment/fs/nfs/public/tests/amplicon_v6_output/SRR1111111 slurm-dev-environment/fs/nfs/ftp/public/databases/metagenomics/mgnify_results/PRJNA398/PRJNA398089/SRR1111/SRR1111111/V6/amplicon
       - mkdir -p slurm-dev-environment/fs/nfs/ftp/public/databases/metagenomics/mgnify_results/PRJNA398/PRJNA398089/study-summaries
       - cp slurm-dev-environment/fs/nfs/public/tests/amplicon_v6_output/*study_summary.tsv slurm-dev-environment/fs/nfs/ftp/public/databases/metagenomics/mgnify_results/PRJNA398/PRJNA398089/study-summaries/
-      - docker compose run app shell -c "from analyses.models import Analysis; a=Analysis.objects.get(accession='MGYA00000004'); a.external_results_dir='PRJNA398/PRJNA398089/SRR1111/SRR1111111/V6/amplicon'; a.save()"
-      # Ensure assembly test data dir is absolute inside the container for convenience in local dev
-      - docker compose run app shell -c "from analyses.models import Assembly; Assembly.objects.filter(dir__contains='assembly_uploader').update(dir='/app/slurm-dev-environment/fs/hps/tests/assembly_uploader')"
+      - docker compose run app python manage.py shell -c "a=Analysis.objects.get(accession='MGYA00000004'); a.external_results_dir='PRJNA398/PRJNA398089/SRR1111/SRR1111111/V6/amplicon'; a.save()"
+      # make results for assembly available
+      - mkdir -p slurm-dev-environment/fs/nfs/ftp/public/databases/metagenomics/mgnify_results/PRJNA398/PRJNA398089/ERZ857/ERZ857107/V6/
+      - cp -r slurm-dev-environment/fs/nfs/public/tests/assembly_v6_output/ERP106708/ERZ857107 slurm-dev-environment/fs/nfs/ftp/public/databases/metagenomics/mgnify_results/PRJNA398/PRJNA398089/ERZ857/ERZ857107/V6/assembly
+      - cp -r slurm-dev-environment/fs/nfs/public/tests/assembly_v6_output/ERP106708/map/ERZ857107 slurm-dev-environment/fs/nfs/ftp/public/databases/metagenomics/mgnify_results/PRJNA398/PRJNA398089/ERZ857/ERZ857107/V6/assembly/mobilome-annotation
+      - docker compose run app python manage.py shell -c "a=Analysis.objects.get(accession='MGYA00000002'); a.external_results_dir='PRJNA398/PRJNA398089/ERZ857/ERZ857107/V6/assembly'; a.save()"
+      # make workdir
+      - mkdir -p slurm-dev-environment/fs/nfs/production/dev-slurm-work-dir
+      - chmod -R o+w slurm-dev-environment/fs
 
   debug-break-prefect-connection:
     desc: "Temporarily return 404s from the prefect server, when prefect worker tries to access it"
@@ -150,42 +165,7 @@ tasks:
       - echo "See ./workflows/ena_utils/{{.CLI_ARGS}}.py"
       - echo "You may also need to update workflows/ena_utils/requestors.py:ENAAPIRequest"
 
-  make:model:
-    desc: "Generate a new model. E.g. task make:model -- SampleMetadata genomes"
+  clean-nextflow-workdirs:
+    desc: "Scan for old nextflow work directories and delete. (Usage: `task clean-nextflow-workdirs -- scan` and `task clean-nextflow-workdirs -- delete`)"
     cmds:
-      - docker compose run app python manage.py make_model {{.CLI_ARGS}}
-
-  make:admin:
-    desc: "Generate a new admin class. E.g. task make:admin -- SampleMetadata genomes"
-    cmds:
-      - docker compose run app python manage.py make_admin {{.CLI_ARGS}}
-
-  make:api:
-    desc: "Generate a new API endpoint. E.g. task make:api -- SampleMetadata genomes"
-    cmds:
-      - docker compose run app python manage.py make_api {{.CLI_ARGS}}
-
-  make:workflow:
-    desc: "Generate a new Prefect workflow. E.g. task make:workflow -- import_sample_metadata"
-    cmds:
-      - docker compose run app python manage.py make_workflow {{.CLI_ARGS}}
-
-  make:all:
-    desc: "Generate model, admin, and API for a new entity. E.g. task make:all -- SampleMetadata genomes"
-    cmds:
-      - task: make:model
-        vars: {CLI_ARGS: "{{.CLI_ARGS}}"}
-      - task: make:admin
-        vars: {CLI_ARGS: "{{.CLI_ARGS}}"}
-      - task: make:api
-        vars: {CLI_ARGS: "{{.CLI_ARGS}}"}
-
-  make:migration:
-    desc: "Generate migrations for an app. E.g. task make:migration -- genomes"
-    cmds:
-      - docker compose run app python manage.py makemigrations {{.CLI_ARGS}}
-
-  migrate:
-    desc: "Apply migrations. E.g. task migrate -- genomes"
-    cmds:
-      - docker compose run app python manage.py migrate {{.CLI_ARGS}}
+      - docker compose run --entrypoint /bin/bash app -c "python utils/clean_nextflow_workdirs.py {{.CLI_ARGS}}"

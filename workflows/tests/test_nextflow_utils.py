@@ -5,7 +5,6 @@ from pathlib import Path
 
 import pytest
 
-from django.conf import settings
 
 import analyses.models
 import ena.models
@@ -188,6 +187,60 @@ def test_queryset_to_samplesheet(raw_reads_mgnify_study):
         )
     samplesheet_ret.unlink(missing_ok=True)
 
+    samplesheet_ret = queryset_to_samplesheet(
+        queryset=run_qs,
+        filename=samplesheet,
+        column_map={
+            "fastq1": SamplesheetColumnSource(
+                lookup_string="metadata__fastq_ftps", renderer=lambda f: f[0]
+            ),
+            "contaminant_genome": SamplesheetColumnSource(
+                lookup_string="id", renderer=lambda _: "chicken.fna"
+            ),
+        },
+        bludgeon=True,
+    )
+    with open(samplesheet_ret) as f:
+        csv_reader = csv.DictReader(f, delimiter=",")
+        first_line = next(csv_reader)
+        assert first_line["fastq1"] == "/path/to/fastq_1.fastq.gz"
+        assert first_line["contaminant_genome"] == "chicken.fna"
+    samplesheet_ret.unlink(missing_ok=True)
+
+    # should be able to pass constants
+    samplesheet_ret = queryset_to_samplesheet(
+        queryset=run_qs,
+        filename=samplesheet,
+        column_map={
+            "fastq1": SamplesheetColumnSource(
+                lookup_string="metadata__fastq_ftps", renderer=lambda f: f[0]
+            ),
+            "contaminant_genome": "chicken.fna",
+        },
+    )
+    with open(samplesheet_ret) as f:
+        csv_reader = csv.DictReader(f, delimiter=",")
+        first_line = next(csv_reader)
+        assert first_line["contaminant_genome"] == "chicken.fna"
+    samplesheet_ret.unlink(missing_ok=True)
+
+    # should be able to pass whole objects instead of lookup strings
+    samplesheet_ret = queryset_to_samplesheet(
+        queryset=run_qs,
+        filename=samplesheet,
+        column_map={
+            "fastq1": SamplesheetColumnSource(
+                pass_whole_object=True,
+                renderer=lambda run: run.metadata["fastq_ftps"][0],
+            ),
+        },
+    )
+    with open(samplesheet_ret) as f:
+        csv_reader = csv.DictReader(f, delimiter=",")
+        first_line = next(csv_reader)
+        assert first_line["fastq1"] == "/path/to/fastq_1.fastq.gz"
+    samplesheet_ret.unlink(missing_ok=True)
+
 
 @pytest.mark.django_db(transaction=True)
 def test_queryset_hash(raw_reads_mgnify_study):
@@ -204,12 +257,9 @@ def test_nextflow_trace_from_flag(
     mock_start_cluster_job,
     mock_cluster_can_accept_jobs_yes,
     mock_check_cluster_job_all_completed,
+    tmp_path,
 ):
-    trace_file_location = (
-        Path(settings.EMG_CONFIG.slurm.default_workdir)
-        / "hello-nextflow"
-        / "trace-hello.txt"
-    )
+    trace_file_location = tmp_path / "hello-nextflow" / "trace-hello.txt"
 
     def make_trace_file(*args, **kwargs):
         write_nextflow_tracefile(trace_file_location)
@@ -224,7 +274,7 @@ def test_nextflow_trace_from_flag(
         resubmit_policy=ResubmitAlwaysPolicy,
         memory="100M",
         environment="ALL",
-        working_dir=Path(settings.EMG_CONFIG.slurm.default_workdir) / "hello-nextflow",
+        working_dir=tmp_path / "hello-nextflow",
     )
 
     assert len(hello_nextfow_flow.nextflow_trace)
@@ -242,11 +292,10 @@ def test_nextflow_trace_from_pipeline_info(
     mock_start_cluster_job,
     mock_cluster_can_accept_jobs_yes,
     mock_check_cluster_job_all_completed,
+    tmp_path,
 ):
     trace_file_location = (
-        Path(settings.EMG_CONFIG.slurm.default_workdir)
-        / "hello-nextflow"
-        / "pipeline_info/execution_trace_2025-05-01.txt"
+        tmp_path / "hello-nextflow" / "pipeline_info/execution_trace_2025-05-01.txt"
     )
 
     def make_trace_file(*args, **kwargs):
@@ -262,11 +311,9 @@ def test_nextflow_trace_from_pipeline_info(
         resubmit_policy=ResubmitAlwaysPolicy,
         memory="100M",
         environment="ALL",
-        working_dir=Path(settings.EMG_CONFIG.slurm.default_workdir) / "hello-nextflow",
+        working_dir=tmp_path / "hello-nextflow",
     )
 
     assert len(hello_nextfow_flow.nextflow_trace)
     # Fixture - data
     assert hello_nextfow_flow.nextflow_trace[0]["hash"] == "c4/1f6cf1"
-
-    trace_file_location.unlink()

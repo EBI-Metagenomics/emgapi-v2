@@ -1,0 +1,8 @@
+# Private Study Summary
+# This is a test file for the private study download functionality
+# It contains mock data for testing purposes
+
+taxon_id	taxon_name	count	percentage
+1	root	100	100.0
+2	Bacteria	80	80.0
+3	Archaea	20	20.0

@@ -1,8 +1,11 @@
 #!/usr/bin/env nextflow
 
 params.sample = "SAMN10879440"
+params.publishDir = null
 
 process downloadFastq {
+    publishDir params.publishDir ?: "results", mode: 'copy', enabled: params.publishDir != null
+
     input:
         tuple val(run_accession), val(fastq_ftp)
     output:

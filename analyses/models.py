@@ -4,14 +4,19 @@ import logging
 import os
 import re
 from pathlib import Path
-from typing import ClassVar, Union
+from typing import ClassVar, Union, Optional
 
+from aenum import extend_enum
+from db_file_storage.model_utils import delete_file, delete_file_if_needed
+from django.conf import settings
 from django.contrib.postgres.indexes import GinIndex
 from django.core.exceptions import MultipleObjectsReturned, ObjectDoesNotExist
+from django.core.files.storage import storages
 from django.db import models
 from django.db.models import JSONField, Q, Func, Value
 from django.db.models.signals import post_save
 from django.dispatch import receiver
+from django.utils.text import Truncator
 from django_ltree.models import TreeModel
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -22,9 +27,12 @@ from analyses.base_models.base_models import (
     PrivacyFilterManagerMixin,
     TimeStampedModel,
     VisibilityControlledModel,
+    InferredMetadataMixin,
+    DbStoredFileField,
 )
 from analyses.base_models.mgnify_accessioned_models import MGnifyAccessionField
 from analyses.base_models.with_downloads_models import WithDownloadsModel
+from analyses.base_models.with_experiment_type_models import WithExperimentTypeModel
 from analyses.base_models.with_status_models import SelectByStatusManagerMixin
 from analyses.base_models.with_watchers_models import WithWatchersModel
 from emgapiv2.async_utils import anysync_property
@@ -33,8 +41,10 @@ from emgapiv2.model_utils import JSONFieldWithSchema
 from workflows.ena_utils.read_run import ENAReadRunFields
 from workflows.ena_utils.sample import ENASampleFields
 
-
 # Some models associated with MGnify Analyses (MGYS, MGYA etc).
+
+
+logger = logging.getLogger(__name__)
 
 
 class Biome(TreeModel):
@@ -73,17 +83,19 @@ class Biome(TreeModel):
 
 class StudyManager(ENADerivedManager):
     def get_or_create_for_ena_study(self, ena_study_accession):
-        logging.info(f"Will get/create MGnify study for {ena_study_accession}")
+        logger.info(f"Will get/create MGnify study for {ena_study_accession}")
         try:
             ena_study = ena.models.Study.objects.filter(
                 Q(accession=ena_study_accession)
                 | Q(additional_accessions__icontains=ena_study_accession)
             ).first()
-            logging.debug(f"Got {ena_study}")
+            logger.debug(f"Got {ena_study}")
         except (MultipleObjectsReturned, ObjectDoesNotExist):
-            logging.warning(
-                f"Problem getting ENA study {ena_study_accession} from ENA models DB"
+            logger.error(
+                f"Problem getting ENA study {ena_study_accession} from ENA models DB. "
+                f"The ENA Study needs to have been fetched from ENA APIs first."
             )
+            raise
         study, _ = Study.objects.get_or_create(
             ena_study=ena_study,
             title=ena_study.title,
@@ -102,6 +114,7 @@ class PublicStudyManager(PrivacyFilterManagerMixin, StudyManager):
 
 
 class Study(
+    InferredMetadataMixin,
     ENADerivedModel,
     WithDownloadsModel,
     TimeStampedModel,
@@ -118,8 +131,13 @@ class Study(
         accession_prefix="MGYS", accession_length=8, db_index=True
     )
     ena_study = models.ForeignKey(
-        ena.models.Study, on_delete=models.CASCADE, null=True, blank=True
+        ena.models.Study,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="analyses_studies",
     )
+    metadata = models.JSONField(default=dict, blank=True)
     biome = models.ForeignKey(Biome, on_delete=models.CASCADE, null=True, blank=True)
 
     class StudyFeatures(BaseModel):
@@ -143,11 +161,40 @@ class Study(
     def __str__(self):
         return self.accession
 
+    def set_results_dir_default(self):
+        """
+        This method checks if the `results_dir` attribute is not set. If so, it will
+        initialize `results_dir` to a default value based on the `ena_study.accession`
+        and the pre-configured `default_workdir`. The method then creates the directory
+        if it does not already exist and saves the updated state.
+        """
+        # TODO: This needs to be refactored
+        # This feels like it probably belongs elsewhere, though exactly where depends on what odd case
+        # we're trying to catch? Should it be a migration? Or a management command we run after
+        # certain bad things happen? Or somewhere in the flows?
+        if not self.results_dir:
+            # TODO: there is a v6 hardcoded here.
+            self.results_dir = (
+                Path(settings.EMG_CONFIG.slurm.default_workdir)
+                / f"{self.ena_study.accession}_v6"
+            )
+            logger.info(f"Setting {self}'s results_dir to default {self.results_dir}")
+            self.results_dir.mkdir(exist_ok=True)
+            self.save()
+
     class Meta:
         verbose_name_plural = "studies"
 
         indexes = [
-            GinIndex(fields=["features"]),
+            GinIndex(
+                fields=["features"]
+            ),  # Faster selection of studies with e.g. a certain pipeline version
+            GinIndex(
+                name="idx_study_title_trgm",
+                fields=["title"],
+                opclasses=["gin_trgm_ops"],
+            ),
+            # Fast fulltext (ish) search on the study title.
         ]
 
     @property
@@ -166,50 +213,59 @@ class Study(
 class PublicSampleManager(PrivacyFilterManagerMixin, ENADerivedManager): ...
 
 
-class Sample(ENADerivedModel, TimeStampedModel):
+class Sample(InferredMetadataMixin, ENADerivedModel, TimeStampedModel):
     CommonMetadataKeys = ENASampleFields
 
     objects = ENADerivedManager()
     public_objects = PublicSampleManager()
 
     id = models.AutoField(primary_key=True)
-    ena_sample = models.ForeignKey(ena.models.Sample, on_delete=models.CASCADE)
-    studies = models.ManyToManyField(Study)
+    ena_sample = models.ForeignKey(
+        ena.models.Sample, on_delete=models.CASCADE, related_name="analyses_samples"
+    )
+    biome = models.ForeignKey(Biome, on_delete=models.CASCADE, null=True, blank=True)
+    studies = models.ManyToManyField(Study, related_name="samples")
 
     metadata = models.JSONField(default=dict, blank=True)
+
+    sample_title = models.GeneratedField(
+        expression=Func(
+            Value("sample_title"),
+            function="jsonb_extract_path_text",
+            template="(jsonb_extract_path_text(metadata, %(expressions)s))",
+        ),
+        output_field=models.TextField(),
+        db_persist=True,
+        null=True,
+        blank=True,
+    )
 
     def __str__(self):
         return f"Sample {self.id}: {self.ena_sample}"
 
-
-class WithExperimentTypeModel(models.Model):
-    class ExperimentTypes(models.TextChoices):
-        METATRANSCRIPTOMIC = "METAT", "Metatranscriptomic"
-        METAGENOMIC = "METAG", "Metagenomic"
-        AMPLICON = "AMPLI", "Amplicon"
-        ASSEMBLY = "ASSEM", "Assembly"
-        HYBRID_ASSEMBLY = "HYASS", "Hybrid assembly"
-        LONG_READ_ASSEMBLY = "LRASS", "Long-read assembly"
-
-        # legacy
-        METABARCODING = "METAB", "Metabarcoding"
-        UNKNOWN = "UNKNO", "Unknown"
-
-    experiment_type = models.CharField(
-        choices=ExperimentTypes, max_length=5, default=ExperimentTypes.UNKNOWN
-    )
-
     class Meta:
-        abstract = True
+        indexes = [
+            GinIndex(
+                name="idx_sample_title_trgm",
+                fields=["sample_title"],
+                opclasses=["gin_trgm_ops"],
+            ),
+            # Fast fulltext (ish) search on the sample name.
+        ]
 
 
 class PublicRunManager(PrivacyFilterManagerMixin, models.Manager): ...
 
 
-class Run(TimeStampedModel, ENADerivedModel, WithExperimentTypeModel):
+class Run(
+    InferredMetadataMixin, TimeStampedModel, ENADerivedModel, WithExperimentTypeModel
+):
     CommonMetadataKeys = ENAReadRunFields
-    CommonMetadataKeys.FASTQ_FTPS = (
-        "fastq_ftps"  # plural convention mismatch to ENA; TODO
+    extend_enum(
+        CommonMetadataKeys, "FASTQ_FTPS", "fastq_ftps"
+    ),  # plural convention mismatch to ENA; TODO
+    extend_enum(
+        CommonMetadataKeys, "INFERRED_LIBRARY_LAYOUT", "inferred_library_layout"
     )
 
     class InstrumentPlatformKeys:
@@ -248,23 +304,26 @@ class Run(TimeStampedModel, ENADerivedModel, WithExperimentTypeModel):
     def set_experiment_type_by_metadata(
         self, ena_library_strategy: str, ena_library_source: str
     ):
+        ALLOWED_WHOLE_GENOME_LIBRARY_STRATEGIES = ["wgs", "wga"]
+        ALLOWED_AMPLICON_LIBRARY_STRATEGIES = ["amplicon"]
+
         if ena_library_strategy.lower() == "rna-seq" and (
             ena_library_source.lower() == "metagenomic"
             or ena_library_source.lower() == "metatranscriptomic"
         ):
             self.experiment_type = Run.ExperimentTypes.METATRANSCRIPTOMIC
         elif (
-            ena_library_strategy.lower() == "wgs"
+            ena_library_strategy.lower() in ALLOWED_WHOLE_GENOME_LIBRARY_STRATEGIES
             and ena_library_source.lower() == "metatranscriptomic"
         ):
             self.experiment_type = Run.ExperimentTypes.METATRANSCRIPTOMIC
         elif (
-            ena_library_strategy.lower() == "wgs"
+            ena_library_strategy.lower() in ALLOWED_WHOLE_GENOME_LIBRARY_STRATEGIES
             and ena_library_source.lower() == "metagenomic"
         ):
             self.experiment_type = Run.ExperimentTypes.METAGENOMIC
         elif (
-            ena_library_strategy.lower() == "amplicon"
+            ena_library_strategy.lower() in ALLOWED_AMPLICON_LIBRARY_STRATEGIES
             and ena_library_source.lower() == "metagenomic"
         ):
             self.experiment_type = Run.ExperimentTypes.AMPLICON
@@ -310,7 +369,7 @@ class AssemblyManager(SelectByStatusManagerMixin, ENADerivedManager):
 class PublicAssemblyManager(PrivacyFilterManagerMixin, AssemblyManager): ...
 
 
-class Assembly(TimeStampedModel, ENADerivedModel):
+class Assembly(InferredMetadataMixin, TimeStampedModel, ENADerivedModel):
     objects = AssemblyManager()
     public_objects = PublicAssemblyManager()
 
@@ -353,6 +412,7 @@ class Assembly(TimeStampedModel, ENADerivedModel):
         COVERAGE = "coverage"
         COVERAGE_DEPTH = "coverage_depth"
         N_CONTIGS = "n_contigs"
+        CONTAMINANT_REFERENCE = "contaminant_reference"
 
     metadata = JSONField(default=dict, db_index=True, blank=True)
 
@@ -393,7 +453,7 @@ class Assembly(TimeStampedModel, ENADerivedModel):
         self.status[status] = set_status_as
         if reason:
             self.status[f"{status}_reason"] = reason
-        return self.save()
+        self.save()
 
     def add_erz_accession(self, erz_accession):
         if erz_accession not in self.ena_accessions:
@@ -423,7 +483,7 @@ class Assembly(TimeStampedModel, ENADerivedModel):
         ordering = ["id"]
 
     def __str__(self):
-        return f"Assembly {self.id} | {self.first_accession or 'unaccessioned'} (Run {self.run.first_accession})"
+        return f"Assembly {self.id} | {self.first_accession or 'unaccessioned'} (Run {self.run.first_accession if self.run else '-'})"
 
 
 class AssemblyAnalysisRequest(TimeStampedModel):
@@ -545,6 +605,7 @@ class PublicAnalysisManagerIncludingAnnotations(
 
 
 class Analysis(
+    InferredMetadataMixin,
     TimeStampedModel,
     VisibilityControlledModel,
     WithDownloadsModel,
@@ -571,7 +632,7 @@ class Analysis(
 
     accession = MGnifyAccessionField(accession_prefix="MGYA", accession_length=8)
 
-    suppression_following_fields = ["sample"]  # TODO
+    suppression_following_fields = ["sample"]
     study = models.ForeignKey(
         Study, on_delete=models.CASCADE, to_field="accession", related_name="analyses"
     )
@@ -592,24 +653,25 @@ class Analysis(
     )
     is_suppressed = models.BooleanField(default=False)
 
-    GENOME_PROPERTIES = "genome_properties"
-    GO_TERMS = "go_terms"
-    GO_SLIMS = "go_slims"
-    INTERPRO_IDENTIFIERS = "interpro_identifiers"
-    KEGG_MODULES = "kegg_modules"
-    KEGG_ORTHOLOGS = "kegg_orthologs"
-    ANTISMASH_GENE_CLUSTERS = "antismash_gene_clusters"
+    # TODO: remove all of the abandoned annotations JSON fields and associated logic from this model
     PFAMS = "pfams"
-    RHEA_REACTIONS = "rhea_reactions"
+    INTERPROS = "interpros"
 
     TAXONOMIES = "taxonomies"
     CLOSED_REFERENCE = "closed_reference"
     ASV = "asv"
+
+    # ASA - results categories
+    CODING_SEQUENCES = "coding_sequences"
     FUNCTIONAL_ANNOTATION = "functional_annotation"
+    PATHWAYS_AND_SYSTEMS = "pathways_and_systems"
+    VIRIFY = "virify"
+    MAP = "mobilome_annotation_pipeline"
 
     class TaxonomySources(FutureStrEnum):
         SSU: str = "ssu"
         LSU: str = "lsu"
+        MOTUS: str = "motus"
         ITS_ONE_DB: str = "its_one_db"
         UNITE: str = "unite"
         PR2: str = "pr2"
@@ -617,14 +679,29 @@ class Analysis(
         DADA2_PR2: str = "dada2_pr2"
         UNIREF: str = "uniref"
 
-    TAXONOMIES_SSU = f"{TAXONOMIES}__{TaxonomySources.SSU.value}"
-    TAXONOMIES_LSU = f"{TAXONOMIES}__{TaxonomySources.LSU.value}"
-    TAXONOMIES_ITS_ONE_DB = f"{TAXONOMIES}__{TaxonomySources.ITS_ONE_DB.value}"
-    TAXONOMIES_UNITE = f"{TAXONOMIES}__{TaxonomySources.UNITE.value}"
-    TAXONOMIES_PR2 = f"{TAXONOMIES}__{TaxonomySources.PR2.value}"
-    TAXONOMIES_DADA2_SILVA = f"{TAXONOMIES}__{TaxonomySources.DADA2_SILVA.value}"
-    TAXONOMIES_DADA2_PR2 = f"{TAXONOMIES}__{TaxonomySources.DADA2_PR2.value}"
-    TAXONOMIES_UNIREF = f"{TAXONOMIES}__{TaxonomySources.UNIREF.value}"
+    TAXONOMIES_SSU = f"{TAXONOMIES}__{TaxonomySources.SSU}"
+    TAXONOMIES_LSU = f"{TAXONOMIES}__{TaxonomySources.LSU}"
+    TAXONOMIES_ITS_ONE_DB = f"{TAXONOMIES}__{TaxonomySources.ITS_ONE_DB}"
+    TAXONOMIES_UNITE = f"{TAXONOMIES}__{TaxonomySources.UNITE}"
+    TAXONOMIES_PR2 = f"{TAXONOMIES}__{TaxonomySources.PR2}"
+    TAXONOMIES_DADA2_SILVA = f"{TAXONOMIES}__{TaxonomySources.DADA2_SILVA}"
+    TAXONOMIES_DADA2_PR2 = f"{TAXONOMIES}__{TaxonomySources.DADA2_PR2}"
+    TAXONOMIES_UNIREF = f"{TAXONOMIES}__{TaxonomySources.UNIREF}"
+
+    class FunctionalSources(FutureStrEnum):
+        PFAM: str = "pfam"
+
+    @staticmethod
+    def default_annotations():
+        return {
+            Analysis.TAXONOMIES: [],
+            Analysis.PFAMS: [],
+            Analysis.INTERPROS: [],
+        }
+
+    # TODO: These fields are part of a previous and abandoned idea of storing annotations and qc in json fields
+    annotations = models.JSONField(default=default_annotations.__func__)
+    quality_control = models.JSONField(default=dict, blank=True)
 
     ALLOWED_DOWNLOAD_GROUP_PREFIXES = [
         "all",  # catch-all for legacy
@@ -632,26 +709,16 @@ class Analysis(
         f"{TAXONOMIES}.asv.",
         "quality_control",
         "primer_identification",
-        "asv",
+        "taxonomy",
+        "annotation_summary",
+        ASV,
+        PFAMS,
+        CODING_SEQUENCES,
         FUNCTIONAL_ANNOTATION,
+        PATHWAYS_AND_SYSTEMS,
+        VIRIFY,
+        MAP,
     ]
-
-    @staticmethod
-    def default_annotations():
-        return {
-            Analysis.GENOME_PROPERTIES: [],
-            Analysis.GO_TERMS: [],
-            Analysis.GO_SLIMS: [],
-            Analysis.INTERPRO_IDENTIFIERS: [],
-            Analysis.KEGG_MODULES: [],
-            Analysis.KEGG_ORTHOLOGS: [],
-            Analysis.TAXONOMIES: [],
-            Analysis.ANTISMASH_GENE_CLUSTERS: [],
-            Analysis.PFAMS: [],
-        }
-
-    annotations = models.JSONField(default=default_annotations.__func__)
-    quality_control = models.JSONField(default=dict, blank=True)
 
     class KnownMetadataKeys:
         MARKER_GENE_SUMMARY = "marker_gene_summary"  # for amplicon analyses
@@ -667,6 +734,10 @@ class Analysis(
     )
 
     class AnalysisStates(FutureStrEnum):
+        # TODO: this is pipeline specific - I think we need to move elsewhere or refactor (mbc)
+        # One idea is to strictly keyed high level generic state (even fewer than this set),
+        # and then a freely-keyed one for the pipeline specifics.
+        # Maybe using something similar to Prefect's StateType
         ANALYSIS_STARTED = "analysis_started"
         ANALYSIS_COMPLETED = "analysis_completed"
         ANALYSIS_BLOCKED = "analysis_blocked"
@@ -691,12 +762,18 @@ class Analysis(
     )
 
     def mark_status(
-        self, status: AnalysisStates, set_status_as: bool = True, reason: str = None
+        self,
+        status: AnalysisStates,
+        set_status_as: bool = True,
+        reason: str = None,
+        save: bool = True,
     ):
         self.status[status] = set_status_as
         if reason:
             self.status[f"{status}_reason"] = reason
-        return self.save()
+        if save:
+            return self.save()
+        return self
 
     @property
     def assembly_or_run(self) -> Union[Assembly, Run]:
@@ -757,7 +834,7 @@ def on_study_saved_update_analyses_suppression_states(
         is_suppressed=instance.is_suppressed
     )
     for analysis in analyses_to_update_suppression_of:
-        logging.info(
+        logger.info(
             f"Setting is_suppressed to {instance.is_suppressed} on {analysis.accession} via {instance.accession}"
         )
         analysis.is_suppressed = instance.is_suppressed
@@ -789,3 +866,119 @@ class AnalysedContig(TimeStampedModel):
         }
 
     annotations = models.JSONField(default=default_annotations.__func__)
+
+
+class SuperStudyImage(DbStoredFileField): ...
+
+
+class SuperStudy(TimeStampedModel):
+    slug = models.SlugField(unique=True, primary_key=True)
+    title = models.CharField(max_length=255)
+    description = models.TextField(blank=True)
+    studies = models.ManyToManyField(
+        Study, related_name="super_studies", through="SuperStudyStudy"
+    )
+    genome_catalogues = models.ManyToManyField(
+        "genomes.GenomeCatalogue",
+        related_name="super_studies",
+        through="SuperStudyGenomeCatalogue",
+    )
+    # genome_catalogues #TODO
+    logo = models.ImageField(
+        upload_to="analyses.SuperStudyImage/bytes/filename/mimetype",
+        blank=True,
+        null=True,
+        storage=storages["fieldfiles"],
+    )
+
+    class Meta:
+        verbose_name_plural = "super studies"
+
+    def save(self, *args, **kwargs):
+        delete_file_if_needed(self, "logo")
+        super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        super().delete(*args, **kwargs)
+        delete_file(self, "logo")
+
+    def __str__(self):
+        return self.pk
+
+
+class SuperStudyStudy(TimeStampedModel):
+    study = models.ForeignKey(Study, on_delete=models.CASCADE)
+    super_study = models.ForeignKey(SuperStudy, on_delete=models.CASCADE)
+    is_flagship = models.BooleanField(default=True)
+
+    class Meta:
+        verbose_name = "Study in Super Study"
+        verbose_name_plural = "Studies in Super Study"
+        unique_together = (("study", "super_study"),)
+
+    def __str__(self):
+        return f"SuperStudyStudy {self.pk}: {self.study} in {self.super_study}"
+
+
+class SuperStudyGenomeCatalogue(TimeStampedModel):
+    genome_catalogue = models.ForeignKey(
+        "genomes.GenomeCatalogue", on_delete=models.CASCADE
+    )
+    super_study = models.ForeignKey(SuperStudy, on_delete=models.CASCADE)
+
+    class Meta:
+        verbose_name = "Genome Catalogue in Super Study"
+        verbose_name_plural = "Genome Catalogues in Super Study"
+        unique_together = (("genome_catalogue", "super_study"),)
+
+    def __str__(self):
+        return f"SuperStudyGenomeCatalogue {self.pk}: {self.genome_catalogue} in {self.super_study}"
+
+
+class StudyPublication(TimeStampedModel):
+    study = models.ForeignKey(Study, on_delete=models.CASCADE)
+    publication = models.ForeignKey("Publication", on_delete=models.CASCADE)
+
+
+class Publication(TimeStampedModel):
+    """
+    Model for scientific publications related to studies.
+    """
+
+    pubmed_id = models.IntegerField(primary_key=True)
+    title = models.CharField(max_length=740)
+    published_year = models.SmallIntegerField(null=True, blank=True)
+
+    class PublicationMetadata(BaseModel):
+        """
+        Pydantic schema for storing additional publication metadata in JSON.
+        """
+
+        authors: Optional[str] = Field(None)
+        doi: Optional[str] = Field(None)
+        isbn: Optional[str] = Field(None)
+        iso_journal: Optional[str] = Field(None)
+        pubmed_central_id: Optional[int] = Field(None)
+        volume: Optional[str] = Field(None)
+        pub_type: Optional[str] = Field(None)
+
+    metadata = JSONFieldWithSchema(schema=PublicationMetadata)
+
+    studies = models.ManyToManyField(
+        Study, related_name="publications", through=StudyPublication
+    )
+
+    class Meta:
+        verbose_name = "Publication"
+        verbose_name_plural = "Publications"
+        indexes = [
+            GinIndex(
+                name="idx_publication_title_trgm",
+                fields=["title"],
+                opclasses=["gin_trgm_ops"],
+            ),
+            # Fast fulltext (ish) search on the title.
+        ]
+
+    def __str__(self):
+        return f"Publication {self.pk}: {Truncator(self.title).words(5)}"
