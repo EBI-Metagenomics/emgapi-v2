@@ -147,6 +147,12 @@ def run_map_batch(assembly_analyses_batch_id: uuid.UUID):
             ),
             ("-config", EMG_CONFIG.map_pipeline.pipeline_config_file),
             "-resume",
+            (
+                "-work-dir",
+                Path(EMG_CONFIG.assembly_analysis_pipeline.workdir_root)
+                / mgnify_study.first_accession
+                / "map",
+            ),
             ("--input", map_samplesheet_path),
             ("--outdir", map_outdir),
             EMG_CONFIG.slurm.use_nextflow_tower and "-with-tower",
