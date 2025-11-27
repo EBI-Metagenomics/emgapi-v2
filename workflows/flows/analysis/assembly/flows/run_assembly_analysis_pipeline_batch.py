@@ -3,6 +3,7 @@ from datetime import timedelta
 from pathlib import Path
 
 from django.utils.text import slugify
+from django.db import close_old_connections
 from prefect import flow, get_run_logger
 from prefect.runtime import flow_run
 
@@ -272,7 +273,13 @@ def run_assembly_analysis_pipeline_batch(
                 working_dir=assembly_analyses_workspace_dir,
                 resubmit_policy=ResubmitIfFailedPolicy,
             )
+            # This is required because a flow may need a few days to run, and when that is done, the connection to
+            # psql is going to be closed or dead at least
+            close_old_connections()
         except Exception as e:
+
+            close_old_connections()
+
             error_type = (
                 "ASA pipeline failed"
                 if isinstance(e, ClusterJobFailedException)
@@ -355,6 +362,7 @@ def run_assembly_analysis_pipeline_batch(
     run_virify_batch(
         assembly_analyses_batch_id=assembly_analysis_batch.id,
     )
+    close_old_connections()
     # Note: run_virify_batch updates counts internally
 
     # Refresh batch to get updates from run_virify_batch
@@ -409,6 +417,7 @@ def run_assembly_analysis_pipeline_batch(
     run_map_batch(
         assembly_analyses_batch_id=assembly_analysis_batch.id,
     )
+    close_old_connections()
 
     # Refresh batch to get updates from run_map_batch
     assembly_analysis_batch.refresh_from_db()
@@ -456,6 +465,9 @@ def run_assembly_analysis_pipeline_batch(
         logger.info("No MAP analyses completed, skipping result import")
 
     # At this point, the batch is completed and all analyses are in the DB. #
+
+    # Just in case the connection was closed because previous steps took a long time
+    close_old_connections()
 
     #######################################
     # === Study summary for the batch === #

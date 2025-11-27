@@ -1,6 +1,7 @@
 import uuid
 from datetime import timedelta
 
+from django.db import close_old_connections
 from prefect import flow, get_run_logger
 from prefect.runtime import flow_run
 
@@ -163,7 +164,9 @@ def run_virify_batch(assembly_analyses_batch_id: uuid.UUID):
             working_dir=virify_outdir,
             resubmit_policy=ResubmitIfFailedPolicy,
         )
+        close_old_connections()
     except Exception as e:
+        close_old_connections()
         error_type = (
             "VIRIfy pipeline failed"
             if isinstance(e, ClusterJobFailedException)

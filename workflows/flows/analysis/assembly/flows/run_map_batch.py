@@ -2,6 +2,7 @@ import uuid
 from datetime import timedelta
 from pathlib import Path
 
+from django.db import close_old_connections
 from prefect import flow, get_run_logger
 from prefect.runtime import flow_run
 
@@ -171,7 +172,9 @@ def run_map_batch(assembly_analyses_batch_id: uuid.UUID):
             working_dir=map_outdir,
             resubmit_policy=ResubmitIfFailedPolicy,
         )
+        close_old_connections()
     except Exception as e:
+        close_old_connections()
         error_type = (
             "MAP pipeline failed"
             if isinstance(e, ClusterJobFailedException)
