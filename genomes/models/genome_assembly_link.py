@@ -21,10 +21,10 @@ class GenomeAssemblyLink(BaseModel):
         max_length=100,
         null=True,
         blank=True,
-        help_text="Arbitrary genome accession for species representative",
+        help_text="Genome accession for species representative",
     )
     mag_accession = models.CharField(
-        max_length=100, null=True, blank=True, help_text="Arbitrary accession for MAG"
+        max_length=100, null=True, blank=True, help_text="Accession for MAG"
     )
 
     class Meta:
