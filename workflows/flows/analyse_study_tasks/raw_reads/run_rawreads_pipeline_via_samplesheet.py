@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import List, Union
 
 from django.conf import settings
+from django.db import close_old_connections
 from django.utils.text import slugify
 from prefect import flow
 
@@ -101,7 +102,9 @@ def run_rawreads_pipeline_via_samplesheet(
             working_dir=rawreads_current_outdir,
             resubmit_policy=ResubmitIfFailedPolicy,
         )
+        close_old_connections()
     except ClusterJobFailedException:
+        close_old_connections()
         for analysis in rawreads_analyses:
             mark_analysis_as_failed(analysis)
     else:
