@@ -170,7 +170,7 @@ def make_samplesheet_for_map(
                 virify_workspace
                 / assembly_accession
                 / EMG_CONFIG.virify_pipeline.final_gff_folder
-                / f"{assembly_accession}_virify.gff"
+                / f"{assembly_accession}_virify.gff.gz"
             )
 
             # The files should exist at this point... but nevertheless check
