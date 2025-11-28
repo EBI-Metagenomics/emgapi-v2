@@ -233,6 +233,9 @@ class AssemblyResultSchema(PipelineResultSchema):
                                 annotations_key=Analysis.INTERPROS,
                                 import_as_records=True,
                             ),
+                            index_files=[
+                                DownloadFileIndexFileMetadata(index_type="gzi"),
+                            ],
                         ),
                     ],
                 ),
@@ -256,6 +259,9 @@ class AssemblyResultSchema(PipelineResultSchema):
                                 annotations_key=Analysis.PFAMS,
                                 import_as_records=True,
                             ),
+                            index_files=[
+                                DownloadFileIndexFileMetadata(index_type="gzi"),
+                            ],
                         ),
                     ],
                 ),
@@ -275,6 +281,9 @@ class AssemblyResultSchema(PipelineResultSchema):
                                 long_description="Table with counts for each Gene Ontology (GO) Term found",
                             ),
                             content_validator=GOSummarySchema,
+                            index_files=[
+                                DownloadFileIndexFileMetadata(index_type="gzi"),
+                            ],
                         ),
                         PipelineFileSchema(
                             filename_template="{identifier}_goslim_summary.tsv.gz",
@@ -287,6 +296,9 @@ class AssemblyResultSchema(PipelineResultSchema):
                                 long_description="Table with counts for each Gene Ontology (GO)-Slim Term found",
                             ),
                             content_validator=GOSummarySchema,
+                            index_files=[
+                                DownloadFileIndexFileMetadata(index_type="gzi"),
+                            ],
                         ),
                     ],
                 ),
@@ -305,6 +317,9 @@ class AssemblyResultSchema(PipelineResultSchema):
                                 short_description="Rhea reaction counts",
                                 long_description="Table with counts of each Rhea reaction found",
                             ),
+                            index_files=[
+                                DownloadFileIndexFileMetadata(index_type="gzi"),
+                            ],
                         ),
                     ],
                 ),
@@ -353,6 +368,9 @@ class AssemblyResultSchema(PipelineResultSchema):
                                 long_description="KEGG Orthology assignments summary",
                             ),
                             content_validator=KOSummarySchema,
+                            index_files=[
+                                DownloadFileIndexFileMetadata(index_type="gzi"),
+                            ],
                         ),
                     ],
                 ),
@@ -552,6 +570,9 @@ class AssemblyResultSchema(PipelineResultSchema):
                                 short_description="KEGG Modules per contig",
                                 long_description="KEGG Modules found per contig",
                             ),
+                            index_files=[
+                                DownloadFileIndexFileMetadata(index_type="gzi"),
+                            ],
                         ),
                         PipelineFileSchema(
                             filename_template="{identifier}_kegg_modules_summary.tsv.gz",
@@ -564,6 +585,9 @@ class AssemblyResultSchema(PipelineResultSchema):
                                 long_description="Table with counts for each KEGG Module found",
                             ),
                             content_validator=KEGGModulesSummarySchema,
+                            index_files=[
+                                DownloadFileIndexFileMetadata(index_type="gzi"),
+                            ],
                         ),
                     ],
                 ),

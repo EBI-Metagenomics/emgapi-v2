@@ -14,7 +14,7 @@ from workflows.models import (
 from workflows.prefect_utils.slurm_flow import ClusterJobFailedException
 
 
-@pytest.mark.django_db
+@pytest.mark.django_db(transaction=True)
 @patch("workflows.flows.analysis.assembly.flows.run_map_batch.make_samplesheet_for_map")
 @patch("workflows.flows.analysis.assembly.flows.run_map_batch.flow_run")
 @patch("workflows.flows.analysis.assembly.flows.run_map_batch.run_cluster_job")
@@ -85,7 +85,7 @@ def test_run_map_batch_success(
     )
 
 
-@pytest.mark.django_db
+@pytest.mark.django_db(transaction=True)
 @patch("workflows.flows.analysis.assembly.flows.run_map_batch.run_cluster_job")
 @patch("workflows.flows.analysis.assembly.flows.run_map_batch.flow_run")
 @patch("workflows.flows.analysis.assembly.flows.run_map_batch.make_samplesheet_for_map")
@@ -149,7 +149,7 @@ def test_run_map_batch_cluster_job_failed(
     assert batch.pipeline_status_counts.map.failed == batch.total_analyses
 
 
-@pytest.mark.django_db
+@pytest.mark.django_db(transaction=True)
 @patch("workflows.flows.analysis.assembly.flows.run_map_batch.make_samplesheet_for_map")
 def test_run_map_batch_no_samplesheet(
     mock_make_samplesheet,
