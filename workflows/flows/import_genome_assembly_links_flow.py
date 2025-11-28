@@ -10,10 +10,9 @@ This flow accepts a path to a TSV file with the following columns:
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
-from prefect import flow, task, get_run_logger
-
-from django.db import transaction
 from django.core.exceptions import ObjectDoesNotExist
+from django.db import transaction
+from prefect import flow, task, get_run_logger
 
 # Import Django models
 from analyses.models import Assembly
@@ -22,12 +21,11 @@ from workflows.data_io_utils.csv.csv_comment_handler import (
     CommentAwareDictReader,
     CSVDelimiter,
 )
-
-from workflows.data_io_utils.file_rules.nodes import File
 from workflows.data_io_utils.file_rules.common_rules import (
     FileExistsRule,
     FileIsNotEmptyRule,
 )
+from workflows.data_io_utils.file_rules.nodes import File
 
 
 @task(name="Validate TSV file")
@@ -123,23 +121,41 @@ def process_tsv_records(records: List[Dict[str, str]]) -> List[Dict[str, str]]:
     logger = get_run_logger()
     validated_records = []
 
+    skipped = 0
     for i, record in enumerate(records, 1):
+        if i == 1:
+            logger.info(f"Processing record {i}")
+            logger.info(record)
+
+        # Safely normalise fields
+        primary_assembly = (record.get("primary_assembly") or "").strip()
+        genome_raw = record.get("genome")
+        genome = (genome_raw or "").strip()
+
+        # Remove rows where genome is NA-like (None, NA, N/A, null, NULL)
+        if genome_raw is None or genome.lower() in {"na", "n/a", "null"}:
+            skipped += 1
+            continue
+
         cleaned_record = {
-            "primary_assembly": record["primary_assembly"].strip(),
-            "genome": record["genome"].strip(),
+            "primary_assembly": primary_assembly,
+            "genome": genome,
             "mag_accession": (
-                record.get("mag_accession", "").strip()
+                (record.get("mag_accession") or "").strip()
                 if record.get("mag_accession")
                 else None
             ),
             "species_rep": (
-                record.get("species_rep", "").strip()
+                (record.get("species_rep") or "").strip()
                 if record.get("species_rep")
                 else None
             ),
         }
 
         validated_records.append(cleaned_record)
+
+    if skipped:
+        logger.info(f"Skipped {skipped} record(s) due to NA-like genome values")
 
     logger.info(f"Validated {len(validated_records)} records")
     return validated_records
@@ -173,7 +189,7 @@ def find_objects(
     genomes_map = {
         g.accession: g
         for g in Genome.objects.filter(accession__in=list(genome_accessions)).only(
-            "id", "accession"
+            "genome_id", "accession"
         )
     }
 
