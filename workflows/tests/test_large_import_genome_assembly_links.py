@@ -52,6 +52,8 @@ def test_read_tsv_file_one_million_records():
         assert records[0]["primary_assembly"] == "ERZ000001"
         assert records[0]["genome"] == "MGYG000000001"  # 1 zero-padded to 9 digits
         assert records[-1]["primary_assembly"] == "ERZ1000000"  # ERZ + 7 digits
-        assert records[-1]["genome"] == "MGYG001000000"  # 1,000,000 zero-padded to 9 digits
+        assert (
+            records[-1]["genome"] == "MGYG001000000"
+        )  # 1,000,000 zero-padded to 9 digits
     finally:
         os.unlink(path)
