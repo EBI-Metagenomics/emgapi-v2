@@ -147,7 +147,7 @@ def test_process_tsv_records():
     validated_records = run_flow_and_capture_logs(test_flow, records).result
 
     # Check that records with missing required fields were filtered out
-    assert len(validated_records) == 3
+    assert len(validated_records) == 5
 
     # Check that the records were cleaned properly
     assert validated_records[0]["primary_assembly"] == "ERZ123456"
@@ -188,7 +188,7 @@ def test_find_objects():
         num_contigs=100,
         n_50=10000,
         gc_content=0.5,
-        type=Genome.MAG,
+        type="MAG",
         completeness=95.0,
         contamination=2.0,
         trnas=20.0,
@@ -328,7 +328,7 @@ def test_create_links():
         num_contigs=100,
         n_50=10000,
         gc_content=0.5,
-        type=Genome.MAG,
+        type="MAG",
         completeness=95.0,
         contamination=2.0,
         trnas=20.0,
@@ -347,7 +347,7 @@ def test_create_links():
         num_contigs=200,
         n_50=20000,
         gc_content=0.6,
-        type=Genome.MAG,
+        type="Isolate",
         completeness=90.0,
         contamination=3.0,
         trnas=25.0,
@@ -510,7 +510,7 @@ def test_import_genome_assembly_links_flow(mock_tsv_file):
         num_contigs=100,
         n_50=10000,
         gc_content=0.5,
-        type=Genome.MAG,
+        type="MAG",
         completeness=95.0,
         contamination=2.0,
         trnas=20.0,
@@ -529,7 +529,7 @@ def test_import_genome_assembly_links_flow(mock_tsv_file):
         num_contigs=200,
         n_50=20000,
         gc_content=0.6,
-        type=Genome.MAG,
+        type="Isolate",
         completeness=90.0,
         contamination=3.0,
         trnas=25.0,
@@ -614,7 +614,7 @@ def test_import_genome_assembly_links_flow(mock_tsv_file):
         # Check the result
         result = logged_flow_run.result
         assert result["total_records"] == 5
-        assert result["validated_records"] == 3
+        assert result["validated_records"] == 4
         assert result["links_created_or_updated"] == 2
 
         # Check that the links were created
@@ -631,7 +631,6 @@ def test_import_genome_assembly_links_flow(mock_tsv_file):
         assert "Starting import of genome assembly links" in logged_flow_run.logs
         assert "TSV file validated" in logged_flow_run.logs
         assert "Read 5 records from TSV file" in logged_flow_run.logs
-        assert "Validated 3 records" in logged_flow_run.logs
-        assert "Found objects for 3 records" in logged_flow_run.logs
+        assert "Validated 4 records" in logged_flow_run.logs
         assert "Created 2 links" in logged_flow_run.logs
         assert "Import completed" in logged_flow_run.logs

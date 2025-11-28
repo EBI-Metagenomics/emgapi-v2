@@ -275,9 +275,9 @@ def create_links(
         genome_ids = set()
         assembly_ids = set()
         for record, genome, assembly in batch:
-            key = (genome.id, assembly.id)
+            key = (genome.genome_id, assembly.id)
             key_to_record[key] = record
-            genome_ids.add(genome.id)
+            genome_ids.add(genome.genome_id)
             assembly_ids.add(assembly.id)
 
         with transaction.atomic():
