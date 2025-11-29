@@ -46,6 +46,49 @@ class GetByENAAccessionManagerMixin:
             raise self.model.DoesNotExist()
         return qs.first()
 
+    def match_accessions_to_instances(self, requested_accessions: list[str] | set[str]):
+        """
+        This function maps a list of ENA accessions to assembly model instances.
+        This requested accessions normally comes from importing genome_assembly_links from
+        a provided TSV file.
+
+        Build a mapping from requested_accession strings to model instance, using a bulk
+        overlap query on ena_accessions first, then falling back to per-accession
+        get_by_accession for anything missing. Missing or ambiguous accessions
+        are simply omitted from the result.
+        """
+        from django.core.exceptions import ObjectDoesNotExist, MultipleObjectsReturned
+
+        if not requested_accessions:
+            return {}
+        accession_set = {a for a in requested_accessions if a}
+        matching_assemblies: dict[str, any] = {}
+        try:
+            qs = (
+                self.get_queryset()
+                .filter(ena_accessions__overlap=list(accession_set))
+                .only("id", "ena_accessions")
+            )
+            for obj in qs:
+                for acc in getattr(obj, "ena_accessions", []) or []:
+                    if acc in accession_set and acc not in matching_assemblies:
+                        matching_assemblies[acc] = obj
+            missing = {acc for acc in accession_set if acc not in matching_assemblies}
+        except Exception:
+            # Fallback to per-accession if the DB finding overlap fails
+            missing = accession_set
+
+        for acc in list(missing):
+            try:
+                obj = self.get_by_accession(acc)
+                if isinstance(obj, Exception):
+                    continue
+                matching_assemblies[acc] = obj
+            except (ObjectDoesNotExist, MultipleObjectsReturned):
+                # Skip missing or ambiguous
+                continue
+        return matching_assemblies
+
 
 class UpdateOrCreateByAccessionManagerMixin:
     def update_or_create_by_accession(

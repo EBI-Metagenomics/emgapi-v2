@@ -1,11 +1,11 @@
 from django.db import models
 
+from analyses.base_models.base_models import TimeStampedModel
 from analyses.models import Assembly
 from genomes.models import Genome
-from genomes.models.base_model import BaseModel
 
 
-class GenomeAssemblyLink(BaseModel):
+class GenomeAssemblyLink(TimeStampedModel):
     """
     A many-to-many relationship model between Genome and Assembly.
     Stores additional information about the relationship.

@@ -10,7 +10,6 @@ This flow accepts a path to a TSV file with the following columns:
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
-from django.core.exceptions import ObjectDoesNotExist
 from django.db import transaction
 from prefect import flow, task, get_run_logger
 
@@ -132,7 +131,7 @@ def process_tsv_records(records: List[Dict[str, str]]) -> List[Dict[str, str]]:
         genome_raw = record.get("genome")
         genome = (genome_raw or "").strip()
 
-        # Remove rows where genome is NA-like (None, NA, N/A, null, NULL)
+        # Skip records where genome is NA-like; CSV reader maps "" to None
         if genome_raw is None or genome.lower() in {"na", "n/a", "null"}:
             skipped += 1
             continue
@@ -193,36 +192,9 @@ def find_objects(
         )
     }
 
-    # Assembly has custom manager method get_by_accession for single, but here we batch by ena_accessions or similar.
-    # Prefer a generic filter that supports accession lookup via a field used by get_by_accession.
-    # Fallback: use get_by_accession per accession if bulk filter is not straightforward.
-    assemblies_map: Dict[str, Assembly] = {}
-    missing_for_bulk: set = set()
-    try:
-        # Try common fields first
-        assemblies_qs = Assembly.objects.filter(
-            ena_accessions__overlap=list(assembly_accessions)
-        )
-        for a in assemblies_qs.only("id", "ena_accessions"):
-            for acc in a.ena_accessions or []:
-                if acc in assembly_accessions and acc not in assemblies_map:
-                    assemblies_map[acc] = a
-        # Track those not resolved by overlap
-        missing_for_bulk = {
-            acc for acc in assembly_accessions if acc not in assemblies_map
-        }
-    except Exception:
-        # If model doesn't support this lookup, fall back to per-accession method
-        missing_for_bulk = assembly_accessions
-
-    # Resolve any remaining via get_by_accession individually
-    for acc in list(missing_for_bulk):
-        try:
-            a = Assembly.objects.get_by_accession(acc)
-            assemblies_map[acc] = a
-        except (ObjectDoesNotExist, Assembly.MultipleObjectsReturned):
-            # Log later per record
-            continue
+    assemblies_map: Dict[str, Assembly] = (
+        Assembly.objects.match_accessions_to_instances(assembly_accessions)
+    )
 
     for record in records:
         genome = genomes_map.get(record.get("genome"))
