@@ -6,18 +6,20 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('genomes', '0004_alter_genomeassemblylink_mag_accession'),
+        ("genomes", "0004_alter_genomeassemblylink_mag_accession"),
     ]
 
     operations = [
         migrations.AlterField(
-            model_name='genomeassemblylink',
-            name='created_at',
+            model_name="genomeassemblylink",
+            name="created_at",
             field=models.DateTimeField(auto_now_add=True),
         ),
         migrations.AlterField(
-            model_name='genomeassemblylink',
-            name='id',
-            field=models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID'),
+            model_name="genomeassemblylink",
+            name="id",
+            field=models.BigAutoField(
+                auto_created=True, primary_key=True, serialize=False, verbose_name="ID"
+            ),
         ),
     ]
