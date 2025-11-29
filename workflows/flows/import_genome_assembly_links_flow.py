@@ -165,14 +165,14 @@ def find_objects(
     records: List[Dict[str, str]],
 ) -> List[Tuple[Dict[str, str], Optional[Genome], Optional[Assembly]]]:
     """
-    Finds the Genome and Assembly objects for each record using batched lookups
+    Find Genome and Assembly objects for each input record using batched lookups
     to reduce database round trips.
 
-    Args:
-        records: List of validated and cleaned records
-
-    Returns:
-        List of tuples containing the record, Genome object, and Assembly object
+    :param records: Validated and cleaned records.
+    :type records: list[dict[str, str]]
+    :returns: Tuples of (record, Genome, Assembly) for each input record. If a
+              lookup fails, the corresponding Genome or Assembly will be None.
+    :rtype: list[tuple[dict[str, str], Optional[Genome], Optional[Assembly]]]
     """
     logger = get_run_logger()
     results = []
