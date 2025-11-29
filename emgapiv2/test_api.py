@@ -13,6 +13,8 @@ from analyses.base_models.with_downloads_models import (
 )
 from analyses.models import Analysis, Sample
 
+from genomes.models import GenomeAssemblyLink
+
 R = TypeVar("R")
 
 EMG_CONFIG = settings.EMG_CONFIG
@@ -428,8 +430,6 @@ def test_api_assembly_genome_links_empty(mgnify_assemblies, ninja_api_client):
 def test_api_assembly_genome_links_with_data(
     mgnify_assemblies, genomes, ninja_api_client
 ):
-    from genomes.models import GenomeAssemblyLink
-
     # Prepare assembly and genome
     assembly = mgnify_assemblies[0]
     assembly.ena_accessions = ["ERZ2001"]
