@@ -1,4 +1,5 @@
 from prefect import flow, get_run_logger
+from prefect.flow_engine import load_flow_run
 
 import analyses.models
 import workflows.models
@@ -11,7 +12,6 @@ from workflows.flows.analyse_study_tasks.shared.study_summary import (
 from workflows.flows.analysis.assembly.tasks.add_assembly_study_summaries_to_downloads import (
     add_assembly_study_summaries_to_downloads,
 )
-from workflows.models import AssemblyAnalysisPipelineStatus
 
 
 @flow(
@@ -20,7 +20,13 @@ from workflows.models import AssemblyAnalysisPipelineStatus
 )
 def finalize_assembly_study(study_accession: str):
     """
-    Run the last study level steps on study assembly analysis batches
+    Run the last study level steps on study assembly analysis batches.
+    This method checks that all the study batches have finished running, as in each
+    batch 3 flows (aca, virify and map) are not running anymore. This is not ideal, and I'm
+    working to improve it.
+    TODO: Improve as is_running() is not enough, flows may have failed or haven't even started!
+    TODO: Add unit tests
+    TODO: Use events or automations to improve this
 
     This includes:
     - Merging assembly study summaries
@@ -46,19 +52,35 @@ def finalize_assembly_study(study_accession: str):
     # Check for incomplete batches
     incomplete_count = 0
     for batch in batches:
-        incomplete_analyses = batch.batch_analyses.exclude(
-            asa_status=AssemblyAnalysisPipelineStatus.COMPLETED
-        )
-        if incomplete_analyses.exists():
-            incomplete_count += incomplete_analyses.count()
+        # Each batch has 3 potential flows: aca, virify and map.
+        # This is a blunt approach of fetching those flows and making sure they are not running
+        flow_ids = [
+            batch.aca_flow_run_id,
+            batch.virify_flow_run_id,
+            batch.map_flow_run_id,
+        ]
+        for flow_id in flow_ids:
+            if flow_id is None:
+                logger.error(f"Flow ID {flow_id} is None. Skipping...")
+
+            try:
+                load_flow_run(flow_id)
+                if load_flow_run(flow_id).is_running():
+                    incomplete_count += 1
+                    break
+            except Exception:
+                logger.error(f"Flow ID {flow_id} is not an integer. Skipping...")
+                continue
 
     if incomplete_count > 0:
         logger.warning(
-            f"{incomplete_count} analyses still incomplete. Skipping finalization."
+            f"{incomplete_count} flows are still running. Skipping finalization."
         )
         return
 
-    logger.info("All batches complete. Running finalization steps...")
+    logger.info(
+        "All batches flows have finished running. Running finalization steps..."
+    )
 
     ################################################
     #  === Study summary merging and uploading === #
