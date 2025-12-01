@@ -9,7 +9,6 @@ from prefect.runtime import flow_run, deployment
 from pydantic import Field
 
 from activate_django_first import EMG_CONFIG
-
 import analyses.base_models.with_experiment_type_models
 from workflows.flows.analyse_study_tasks.shared.copy_v6_pipeline_results import (
     copy_v6_study_summaries,

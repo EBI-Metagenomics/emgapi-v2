@@ -11,6 +11,9 @@ from activate_django_first import EMG_CONFIG
 
 from analyses.models import Study, Analysis
 from workflows.data_io_utils.schemas.assembly import ImportResult
+from workflows.flows.analyse_study_tasks.shared.copy_v6_pipeline_results import (
+    copy_assembly_batch_results,
+)
 from workflows.flows.analysis.assembly.flows.run_map_batch import run_map_batch
 from workflows.flows.analysis.assembly.flows.run_virify_batch import (
     run_virify_batch,
@@ -496,3 +499,8 @@ def run_assembly_analysis_pipeline_batch(
         logger.warning(
             "No successfully imported ASA analyses, skipping study summary generation"
         )
+
+    #######################################
+    # === Sync results for the batch === #
+    #######################################
+    copy_assembly_batch_results(assembly_analysis_batch_id)

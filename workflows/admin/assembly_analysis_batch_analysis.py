@@ -41,6 +41,7 @@ class AssemblyAnalysisBatchAnalysisAdmin(ModelAdmin):
     list_filter_submit = True
 
     list_filter = [
+        ("batch__study", AutocompleteSelectMultipleFilter),
         ("batch", AutocompleteSelectMultipleFilter),
         ("analysis__assembly", AutocompleteSelectMultipleFilter),
         "asa_status",
