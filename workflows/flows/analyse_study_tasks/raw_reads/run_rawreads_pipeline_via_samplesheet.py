@@ -64,7 +64,6 @@ def run_rawreads_pipeline_via_samplesheet(
 
     workdir = (
         Path(EMG_CONFIG.rawreads_pipeline.base_workdir)
-        / f"{os.environ['USER']}"
         / f"{mgnify_study.ena_study.accession}_rawreads_v6"
         / f"rawreads-v6-sheet-{slugify(samplesheet)[-10:]}"
     )
