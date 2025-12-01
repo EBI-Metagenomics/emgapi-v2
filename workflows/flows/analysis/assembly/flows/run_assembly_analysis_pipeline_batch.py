@@ -144,7 +144,8 @@ def process_import_results(
 
 
 @flow(
-    name="Run assembly analysis pipeline-v6 for an assembly analysis batch (ASA, VIRIfy and MAP)"
+    name="Run assembly analysis pipeline-v6 for an assembly analysis batch (ASA, VIRIfy and MAP)",
+    flow_run_name="Assembly Analysis Batch {{ assembly_analysis_batch_id }}",
 )
 def run_assembly_analysis_pipeline_batch(
     assembly_analysis_batch_id: uuid.UUID,

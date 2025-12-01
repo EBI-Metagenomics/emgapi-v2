@@ -136,7 +136,7 @@ def analysis_assembly_study(
             f"Running batch {str(batch.id)[:8]} with {batch.total_analyses} analyses"
         )
         run_deployment(
-            name="run-assembly-analysis-pipeline-batch/run-assembly-analysis-pipeline-batch",
+            name="run-assembly-analysis-pipeline-batch/run_assembly_analysis_pipeline_deployment",
             parameters={"assembly_analysis_batch_id": batch.id},
             timeout=0,
         )
