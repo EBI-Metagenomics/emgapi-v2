@@ -86,9 +86,14 @@ def setup_virify_output_helpers(virify_outdir: Path, assembly_accession: str):
     gff_dir = assembly_dir / settings.EMG_CONFIG.virify_pipeline.final_gff_folder
     gff_dir.mkdir(parents=True, exist_ok=True)
 
-    # Create VIRify GFF file (not gzipped to match schema expectation)
-    virify_gff = gff_dir / f"{assembly_accession}_virify.gff"
-    virify_gff.write_text("##gff-version 3\n# Mock VIRify GFF content")
+    # Create VIRify GFF file (gzipped with index files to match schema expectation)
+    virify_gff = gff_dir / f"{assembly_accession}_virify.gff.gz"
+    with gzip.open(virify_gff, "wt") as f:
+        f.write("##gff-version 3\n# Mock VIRify GFF content\n")
+
+    # Create index files
+    virify_gff.with_suffix(".gz.gzi").touch()
+    virify_gff.with_suffix(".gz.csi").touch()
 
 
 def setup_map_output_helpers(map_outdir: Path, assembly_accession: str):

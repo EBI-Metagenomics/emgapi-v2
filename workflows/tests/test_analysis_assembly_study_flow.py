@@ -299,22 +299,33 @@ def setup_virify_batch_fixtures(
     gff_dir = assembly_dir / EMG_CONFIG.virify_pipeline.final_gff_folder
     gff_dir.mkdir(parents=True, exist_ok=True)
 
-    # Copy VIRify GFF fixtures
+    # Copy VIRify GFF fixtures (compressed format with index files)
     src_gff = (
         Path("/app/data/tests/virify_v3_output")
         / "08-final"
         / "gff"
         / f"{scenario.assembly_accession_success}_virify.gff.gz"
     )
-    dst_gff = gff_dir / f"{scenario.assembly_accession_success}_virify.gff"
+    dst_gff = gff_dir / f"{scenario.assembly_accession_success}_virify.gff.gz"
 
     if src_gff.exists():
-        # Copy and decompress the gzipped fixture to match schema expectation (.gff not .gff.gz)
-        import gzip
+        # Copy the compressed GFF file as-is (schema expects .gff.gz format)
+        shutil.copy2(src_gff, dst_gff)
+        print(f"Copied VIRify GFF from {src_gff} to {dst_gff}")
 
-        with gzip.open(src_gff, "rt") as f_in:
-            dst_gff.write_text(f_in.read())
-        print(f"Copied and decompressed VIRify GFF from {src_gff} to {dst_gff}")
+        # Copy index files (.gzi and .csi)
+        src_gzi = src_gff.with_suffix(".gz.gzi")
+        src_csi = src_gff.with_suffix(".gz.csi")
+
+        if src_gzi.exists():
+            dst_gzi = dst_gff.with_suffix(".gz.gzi")
+            shutil.copy2(src_gzi, dst_gzi)
+            print(f"Copied VIRify GFF index (.gzi) from {src_gzi} to {dst_gzi}")
+
+        if src_csi.exists():
+            dst_csi = dst_gff.with_suffix(".gz.csi")
+            shutil.copy2(src_csi, dst_csi)
+            print(f"Copied VIRify GFF index (.csi) from {src_csi} to {dst_csi}")
     else:
         print(f"Warning: VIRify fixture not found at {src_gff}")
 
@@ -679,9 +690,12 @@ def test_prefect_analyse_assembly_flow(
         virify_workspace
         / assembly_test_scenario.assembly_accession_success
         / EMG_CONFIG.virify_pipeline.final_gff_folder
-        / f"{assembly_test_scenario.assembly_accession_success}_virify.gff"
+        / f"{assembly_test_scenario.assembly_accession_success}_virify.gff.gz"
     )
     assert virify_gff.exists()
+    # Verify index files also exist
+    assert virify_gff.with_suffix(".gz.gzi").exists()
+    assert virify_gff.with_suffix(".gz.csi").exists()
 
     # Verify MAP pipeline state
     batch.update_pipeline_status_counts(AssemblyAnalysisPipeline.MAP)
