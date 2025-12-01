@@ -416,16 +416,12 @@ def setup_study_summary_fixtures(study: Study):
     "workflows.flows.analyse_study_tasks.shared.copy_v6_pipeline_results.run_deployment"
 )
 @patch("workflows.flows.analysis.assembly.flows.analysis_assembly_study.run_deployment")
-@patch(
-    "workflows.flows.analysis.assembly.flows.run_assembly_analysis_pipeline_batch.run_deployment"
-)
 @pytest.mark.parametrize(
     "mock_suspend_flow_run",
     ["workflows.flows.analysis.assembly.flows.analysis_assembly_study"],
     indirect=True,
 )
 def test_prefect_analyse_assembly_flow(
-    mock_run_deployment_batch,
     mock_run_deployment_analysis_assembly_study,
     mock_run_deployment,
     mock_queryset_hash,
@@ -809,16 +805,12 @@ def test_prefect_analyse_assembly_flow(
     "workflows.flows.analyse_study_tasks.shared.copy_v6_pipeline_results.run_deployment"
 )
 @patch("workflows.flows.analysis.assembly.flows.analysis_assembly_study.run_deployment")
-@patch(
-    "workflows.flows.analysis.assembly.flows.run_assembly_analysis_pipeline_batch.run_deployment"
-)
 @pytest.mark.parametrize(
     "mock_suspend_flow_run",
     ["workflows.flows.analysis.assembly.flows.analysis_assembly_study"],
     indirect=True,
 )
 def test_prefect_analyse_assembly_flow_missing_directory(
-    mock_run_deployment_batch,
     mock_run_deployment_analysis_assembly_study,
     mock_run_deployment,
     mock_queryset_hash,
@@ -1001,16 +993,12 @@ def test_prefect_analyse_assembly_flow_missing_directory(
     "workflows.flows.analyse_study_tasks.shared.copy_v6_pipeline_results.run_deployment"
 )
 @patch("workflows.flows.analysis.assembly.flows.analysis_assembly_study.run_deployment")
-@patch(
-    "workflows.flows.analysis.assembly.flows.run_assembly_analysis_pipeline_batch.run_deployment"
-)
 @pytest.mark.parametrize(
     "mock_suspend_flow_run",
     ["workflows.flows.analysis.assembly.flows.analysis_assembly_study"],
     indirect=True,
 )
 def test_prefect_analyse_assembly_flow_invalid_schema(
-    mock_run_deployment_batch,
     mock_run_deployment_analysis_assembly_study,
     mock_run_deployment,
     mock_queryset_hash,
