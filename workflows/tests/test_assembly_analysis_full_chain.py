@@ -141,7 +141,11 @@ def setup_map_output_helpers(map_outdir: Path, assembly_accession: str):
 )
 @patch("workflows.flows.analysis.assembly.flows.run_virify_batch.run_cluster_job")
 @patch("workflows.flows.analysis.assembly.flows.run_map_batch.run_cluster_job")
+@patch(
+    "workflows.flows.analysis.assembly.flows.run_assembly_analysis_pipeline_batch.copy_assembly_batch_results"
+)
 def test_full_chain_success(
+    mock_run_deployment,
     mock_map_cluster_job,
     mock_virify_cluster_job,
     mock_generate_summary,
@@ -263,7 +267,15 @@ def test_full_chain_success(
 @patch(
     "workflows.flows.analysis.assembly.flows.run_assembly_analysis_pipeline_batch.generate_assembly_analysis_pipeline_batch_summary"
 )
+@patch(
+    "workflows.flows.analysis.assembly.flows.run_assembly_analysis_pipeline_batch.run_deployment"
+)
+@patch(
+    "workflows.flows.analysis.assembly.flows.run_assembly_analysis_pipeline_batch.copy_assembly_batch_results"
+)
 def test_asa_failure_stops_chain(
+    mock_copy_assembly_batch_results,
+    mock_run_deployment,
     mock_generate_summary,
     mock_set_post_states,
     mock_import_analyses,
@@ -318,6 +330,9 @@ def test_asa_failure_stops_chain(
     assert batch.pipeline_status_counts.virify.pending == batch.total_analyses
     assert batch.pipeline_status_counts.map.pending == batch.total_analyses
 
+    # Verify finalization was NOT triggered (batch failed)
+    assert not mock_run_deployment.called
+
 
 @pytest.mark.django_db(transaction=True)
 @patch(
@@ -340,7 +355,15 @@ def test_asa_failure_stops_chain(
 )
 @patch("workflows.flows.analysis.assembly.flows.run_map_batch.run_cluster_job")
 @patch("workflows.flows.analysis.assembly.flows.run_virify_batch.run_cluster_job")
+@patch(
+    "workflows.flows.analysis.assembly.flows.run_assembly_analysis_pipeline_batch.run_deployment"
+)
+@patch(
+    "workflows.flows.analysis.assembly.flows.run_assembly_analysis_pipeline_batch.copy_assembly_batch_results"
+)
 def test_virify_failure_partial_results(
+    mock_copy_assembly_batch_results,
+    mock_run_deployment,
     mock_virify_cluster_job,
     mock_map_cluster_job,
     mock_assembly_analysis_batch_results_importer,
@@ -434,6 +457,9 @@ def test_virify_failure_partial_results(
     # Verify summary was still generated (ASA completed)
     assert mock_generate_summary.called
 
+    # Verify finalization was NOT triggered (VIRify failed, so not all complete)
+    assert not mock_run_deployment.called
+
 
 @pytest.mark.django_db(transaction=True)
 @patch(
@@ -454,7 +480,15 @@ def test_virify_failure_partial_results(
 @patch(
     "workflows.flows.analysis.assembly.flows.run_assembly_analysis_pipeline_batch.generate_assembly_analysis_pipeline_batch_summary"
 )
+@patch(
+    "workflows.flows.analysis.assembly.flows.run_assembly_analysis_pipeline_batch.run_deployment"
+)
+@patch(
+    "workflows.flows.analysis.assembly.flows.run_assembly_analysis_pipeline_batch.copy_assembly_batch_results"
+)
 def test_asa_not_ready_for_virify(
+    mock_copy_assembly_batch_results,
+    mock_run_deployment,
     mock_generate_summary,
     mock_set_post_states,
     mock_import_analyses,
@@ -523,3 +557,6 @@ def test_asa_not_ready_for_virify(
     batch.update_pipeline_status_counts(AssemblyAnalysisPipeline.MAP)
     assert batch.pipeline_status_counts.virify.failed == batch.total_analyses
     assert batch.pipeline_status_counts.map.pending == batch.total_analyses
+
+    # Verify finalization was NOT triggered (VIRify failed, so not all complete)
+    assert not mock_run_deployment.called
