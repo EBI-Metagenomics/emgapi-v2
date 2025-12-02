@@ -376,27 +376,18 @@ def test_biomes_endpoint(ninja_api_client, top_level_biomes):
 
 
 @pytest.mark.django_db
-def test_api_assemblies_list(mgnify_assemblies, ninja_api_client):
-    # Set accessions for the assemblies
-    for i, assembly in enumerate(mgnify_assemblies):
-        assembly.ena_accessions = [f"ERZ{i+1}"]
-        assembly.save()
-
+def test_api_assemblies_list(mgnify_assemblies_with_ena, ninja_api_client):
     items = call_endpoint_and_get_data(
-        ninja_api_client, "/assemblies/", count=len(mgnify_assemblies)
+        ninja_api_client, "/assemblies/", count=len(mgnify_assemblies_with_ena)
     )
-    assert items[0]["accession"] in [a.first_accession for a in mgnify_assemblies]
+    assert items[0]["accession"] in [
+        a.first_accession for a in mgnify_assemblies_with_ena
+    ]
 
 
 @pytest.mark.django_db
-def test_api_assembly_detail(mgnify_assemblies, ninja_api_client):
-    # Set accessions for the assemblies
-    for i, assembly in enumerate(mgnify_assemblies):
-        assembly.ena_accessions = [f"ERZ{i+1}"]
-        assembly.save()
-
-    # Use the first assembly
-    assembly = mgnify_assemblies[0]
+def test_api_assembly_detail(mgnify_assemblies_with_ena, ninja_api_client):
+    assembly = mgnify_assemblies_with_ena[0]
 
     assembly_detail = call_endpoint_and_get_data(
         ninja_api_client,
@@ -411,12 +402,10 @@ def test_api_assembly_detail(mgnify_assemblies, ninja_api_client):
 
 
 @pytest.mark.django_db
-def test_api_assembly_genome_links_empty(mgnify_assemblies, ninja_api_client):
-    # Ensure an accession is set for the first assembly
-    assembly = mgnify_assemblies[0]
-    assembly.ena_accessions = ["ERZ1001"]
-    assembly.save()
-
+def test_api_assembly_genome_links_with_no_data(
+    mgnify_assemblies_with_ena, ninja_api_client
+):
+    assembly = mgnify_assemblies_with_ena[0]
     items = call_endpoint_and_get_data(
         ninja_api_client,
         f"/assemblies/{assembly.ena_accessions[0]}/genome-links",
@@ -430,14 +419,12 @@ def test_api_assembly_genome_links_empty(mgnify_assemblies, ninja_api_client):
 def test_api_assembly_genome_links_with_data(
     mgnify_assemblies, genomes, ninja_api_client
 ):
-    # Prepare assembly and genome
     assembly = mgnify_assemblies[0]
     assembly.ena_accessions = ["ERZ2001"]
     assembly.save()
 
     genome = genomes[0]
 
-    # Create a link
     GenomeAssemblyLink.objects.create(
         genome=genome,
         assembly=assembly,
@@ -455,11 +442,8 @@ def test_api_assembly_genome_links_with_data(
     assert len(items) == 1
     item = items[0]
 
-    # Fields on the link
     assert item["species_rep"] == "GCA_123456789.1"
     assert item["mag_accession"] == "MAGS12345"
 
-    # Nested genome fields provided by GenomeSchema
     assert item["genome"]["accession"] == genome.accession
-    # catalogue_version is resolved from genome.catalogue.version by the schema
     assert item["genome"]["catalogue_version"] == genome.catalogue.version
