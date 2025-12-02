@@ -52,19 +52,16 @@ def run_rawreads_pipeline_via_samplesheet(
     for analysis in rawreads_analyses:
         mark_analysis_as_started(analysis)
 
-    rawreads_current_outdir_parent = Path(
-        f"{EMG_CONFIG.slurm.default_workdir}/{mgnify_study.ena_study.accession}_rawreads_v6"
-    )
-
     rawreads_current_outdir = (
-        rawreads_current_outdir_parent
+        Path(f"{EMG_CONFIG.slurm.default_workdir}")
+        / f"{mgnify_study.ena_study.accession}_rawreads"
         / ss_hash[:6]  # uses samplesheet hash prefix as dir name for the chunk
     )
     print(f"Using output dir {rawreads_current_outdir} for this execution")
 
     workdir = (
-        Path(EMG_CONFIG.rawreads_pipeline.base_workdir)
-        / f"{mgnify_study.ena_study.accession}_rawreads_v6"
+        Path(f"{EMG_CONFIG.slurm.default_workdir}")
+        / f"{mgnify_study.ena_study.accession}_rawreads"
         / f"rawreads-v6-sheet-{slugify(samplesheet)[-10:]}"
     )
     os.makedirs(workdir, exist_ok=True)
