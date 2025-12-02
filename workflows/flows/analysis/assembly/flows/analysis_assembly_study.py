@@ -138,7 +138,7 @@ def analysis_assembly_study(
         run_deployment(
             name="run-assembly-analysis-pipeline-batch/run_assembly_analysis_pipeline_deployment",
             parameters={"assembly_analysis_batch_id": batch.id},
-            timeout=0,
+            timeout=0,  # This should just make this exit immediately
         )
 
     logger.info(
