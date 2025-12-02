@@ -18,6 +18,7 @@ from workflows.data_io_utils.file_rules.common_rules import (
 from workflows.data_io_utils.file_rules.nodes import File
 import sys
 
+
 @task(name="Validate TSV file")
 def validate_tsv_file(tsv_path: str) -> str:
     """
@@ -303,6 +304,7 @@ This flow accepts a path to a TSV file with the following columns:
 - genome: the accession of the related genome
 - species_rep: arbitrary genome accession for species representative
 """
+
 
 @flow(name="import_genome_assembly_links_flow")
 def import_genome_assembly_links_flow(tsv_path: str) -> Dict[str, int]:

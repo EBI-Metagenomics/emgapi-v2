@@ -5,6 +5,7 @@ import re
 
 # TODO: move to separate app and perform tests
 
+
 class Command(BaseCommand):
     help = "Create a new API endpoint for a model"
 

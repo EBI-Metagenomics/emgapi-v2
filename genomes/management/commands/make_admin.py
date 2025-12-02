@@ -2,6 +2,7 @@ from django.core.management.base import BaseCommand
 import os
 import re
 
+
 # TODO: move to separate app and perform tests
 class Command(BaseCommand):
     help = "Create a new admin class for a model"
