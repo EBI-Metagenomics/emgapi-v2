@@ -5,9 +5,8 @@ from typing import Any, Protocol
 
 from django.conf import settings
 from django.contrib.postgres.fields import ArrayField
-from django.core.exceptions import ObjectDoesNotExist
+from django.core.exceptions import ObjectDoesNotExist, MultipleObjectsReturned
 from django.db import models
-
 import ena.models
 
 
@@ -57,8 +56,6 @@ class GetByENAAccessionManagerMixin:
         get_by_accession for anything missing. Missing or ambiguous accessions
         are simply omitted from the result.
         """
-        from django.core.exceptions import ObjectDoesNotExist, MultipleObjectsReturned
-
         if not requested_accessions:
             return {}
         accession_set = {a for a in requested_accessions if a}

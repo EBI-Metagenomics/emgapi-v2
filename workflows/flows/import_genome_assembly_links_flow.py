@@ -1,16 +1,7 @@
-"""
-Prefect flow for ingesting data into the GenomeAssemblyLink model.
-This flow accepts a path to a TSV file with the following columns:
-- primary_assembly: the accession of the related assembly
-- mag_accession: arbitrary accession for MAG
-- genome: the accession of the related genome
-- species_rep: arbitrary genome accession for species representative
-"""
-
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
-from django.db import transaction
+from django.db import transaction, close_old_connections
 from prefect import flow, task, get_run_logger
 
 # Import Django models
@@ -25,7 +16,7 @@ from workflows.data_io_utils.file_rules.common_rules import (
     FileIsNotEmptyRule,
 )
 from workflows.data_io_utils.file_rules.nodes import File
-
+import sys
 
 @task(name="Validate TSV file")
 def validate_tsv_file(tsv_path: str) -> str:
@@ -168,7 +159,7 @@ def find_objects(
     Find Genome and Assembly objects for each input record using batched lookups
     to reduce database round trips.
 
-    :param records: Validated and cleaned records.
+    :param records: List of input dictionaries containing 'genome' and/or 'primary_assembly' accessions
     :type records: list[dict[str, str]]
     :returns: Tuples of (record, Genome, Assembly) for each input record. If a
               lookup fails, the corresponding Genome or Assembly will be None.
@@ -242,7 +233,7 @@ def create_links(
     skipped_count += len(objects) - len(valid_rows)
 
     for batch in chunker(valid_rows, chunk_size):
-        # Build key list and maps
+        close_old_connections()
         key_to_record = {}
         genome_ids = set()
         assembly_ids = set()
@@ -304,6 +295,15 @@ def create_links(
     return created_count + updated_count
 
 
+"""
+Prefect flow for ingesting data into the GenomeAssemblyLink model.
+This flow accepts a path to a TSV file with the following columns:
+- primary_assembly: the accession of the related assembly
+- mag_accession: arbitrary accession for MAG
+- genome: the accession of the related genome
+- species_rep: arbitrary genome accession for species representative
+"""
+
 @flow(name="import_genome_assembly_links_flow")
 def import_genome_assembly_links_flow(tsv_path: str) -> Dict[str, int]:
     """
@@ -345,9 +345,6 @@ def import_genome_assembly_links_flow(tsv_path: str) -> Dict[str, int]:
 
 
 if __name__ == "__main__":
-    # This allows the flow to be run directly for testing
-    import sys
-
     if len(sys.argv) != 2:
         print("Usage: python import_genome_assembly_links_flow.py <tsv_path>")
         sys.exit(1)

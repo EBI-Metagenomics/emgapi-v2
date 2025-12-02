@@ -1,7 +1,3 @@
-"""
-Tests for the import_genome_assembly_links flow.
-"""
-
 import os
 import tempfile
 from unittest.mock import patch
