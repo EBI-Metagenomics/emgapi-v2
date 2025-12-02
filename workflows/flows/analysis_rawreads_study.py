@@ -182,8 +182,8 @@ def analysis_rawreads_study(study_accession: str):
     copy_v6_study_summaries(mgnify_study.accession)
     # delete work directory
     study_workdir = (
-        Path(EMG_CONFIG.rawreads_pipeline.base_workdir)
-        / f"{mgnify_study.ena_study.accession}_rawreads_v6"
+        Path(f"{EMG_CONFIG.slurm.default_workdir}")
+        / f"{mgnify_study.ena_study.accession}_rawreads"
     )
     delete_pipeline_workdir(
         study_workdir
