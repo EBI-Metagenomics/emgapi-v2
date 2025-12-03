@@ -5,6 +5,7 @@ from prefect import task, get_run_logger
 from prefect.deployments import run_deployment
 
 from activate_django_first import EMG_CONFIG
+
 from analyses.models import Analysis, Study
 from workflows.data_io_utils.filenames import (
     accession_prefix_separated_dir_path,

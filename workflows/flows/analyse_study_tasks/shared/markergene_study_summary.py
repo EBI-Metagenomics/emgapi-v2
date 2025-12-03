@@ -9,6 +9,7 @@ from mgnify_pipelines_toolkit.analysis.shared.markergene_study_summary import (
 from prefect import flow, get_run_logger
 
 from activate_django_first import EMG_CONFIG
+
 from analyses.models import Study, Analysis
 from workflows.data_io_utils.file_rules.common_rules import (
     DirectoryExistsRule,

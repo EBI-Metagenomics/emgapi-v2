@@ -6,10 +6,11 @@ from unittest.mock import patch
 
 import pytest
 
+from activate_django_first import EMG_CONFIG
+
 from analyses.models import Biome
 from genomes.models import GenomeCatalogue, Genome
 from django.conf import settings
-from activate_django_first import EMG_CONFIG
 
 genome_config = settings.EMG_CONFIG.genomes
 

@@ -6,6 +6,7 @@ from django.db.models import QuerySet
 from prefect import task, get_run_logger
 
 from activate_django_first import EMG_CONFIG
+
 import analyses.models
 from workflows.ena_utils.analysis import ENAAnalysisFields
 from workflows.models import (
