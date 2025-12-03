@@ -139,6 +139,7 @@ def analysis_assembly_study(
             name="run-assembly-analysis-pipeline-batch/run_assembly_analysis_pipeline_deployment",
             parameters={"assembly_analysis_batch_id": batch.id},
             timeout=0,  # Timeout=0 means to run in background and return immediately
+            as_subflow=False,  # I'm testing this because timeout=0 didn't do the trick and the execution was stuck here
         )
 
     logger.info(

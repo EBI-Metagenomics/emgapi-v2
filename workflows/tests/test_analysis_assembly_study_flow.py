@@ -462,7 +462,7 @@ def test_prefect_analyse_assembly_flow(
 
     # Mock run_deployment for batch submission to actually call the batch flow
     # This allows the test to verify batch processing while preventing actual deployment
-    def run_batch_deployment(name, parameters, timeout):
+    def run_batch_deployment(name, parameters, timeout, as_subflow):
         """Call the actual batch flow instead of deploying."""
         if "run-assembly-analysis-pipeline-batch" in name:
             run_assembly_analysis_pipeline_batch(
@@ -848,7 +848,7 @@ def test_prefect_analyse_assembly_flow_missing_directory(
     mock_run_deployment.return_value = Mock(id="mock-flow-run-id")
 
     # Mock run_deployment for batch submission to actually call the batch flow
-    def run_batch_deployment(name, parameters, timeout):
+    def run_batch_deployment(name, parameters, timeout, as_subflow):
         """Call the actual batch flow instead of deploying."""
         if "run-assembly-analysis-pipeline-batch" in name:
             run_assembly_analysis_pipeline_batch(
@@ -1037,7 +1037,7 @@ def test_prefect_analyse_assembly_flow_invalid_schema(
     mock_run_deployment.return_value = Mock(id="mock-flow-run-id")
 
     # Mock run_deployment for batch submission to actually call the batch flow
-    def run_batch_deployment(name, parameters, timeout):
+    def run_batch_deployment(name, parameters, timeout, as_subflow):
         """Call the actual batch flow instead of deploying."""
         if "run-assembly-analysis-pipeline-batch" in name:
             run_assembly_analysis_pipeline_batch(
