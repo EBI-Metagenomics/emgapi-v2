@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from typing import Optional, ClassVar
 
 from caseconverter import pascalcase, titlecase
@@ -16,9 +18,10 @@ class ApiSections(FutureStrEnum):
     PUBLICATIONS = "Publications"
     REQUESTS = "Requests"
     PRIVATE_DATA = "Private Data"
-    GENOMES = "Genomes"
     MISC = "Miscellaneous"
     AUTH = "Authentication"
+    GENOMES = "Genomes"
+    ASSEMBLIES = "Assemblies"
 
 
 class OpenApiKeywords(FutureStrEnum):
@@ -63,6 +66,23 @@ def make_links_section(links: dict, response_code: int = 200) -> dict:
     return {
         OpenApiKeywords.RESPONSES.value: {
             response_code: {OpenApiKeywords.LINKS.value: links}
+        }
+    }
+
+
+def make_child_link(
+    operation_id: str,
+    child_name: str,
+    self_object_name: str,
+    path_param: str = "accession",
+    description: str | None = None,
+) -> dict:
+    link_name = f"Get{child_name.capitalize().replace('-', '')}For{self_object_name.capitalize()}"
+    return {
+        link_name: {
+            "operationId": operation_id,
+            "parameters": {path_param: "$request.path.accession"},
+            **({"description": description} if description else {}),
         }
     }
 

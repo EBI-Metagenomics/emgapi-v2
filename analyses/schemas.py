@@ -257,11 +257,99 @@ class AnalysedRun(ModelSchema):
 
 
 class Assembly(ModelSchema):
-    accession: str = Field(..., alias="first_accession", examples=["ERZ000001"])
+    accession: Optional[str] = Field(
+        None, alias="first_accession", examples=["ERZ000001"]
+    )
 
     class Meta:
         model = analyses.models.Assembly
         fields = ["updated_at"]
+
+
+class GenomeSchema(Schema):
+    """Simple schema for a Genome model."""
+
+    accession: str = Field(..., examples=["MGYG000000001"])
+    catalogue_id: Optional[str] = Field()
+    taxon_lineage: Optional[str] = Field()
+    catalogue_version: Optional[str] = Field(
+        None, description="Version of the genome catalogue"
+    )
+
+    @staticmethod
+    def resolve_catalogue_version(obj) -> Optional[str]:
+        return getattr(getattr(obj, "catalogue", None), "version", None)
+
+    class Config:
+        from_attributes = True
+
+
+class GenomeAssemblyLinkSchema(Schema):
+    genome: GenomeSchema
+    species_rep: Optional[str] = Field(
+        None,
+        description="Deposition database accession for species representative",
+        examples=["GCA_123456789.1"],
+    )
+    mag_accession: Optional[str] = Field(
+        None, description="Deposition database for MAG", examples=["MGYG000000001"]
+    )
+
+    class Config:
+        from_attributes = True
+
+
+class AssemblyDetail(Assembly):
+    run_accession: Optional[str] = None
+    sample_accession: Optional[str] = None
+    reads_study_accession: Optional[str] = None
+    assembly_study_accession: Optional[str] = None
+    assembler_name: Optional[str] = None
+    assembler_version: Optional[str] = None
+    metadata: Optional[Dict[str, Any]] = Field(
+        None,
+        description="Additional metadata associated with the assembly",
+        examples=[{"coverage": 30, "coverage_depth": 100, "n_contigs": 1000}],
+    )
+    status: Optional[Dict[str, Any]] = Field(
+        None,
+        description="Status information for the assembly",
+        examples=[{"assembly_completed": True, "assembly_uploaded": True}],
+    )
+
+    @staticmethod
+    def resolve_run_accession(obj: analyses.models.Assembly) -> Optional[str]:
+        return obj.run.first_accession if obj.run else None
+
+    @staticmethod
+    def resolve_sample_accession(obj: analyses.models.Assembly) -> Optional[str]:
+        return (
+            obj.sample.ena_sample.accession
+            if obj.sample and obj.sample.ena_sample
+            else None
+        )
+
+    @staticmethod
+    def resolve_reads_study_accession(obj: analyses.models.Assembly) -> Optional[str]:
+        return obj.reads_study.accession if obj.reads_study else None
+
+    @staticmethod
+    def resolve_assembly_study_accession(
+        obj: analyses.models.Assembly,
+    ) -> Optional[str]:
+        return obj.assembly_study.accession if obj.assembly_study else None
+
+    @staticmethod
+    def resolve_assembler_name(obj: analyses.models.Assembly) -> Optional[str]:
+        return obj.assembler.name if obj.assembler else None
+
+    @staticmethod
+    def resolve_assembler_version(obj: analyses.models.Assembly) -> Optional[str]:
+        return obj.assembler.version if obj.assembler else None
+
+    class Meta:
+        model = analyses.models.Assembly
+        fields = ["updated_at", "metadata", "status"]
 
 
 class MGnifyAnalysis(ModelSchema):

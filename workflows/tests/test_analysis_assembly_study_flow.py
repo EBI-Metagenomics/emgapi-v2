@@ -464,7 +464,7 @@ def test_prefect_analyse_assembly_flow(
     # This allows the test to verify batch processing while preventing actual deployment
     def run_batch_deployment(name, parameters, timeout):
         """Call the actual batch flow instead of deploying."""
-        if "run-assembly-analysis-pipeline-batch" in name:
+        if EMG_CONFIG.assembly_analysis_pipeline.batch_runner_deployment_id in name:
             run_assembly_analysis_pipeline_batch(
                 parameters["assembly_analysis_batch_id"]
             )
@@ -850,7 +850,7 @@ def test_prefect_analyse_assembly_flow_missing_directory(
     # Mock run_deployment for batch submission to actually call the batch flow
     def run_batch_deployment(name, parameters, timeout):
         """Call the actual batch flow instead of deploying."""
-        if "run-assembly-analysis-pipeline-batch" in name:
+        if EMG_CONFIG.assembly_analysis_pipeline.batch_runner_deployment_id in name:
             run_assembly_analysis_pipeline_batch(
                 parameters["assembly_analysis_batch_id"]
             )
@@ -1039,7 +1039,7 @@ def test_prefect_analyse_assembly_flow_invalid_schema(
     # Mock run_deployment for batch submission to actually call the batch flow
     def run_batch_deployment(name, parameters, timeout):
         """Call the actual batch flow instead of deploying."""
-        if "run-assembly-analysis-pipeline-batch" in name:
+        if EMG_CONFIG.assembly_analysis_pipeline.batch_runner_deployment_id in name:
             run_assembly_analysis_pipeline_batch(
                 parameters["assembly_analysis_batch_id"]
             )

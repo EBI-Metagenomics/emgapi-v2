@@ -7,6 +7,7 @@ from prefect import flow, get_run_logger
 from prefect.runtime import flow_run
 
 from activate_django_first import EMG_CONFIG
+
 from workflows.models import (
     AssemblyAnalysisBatch,
     AssemblyAnalysisPipeline,

@@ -7,9 +7,10 @@ requires-python = ">= 3.11"
 DJANGO_SETTINGS_MODULE = "emgapiv2.settings_test"
 python_files = ["tests.py", "test_*.py", "*_tests.py"]
 markers = [
-    "dev_data_maker: A test that is not really a test but used to generate data for dev purposes"
+    "dev_data_maker: A test that is not really a test but used to generate data for dev purposes",
+    "use_large_genome_links_tsv: Use as an opt in for the test_large_import_genome_links_tsv test to use a large tsv file (not run by default to save time)",
 ]
-addopts = "--cov=/app --cov-report=term-missing --cov-report=html:coverage/htmlcov --cov-report=xml:coverage/coverage.xml -m 'not dev_data_maker' -n auto"
+addopts = "--cov=/app --cov-report=term-missing --cov-report=html:coverage/htmlcov --cov-report=xml:coverage/coverage.xml -m 'not dev_data_maker and not large_tsv' -n auto"
 env = [
     "PREFECT_TASKS_REFRESH_CACHE=true",  # so that a prefect test harness can be shared over the test session (much faster), without caching causing side effects between tests
     "PREFECT_LOGGING_TO_API_BATCH_INTERVAL=0",  # write logs very quickly to api, so they are available immediately in tests

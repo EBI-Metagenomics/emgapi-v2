@@ -14,8 +14,8 @@ from mgnify_pipelines_toolkit.schemas.dataframes import (
 )
 from pydantic import BaseModel, Field
 
-import analyses.models
 from activate_django_first import EMG_CONFIG
+import analyses.models
 from analyses.base_models.with_downloads_models import (
     DownloadFileType,
     DownloadType,

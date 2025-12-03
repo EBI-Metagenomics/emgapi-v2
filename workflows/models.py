@@ -513,7 +513,7 @@ class AssemblyAnalysisBatchManager(models.Manager):
         """
         logger.info(f"Creating batch for {len(analysis_ids)} analyses")
 
-        batch, _ = AssemblyAnalysisBatch.objects.get_or_create(
+        batch = AssemblyAnalysisBatch(
             study=study,
             batch_type=StudyAnalysisBatch.BatchType.ASSEMBLY_ANALYSIS,
         )
