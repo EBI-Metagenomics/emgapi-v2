@@ -230,6 +230,7 @@ def run_assembler_for_samplesheet(
             "-resume",
             ("--samplesheet", samplesheet_csv),
             mgnify_study.is_private and "--private_study",
+            EMG_CONFIG.assembler.has_fire_access and "--use_fire_download",
             ("--outdir", miassembler_outdir),
             EMG_CONFIG.slurm.use_nextflow_tower and "-with-tower",
         ]
