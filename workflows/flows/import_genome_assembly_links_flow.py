@@ -1,7 +1,7 @@
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
-from django.db import transaction, close_old_connections
+from django.db import transaction
 from prefect import flow, task, get_run_logger
 
 # Import Django models
@@ -234,7 +234,7 @@ def create_links(
     skipped_count += len(objects) - len(valid_rows)
 
     for batch in chunker(valid_rows, chunk_size):
-        close_old_connections()
+        # close_old_connections()
         key_to_record = {}
         genome_ids = set()
         assembly_ids = set()
