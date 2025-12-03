@@ -258,7 +258,8 @@ def run_assembly_analysis_pipeline_batch(
                     / mgnify_study.first_accession
                     / "asa",
                 ),
-                "--use_fire_download",
+                EMG_CONFIG.assembly_analysis_pipeline.has_fire_access
+                and "--use_fire_download",
                 ("--input", samplesheet),
                 ("--outdir", assembly_analyses_workspace_dir),
                 EMG_CONFIG.slurm.use_nextflow_tower and "-with-tower",

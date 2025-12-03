@@ -93,3 +93,11 @@ def assembly_with_analyses(mgnify_assemblies, raw_reads_mgnify_study):
         analysis.inherit_experiment_type()
         analyses.append(analysis)
     return analyses
+
+
+@pytest.fixture
+def mgnify_assemblies_with_ena(mgnify_assemblies):
+    for i, assembly in enumerate(mgnify_assemblies):
+        assembly.ena_accessions = [f"ERZ{i+1}"]
+        assembly.save()
+    return mgnify_assemblies
