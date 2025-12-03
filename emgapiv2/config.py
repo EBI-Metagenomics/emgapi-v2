@@ -67,6 +67,7 @@ class MGnifyPipelineConfig(BaseModel):
     pipeline_git_revision: str = ...  # Required
     pipeline_config_file: str = "/nfs/public/donco.config"
     pipeline_nf_profile: str = "codon"
+    has_fire_access: bool = True  # Only available on-prem @ EBI
 
     # Basic resources
     pipeline_time_limit_days: int = 1
@@ -91,7 +92,7 @@ class AssemblerConfig(MGnifyPipelineConfig):
 
 class AmpliconPipelineConfig(MGnifyPipelineConfig):
     pipeline_repo: str = "ebi-metagenomics/amplicon-analysis-pipeline"
-    pipeline_git_revision: str = "v6.0.0"
+    pipeline_git_revision: str = "v6.0.5"
 
     # Resources
     pipeline_time_limit_days: int = 5
