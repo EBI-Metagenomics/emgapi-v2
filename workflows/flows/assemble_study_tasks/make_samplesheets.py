@@ -16,7 +16,6 @@ from workflows.flows.assemble_study_tasks.get_assemblies_to_attempt import (
 )
 
 import analyses.models
-from workflows.ena_utils.ena_file_fetching import convert_ena_ftp_to_fire_fastq
 from workflows.ena_utils.ena_api_requests import SINGLE_END_LIBRARY_LAYOUT
 from workflows.nextflow_utils.samplesheets import (
     SamplesheetColumnSource,
@@ -75,13 +74,11 @@ def make_samplesheet(
             ),
             "fastq_1": SamplesheetColumnSource(
                 lookup_string=f"run__metadata__{analyses.models.Run.CommonMetadataKeys.FASTQ_FTPS}",
-                renderer=lambda ftps: convert_ena_ftp_to_fire_fastq(ftps[0]),
+                renderer=lambda ftps: ftps[0],
             ),
             "fastq_2": SamplesheetColumnSource(
                 lookup_string=f"run__metadata__{analyses.models.Run.CommonMetadataKeys.FASTQ_FTPS}",
-                renderer=lambda ftps: (
-                    convert_ena_ftp_to_fire_fastq(ftps[1]) if len(ftps) > 1 else ""
-                ),
+                renderer=lambda ftps: (ftps[1] if len(ftps) > 1 else ""),
             ),
             "library_strategy": SamplesheetColumnSource(
                 lookup_string="run__experiment_type",

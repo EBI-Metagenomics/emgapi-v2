@@ -9,7 +9,6 @@ from prefect.artifacts import create_table_artifact
 from activate_django_first import EMG_CONFIG
 
 import analyses.models
-from workflows.ena_utils.ena_file_fetching import convert_ena_ftp_to_fire_fastq
 from workflows.nextflow_utils.samplesheets import (
     queryset_hash,
     queryset_to_samplesheet,
@@ -44,16 +43,6 @@ def make_samplesheet_amplicon(
 
     ss_hash = queryset_hash(runs, "id")
 
-    def convert_ftp_to_fire(ftp):
-        """We don't transform FTP paths to FIRE for private studies.
-        FIRE S3 + Nextflow caching is not working properly; each time Nextflow tries to
-        see if the files were modified, it fails, which invalidates the cache.
-        For more details: https://embl.atlassian.net/browse/EMG-8203
-        """
-        if not mgnify_study.is_private:
-            return convert_ena_ftp_to_fire_fastq(ftp)
-        return ftp
-
     sample_sheet_csv = queryset_to_samplesheet(
         queryset=runs,
         filename=Path(EMG_CONFIG.slurm.default_workdir)
@@ -67,13 +56,11 @@ def make_samplesheet_amplicon(
             ),
             "fastq_1": SamplesheetColumnSource(
                 lookup_string=METADATA__FASTQ_FTPS,
-                renderer=lambda ftps: convert_ftp_to_fire(ftps[0]),
+                renderer=lambda ftps: ftps[0],
             ),
             "fastq_2": SamplesheetColumnSource(
                 lookup_string=METADATA__FASTQ_FTPS,
-                renderer=lambda ftps: (
-                    convert_ftp_to_fire(ftps[1]) if len(ftps) > 1 else ""
-                ),
+                renderer=lambda ftps: (ftps[1] if len(ftps) > 1 else ""),
             ),
             "single_end": SamplesheetColumnSource(
                 lookup_string=METADATA__FASTQ_FTPS,

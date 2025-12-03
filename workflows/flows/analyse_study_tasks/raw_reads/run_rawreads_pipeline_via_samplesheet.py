@@ -76,6 +76,7 @@ def run_rawreads_pipeline_via_samplesheet(
             ("--samplesheet", samplesheet),
             ("--outdir", rawreads_current_outdir),
             EMG_CONFIG.slurm.use_nextflow_tower and "-with-tower",
+            EMG_CONFIG.rawreads_pipeline.has_fire_access and "--use_fire_download",
             ("-work-dir", workdir),
             ("-ansi-log", "false"),
         ]

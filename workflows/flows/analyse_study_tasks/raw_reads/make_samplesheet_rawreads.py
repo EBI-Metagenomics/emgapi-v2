@@ -9,7 +9,6 @@ from prefect.artifacts import create_table_artifact
 from activate_django_first import EMG_CONFIG
 
 import analyses.models
-from workflows.ena_utils.ena_file_fetching import convert_ena_ftp_to_fire_fastq
 from workflows.nextflow_utils.samplesheets import (
     queryset_hash,
     queryset_to_samplesheet,
@@ -56,13 +55,11 @@ def make_samplesheet_rawreads(
             ),
             "fastq_1": SamplesheetColumnSource(
                 lookup_string=METADATA__FASTQ_FTPS,
-                renderer=lambda ftps: convert_ena_ftp_to_fire_fastq(ftps[0]),
+                renderer=lambda ftps: ftps[0],
             ),
             "fastq_2": SamplesheetColumnSource(
                 lookup_string=METADATA__FASTQ_FTPS,
-                renderer=lambda ftps: (
-                    convert_ena_ftp_to_fire_fastq(ftps[1]) if len(ftps) > 1 else ""
-                ),
+                renderer=lambda ftps: (ftps[1] if len(ftps) > 1 else ""),
             ),
             "single_end": SamplesheetColumnSource(
                 pass_whole_object=True,
