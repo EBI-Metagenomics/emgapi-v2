@@ -50,7 +50,7 @@ def mock_tsv_file():
 
 
 @pytest.mark.django_db
-def test_validate_tsv_file(mock_tsv_file):
+def test_validate_tsv_file(mock_tsv_file, prefect_harness):
     """Test the validate_tsv_file task."""
 
     # Create a test flow that calls the validate_tsv_file task
@@ -76,7 +76,7 @@ def test_validate_tsv_file(mock_tsv_file):
 
 
 @pytest.mark.django_db
-def test_read_tsv_file(mock_tsv_file):
+def test_read_tsv_file(mock_tsv_file, prefect_harness):
     """Test the read_tsv_file task."""
 
     # Create a test flow that calls the read_tsv_file task
@@ -98,7 +98,7 @@ def test_read_tsv_file(mock_tsv_file):
 
 
 @pytest.mark.django_db
-def test_process_tsv_records():
+def test_process_tsv_records(prefect_harness):
     """Test the process_tsv_records task."""
     # Create test records
     records = [
@@ -159,7 +159,7 @@ def test_process_tsv_records():
 
 
 @pytest.mark.django_db
-def test_find_objects():
+def test_find_objects(prefect_harness):
     """Test the find_objects task."""
     # Create test biome
     biome = Biome.objects.create(
@@ -299,7 +299,7 @@ def test_find_objects():
 
 
 @pytest.mark.django_db
-def test_create_links():
+def test_create_links(prefect_harness):
     """Test the create_links task."""
     # Create test biome
     biome = Biome.objects.create(
@@ -481,7 +481,7 @@ def test_create_links():
 
 
 @pytest.mark.django_db
-def test_import_genome_assembly_links_flow(mock_tsv_file):
+def test_import_genome_assembly_links_flow(mock_tsv_file, prefect_harness):
     """Test the import_genome_assembly_links flow end-to-end."""
     # Create test biome
     biome = Biome.objects.create(
