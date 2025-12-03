@@ -17,6 +17,12 @@ from analyses.models import Study, Analysis
 from workflows.flows.analysis.assembly.flows.analysis_assembly_study import (
     analysis_assembly_study,
 )
+from workflows.flows.analysis.assembly.flows.finalize_assembly_study import (
+    finalize_assembly_study,
+)
+from workflows.flows.analysis.assembly.flows.run_assembly_analysis_pipeline_batch import (
+    run_assembly_analysis_pipeline_batch,
+)
 from workflows.flows.analysis.assembly.tasks.add_assembly_study_summaries_to_downloads import (
     add_assembly_study_summaries_to_downloads,
 )
@@ -409,12 +415,14 @@ def setup_study_summary_fixtures(study: Study):
 @patch(
     "workflows.flows.analyse_study_tasks.shared.copy_v6_pipeline_results.run_deployment"
 )
+@patch("workflows.flows.analysis.assembly.flows.analysis_assembly_study.run_deployment")
 @pytest.mark.parametrize(
     "mock_suspend_flow_run",
     ["workflows.flows.analysis.assembly.flows.analysis_assembly_study"],
     indirect=True,
 )
 def test_prefect_analyse_assembly_flow(
+    mock_run_deployment_analysis_assembly_study,
     mock_run_deployment,
     mock_queryset_hash,
     assembly_test_scenario,
@@ -451,6 +459,18 @@ def test_prefect_analyse_assembly_flow(
     """
     # Mock run_deployment to prevent actual deployment execution
     mock_run_deployment.return_value = Mock(id="mock-flow-run-id")
+
+    # Mock run_deployment for batch submission to actually call the batch flow
+    # This allows the test to verify batch processing while preventing actual deployment
+    def run_batch_deployment(name, parameters, timeout):
+        """Call the actual batch flow instead of deploying."""
+        if "run-assembly-analysis-pipeline-batch" in name:
+            run_assembly_analysis_pipeline_batch(
+                parameters["assembly_analysis_batch_id"]
+            )
+        return Mock(id="mock-batch-flow-run-id")
+
+    mock_run_deployment_analysis_assembly_study.side_effect = run_batch_deployment
 
     mock_queryset_hash.return_value = "abc123"
 
@@ -599,6 +619,9 @@ def test_prefect_analyse_assembly_flow(
     assert (
         study.analyses.filter(status__analysis_annotations_imported=True).count() == 1
     )
+
+    # Will run all the import bits required to "close" the study
+    finalize_assembly_study(study_accession=study.accession)
 
     # Verify study has v6 analyses
     study.refresh_from_db()
@@ -781,12 +804,14 @@ def test_prefect_analyse_assembly_flow(
 @patch(
     "workflows.flows.analyse_study_tasks.shared.copy_v6_pipeline_results.run_deployment"
 )
+@patch("workflows.flows.analysis.assembly.flows.analysis_assembly_study.run_deployment")
 @pytest.mark.parametrize(
     "mock_suspend_flow_run",
     ["workflows.flows.analysis.assembly.flows.analysis_assembly_study"],
     indirect=True,
 )
 def test_prefect_analyse_assembly_flow_missing_directory(
+    mock_run_deployment_analysis_assembly_study,
     mock_run_deployment,
     mock_queryset_hash,
     mock_run_virify_batch,
@@ -821,6 +846,17 @@ def test_prefect_analyse_assembly_flow_missing_directory(
     """
     # Mock run_deployment to prevent actual deployment execution
     mock_run_deployment.return_value = Mock(id="mock-flow-run-id")
+
+    # Mock run_deployment for batch submission to actually call the batch flow
+    def run_batch_deployment(name, parameters, timeout):
+        """Call the actual batch flow instead of deploying."""
+        if "run-assembly-analysis-pipeline-batch" in name:
+            run_assembly_analysis_pipeline_batch(
+                parameters["assembly_analysis_batch_id"]
+            )
+        return Mock(id="mock-batch-flow-run-id")
+
+    mock_run_deployment_analysis_assembly_study.side_effect = run_batch_deployment
 
     # Use same study as original test but different hash for workspace isolation
     scenario = AssemblyTestScenario(
@@ -956,12 +992,14 @@ def test_prefect_analyse_assembly_flow_missing_directory(
 @patch(
     "workflows.flows.analyse_study_tasks.shared.copy_v6_pipeline_results.run_deployment"
 )
+@patch("workflows.flows.analysis.assembly.flows.analysis_assembly_study.run_deployment")
 @pytest.mark.parametrize(
     "mock_suspend_flow_run",
     ["workflows.flows.analysis.assembly.flows.analysis_assembly_study"],
     indirect=True,
 )
 def test_prefect_analyse_assembly_flow_invalid_schema(
+    mock_run_deployment_analysis_assembly_study,
     mock_run_deployment,
     mock_queryset_hash,
     mock_run_virify_batch,
@@ -997,6 +1035,17 @@ def test_prefect_analyse_assembly_flow_invalid_schema(
     """
     # Mock run_deployment to prevent actual deployment execution
     mock_run_deployment.return_value = Mock(id="mock-flow-run-id")
+
+    # Mock run_deployment for batch submission to actually call the batch flow
+    def run_batch_deployment(name, parameters, timeout):
+        """Call the actual batch flow instead of deploying."""
+        if "run-assembly-analysis-pipeline-batch" in name:
+            run_assembly_analysis_pipeline_batch(
+                parameters["assembly_analysis_batch_id"]
+            )
+        return Mock(id="mock-batch-flow-run-id")
+
+    mock_run_deployment_analysis_assembly_study.side_effect = run_batch_deployment
 
     # Use same study as original test but different hash for workspace isolation
     scenario = AssemblyTestScenario(

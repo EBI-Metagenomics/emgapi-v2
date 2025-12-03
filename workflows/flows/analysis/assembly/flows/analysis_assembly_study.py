@@ -3,6 +3,7 @@ from textwrap import dedent as _
 from typing import Optional, List
 
 from prefect import flow, get_run_logger, suspend_flow_run
+from prefect.deployments import run_deployment
 from prefect.input import RunInput
 from pydantic import Field
 
@@ -14,19 +15,6 @@ import workflows.models
 from workflows.ena_utils.ena_api_requests import (
     get_study_from_ena,
     get_study_assemblies_from_ena,
-)
-from workflows.flows.analyse_study_tasks.shared.copy_v6_pipeline_results import (
-    copy_v6_study_summaries,
-    copy_assembly_batch_results,
-)
-from workflows.flows.analyse_study_tasks.shared.study_summary import (
-    merge_assembly_study_summaries,
-)
-from workflows.flows.analysis.assembly.flows.run_assembly_analysis_pipeline_batch import (
-    run_assembly_analysis_pipeline_batch,
-)
-from workflows.flows.analysis.assembly.tasks.add_assembly_study_summaries_to_downloads import (
-    add_assembly_study_summaries_to_downloads,
 )
 from workflows.flows.analysis.assembly.tasks.create_analyses_for_assemblies import (
     create_analyses_for_assemblies,
@@ -142,44 +130,18 @@ def analysis_assembly_study(
 
     logger.info(f"Created {len(batches)} batches for study {mgnify_study.accession}")
 
-    logger.info(f"Running {len(batches)} batches...")
+    logger.info(f"Running {len(batches)} batches in parallel...")
     for batch in batches:
         logger.info(
             f"Running batch {str(batch.id)[:8]} with {batch.total_analyses} analyses"
         )
-        run_assembly_analysis_pipeline_batch(batch.id)
+        run_deployment(
+            name="run-assembly-analysis-pipeline-batch/run_assembly_analysis_pipeline_deployment",
+            parameters={"assembly_analysis_batch_id": batch.id},
+            timeout=0,  # Timeout=0 means to run in background and return immediately
+        )
 
-    #######################################
-    # === Sync results for each batch === #
-    #######################################
-    for batch in batches:
-        copy_assembly_batch_results(batch.id)
-
-    ###############################################
-    # === Study summary merging and uploading === #
-    ###############################################
-    merge_assembly_study_summaries(
-        mgnify_study.accession,
-        cleanup_partials=True,
+    logger.info(
+        f"All {len(batches)} batches submitted successfully. "
+        "Finalization will be triggered automatically when all batches complete."
     )
-
-    #####################################
-    # === Download files summaries === #
-    ###################################
-    add_assembly_study_summaries_to_downloads(mgnify_study.accession)
-
-    copy_v6_study_summaries(mgnify_study.accession)
-
-    mgnify_study.refresh_from_db()
-
-    # Sanity check
-    mgnify_study.features.has_v6_analyses = mgnify_study.analyses.filter(
-        pipeline_version=analyses.models.Analysis.PipelineVersions.v6, is_ready=True
-    ).exists()
-
-    mgnify_study.save()
-
-    # # TODO: review these... for the time being use the admin panel
-    # # Build event payload
-    # payload = { }
-    # events.emit_event( )

@@ -11,6 +11,9 @@ from activate_django_first import EMG_CONFIG
 
 from analyses.models import Study, Analysis
 from workflows.data_io_utils.schemas.assembly import ImportResult
+from workflows.flows.analyse_study_tasks.shared.copy_v6_pipeline_results import (
+    copy_assembly_batch_results,
+)
 from workflows.flows.analysis.assembly.flows.run_map_batch import run_map_batch
 from workflows.flows.analysis.assembly.flows.run_virify_batch import (
     run_virify_batch,
@@ -141,7 +144,8 @@ def process_import_results(
 
 
 @flow(
-    name="Run assembly analysis pipeline-v6 for an assembly analysis batch (ASA, VIRIfy and MAP)"
+    name="Run assembly analysis pipeline-v6 for an assembly analysis batch (ASA, VIRIfy and MAP)",
+    flow_run_name="Assembly Analysis Batch {{ assembly_analysis_batch_id }}",
 )
 def run_assembly_analysis_pipeline_batch(
     assembly_analysis_batch_id: uuid.UUID,
@@ -254,7 +258,8 @@ def run_assembly_analysis_pipeline_batch(
                     / mgnify_study.first_accession
                     / "asa",
                 ),
-                "--use_fire_download",
+                EMG_CONFIG.assembly_analysis_pipeline.has_fire_access
+                and "--use_fire_download",
                 ("--input", samplesheet),
                 ("--outdir", assembly_analyses_workspace_dir),
                 EMG_CONFIG.slurm.use_nextflow_tower and "-with-tower",
@@ -496,3 +501,8 @@ def run_assembly_analysis_pipeline_batch(
         logger.warning(
             "No successfully imported ASA analyses, skipping study summary generation"
         )
+
+    #######################################
+    # === Sync results for the batch === #
+    #######################################
+    copy_assembly_batch_results(assembly_analysis_batch_id)
