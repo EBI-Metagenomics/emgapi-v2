@@ -28,6 +28,7 @@ psycopg2-binary
 
 # Prefect workflows
 prefect==3.4.19
+fastapi==0.123.6
 prefect-shell==0.3.1
 prefect-slack==0.3.1
 prefect-slurm==0.1.2
