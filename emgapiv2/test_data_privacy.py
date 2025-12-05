@@ -459,6 +459,25 @@ def test_private_analysis_detail_access(
     data = response.json()
     assert data["accession"] == private_analysis_accession
 
+    # Test if analysis is unfinished - should NOT be able to see yet as owner
+    private_analysis_with_download.mark_status(
+        Analysis.AnalysisStates.ANALYSIS_ANNOTATIONS_IMPORTED, False
+    )
+    private_analysis_with_download.refresh_from_db()
+    headers_owner = {"Authorization": f"Bearer {webin_private_auth_token}"}
+    response = ninja_api_client.get(
+        f"/analyses/{private_analysis_accession}", headers=headers_owner
+    )
+    assert response.status_code == 404
+
+    # ...but should be able to view as admin still
+    response = ninja_api_client.get(
+        f"/analyses/{private_analysis_accession}", user=admin_user
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["accession"] == private_analysis_accession
+
 
 @pytest.mark.django_db
 def test_private_analysis_annotations_access(

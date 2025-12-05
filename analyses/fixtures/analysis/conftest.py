@@ -98,6 +98,9 @@ def private_analysis_with_download(webin_private_study, private_run):
             download_group="all.sequence_data.private",
         )
     )
+    private_analysis.mark_status(
+        private_analysis.AnalysisStates.ANALYSIS_ANNOTATIONS_IMPORTED
+    )
     return private_analysis
 
 
