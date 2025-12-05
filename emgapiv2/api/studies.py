@@ -108,16 +108,14 @@ class StudyController(UnauthorisedIsUnfoundController):
         ),
         auth=[WebinJWTAuth(), DjangoSuperUserAuth(), NoAuth()],
         permissions=[
-            perms.IsPublic
-            | (perms.IsWebinOwner & perms.IsReady)
-            | perms.IsAdminUserWithObjectPerms
+            perms.IsPublic | perms.IsWebinOwner | perms.IsAdminUserWithObjectPerms
         ],
     )
     @paginate()
     def list_mgnify_study_analyses(self, accession: str):
         return self.get_object_or_exception(
             analyses.models.Study.objects, accession=accession
-        ).analyses.all()
+        ).analyses.filter(is_ready=True)
 
     @http_get(
         "/{accession}/publications/",
