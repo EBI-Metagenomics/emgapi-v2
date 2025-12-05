@@ -1,7 +1,6 @@
 import os
 import glob
 import logging
-import sys
 import json
 import csv
 
