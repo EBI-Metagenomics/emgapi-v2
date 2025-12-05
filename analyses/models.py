@@ -85,10 +85,10 @@ class StudyManager(ENADerivedManager):
     def get_or_create_for_ena_study(self, ena_study_accession):
         logger.info(f"Will get/create MGnify study for {ena_study_accession}")
         try:
-            ena_study = ena.models.Study.objects.filter(
+            ena_study = ena.models.Study.objects.get(
                 Q(accession=ena_study_accession)
                 | Q(additional_accessions__icontains=ena_study_accession)
-            ).first()
+            )
             logger.debug(f"Got {ena_study}")
         except (MultipleObjectsReturned, ObjectDoesNotExist):
             logger.error(
