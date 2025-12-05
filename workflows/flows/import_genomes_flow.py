@@ -129,9 +129,12 @@ def process_genome_dir(catalogue, genome_dir):
 
     genome_data["catalogue"] = catalogue
     genome_results_path = get_genome_result_path(genome_dir)
-    genome_data["result_directory"] = (
-        f"{genome_config.results_directory_root}/{genome_results_path.replace('/website/', '/')}"
-    )
+
+    # genome_data["result_directory"] = (
+    #     f"{genome_config.results_directory_root}/{genome_results_path.replace('/website/', '/')}"
+    # )
+    genome_data["result_directory"] = f"{genome_results_path.replace('/website/', '/')}"
+
     genome_data["biome"] = Biome.objects.filter(path=path).first()
 
     genome_data = Genome.clean_data(genome_data)
