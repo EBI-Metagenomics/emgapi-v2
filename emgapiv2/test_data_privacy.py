@@ -271,6 +271,15 @@ def test_owner_can_view_private_study_analyses_list(
     assert data["items"][0]["accession"] == private_analysis_with_download.accession
     assert data["count"] == 1
 
+    # unfinished analyses should be absent
+    private_analysis_with_download.mark_status(
+        Analysis.AnalysisStates.ANALYSIS_ANNOTATIONS_IMPORTED, False
+    )
+    response = ninja_api_client.get(f"/studies/{study}/analyses/", headers=headers)
+    assert response.status_code == 200
+    data = response.json()
+    assert data["count"] == 0
+
 
 @pytest.mark.django_db
 def test_admin_can_view_private_study_detail(
