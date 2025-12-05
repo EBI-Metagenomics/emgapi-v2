@@ -66,6 +66,9 @@ def raw_read_analyses(raw_read_run):
     s.features.has_v6_analyses = True
     s.save()
 
+    for mgya in mgyas:
+        mgya.refresh_from_db()
+
     return mgyas
 
 
@@ -97,6 +100,9 @@ def private_analysis_with_download(webin_private_study, private_run):
             path="private_analysis_sequences.fasta",
             download_group="all.sequence_data.private",
         )
+    )
+    private_analysis.mark_status(
+        private_analysis.AnalysisStates.ANALYSIS_ANNOTATIONS_IMPORTED
     )
     return private_analysis
 

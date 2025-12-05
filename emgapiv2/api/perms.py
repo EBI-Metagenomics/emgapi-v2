@@ -1,5 +1,5 @@
 import logging
-from typing import Union
+from typing import Union, Protocol
 
 from django.http import HttpRequest
 from ninja_extra import permissions, ControllerBase
@@ -25,6 +25,25 @@ class IsPublic(permissions.BasePermission):
     ) -> bool:
         logger.debug(f"IsPublic permission for {obj}? {not obj.is_private}")
         return not obj.is_private
+
+
+class ModelWithIsReady(Protocol):
+    is_ready: bool
+
+
+class IsReady(permissions.BasePermission):
+    """
+    Object permission is only granted if the object's "is_ready" field is True.
+    Used on models like Analysis, where is_ready is a generated field based on the analysis's statuses.
+    """
+
+    def has_permission(self, request: HttpRequest, controller) -> bool:
+        return True
+
+    def has_object_permission(
+        self, request: HttpRequest, controller: "ControllerBase", obj: ModelWithIsReady
+    ) -> bool:
+        return obj.is_ready
 
 
 class IsWebinOwner(IsPublic):

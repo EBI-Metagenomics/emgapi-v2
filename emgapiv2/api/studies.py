@@ -115,7 +115,7 @@ class StudyController(UnauthorisedIsUnfoundController):
     def list_mgnify_study_analyses(self, accession: str):
         return self.get_object_or_exception(
             analyses.models.Study.objects, accession=accession
-        ).analyses.all()
+        ).analyses.filter(is_ready=True)
 
     @http_get(
         "/{accession}/publications/",
