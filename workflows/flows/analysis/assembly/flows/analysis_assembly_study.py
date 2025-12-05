@@ -136,7 +136,8 @@ def analysis_assembly_study(
             f"Running batch {str(batch.id)[:8]} with {batch.total_analyses} analyses"
         )
         run_deployment(
-            name="run-assembly-analysis-pipeline-batch/run_assembly_analysis_pipeline_deployment",
+            # TODO: use the deployment name, re-deploy the flow properly
+            name=EMG_CONFIG.assembly_analysis_pipeline.batch_runner_deployment_id,
             parameters={"assembly_analysis_batch_id": batch.id},
             timeout=0,  # Timeout=0 means to run in background and return immediately
         )
