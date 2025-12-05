@@ -108,7 +108,9 @@ class StudyController(UnauthorisedIsUnfoundController):
         ),
         auth=[WebinJWTAuth(), DjangoSuperUserAuth(), NoAuth()],
         permissions=[
-            perms.IsPublic | perms.IsWebinOwner | perms.IsAdminUserWithObjectPerms
+            perms.IsPublic
+            | (perms.IsWebinOwner & perms.IsReady)
+            | perms.IsAdminUserWithObjectPerms
         ],
     )
     @paginate()
