@@ -261,7 +261,7 @@ items:
                       key: PREFECT_SERVER_API_AUTH_STRING
                       name: emgapi-secret
                 - name: EXTRA_PIP_PACKAGES
-                  value: httpx[cli] nextflowpy prefect-slurm==0.1.2
+                  value: httpx[cli] nextflowpy prefect-slurm==0.1.3
                 - name: PREFECT_LOCAL_STORAGE_PATH
                   value: /app/data/prefect/storage
                 - name: PREFECT_LOGGING_LEVEL
