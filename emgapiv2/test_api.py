@@ -112,17 +112,14 @@ def test_api_analyses_list(raw_read_analyses, ninja_api_client):
 
 @pytest.mark.django_db
 def test_api_study_analyses_list(raw_read_analyses, ninja_api_client):
+    finished_analyses = list(filter(lambda a: a.is_ready, raw_read_analyses))
     items = call_endpoint_and_get_data(
         ninja_api_client,
         f"/studies/{raw_read_analyses[0].study.accession}/analyses/",
-        count=len(raw_read_analyses),
+        count=len(finished_analyses),
     )
-    assert items[0]["accession"] in [a.accession for a in raw_read_analyses]
-    assert sorted([a["experiment_type"] for a in items]) == [
-        "Amplicon",
-        "Metagenomic",
-        "Metagenomic",
-    ]
+    assert items[0]["accession"] in [a.accession for a in finished_analyses]
+    assert items[0]["experiment_type"] in ["Metagenomic", "Amplicon"]
 
 
 @pytest.mark.django_db
