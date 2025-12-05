@@ -66,6 +66,9 @@ def raw_read_analyses(raw_read_run):
     s.features.has_v6_analyses = True
     s.save()
 
+    for mgya in mgyas:
+        mgya.refresh_from_db()
+
     return mgyas
 
 
