@@ -24,10 +24,10 @@ fileignoreconfig:
   allowed_patterns: [password="password123"]
 
 - filename: deployment/ebi-wp-k8s-hl/ebi-wp-k8s-hl.yaml
-  checksum: 016b1063a04a27b3147c54bcd4e34d5dc52bd4c5526e911c8fa6098334704c5c
+  checksum: c4ad998308f09a7017f930604108ada656b68eb3765989e19652824a5ef631ae
 
 - filename: deployment/ebi-wp-k8s-hl/README.md
-  allowed_patterns: [kubectl create secret generic nginx-private-data-config-secret --from-file=private-data-nginx.conf -n emgapiv2-hl-exp]
+  allowed_patterns: [kubectl create secret generic nginx-private-data-config-secret --from-file=private-data-nginx.conf -n emgapiv2-hl-exp, google-maps-key-secret, create secret generic, google-maps-key]
 
 - filename: docker-compose.yaml
   allowed_patterns: [EMG_WEBIN__JWT_SECRET_KEY=dummy-key, SECURE_LINK_SECRET=dummy-key]

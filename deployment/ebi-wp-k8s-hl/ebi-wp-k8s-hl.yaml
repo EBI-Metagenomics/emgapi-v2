@@ -458,6 +458,11 @@ items:
               env:
                 - name: VITE_BASE_URL
                   value: "/metagenomics/v6-early-data-release"
+                - name: VITE_GOOGLE_MAPS_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: google-maps-secret-key
+                      key: google-maps-key
               command: ["/bin/sh"]
               args:
                 - -c
