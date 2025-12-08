@@ -461,7 +461,7 @@ items:
                 - name: VITE_GOOGLE_MAPS_KEY
                   valueFrom:
                     secretKeyRef:
-                      name: google-maps-secret-key
+                      name: google-maps-key-secret
                       key: google-maps-key
               command: ["/bin/sh"]
               args:
