@@ -28,6 +28,8 @@ PRIVATE_DATA_SECURE_LINK_SECRET_KEY=...
 
 Make the secrets
 `kubectl create secret generic emgapi-secret --from-env-file=secrets-k8s.env -n emgapiv2-hl-exp`
+`kubectl create secret generic google-maps-key-secret --from-literal=google-maps-key='<...get it from the google maps api dashboard...>' -n emgapiv2-hl-exp`
+(The `google-maps-key-secret` is only needed for the web client deployment to have working maps. It can be missing otherwise.)
 
 ### Create Quay.io pull secrets
 * Get authentication credentials for quay.io (the built image is private). You can get a Kubernetes secrets yaml file from your Quay.io user settings, in the "CLI Password" section.

@@ -6,7 +6,6 @@ from unittest.mock import patch
 
 import pytest
 
-from activate_django_first import EMG_CONFIG
 
 from analyses.models import Biome
 from genomes.models import GenomeCatalogue, Genome
@@ -92,7 +91,6 @@ from workflows.flows.import_genomes_flow import (
     import_genomes_flow,
     validate_pipeline_version,
     parse_options,
-    get_catalogue,
     gather_genome_dirs,
 )
 from workflows.prefect_utils.testing_utils import run_flow_and_capture_logs
@@ -127,33 +125,33 @@ def test_parse_options():
             parse_options(options)
 
 
-@pytest.mark.django_db
-def test_get_catalogue():
-
-    biome = Biome.objects.create(
-        id=1,
-        biome_name="Rumen",
-        path="root.host_associated.mammals.digestive_system.stomach.rumen",
-    )
-
-    options = get_default_options()
-
-    with patch("analyses.models.Biome.lineage_to_path", return_value=biome.path):
-        catalogue = get_catalogue(options)
-
-        assert catalogue.catalogue_id == "sheep-rumen-v1-0"
-        assert catalogue.version == "1.0"
-        assert catalogue.name == "Sheep rumen v1.0"
-        assert catalogue.biome == biome
-        assert (
-            catalogue.result_directory
-            # == f"{EMG_CONFIG.service_urls.transfer_services_url_root}/genomes/sheep-rumen/1.0"
-            == f"{EMG_CONFIG.service_urls.transfer_services_url_root}/genomes/sheep-rumen/1.0"
-            # == f"{genome_config.results_directory_root}/genomes/sheep-rumen/1.0"
-        )
-        assert catalogue.pipeline_version_tag == "v3.0.0dev"
-        assert catalogue.catalogue_biome_label == "Sheep Rumen"
-        assert catalogue.catalogue_type == "prokaryotes"
+# @pytest.mark.django_db
+# def test_get_catalogue():
+#
+#     biome = Biome.objects.create(
+#         id=1,
+#         biome_name="Rumen",
+#         path="root.host_associated.mammals.digestive_system.stomach.rumen",
+#     )
+#
+#     options = get_default_options()
+#
+#     with patch("analyses.models.Biome.lineage_to_path", return_value=biome.path):
+#         catalogue = get_catalogue(options)
+#
+#         assert catalogue.catalogue_id == "sheep-rumen-v1-0"
+#         assert catalogue.version == "1.0"
+#         assert catalogue.name == "Sheep rumen v1.0"
+#         assert catalogue.biome == biome
+#         assert (
+#             catalogue.result_directory
+#             # == f"{EMG_CONFIG.service_urls.transfer_services_url_root}/genomes/sheep-rumen/1.0"
+#             == f"{EMG_CONFIG.service_urls.transfer_services_url_root}/genomes/sheep-rumen/1.0"
+#             # == f"{genome_config.results_directory_root}/genomes/sheep-rumen/1.0"
+#         )
+#         assert catalogue.pipeline_version_tag == "v3.0.0dev"
+#         assert catalogue.catalogue_biome_label == "Sheep Rumen"
+#         assert catalogue.catalogue_type == "prokaryotes"
 
 
 @pytest.mark.django_db

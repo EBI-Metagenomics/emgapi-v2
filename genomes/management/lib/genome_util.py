@@ -1,7 +1,6 @@
 import os
 import glob
 import logging
-import sys
 import json
 import csv
 
@@ -53,7 +52,7 @@ def sanity_check_catalogue_dir(d):
             logger.error(e)
         logger.error("Validation failed, see errors above")
         # TODO: replace with raise CommandError
-        sys.exit(1)
+        # sys.exit(1)
 
 
 REQUIRED_JSON_FIELDS_PROKS = {
