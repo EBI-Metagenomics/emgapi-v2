@@ -18,7 +18,7 @@ from workflows.prefect_utils.slurm_flow import (
     run_cluster_job,
     ClusterJobFailedException,
 )
-from workflows.prefect_utils.slurm_policies import ResubmitIfFailedPolicy
+from workflows.prefect_utils.slurm_policies import ResubmitAlwaysPolicy
 
 
 @flow(name="Run the VIRify pipeline batch")
@@ -170,7 +170,7 @@ def run_virify_batch(assembly_analyses_batch_id: uuid.UUID):
             environment=env_variables,
             input_files_to_hash=[virify_samplesheet_path],
             working_dir=virify_outdir,
-            resubmit_policy=ResubmitIfFailedPolicy,
+            resubmit_policy=ResubmitAlwaysPolicy,  # We let Nextflow handle resubmissions
         )
         close_old_connections()
     except Exception as e:
