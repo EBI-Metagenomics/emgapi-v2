@@ -71,18 +71,6 @@ def get_catalogue(options):
     logger.info(f"Catalogue results path to save: {results_path_to_save}")
 
     catalogue_id = f"{options['catalogue_name'].replace(' ', '-')}-v{options['catalogue_version'].replace('.', '-')}".lower()
-    logger.info(f"length of catalogue_version: {len(options['catalogue_version'])}")
-    logger.info(f"length of catalogue_name: {len(options['catalogue_name'])}")
-    logger.info(f"length of catalogue_version: {len(options['catalogue_version'])}")
-
-    # logger.info(f"length of biome: {len(biome.path)}")
-    logger.info(f"length of results_path_to_save: {len(results_path_to_save)}")
-    logger.info(f"length of ftp_url: {len(genome_config.mags_ftp_site)}")
-    logger.info(f"length of pipeline_version: {len(options['pipeline_version'])}")
-    logger.info(
-        f"length of catalogue_biome_label: {len(options['catalogue_biome_label'])}"
-    )
-    logger.info(f"length of catalogue_type: {len(options['catalogue_type'])}")
 
     catalogue, _ = GenomeCatalogue.objects.get_or_create(
         catalogue_id=catalogue_id,
@@ -130,9 +118,6 @@ def process_genome_dir(catalogue, genome_dir):
     genome_data["catalogue"] = catalogue
     genome_results_path = get_genome_result_path(genome_dir)
 
-    # genome_data["result_directory"] = (
-    #     f"{genome_config.results_directory_root}/{genome_results_path.replace('/website/', '/')}"
-    # )
     genome_data["result_directory"] = f"{genome_results_path.replace('/website/', '/')}"
 
     genome_data["biome"] = Biome.objects.filter(path=path).first()
@@ -141,10 +126,6 @@ def process_genome_dir(catalogue, genome_dir):
     genome_data = Genome.clean_data(genome_data)
 
     close_old_connections()
-    for key in list(genome_data.keys()):
-        if isinstance(genome_data[key], str):
-            logger.info(f"LENGTH OF GENOME DATA {key}: {len(genome_data[key])}")
-            logger.info(f"{key}: {genome_data[key]}")
 
     genome, _ = Genome.objects.update_or_create(
         accession=accession, defaults=genome_data
@@ -211,7 +192,6 @@ def upload_catalogue_summary(catalogue, catalogue_dir):
     else:
         catalogue.other_stats = {}
         logger.warning(f"No catalogue summary found at {summary_file}")
-        # logger.error(f"No catalogue summary found at {summary_file}")
     catalogue.save()
 
 

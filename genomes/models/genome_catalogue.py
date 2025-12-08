@@ -72,7 +72,6 @@ class GenomeCatalogue(WithDownloadsModel, TimeStampedModel):
 
     class Meta:
         unique_together = ("catalogue_biome_label", "version", "catalogue_type")
-        # db_table = "genome_catalogue"
 
     def __str__(self):
         return self.name
