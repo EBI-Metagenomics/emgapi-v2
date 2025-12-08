@@ -42,7 +42,7 @@ from workflows.prefect_utils.slurm_flow import (
     run_cluster_job,
     ClusterJobFailedException,
 )
-from workflows.prefect_utils.slurm_policies import ResubmitIfFailedPolicy
+from workflows.prefect_utils.slurm_policies import ResubmitAlwaysPolicy
 
 
 def process_import_results(
@@ -282,7 +282,7 @@ def run_assembly_analysis_pipeline_batch(
                 environment=env_variables,
                 input_files_to_hash=[samplesheet],
                 working_dir=assembly_analyses_workspace_dir,
-                resubmit_policy=ResubmitIfFailedPolicy,
+                resubmit_policy=ResubmitAlwaysPolicy,  # Let Nextflow handle resubmissions
             )
             # This is required because a flow may need a few days to run, and when that is done, the connection to
             # psql is going to be closed or dead at least
