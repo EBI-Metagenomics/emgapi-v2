@@ -1,9 +1,12 @@
+from pathlib import Path
 from unittest.mock import patch, Mock
 
 import pytest
 from django.core.management import call_command
 
 from analyses.models import Biome, Run, Analysis
+from workflows.data_io_utils.mgnify_v6_utils.assembly import AssemblyResultImporter
+from workflows.data_io_utils.schemas import AssemblyResultSchema, MapResultSchema
 from workflows.flows.analyse_study_tasks.amplicon.import_completed_amplicon_analyses import (
     import_completed_analysis as import_completed_amplicon_analysis,
 )
@@ -98,6 +101,21 @@ def assembly_analysis_with_downloads(mock_run_deployment, mgnify_assemblies_comp
     analysis.mark_status(analysis.AnalysisStates.ANALYSIS_COMPLETED)
     analysis.results_dir = "/app/data/tests/assembly_v6_output/ERP106708/ERZ857107"
     analysis.save()
+
+    importer = AssemblyResultImporter(analysis)
+    schema = AssemblyResultSchema()
+    importer.import_results(
+        schema=schema,
+        base_path=Path(analysis.results_dir).parent,
+        validate_first=True,
+    )
+
+    schema = MapResultSchema()
+    importer.import_results(
+        schema=schema,
+        base_path=Path(analysis.results_dir).parent / "map",
+        validate_first=True,
+    )
 
 
 # TODO: currently unused as download data fixtures are missing
