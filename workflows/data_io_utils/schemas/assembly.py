@@ -455,7 +455,7 @@ class AssemblyResultSchema(PipelineResultSchema):
                             download_metadata=DownloadFileMetadata(
                                 file_type=DownloadFileType.OTHER,
                                 download_type=DownloadType.FUNCTIONAL_ANALYSIS,
-                                download_group=f"{analyses.models.Analysis.FUNCTIONAL_ANNOTATION}.antismash",
+                                download_group=f"{analyses.models.Analysis.PATHWAYS_AND_SYSTEMS}.antismash",
                                 short_description="antiSMASH GenBank output",
                                 long_description="antiSMASH biosynthetic gene cluster predictions in GenBank format",
                             ),
@@ -466,7 +466,7 @@ class AssemblyResultSchema(PipelineResultSchema):
                             download_metadata=DownloadFileMetadata(
                                 file_type=DownloadFileType.GFF,
                                 download_type=DownloadType.FUNCTIONAL_ANALYSIS,
-                                download_group=f"{analyses.models.Analysis.FUNCTIONAL_ANNOTATION}.antismash",
+                                download_group=f"{analyses.models.Analysis.PATHWAYS_AND_SYSTEMS}.antismash",
                                 short_description="antiSMASH GFF output",
                                 long_description="antiSMASH biosynthetic gene cluster predictions in GFF format",
                             ),
@@ -477,7 +477,7 @@ class AssemblyResultSchema(PipelineResultSchema):
                             download_metadata=DownloadFileMetadata(
                                 file_type=DownloadFileType.TSV,
                                 download_type=DownloadType.FUNCTIONAL_ANALYSIS,
-                                download_group=f"{analyses.models.Analysis.FUNCTIONAL_ANNOTATION}.antismash",
+                                download_group=f"{analyses.models.Analysis.PATHWAYS_AND_SYSTEMS}.antismash",
                                 short_description="antiSMASH BGC counts",
                                 long_description="Table with counts for each BGC found",
                             ),
@@ -496,7 +496,7 @@ class AssemblyResultSchema(PipelineResultSchema):
                             download_metadata=DownloadFileMetadata(
                                 file_type=DownloadFileType.GFF,
                                 download_type=DownloadType.FUNCTIONAL_ANALYSIS,
-                                download_group=f"{analyses.models.Analysis.FUNCTIONAL_ANNOTATION}.sanntis",
+                                download_group=f"{analyses.models.Analysis.PATHWAYS_AND_SYSTEMS}.sanntis",
                                 short_description="SanntiS GFF output",
                                 long_description="SanntiS biosynthetic gene cluster predictions",
                             ),
@@ -507,7 +507,7 @@ class AssemblyResultSchema(PipelineResultSchema):
                             download_metadata=DownloadFileMetadata(
                                 file_type=DownloadFileType.TSV,
                                 download_type=DownloadType.FUNCTIONAL_ANALYSIS,
-                                download_group=f"{analyses.models.Analysis.FUNCTIONAL_ANNOTATION}.sanntis",
+                                download_group=f"{analyses.models.Analysis.PATHWAYS_AND_SYSTEMS}.sanntis",
                                 short_description="SanntiS BGC counts",
                                 long_description="Table with counts for each BGC found",
                             ),
@@ -526,7 +526,7 @@ class AssemblyResultSchema(PipelineResultSchema):
                             download_metadata=DownloadFileMetadata(
                                 file_type=DownloadFileType.OTHER,
                                 download_type=DownloadType.FUNCTIONAL_ANALYSIS,
-                                download_group=f"{analyses.models.Analysis.FUNCTIONAL_ANNOTATION}.genome_properties",
+                                download_group=f"{analyses.models.Analysis.PATHWAYS_AND_SYSTEMS}.genome_properties",
                                 short_description="Genome Properties JSON",
                                 long_description="Genome Properties results in JSON format",
                             ),
@@ -537,7 +537,7 @@ class AssemblyResultSchema(PipelineResultSchema):
                             download_metadata=DownloadFileMetadata(
                                 file_type=DownloadFileType.TSV,
                                 download_type=DownloadType.FUNCTIONAL_ANALYSIS,
-                                download_group=f"{analyses.models.Analysis.FUNCTIONAL_ANNOTATION}.genome_properties",
+                                download_group=f"{analyses.models.Analysis.PATHWAYS_AND_SYSTEMS}.genome_properties",
                                 short_description="Genome Properties counts",
                                 long_description="Table with counts for each Genome Property found",
                             ),
@@ -548,7 +548,7 @@ class AssemblyResultSchema(PipelineResultSchema):
                             download_metadata=DownloadFileMetadata(
                                 file_type=DownloadFileType.OTHER,
                                 download_type=DownloadType.FUNCTIONAL_ANALYSIS,
-                                download_group=f"{analyses.models.Analysis.FUNCTIONAL_ANNOTATION}.genome_properties",
+                                download_group=f"{analyses.models.Analysis.PATHWAYS_AND_SYSTEMS}.genome_properties",
                                 short_description="Genome Properties text output",
                                 long_description="Genome Properties results in text format",
                             ),
@@ -566,7 +566,7 @@ class AssemblyResultSchema(PipelineResultSchema):
                             download_metadata=DownloadFileMetadata(
                                 file_type=DownloadFileType.TSV,
                                 download_type=DownloadType.FUNCTIONAL_ANALYSIS,
-                                download_group=f"{analyses.models.Analysis.FUNCTIONAL_ANNOTATION}.kegg_modules",
+                                download_group=f"{analyses.models.Analysis.PATHWAYS_AND_SYSTEMS}.kegg_modules",
                                 short_description="KEGG Modules per contig",
                                 long_description="KEGG Modules found per contig",
                             ),
@@ -580,7 +580,7 @@ class AssemblyResultSchema(PipelineResultSchema):
                             download_metadata=DownloadFileMetadata(
                                 file_type=DownloadFileType.TSV,
                                 download_type=DownloadType.FUNCTIONAL_ANALYSIS,
-                                download_group=f"{analyses.models.Analysis.FUNCTIONAL_ANNOTATION}.kegg_modules",
+                                download_group=f"{analyses.models.Analysis.PATHWAYS_AND_SYSTEMS}.kegg_modules",
                                 short_description="KEGG Modules counts",
                                 long_description="Table with counts for each KEGG Module found",
                             ),
@@ -602,7 +602,7 @@ class AssemblyResultSchema(PipelineResultSchema):
                             download_metadata=DownloadFileMetadata(
                                 file_type=DownloadFileType.TSV,
                                 download_type=DownloadType.FUNCTIONAL_ANALYSIS,
-                                download_group=f"{analyses.models.Analysis.FUNCTIONAL_ANNOTATION}.dram_distill",
+                                download_group=f"{analyses.models.Analysis.PATHWAYS_AND_SYSTEMS}.dram_distill",
                                 short_description="DRAM Distill results",
                                 long_description="Table with DRAM Distill results",
                             ),
@@ -613,7 +613,7 @@ class AssemblyResultSchema(PipelineResultSchema):
                             download_metadata=DownloadFileMetadata(
                                 file_type=DownloadFileType.HTML,
                                 download_type=DownloadType.FUNCTIONAL_ANALYSIS,
-                                download_group=f"{analyses.models.Analysis.FUNCTIONAL_ANNOTATION}.dram_distill",
+                                download_group=f"{analyses.models.Analysis.PATHWAYS_AND_SYSTEMS}.dram_distill",
                                 short_description="DRAM Distill HTML report",
                                 long_description="DRAM Distill HTML visualization",
                             ),
@@ -624,7 +624,7 @@ class AssemblyResultSchema(PipelineResultSchema):
                             download_metadata=DownloadFileMetadata(
                                 file_type=DownloadFileType.TSV,
                                 download_type=DownloadType.FUNCTIONAL_ANALYSIS,
-                                download_group=f"{analyses.models.Analysis.FUNCTIONAL_ANNOTATION}.dram_distill",
+                                download_group=f"{analyses.models.Analysis.PATHWAYS_AND_SYSTEMS}.dram_distill",
                                 short_description="DRAM genome statistics",
                                 long_description="DRAM genome statistics table",
                             ),
@@ -635,7 +635,7 @@ class AssemblyResultSchema(PipelineResultSchema):
                             download_metadata=DownloadFileMetadata(
                                 file_type=DownloadFileType.OTHER,
                                 download_type=DownloadType.FUNCTIONAL_ANALYSIS,
-                                download_group=f"{analyses.models.Analysis.FUNCTIONAL_ANNOTATION}.dram_distill",
+                                download_group=f"{analyses.models.Analysis.PATHWAYS_AND_SYSTEMS}.dram_distill",
                                 short_description="DRAM metabolism summary",
                                 long_description="DRAM metabolism summary spreadsheet",
                             ),
