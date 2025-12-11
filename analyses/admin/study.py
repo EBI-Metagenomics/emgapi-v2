@@ -442,9 +442,7 @@ class StudyAdmin(ENABrowserLinkMixin, JSONFieldWidgetOverridesMixin, ModelAdmin)
                     "admin:workflows_assemblyanalysisbatchanalysis_changelist",
                     query={
                         "batch__study__id__exact": study.id,
-                        "asa_status__exact": AssemblyAnalysisPipelineStatus.PENDING,
-                        "virify_status__exact": AssemblyAnalysisPipelineStatus.PENDING,
-                        "map_status__exact": AssemblyAnalysisPipelineStatus.PENDING,
+                        "status": AssemblyAnalysisPipelineStatus.PENDING,
                     },
                 ),
             },
@@ -456,9 +454,7 @@ class StudyAdmin(ENABrowserLinkMixin, JSONFieldWidgetOverridesMixin, ModelAdmin)
                     "admin:workflows_assemblyanalysisbatchanalysis_changelist",
                     query={
                         "batch__study__id__exact": study.id,
-                        "asa_status__exact": AssemblyAnalysisPipelineStatus.RUNNING,
-                        "virify_status__exact": AssemblyAnalysisPipelineStatus.RUNNING,
-                        "map_status__exact": AssemblyAnalysisPipelineStatus.RUNNING,
+                        "status": AssemblyAnalysisPipelineStatus.RUNNING,
                     },
                 ),
             },
@@ -470,9 +466,7 @@ class StudyAdmin(ENABrowserLinkMixin, JSONFieldWidgetOverridesMixin, ModelAdmin)
                     "admin:workflows_assemblyanalysisbatchanalysis_changelist",
                     query={
                         "batch__study__id__exact": study.id,
-                        "asa_status__exact": AssemblyAnalysisPipelineStatus.FAILED,
-                        "virify_status__exact": AssemblyAnalysisPipelineStatus.FAILED,
-                        "map_status__exact": AssemblyAnalysisPipelineStatus.FAILED,
+                        "status": AssemblyAnalysisPipelineStatus.FAILED,
                     },
                 ),
             },
@@ -484,9 +478,7 @@ class StudyAdmin(ENABrowserLinkMixin, JSONFieldWidgetOverridesMixin, ModelAdmin)
                     "admin:workflows_assemblyanalysisbatchanalysis_changelist",
                     query={
                         "batch__study__id__exact": study.id,
-                        "asa_status__exact": AssemblyAnalysisPipelineStatus.COMPLETED,
-                        "virify_status__exact": AssemblyAnalysisPipelineStatus.COMPLETED,
-                        "map_status__exact": AssemblyAnalysisPipelineStatus.COMPLETED,
+                        "status": AssemblyAnalysisPipelineStatus.COMPLETED,
                     },
                 ),
             },
