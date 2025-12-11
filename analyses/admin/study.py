@@ -17,6 +17,7 @@ from analyses.admin.base import (
     StudyFilter,
     TabularInlinePaginatedWithTabSupport,
 )
+from workflows.models import AssemblyAnalysisPipelineStatus
 from analyses.models import Analysis, Assembly, Run, Study
 from emgapiv2.widgets import StatusPathwayWidget
 
@@ -127,6 +128,7 @@ class StudyAdmin(ENABrowserLinkMixin, JSONFieldWidgetOverridesMixin, ModelAdmin)
                 "show_assembly_status_summary",
                 "show_run_type_summary",
                 "show_analysis_status_summary",
+                "show_assembly_analysis_status_summary",
             ],
         },
     ] + ENABrowserLinkMixin.actions_detail
@@ -332,6 +334,165 @@ class StudyAdmin(ENABrowserLinkMixin, JSONFieldWidgetOverridesMixin, ModelAdmin)
                 "analyses_status_table": analyses_status_table,
                 "analyses_progress": analyses_progress,
                 "title": f"Analysis status summary for {study.accession}",
+                **self.admin_site.each_context(request),
+            },
+        )
+
+    @action(
+        description="Assembly analysis statuses",
+        url_path="study-assembly-analysis-status-summary",
+    )
+    def show_assembly_analysis_status_summary(self, request, object_id):
+        study = get_object_or_404(Study.objects, pk=object_id)
+        batches = study.analysis_batches.all().order_by("-created_at")
+
+        # Calculate totals across all batches
+        total_pending = 0
+        total_running = 0
+        total_failed = 0
+        total_completed = 0
+
+        rows = []
+        for batch in batches:
+            pending_count = sum(
+                [
+                    batch.pipeline_status_counts.asa.pending,
+                    batch.pipeline_status_counts.virify.pending,
+                    batch.pipeline_status_counts.map.pending,
+                ]
+            )
+            running_count = sum(
+                [
+                    batch.pipeline_status_counts.asa.running,
+                    batch.pipeline_status_counts.virify.running,
+                    batch.pipeline_status_counts.map.running,
+                ]
+            )
+            failed_count = sum(
+                [
+                    batch.pipeline_status_counts.asa.failed,
+                    batch.pipeline_status_counts.virify.failed,
+                    batch.pipeline_status_counts.map.failed,
+                ]
+            )
+            completed_count = sum(
+                [
+                    batch.pipeline_status_counts.asa.completed,
+                    batch.pipeline_status_counts.virify.completed,
+                    batch.pipeline_status_counts.map.completed,
+                ]
+            )
+
+            # Add to totals
+            total_pending += pending_count
+            total_running += running_count
+            total_failed += failed_count
+            total_completed += completed_count
+
+            row = [
+                format_html(
+                    "<a href='{}'>{}</a>",
+                    reverse_lazy(
+                        "admin:workflows_assemblyanalysisbatchanalysis_changelist",
+                        query={"batch__id__exact": str(batch.id)},
+                    ),
+                    str(batch.id)[:8],
+                ),
+                batch.total_analyses,
+                pending_count,
+                running_count,
+                failed_count,
+                completed_count,
+                batch.updated_at.strftime("%Y-%m-%d %H:%M"),
+            ]
+            rows.append(row)
+
+        batches_table = {
+            "headers": [
+                "Batch",
+                "Total analyses",
+                "Pending analyses",
+                "Running analyses",
+                "Failed analyses",
+                "Completed analyses",
+                "Updated",
+            ],
+            "rows": rows,
+        }
+
+        # Calculate total analyses across all batches
+        total_analyses = sum(batch.total_analyses for batch in batches)
+
+        # Create summary card items with links
+        summary_items = [
+            {
+                "label": "Total analyses",
+                "value": total_analyses,
+                "colour": "white",
+                "url": reverse_lazy(
+                    "admin:workflows_assemblyanalysisbatchanalysis_changelist",
+                    query={"study__accession__exact": study.accession},
+                ),
+            },
+            {
+                "label": "Pending",
+                "value": total_pending,
+                "colour": "blue",
+                "url": reverse_lazy(
+                    "admin:workflows_assemblyanalysisbatchanalysis_changelist",
+                    query={
+                        "batch__study__id__exact": study.id,
+                        "status": AssemblyAnalysisPipelineStatus.PENDING,
+                    },
+                ),
+            },
+            {
+                "label": "Running",
+                "value": total_running,
+                "colour": "green",
+                "url": reverse_lazy(
+                    "admin:workflows_assemblyanalysisbatchanalysis_changelist",
+                    query={
+                        "batch__study__id__exact": study.id,
+                        "status": AssemblyAnalysisPipelineStatus.RUNNING,
+                    },
+                ),
+            },
+            {
+                "label": "Failed",
+                "value": total_failed,
+                "colour": "red",
+                "url": reverse_lazy(
+                    "admin:workflows_assemblyanalysisbatchanalysis_changelist",
+                    query={
+                        "batch__study__id__exact": study.id,
+                        "status": AssemblyAnalysisPipelineStatus.FAILED,
+                    },
+                ),
+            },
+            {
+                "label": "Completed",
+                "value": total_completed,
+                "colour": "white",
+                "url": reverse_lazy(
+                    "admin:workflows_assemblyanalysisbatchanalysis_changelist",
+                    query={
+                        "batch__study__id__exact": study.id,
+                        "status": AssemblyAnalysisPipelineStatus.COMPLETED,
+                    },
+                ),
+            },
+        ]
+
+        return render(
+            request,
+            "admin/study_admin_assembly_analysis_status_summary.html",
+            {
+                "study": study,
+                "summary_title": f"{study} assembly analyses summary",
+                "summary_items": summary_items,
+                "batches_table": batches_table,
+                "table_title": f"Assembly Analysis Batches for {study.accession}",
                 **self.admin_site.each_context(request),
             },
         )
