@@ -80,11 +80,6 @@ class AssemblyAnalysisBatchAdmin(JSONFieldWidgetOverridesMixin, ModelAdmin):
     list_display = [
         "id_short",
         "study_link",
-        "total_count",
-        "completed_count",
-        "pending_count",
-        "running_count",
-        "failed_count",
         "updated_at",
     ]
 
@@ -128,83 +123,6 @@ class AssemblyAnalysisBatchAdmin(JSONFieldWidgetOverridesMixin, ModelAdmin):
         """Link to the study admin page."""
         url = reverse("admin:analyses_study_change", args=[obj.study.accession])
         return format_html('<a href="{}">{}</a>', url, obj.study.accession)
-
-    @display(description="Completed")
-    def completed_count(self, obj):
-        """
-        Display completed count per pipeline (ASA, VIRify, MAP).
-        """
-        if not obj.pipeline_status_counts:
-            return "-"
-
-        asa = obj.pipeline_status_counts.asa.completed
-        virify = obj.pipeline_status_counts.virify.completed
-        map_count = obj.pipeline_status_counts.map.completed
-
-        return f"A:{asa} V:{virify} M:{map_count}"
-
-    @display(description="Failed")
-    def failed_count(self, obj):
-        """
-        Display failed count per pipeline (A:ASA V:VIRify M:MAP).
-        """
-        if not obj.pipeline_status_counts:
-            return "-"
-
-        asa = obj.pipeline_status_counts.asa.failed
-        virify = obj.pipeline_status_counts.virify.failed
-        map_count = obj.pipeline_status_counts.map.failed
-
-        return f"A:{asa} V:{virify} M:{map_count}"
-
-    @display(description="Running")
-    def running_count(self, obj):
-        """
-        Display running count per pipeline (A:ASA V:VIRify M:MAP).
-        """
-        if not obj.pipeline_status_counts:
-            return "-"
-
-        asa = obj.pipeline_status_counts.asa.running
-        virify = obj.pipeline_status_counts.virify.running
-        map_count = obj.pipeline_status_counts.map.running
-
-        return f"A:{asa} V:{virify} M:{map_count}"
-
-    @display(description="Pending")
-    def pending_count(self, obj):
-        """
-        Display pending count per pipeline (A:ASA V:VIRify M:MAP).
-        """
-        if not obj.pipeline_status_counts:
-            return "-"
-
-        asa = obj.pipeline_status_counts.asa.pending
-        virify = obj.pipeline_status_counts.virify.pending
-        map_count = obj.pipeline_status_counts.map.pending
-
-        return f"A:{asa} V:{virify} M:{map_count}"
-
-    @display(description="Total")
-    def total_count(self, obj):
-        """
-        Display sum of all statuses across all pipelines.
-        """
-        if not obj.pipeline_status_counts:
-            return 0
-
-        # Sum all statuses (completed, failed, running, pending) across all pipelines (ASA, VIRify, MAP)
-        total = 0
-        for pipeline in [
-            obj.pipeline_status_counts.asa,
-            obj.pipeline_status_counts.virify,
-            obj.pipeline_status_counts.map,
-        ]:
-            total += pipeline.completed
-            total += pipeline.failed
-            total += pipeline.running
-            total += pipeline.pending
-        return total
 
     @action(description="Reset selected batches to PENDING")
     def mark_for_rerun(self, request, queryset):
