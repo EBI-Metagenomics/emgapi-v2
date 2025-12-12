@@ -1,5 +1,6 @@
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
+from activate_django_first import EMG_CONFIG
 
 from django.db import transaction
 from prefect import flow, task, get_run_logger
