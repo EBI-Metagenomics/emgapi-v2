@@ -1,5 +1,5 @@
 import csv
-from typing import Iterable, Hashable
+from typing import Iterable, Hashable, Optional
 
 from emgapiv2.enum_utils import FutureStrEnum
 
@@ -89,6 +89,18 @@ class CommentAwareDictReader(csv.DictReader):
         # Adjust the file pointer to the lines after any meaningless comments (i.e. those that aren't a header row)
         move_file_pointer_past_comment_lines(f, self.comment_char, self.delimiter)
         super().__init__(f, delimiter=delimiter, **kwargs)
+
+        # Normalize header fieldnames to handle BOMs and stray whitespace (e.g. Excel CSV with UTF-8 BOM)
+        # csv.DictReader stores header names in self.fieldnames during __init__.
+        if self.fieldnames:
+
+            def _norm(name: Optional[str]):
+                if name is None:
+                    return None
+                # Strip UTF-8 BOM and surrounding whitespace
+                return str(name).lstrip("\ufeff").strip()
+
+            self.fieldnames = [_norm(n) for n in self.fieldnames]
 
     def __next__(self):
         d = super().__next__()
