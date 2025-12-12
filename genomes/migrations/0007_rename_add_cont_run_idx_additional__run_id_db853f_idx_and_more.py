@@ -6,23 +6,23 @@ from django.db import migrations
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('genomes', '0006_additionalcontainedgenomes'),
+        ("genomes", "0006_additionalcontainedgenomes"),
     ]
 
     operations = [
         migrations.RenameIndex(
-            model_name='additionalcontainedgenomes',
-            new_name='additional__run_id_db853f_idx',
-            old_name='add_cont_run_idx',
+            model_name="additionalcontainedgenomes",
+            new_name="additional__run_id_db853f_idx",
+            old_name="add_cont_run_idx",
         ),
         migrations.RenameIndex(
-            model_name='additionalcontainedgenomes',
-            new_name='additional__genome__d184cd_idx',
-            old_name='add_cont_genome_idx',
+            model_name="additionalcontainedgenomes",
+            new_name="additional__genome__d184cd_idx",
+            old_name="add_cont_genome_idx",
         ),
         migrations.RenameIndex(
-            model_name='additionalcontainedgenomes',
-            new_name='additional__assembl_4aebcf_idx',
-            old_name='add_cont_assembly_idx',
+            model_name="additionalcontainedgenomes",
+            new_name="additional__assembl_4aebcf_idx",
+            old_name="add_cont_assembly_idx",
         ),
     ]
