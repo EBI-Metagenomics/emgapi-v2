@@ -202,6 +202,7 @@ def amplicon_analysis_with_downloads(
     }
     analysis.save()
     import_completed_amplicon_analysis(analysis)
+    return analysis
 
 
 @pytest.fixture
