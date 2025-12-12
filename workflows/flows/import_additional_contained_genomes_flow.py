@@ -7,7 +7,6 @@ from django.db import transaction
 from django.db.models import Q
 from prefect import flow, task, get_run_logger
 
-# Import Django models
 from analyses.models import Assembly, Run
 from genomes.models import Genome, AdditionalContainedGenomes
 from workflows.data_io_utils.csv.csv_comment_handler import (

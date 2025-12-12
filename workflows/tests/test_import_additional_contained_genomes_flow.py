@@ -141,17 +141,15 @@ def test_import_additional_contained_genomes_flow_success(prefect_harness, tmp_p
         import_additional_contained_genomes_flow,
         str(csv_path),
         2,  # chunk_size
-        2,  # insert_batch_size
+        2,  # batch_size
     )
     result = logged.result
 
-    # Expect 1 input row, 2 created attempts (2 assemblies matched), zero skips/missing
     assert result["total_rows"] == 1
     assert result["created_attempts"] == 2
     assert result["skipped_rows"] == 0
     assert result["missing_run_or_genome_rows"] == 0
 
-    # Verify DB rows
     rows = list(
         AdditionalContainedGenomes.objects.filter(run=run, genome=genome).order_by("assembly_id")
     )
