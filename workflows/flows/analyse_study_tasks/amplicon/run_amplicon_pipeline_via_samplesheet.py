@@ -22,6 +22,9 @@ from workflows.flows.analyse_study_tasks.shared.analysis_states import (
 from workflows.flows.analyse_study_tasks.amplicon.set_post_analysies_states import (
     set_post_analysis_states,
 )
+from workflows.flows.analyse_study_tasks.shared.dwcr_generator import (
+    generate_dwc_ready_summary_for_pipeline_run,
+)
 from workflows.flows.analyse_study_tasks.shared.markergene_study_summary import (
     generate_markergene_summary_for_pipeline_run,
 )
@@ -121,5 +124,10 @@ def run_amplicon_pipeline_via_samplesheet(
             pipeline_outdir=amplicon_current_outdir,
             mgnify_study_accession=mgnify_study.accession,
             analysis_type="amplicon",
+            completed_runs_filename=EMG_CONFIG.amplicon_pipeline.completed_runs_csv,
+        )
+        generate_dwc_ready_summary_for_pipeline_run(
+            mgnify_study_accession=mgnify_study.accession,
+            pipeline_outdir=amplicon_current_outdir,
             completed_runs_filename=EMG_CONFIG.amplicon_pipeline.completed_runs_csv,
         )

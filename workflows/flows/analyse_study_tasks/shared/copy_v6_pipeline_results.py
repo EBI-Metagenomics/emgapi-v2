@@ -11,7 +11,10 @@ from workflows.data_io_utils.filenames import (
     accession_prefix_separated_dir_path,
     trailing_slash_ensured_dir,
 )
-from workflows.flows.analyse_study_tasks.shared.study_summary import STUDY_SUMMARY_TSV
+from workflows.flows.analyse_study_tasks.shared.study_summary import (
+    STUDY_SUMMARY_TSV,
+    DWCREADY_CSV,
+)
 from workflows.models import (
     AssemblyAnalysisBatch,
     AssemblyAnalysisPipelineStatus,
@@ -131,6 +134,8 @@ def copy_v6_study_summaries(study_accession: str, timeout: int = 14400):
             "-av",
             f"--include=PRJ*{STUDY_SUMMARY_TSV}",
             f"--include=[DES]RP*{STUDY_SUMMARY_TSV}",
+            f"--include=PRJ*{DWCREADY_CSV}",
+            f"--include=[DES]RP*{DWCREADY_CSV}",
             "--exclude=*",
         ]
     )
