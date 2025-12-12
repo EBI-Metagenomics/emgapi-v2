@@ -1,7 +1,6 @@
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Tuple
 
-from activate_django_first import EMG_CONFIG  # Ensure Django is activated before model imports
 
 from django.db import transaction
 from django.db.models import Q
@@ -77,7 +76,9 @@ def _chunked_iterable(it: Iterable, size: int):
 
 
 @task(name="Process CSV chunk")
-def process_csv_chunk(rows: List[Dict[str, str]], batch_size: int = 10000) -> Tuple[int, int, int]:
+def process_csv_chunk(
+    rows: List[Dict[str, str]], batch_size: int = 10000
+) -> Tuple[int, int, int]:
     """
     Process a list of rows: resolve Run, Genome, Assemblies and bulk-insert into AdditionalContainedGenomes.
     Returns tuple: (created_count, skipped_rows, run_or_genome_missing)
@@ -116,7 +117,9 @@ def process_csv_chunk(rows: List[Dict[str, str]], batch_size: int = 10000) -> Tu
     genomes_map: Dict[str, Genome] = {g.accession: g for g in genomes_qs}
 
     # Group rows by found run id to optimise assembly lookups
-    rows_by_run_id: Dict[int, List[Tuple[str, str, Optional[float], Optional[float]]]] = {}
+    rows_by_run_id: Dict[
+        int, List[Tuple[str, str, Optional[float], Optional[float]]]
+    ] = {}
     missing_run_or_genome = 0
     for run_acc, genome_acc, containment, cani in normalised:
         run = runs_map.get(run_acc)
@@ -124,7 +127,9 @@ def process_csv_chunk(rows: List[Dict[str, str]], batch_size: int = 10000) -> Tu
         if run is None or genome is None:
             missing_run_or_genome += 1
             continue
-        rows_by_run_id.setdefault(run.id, []).append((run_acc, genome_acc, containment, cani))
+        rows_by_run_id.setdefault(run.id, []).append(
+            (run_acc, genome_acc, containment, cani)
+        )
 
     if not rows_by_run_id:
         return 0, skipped, missing_run_or_genome
@@ -143,7 +148,8 @@ def process_csv_chunk(rows: List[Dict[str, str]], batch_size: int = 10000) -> Tu
     # Find assemblies linked to any of these runs either by FK or overlapping ena_accessions
     assemblies_qs = (
         Assembly.objects.filter(
-            Q(run_id__in=run_ids) | Q(ena_accessions__overlap=list(run_acc_to_ids.keys()))
+            Q(run_id__in=run_ids)
+            | Q(ena_accessions__overlap=list(run_acc_to_ids.keys()))
         )
         .select_related(None)
         .only("id", "run_id", "ena_accessions")
@@ -155,7 +161,7 @@ def process_csv_chunk(rows: List[Dict[str, str]], batch_size: int = 10000) -> Tu
         candidate_run_ids = set()
         if a.run_id in assemblies_by_run_id:
             candidate_run_ids.add(a.run_id)
-        for acc in (getattr(a, "ena_accessions", []) or []):
+        for acc in getattr(a, "ena_accessions", []) or []:
             for rid in run_acc_to_ids.get(acc, []):
                 candidate_run_ids.add(rid)
         for rid in candidate_run_ids:
@@ -198,7 +204,9 @@ def process_csv_chunk(rows: List[Dict[str, str]], batch_size: int = 10000) -> Tu
 
 
 @flow(name="import_additional_contained_genomes_flow")
-def import_additional_contained_genomes_flow(csv_path: str, chunk_size: int = 50000, insert_batch_size: int = 10000) -> Dict[str, int]:
+def import_additional_contained_genomes_flow(
+    csv_path: str, chunk_size: int = 50000, insert_batch_size: int = 10000
+) -> Dict[str, int]:
     """
     Imports data from a large CSV file into the AdditionalContainedGenomes model.
 
@@ -222,7 +230,9 @@ def import_additional_contained_genomes_flow(csv_path: str, chunk_size: int = 50
 
     with open(validated_path, "r") as f:
         reader = CommentAwareDictReader(
-            f, delimiter=CSVDelimiter.COMMA, none_values=["", "NA", "N/A", "null", "NULL"]
+            f,
+            delimiter=CSVDelimiter.COMMA,
+            none_values=["", "NA", "N/A", "null", "NULL"],
         )
         # Validate header
         fieldnames = reader.fieldnames or []
@@ -238,14 +248,18 @@ def import_additional_contained_genomes_flow(csv_path: str, chunk_size: int = 50
             rows_buffer.append(row)
             total_rows += 1
             if len(rows_buffer) >= chunk_size:
-                created, skipped, missing = process_csv_chunk(rows_buffer, insert_batch_size)
+                created, skipped, missing = process_csv_chunk(
+                    rows_buffer, insert_batch_size
+                )
                 total_created += created
                 total_skipped += skipped
                 total_missing += missing
                 rows_buffer = []
         # Process remainder
         if rows_buffer:
-            created, skipped, missing = process_csv_chunk(rows_buffer, insert_batch_size)
+            created, skipped, missing = process_csv_chunk(
+                rows_buffer, insert_batch_size
+            )
             total_created += created
             total_skipped += skipped
             total_missing += missing
@@ -264,12 +278,16 @@ def import_additional_contained_genomes_flow(csv_path: str, chunk_size: int = 50
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
-        print("Usage: python import_additional_contained_genomes_flow.py <csv_path> [chunk_size] [insert_batch_size]")
+        print(
+            "Usage: python import_additional_contained_genomes_flow.py <csv_path> [chunk_size] [insert_batch_size]"
+        )
         sys.exit(1)
 
     _csv_path = sys.argv[1]
     _chunk_size = int(sys.argv[2]) if len(sys.argv) > 2 else 50000
     _insert_batch_size = int(sys.argv[3]) if len(sys.argv) > 3 else 10000
 
-    result = import_additional_contained_genomes_flow(_csv_path, _chunk_size, _insert_batch_size)
+    result = import_additional_contained_genomes_flow(
+        _csv_path, _chunk_size, _insert_batch_size
+    )
     print(f"Import completed: {result}")

@@ -1,7 +1,3 @@
-import os
-import tempfile
-from pathlib import Path
-
 import pytest
 from prefect import flow
 
@@ -43,7 +39,9 @@ def _make_ena_study_sample_run(accession: str):
     Returns (ena_study, study, ena_sample, sample, run)
     """
     ena_study = ENAStudy.objects.create(accession="PRJEB12345", title="ENA Study")
-    study = Study.objects.create(accession="MGYS00000001", ena_study=ena_study, title="Study")
+    study = Study.objects.create(
+        accession="MGYS00000001", ena_study=ena_study, title="Study"
+    )
 
     ena_sample = ENASample.objects.create(accession="ERS123456", study=ena_study)
     sample = Sample.objects.create(ena_sample=ena_sample, ena_study=ena_study)
@@ -61,7 +59,9 @@ def _make_ena_study_sample_run(accession: str):
 def test_validate_csv_file(prefect_harness, tmp_path):
     # Prepare a real temp CSV file
     csv_path = tmp_path / "test.csv"
-    csv_path.write_text("Run,Genome_Mgnify_accession,Containment,cANI\nSRR1,MGYG0001,0.1,0.9\n")
+    csv_path.write_text(
+        "Run,Genome_Mgnify_accession,Containment,cANI\nSRR1,MGYG0001,0.1,0.9\n"
+    )
 
     @flow(name="Test Validate CSV File")
     def test_flow(file_path: str):
@@ -151,7 +151,9 @@ def test_import_additional_contained_genomes_flow_success(prefect_harness, tmp_p
     assert result["missing_run_or_genome_rows"] == 0
 
     rows = list(
-        AdditionalContainedGenomes.objects.filter(run=run, genome=genome).order_by("assembly_id")
+        AdditionalContainedGenomes.objects.filter(run=run, genome=genome).order_by(
+            "assembly_id"
+        )
     )
     assert len(rows) == 2
     assert {r.assembly_id for r in rows} == {assembly_fk.id, assembly_overlap.id}
@@ -186,9 +188,13 @@ def test_bom_header_is_accepted(prefect_harness, tmp_path):
     run_acc = "ERR11846481"
     ena_study, study, ena_sample, sample, run = _make_ena_study_sample_run(run_acc)
 
-    a1 = Assembly.objects.create(run=run, sample=sample, reads_study=study, ena_study=ena_study)
+    a1 = Assembly.objects.create(
+        run=run, sample=sample, reads_study=study, ena_study=ena_study
+    )
     a1.save()
-    a2 = Assembly.objects.create(run=None, sample=sample, reads_study=study, ena_study=ena_study)
+    a2 = Assembly.objects.create(
+        run=None, sample=sample, reads_study=study, ena_study=ena_study
+    )
     a2.ena_accessions = [run_acc]
     a2.save()
 
@@ -209,7 +215,9 @@ def test_bom_header_is_accepted(prefect_harness, tmp_path):
     # Should process 1 row and attempt to create 2 records
     assert result["total_rows"] == 1
     assert result["created_attempts"] == 2
-    assert AdditionalContainedGenomes.objects.filter(run=run, genome=genome).count() == 2
+    assert (
+        AdditionalContainedGenomes.objects.filter(run=run, genome=genome).count() == 2
+    )
 
 
 @pytest.mark.httpx_mock(should_mock=should_not_mock_httpx_requests_to_prefect_server)
