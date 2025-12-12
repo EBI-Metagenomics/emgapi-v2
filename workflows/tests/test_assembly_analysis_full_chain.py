@@ -223,11 +223,10 @@ def test_full_chain_success(
     setup_map_output_helpers(map_outdir, assembly_accession)
 
     # Run the full chain
-    run_assembly_analysis_pipeline_batch(assembly_analysis_batch_id=batch.id)
+    run_assembly_analysis_pipeline_batch(assembly_analyses_batch_id=batch.id)
 
     # Verify ASA execution
     batch.refresh_from_db()
-    batch.update_pipeline_status_counts(AssemblyAnalysisPipeline.ASA)
     assert batch.pipeline_status_counts.asa.completed == batch.total_analyses
     assert batch.asa_flow_run_id == "test_asa_flow_run_id"
     assert mock_asa_cluster_job.called
@@ -235,12 +234,10 @@ def test_full_chain_success(
     assert mock_import_analyses.called
 
     # Verify VIRify execution
-    batch.update_pipeline_status_counts(AssemblyAnalysisPipeline.VIRIFY)
     assert batch.pipeline_status_counts.virify.completed == batch.total_analyses
     assert mock_virify_cluster_job.called
 
     # Verify MAP execution
-    batch.update_pipeline_status_counts(AssemblyAnalysisPipeline.MAP)
     assert batch.pipeline_status_counts.map.completed == batch.total_analyses
     assert mock_map_cluster_job.called
 
@@ -312,17 +309,14 @@ def test_asa_failure_stops_chain(
     batch = batches[0]
 
     # Run the flow - should raise an exception
-    run_assembly_analysis_pipeline_batch(assembly_analysis_batch_id=batch.id)
+    run_assembly_analysis_pipeline_batch(assembly_analyses_batch_id=batch.id)
 
-    # Verify ASA failed
+    # Verify ASA failed (status counts already updated by the hook)
     batch.refresh_from_db()
-    batch.update_pipeline_status_counts(AssemblyAnalysisPipeline.ASA)
     assert batch.pipeline_status_counts.asa.failed == batch.total_analyses
     assert batch.last_error is not None
 
     # Verify VIRify and MAP were not started
-    batch.update_pipeline_status_counts(AssemblyAnalysisPipeline.VIRIFY)
-    batch.update_pipeline_status_counts(AssemblyAnalysisPipeline.MAP)
     assert batch.pipeline_status_counts.virify.pending == batch.total_analyses
     assert batch.pipeline_status_counts.map.pending == batch.total_analyses
 
@@ -420,17 +414,15 @@ def test_virify_failure_partial_results(
     setup_asa_output_helpers(asa_outdir, assembly_accession)
 
     # Run the flow
-    run_assembly_analysis_pipeline_batch(assembly_analysis_batch_id=batch.id)
+    run_assembly_analysis_pipeline_batch(assembly_analyses_batch_id=batch.id)
 
     assert mocked_set_post_states.called
 
     # Verify ASA completed
     batch.refresh_from_db()
-    batch.update_pipeline_status_counts(AssemblyAnalysisPipeline.ASA)
     assert batch.pipeline_status_counts.asa.completed == batch.total_analyses
 
     # Verify VIRify failed
-    batch.update_pipeline_status_counts(AssemblyAnalysisPipeline.VIRIFY)
     assert batch.pipeline_status_counts.virify.failed == batch.total_analyses
     assert (
         batch.batch_analyses.filter(
@@ -440,7 +432,6 @@ def test_virify_failure_partial_results(
     )
 
     # Verify MAP was not started
-    batch.update_pipeline_status_counts(AssemblyAnalysisPipeline.MAP)
     assert batch.pipeline_status_counts.map.pending == batch.total_analyses
 
     # Verify summary was still generated (ASA completed)
@@ -526,16 +517,13 @@ def test_asa_not_ready_for_virify(
     batch = batches[0]
 
     # Run the flow
-    run_assembly_analysis_pipeline_batch(assembly_analysis_batch_id=batch.id)
+    run_assembly_analysis_pipeline_batch(assembly_analyses_batch_id=batch.id)
 
     assert mock_import_analyses.called
 
     batch.refresh_from_db()
-    batch.update_pipeline_status_counts(AssemblyAnalysisPipeline.ASA)
     assert batch.pipeline_status_counts.asa.completed == batch.total_analyses
 
     # Verify VIRify and MAP were not run
-    batch.update_pipeline_status_counts(AssemblyAnalysisPipeline.VIRIFY)
-    batch.update_pipeline_status_counts(AssemblyAnalysisPipeline.MAP)
     assert batch.pipeline_status_counts.virify.failed == batch.total_analyses
     assert batch.pipeline_status_counts.map.pending == batch.total_analyses

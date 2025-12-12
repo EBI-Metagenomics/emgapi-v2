@@ -466,7 +466,7 @@ def test_prefect_analyse_assembly_flow(
         """Call the actual batch flow instead of deploying."""
         if EMG_CONFIG.assembly_analysis_pipeline.batch_runner_deployment_id in name:
             run_assembly_analysis_pipeline_batch(
-                parameters["assembly_analysis_batch_id"]
+                parameters["assembly_analyses_batch_id"]
             )
         return Mock(id="mock-batch-flow-run-id")
 
@@ -670,7 +670,6 @@ def test_prefect_analyse_assembly_flow(
     assert batch.study == study
 
     # Verify VIRify pipeline state
-    batch.update_pipeline_status_counts(AssemblyAnalysisPipeline.VIRIFY)
     assert batch.pipeline_status_counts.virify.completed == batch.total_analyses
     assert batch.virify_samplesheet_path is not None
     assert Path(batch.virify_samplesheet_path).exists()
@@ -694,7 +693,6 @@ def test_prefect_analyse_assembly_flow(
     assert virify_gff.with_suffix(".gz.csi").exists()
 
     # Verify MAP pipeline state
-    batch.update_pipeline_status_counts(AssemblyAnalysisPipeline.MAP)
     assert batch.pipeline_status_counts.map.completed == batch.total_analyses
     assert batch.map_samplesheet_path is not None
     # Verify MAP pipeline version
@@ -852,7 +850,7 @@ def test_prefect_analyse_assembly_flow_missing_directory(
         """Call the actual batch flow instead of deploying."""
         if EMG_CONFIG.assembly_analysis_pipeline.batch_runner_deployment_id in name:
             run_assembly_analysis_pipeline_batch(
-                parameters["assembly_analysis_batch_id"]
+                parameters["assembly_analyses_batch_id"]
             )
         return Mock(id="mock-batch-flow-run-id")
 
@@ -977,7 +975,6 @@ def test_prefect_analyse_assembly_flow_missing_directory(
 
     # Verify batch progressed to READY (even though analysis failed QC)
     batch = AssemblyAnalysisBatch.objects.get(study=study)
-    batch.update_pipeline_status_counts(AssemblyAnalysisPipeline.ASA)
     assert batch.pipeline_status_counts.asa.failed == batch.total_analyses
 
 
@@ -1041,7 +1038,7 @@ def test_prefect_analyse_assembly_flow_invalid_schema(
         """Call the actual batch flow instead of deploying."""
         if EMG_CONFIG.assembly_analysis_pipeline.batch_runner_deployment_id in name:
             run_assembly_analysis_pipeline_batch(
-                parameters["assembly_analysis_batch_id"]
+                parameters["assembly_analyses_batch_id"]
             )
         return Mock(id="mock-batch-flow-run-id")
 
@@ -1164,5 +1161,4 @@ def test_prefect_analyse_assembly_flow_invalid_schema(
 
     # Verify batch progressed to READY (even though analysis failed QC)
     batch = AssemblyAnalysisBatch.objects.get(study=study)
-    batch.update_pipeline_status_counts(AssemblyAnalysisPipeline.ASA)
     assert batch.pipeline_status_counts.asa.failed == batch.total_analyses

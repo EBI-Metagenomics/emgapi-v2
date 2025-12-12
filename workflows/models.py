@@ -686,19 +686,23 @@ class AssemblyAnalysisBatch(StudyAnalysisBatch):
         self.save()
 
     def update_pipeline_status_counts(
-        self, pipeline_type: AssemblyAnalysisPipeline
+        self, pipeline_type: Optional[AssemblyAnalysisPipeline] = None
     ) -> "AssemblyAnalysisBatch":
         """
-        Update status counts for a specific pipeline by aggregating from batch_analyses.
+        Update status counts for pipeline(s) by aggregating from batch_analyses.
 
         Uses a single optimized query with conditional aggregation for efficiency.
         This should be called at the end of each pipeline execution to reflect current state.
 
-        TODO: this method should be called from a Django model hook... I'm still experimenting (mbc)
-
-        :param pipeline_type: The pipeline (ASA, VIRify, MAP)
+        :param pipeline_type: The pipeline (ASA, VIRify, MAP). If None, updates all pipelines.
         :return: The updated batch
         """
+        # If no pipeline specified, update all pipelines, one by one
+        if pipeline_type is None:
+            for pipeline in AssemblyAnalysisPipeline:
+                self.update_pipeline_status_counts(pipeline)
+            return self
+
         pipeline_key = pipeline_type.value  # "asa", "virify", "map"
         status_field = f"{pipeline_key}_status"
 

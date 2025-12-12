@@ -9,7 +9,6 @@ from workflows.flows.analysis.assembly.flows.run_map_batch import (
 from workflows.models import (
     AssemblyAnalysisBatch,
     AssemblyAnalysisPipelineStatus,
-    AssemblyAnalysisPipeline,
 )
 from workflows.prefect_utils.slurm_flow import ClusterJobFailedException
 
@@ -75,7 +74,6 @@ def test_run_map_batch_success(
 
     # Verify that the batch state was updated to COMPLETED
     batch.refresh_from_db()
-    batch.update_pipeline_status_counts(AssemblyAnalysisPipeline.MAP)
     assert batch.pipeline_status_counts.map.completed == batch.total_analyses
     assert (
         batch.batch_analyses.filter(
@@ -145,7 +143,6 @@ def test_run_map_batch_cluster_job_failed(
 
     # Verify that the batch state was updated to FAILED
     batch.refresh_from_db()
-    batch.update_pipeline_status_counts(AssemblyAnalysisPipeline.MAP)
     assert batch.pipeline_status_counts.map.failed == batch.total_analyses
 
 
@@ -193,5 +190,4 @@ def test_run_map_batch_no_samplesheet(
 
     # Verify that the batch state shows failure (no samplesheet means it can't run)
     batch.refresh_from_db()
-    batch.update_pipeline_status_counts(AssemblyAnalysisPipeline.MAP)
     assert batch.pipeline_status_counts.map.failed == batch.total_analyses

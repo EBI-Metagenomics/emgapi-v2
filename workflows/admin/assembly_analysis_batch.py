@@ -111,6 +111,7 @@ class AssemblyAnalysisBatchAdmin(JSONFieldWidgetOverridesMixin, ModelAdmin):
         "retry_failed_asa",
         "retry_failed_virify",
         "retry_failed_map",
+        "refresh_status_counts",
     ]
 
     @display(description="Batch ID")
@@ -226,6 +227,26 @@ class AssemblyAnalysisBatchAdmin(JSONFieldWidgetOverridesMixin, ModelAdmin):
         """
         self._retry_failed_pipeline(
             request, queryset, AssemblyAnalysisPipeline.MAP, "MAP"
+        )
+
+    @action(description="Refresh status counts for selected batches")
+    def refresh_status_counts(self, request, queryset):
+        """
+        Refresh pipeline status counts for the selected batches.
+
+        Updates counts for all three pipelines: ASA, VIRify, and MAP.
+
+        :param request: Django admin request
+        :param queryset: Selected AssemblyAnalysisBatch objects
+        """
+        total_batches = queryset.count()
+
+        for batch in queryset:
+            batch.update_pipeline_status_counts()
+
+        self.message_user(
+            request,
+            f"Successfully refreshed status counts for {total_batches} batch(es).",
         )
 
     fieldsets = (

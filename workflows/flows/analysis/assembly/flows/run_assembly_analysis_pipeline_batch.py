@@ -43,6 +43,9 @@ from workflows.prefect_utils.slurm_flow import (
     ClusterJobFailedException,
 )
 from workflows.prefect_utils.slurm_policies import ResubmitAlwaysPolicy
+from workflows.flows.analysis.assembly.utils.status_update_hooks import (
+    update_batch_status_counts,
+)
 
 
 def process_import_results(
@@ -145,10 +148,12 @@ def process_import_results(
 
 @flow(
     name="Run assembly analysis pipeline-v6 for an assembly analysis batch (ASA, VIRIfy and MAP)",
-    flow_run_name="Assembly Analysis Batch {{ assembly_analysis_batch_id }}",
+    flow_run_name="Assembly Analysis Batch {{ assembly_analyses_batch_id }}",
+    on_completion=[update_batch_status_counts],
+    on_failure=[update_batch_status_counts],
 )
 def run_assembly_analysis_pipeline_batch(
-    assembly_analysis_batch_id: uuid.UUID,
+    assembly_analyses_batch_id: uuid.UUID,
 ):
     """
     Run the assembly analysis pipeline-v6 for a given batch, including ASA, VIRify, and MAP.
@@ -164,15 +169,15 @@ def run_assembly_analysis_pipeline_batch(
     - VIRify: Only processes analyses with asa_status=COMPLETED and virify_status!=COMPLETED
     - MAP: Only processes analyses with virify_status=COMPLETED and map_status!=COMPLETED
 
-    :param assembly_analysis_batch_id: Unique identifier for the assembly analysis batch to process.
-    :type assembly_analysis_batch_id: uuid.UUID
+    :param assembly_analyses_batch_id: Unique identifier for the assembly analysis batch to process.
+    :type assembly_analyses_batch_id: uuid.UUID
     :raises ClusterJobFailedException: If the cluster job fails during the ASA pipeline execution.
     :raises Exception: For any unexpected errors encountered during the pipeline execution.
     """
     logger = get_run_logger()
 
     assembly_analysis_batch = AssemblyAnalysisBatch.objects.get(
-        id=assembly_analysis_batch_id
+        id=assembly_analyses_batch_id
     )
 
     # Store Prefect flow run ID, this will be persisted in the db later in the code
@@ -195,10 +200,6 @@ def run_assembly_analysis_pipeline_batch(
     if not analyses_to_process.exists():
         logger.info(
             "All analyses already have ASA COMPLETED status, skipping ASA execution"
-        )
-        # Update counts to reflect the current status
-        assembly_analysis_batch.update_pipeline_status_counts(
-            AssemblyAnalysisPipeline.ASA
         )
     else:
         logger.info(
@@ -300,14 +301,11 @@ def run_assembly_analysis_pipeline_batch(
                 f"{error_type} for study {mgnify_study.ena_study.accession}: {e}"
             )
             assembly_analysis_batch.last_error = str(e)
+            assembly_analysis_batch.save()
             # Only mark RUNNING analyses as FAILED (don't overwrite already-COMPLETED ones)
             assembly_analysis_batch.batch_analyses.filter(
                 asa_status=AssemblyAnalysisPipelineStatus.RUNNING
             ).update(asa_status=AssemblyAnalysisPipelineStatus.FAILED)
-            # Update counts to reflect failures
-            assembly_analysis_batch.update_pipeline_status_counts(
-                AssemblyAnalysisPipeline.ASA
-            )
             return
         else:
             assembly_analyses_workspace_dir = (
@@ -334,7 +332,7 @@ def run_assembly_analysis_pipeline_batch(
             #       needed.
             logger.info("Validating ASA results schemas...")
             validation_results = assembly_analysis_batch_results_importer(
-                assembly_analyses_batch_id=assembly_analysis_batch_id,
+                assembly_analyses_batch_id=assembly_analyses_batch_id,
                 pipeline_type=AssemblyAnalysisPipeline.ASA,
                 validation_only=True,
             )
@@ -353,7 +351,7 @@ def run_assembly_analysis_pipeline_batch(
                     f"Importing {len(successful_validations)} validated ASA analyses..."
                 )
                 import_results = assembly_analysis_batch_results_importer(
-                    assembly_analyses_batch_id=assembly_analysis_batch_id,
+                    assembly_analyses_batch_id=assembly_analyses_batch_id,
                     pipeline_type=AssemblyAnalysisPipeline.ASA,
                     validation_only=False,
                 )
@@ -390,7 +388,7 @@ def run_assembly_analysis_pipeline_batch(
         )
         # First validate
         validation_results = assembly_analysis_batch_results_importer(
-            assembly_analyses_batch_id=assembly_analysis_batch_id,
+            assembly_analyses_batch_id=assembly_analyses_batch_id,
             pipeline_type=AssemblyAnalysisPipeline.VIRIFY,
             validation_only=True,
         )
@@ -407,7 +405,7 @@ def run_assembly_analysis_pipeline_batch(
                 f"Importing {len(successful_validations)} validated VIRify analyses..."
             )
             import_results = assembly_analysis_batch_results_importer(
-                assembly_analyses_batch_id=assembly_analysis_batch_id,
+                assembly_analyses_batch_id=assembly_analyses_batch_id,
                 pipeline_type=AssemblyAnalysisPipeline.VIRIFY,
                 validation_only=False,
             )
@@ -444,7 +442,7 @@ def run_assembly_analysis_pipeline_batch(
         )
         # First validate
         validation_results = assembly_analysis_batch_results_importer(
-            assembly_analyses_batch_id=assembly_analysis_batch_id,
+            assembly_analyses_batch_id=assembly_analyses_batch_id,
             pipeline_type=AssemblyAnalysisPipeline.MAP,
             validation_only=True,
         )
@@ -461,7 +459,7 @@ def run_assembly_analysis_pipeline_batch(
                 f"Importing {len(successful_validations)} validated MAP analyses..."
             )
             import_results = assembly_analysis_batch_results_importer(
-                assembly_analyses_batch_id=assembly_analysis_batch_id,
+                assembly_analyses_batch_id=assembly_analyses_batch_id,
                 pipeline_type=AssemblyAnalysisPipeline.MAP,
                 validation_only=False,
             )
@@ -496,7 +494,7 @@ def run_assembly_analysis_pipeline_batch(
         logger.info(
             f"Generating study summary for {successfully_imported_asa_count} successfully imported ASA analyses"
         )
-        generate_assembly_analysis_pipeline_batch_summary(assembly_analysis_batch_id)
+        generate_assembly_analysis_pipeline_batch_summary(assembly_analyses_batch_id)
     else:
         logger.warning(
             "No successfully imported ASA analyses, skipping study summary generation"
@@ -505,4 +503,4 @@ def run_assembly_analysis_pipeline_batch(
     #######################################
     # === Sync results for the batch === #
     #######################################
-    copy_assembly_batch_results(assembly_analysis_batch_id)
+    copy_assembly_batch_results(assembly_analyses_batch_id)
