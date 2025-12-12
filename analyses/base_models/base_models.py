@@ -64,6 +64,7 @@ class GetByENAAccessionManagerMixin:
             qs = (
                 self.get_queryset()
                 .filter(ena_accessions__overlap=list(accession_set))
+                .select_related(None)
                 .only("id", "ena_accessions")
             )
             for obj in qs:
