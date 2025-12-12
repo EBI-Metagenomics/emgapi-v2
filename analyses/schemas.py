@@ -299,6 +299,33 @@ class GenomeAssemblyLinkSchema(Schema):
         from_attributes = True
 
 
+class AdditionalContainedGenomeSchema(Schema):
+    genome: GenomeSchema
+    run_accession: Optional[str] = Field(
+        None,
+        description="ENA accession of the run that produced this assembly",
+        examples=["ERR0000001", "SRR0000001"],
+    )
+    containment: Optional[float] = Field(
+        None,
+        description="Containment score for the genome within the assembly",
+        examples=[0.65, 1.0],
+    )
+    cani: Optional[float] = Field(
+        None,
+        description="Containment Average Nucleotide Identity (cANI)",
+        examples=[0.97, 1.0],
+    )
+
+    @staticmethod
+    def resolve_run_accession(obj) -> Optional[str]:
+        run = getattr(obj, "run", None)
+        return getattr(run, "first_accession", None) if run else None
+
+    class Config:
+        from_attributes = True
+
+
 class AssemblyDetail(Assembly):
     run_accession: Optional[str] = None
     sample_accession: Optional[str] = None
