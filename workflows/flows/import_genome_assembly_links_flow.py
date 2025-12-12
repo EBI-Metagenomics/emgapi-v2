@@ -19,6 +19,8 @@ from workflows.data_io_utils.file_rules.common_rules import (
 from workflows.data_io_utils.file_rules.nodes import File
 import sys
 
+genome_config = EMG_CONFIG.genomes
+
 
 @task(name="Validate TSV file")
 def validate_tsv_file(tsv_path: str) -> str:
