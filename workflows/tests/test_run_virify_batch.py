@@ -114,7 +114,6 @@ def test_run_virify_batch_success(
 
     # Verify that the batch state was updated to COMPLETED
     batch.refresh_from_db()
-    batch.update_pipeline_status_counts(AssemblyAnalysisPipeline.VIRIFY)
     assert batch.pipeline_status_counts.virify.completed == batch.total_analyses
 
 
@@ -185,7 +184,6 @@ def test_run_virify_batch_cluster_job_failed(
 
     # Verify batch status is FAILED
     batch.refresh_from_db()
-    batch.update_pipeline_status_counts(AssemblyAnalysisPipeline.VIRIFY)
     assert batch.pipeline_status_counts.virify.failed == batch.total_analyses
 
 
@@ -226,5 +224,4 @@ def test_run_virify_batch_no_samplesheet(
 
     # Verify that the batch state shows failure (no samplesheet means it can't run)
     batch.refresh_from_db()
-    batch.update_pipeline_status_counts(AssemblyAnalysisPipeline.VIRIFY)
     assert batch.pipeline_status_counts.virify.failed == batch.total_analyses
