@@ -30,8 +30,11 @@ from workflows.flows.analysis.assembly.utils.status_update_hooks import (
 
 @flow(
     name="Run MAP pipeline batch",
+    on_running=[update_batch_status_counts],
     on_completion=[update_batch_status_counts],
     on_failure=[update_batch_status_counts],
+    on_crashed=[update_batch_status_counts],
+    on_cancellation=[update_batch_status_counts],
 )
 def run_map_batch(assembly_analyses_batch_id: uuid.UUID):
     """

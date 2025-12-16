@@ -151,6 +151,8 @@ def process_import_results(
     flow_run_name="Assembly Analysis Batch {{ assembly_analyses_batch_id }}",
     on_completion=[update_batch_status_counts],
     on_failure=[update_batch_status_counts],
+    on_crashed=[update_batch_status_counts],
+    on_cancellation=[update_batch_status_counts],
 )
 def run_assembly_analysis_pipeline_batch(
     assembly_analyses_batch_id: uuid.UUID,
@@ -212,6 +214,13 @@ def run_assembly_analysis_pipeline_batch(
         analyses_to_process_objs = assembly_analysis_batch.analyses.filter(
             id__in=analyses_to_process.values_list("analysis_id", flat=True)
         )
+
+        # TODO: we are working out what is the best way to handle this
+        #       mbc added this one so users know that the jobs are running
+        #       running this on_running won't do the trick as refreshing the counts
+        #       when this flow starts won't work
+        #       The discussion in this PR: https://github.com/EBI-Metagenomics/emgapi-v2/pull/216
+        assembly_analysis_batch.update_pipeline_status_counts()
 
         # Generate ASA samplesheet using the task - only for analyses that need processing
         samplesheet, _ = make_samplesheet_assembly(
