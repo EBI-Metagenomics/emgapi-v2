@@ -74,6 +74,7 @@ def copy_v6_pipeline_results(analysis_accession: str, timeout: int = 14400):
         "gz",
         "fasta",
         "csv",
+        "deoverlapped",
     ]
 
     command = cli_command(
