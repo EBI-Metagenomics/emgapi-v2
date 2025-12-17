@@ -23,9 +23,19 @@ from workflows.prefect_utils.slurm_flow import (
     ClusterJobFailedException,
 )
 from workflows.prefect_utils.slurm_policies import ResubmitAlwaysPolicy
+from workflows.flows.analysis.assembly.utils.status_update_hooks import (
+    update_batch_status_counts,
+)
 
 
-@flow(name="Run MAP pipeline batch")
+@flow(
+    name="Run MAP pipeline batch",
+    on_running=[update_batch_status_counts],
+    on_completion=[update_batch_status_counts],
+    on_failure=[update_batch_status_counts],
+    on_crashed=[update_batch_status_counts],
+    on_cancellation=[update_batch_status_counts],
+)
 def run_map_batch(assembly_analyses_batch_id: uuid.UUID):
     """
     Run the MAP (Mobilome Annotation Pipeline) for a batch of assemblies.
@@ -76,10 +86,6 @@ def run_map_batch(assembly_analyses_batch_id: uuid.UUID):
         logger.warning(
             "All VIRify-completed analyses already have MAP COMPLETED status, skipping MAP execution"
         )
-        # Update counts to reflect current state
-        assembly_analysis_batch.update_pipeline_status_counts(
-            AssemblyAnalysisPipeline.MAP
-        )
         return
 
     logger.info(
@@ -105,15 +111,11 @@ def run_map_batch(assembly_analyses_batch_id: uuid.UUID):
         error = f"MAP samplesheet {map_samplesheet_path} does not exist."
         logger.error(error)
         assembly_analysis_batch.last_error = error
+        assembly_analysis_batch.save()
         # Only mark RUNNING analyses as FAILED (don't overwrite already-COMPLETED ones)
         assembly_analysis_batch.batch_analyses.filter(
             map_status=AssemblyAnalysisPipelineStatus.RUNNING
         ).update(map_status=AssemblyAnalysisPipelineStatus.FAILED)
-
-        # Update counts to reflect the issue
-        assembly_analysis_batch.update_pipeline_status_counts(
-            AssemblyAnalysisPipeline.MAP
-        )
         return
 
     # Store samplesheet path
@@ -191,14 +193,11 @@ def run_map_batch(assembly_analyses_batch_id: uuid.UUID):
 
         # Mark batch as failed
         assembly_analysis_batch.last_error = str(e)
+        assembly_analysis_batch.save()
         # Only mark RUNNING analyses as FAILED (don't overwrite already-COMPLETED ones)
         assembly_analysis_batch.batch_analyses.filter(
             map_status=AssemblyAnalysisPipelineStatus.RUNNING
         ).update(map_status=AssemblyAnalysisPipelineStatus.FAILED)
-        # Update counts to reflect failures
-        assembly_analysis_batch.update_pipeline_status_counts(
-            AssemblyAnalysisPipeline.MAP
-        )
     else:
         logger.info("MAP pipeline completed successfully")
 
@@ -211,9 +210,3 @@ def run_map_batch(assembly_analyses_batch_id: uuid.UUID):
             f"Marked {completed_count} analyses as MAP completed "
             f"(out of {assembly_analysis_batch.total_analyses} total)"
         )
-
-        # Update counts to reflect completions
-        assembly_analysis_batch.update_pipeline_status_counts(
-            AssemblyAnalysisPipeline.MAP
-        )
-        logger.info("MAP pipeline completed successfully, counts updated")
