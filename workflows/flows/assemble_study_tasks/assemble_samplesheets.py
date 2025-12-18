@@ -1,3 +1,4 @@
+import os
 import csv
 import json
 from datetime import timedelta
@@ -6,6 +7,7 @@ from typing import Iterable, Optional
 
 import pandas as pd
 from django.db.models import Q
+from django.utils.text import slugify
 from prefect import flow, get_run_logger, task
 
 from workflows.prefect_utils.build_cli_command import cli_command
@@ -24,6 +26,9 @@ from workflows.prefect_utils.slurm_flow import (
 )
 from workflows.prefect_utils.slurm_policies import (
     ResubmitIfFailedPolicy,
+)
+from workflows.flows.analyse_study_tasks.cleanup_pipeline_directories import (
+    delete_pipeline_workdir,
 )
 
 # TODO: move to a constants file
@@ -220,6 +225,13 @@ def run_assembler_for_samplesheet(
     )
     assembled_runs_csv = miassembler_outdir / Path("assembled_runs.csv")
 
+    workdir = (
+        Path(f"{EMG_CONFIG.slurm.default_workdir}")
+        / f"{mgnify_study.ena_study.accession}_miassembler"
+        / f"miassembler-sheet-{slugify(samplesheet_csv.name)[-10:]}"
+    )
+    os.makedirs(workdir, exist_ok=True)
+
     command = cli_command(
         [
             ("nextflow", "run", EMG_CONFIG.assembler.pipeline_repo),
@@ -232,6 +244,7 @@ def run_assembler_for_samplesheet(
             mgnify_study.is_private and "--private_study",
             EMG_CONFIG.assembler.has_fire_access and "--use_fire_download",
             ("--outdir", miassembler_outdir),
+            ("-work-dir", workdir),
             EMG_CONFIG.slurm.use_nextflow_tower and "-with-tower",
         ]
     )
@@ -307,6 +320,12 @@ def run_assembler_for_samplesheet(
                     status=analyses.models.Assembly.AssemblyStates.ASSEMBLY_FAILED,
                     reason="The assembly is missing from the pipeline end-of-run reports",
                 )
+        delete_pipeline_workdir(
+            workdir
+        )  # will also delete past "abandoned" nextflow files
+        # delete_pipeline_workdir(
+        #     miassembler_outdir
+        # )  # delete output directory as well?
     finally:
         # output list of assembled runs
         assembled_runs = []

@@ -1,3 +1,4 @@
+import os
 import uuid
 from datetime import timedelta
 from pathlib import Path
@@ -25,6 +26,9 @@ from workflows.prefect_utils.slurm_flow import (
 from workflows.prefect_utils.slurm_policies import ResubmitAlwaysPolicy
 from workflows.flows.analysis.assembly.utils.status_update_hooks import (
     update_batch_status_counts,
+)
+from workflows.flows.analyse_study_tasks.cleanup_pipeline_directories import (
+    delete_pipeline_workdir,
 )
 
 
@@ -128,6 +132,13 @@ def run_map_batch(assembly_analyses_batch_id: uuid.UUID):
 
     logger.info(f"Using output dir {map_outdir} for MAP pipeline")
 
+    workdir = (
+        Path(EMG_CONFIG.assembly_analysis_pipeline.workdir_root)
+        / str(mgnify_study.first_accession)
+        / "map"
+    )
+
+    os.makedirs(workdir, exist_ok=True)
     # TODO: we need to standardize pipelines params
     #       i.e. VIRIfy output => outdir
     #       i.e. MAP samplesheet => input
@@ -151,12 +162,7 @@ def run_map_batch(assembly_analyses_batch_id: uuid.UUID):
             ),
             ("-config", EMG_CONFIG.map_pipeline.pipeline_config_file),
             "-resume",
-            (
-                "-work-dir",
-                Path(EMG_CONFIG.assembly_analysis_pipeline.workdir_root)
-                / mgnify_study.first_accession
-                / "map",
-            ),
+            ("-work-dir", workdir),
             ("--input", map_samplesheet_path),
             ("--outdir", map_outdir),
             EMG_CONFIG.slurm.use_nextflow_tower and "-with-tower",
@@ -199,6 +205,13 @@ def run_map_batch(assembly_analyses_batch_id: uuid.UUID):
             map_status=AssemblyAnalysisPipelineStatus.RUNNING
         ).update(map_status=AssemblyAnalysisPipelineStatus.FAILED)
     else:
+        delete_pipeline_workdir(
+            workdir
+        )  # will also delete past "abandoned" nextflow files
+        # delete_pipeline_workdir(
+        #     map_outdir
+        # )  # delete output directory as well?
+
         logger.info("MAP pipeline completed successfully")
 
         # Mark only RUNNING analyses as MAP completed (don't overwrite already-COMPLETED ones)

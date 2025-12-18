@@ -117,3 +117,6 @@ def run_rawreads_pipeline_via_samplesheet(
         delete_pipeline_workdir(
             workdir
         )  # will also delete past "abandoned" nextflow files
+        # delete_pipeline_workdir(
+        #     rawreads_current_outdir
+        # )  # delete output directory as well?

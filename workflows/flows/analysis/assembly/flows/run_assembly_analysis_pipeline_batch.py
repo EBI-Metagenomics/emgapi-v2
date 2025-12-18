@@ -1,3 +1,4 @@
+import os
 import uuid
 from datetime import timedelta
 from pathlib import Path
@@ -45,6 +46,9 @@ from workflows.prefect_utils.slurm_flow import (
 from workflows.prefect_utils.slurm_policies import ResubmitAlwaysPolicy
 from workflows.flows.analysis.assembly.utils.status_update_hooks import (
     update_batch_status_counts,
+)
+from workflows.flows.analyse_study_tasks.cleanup_pipeline_directories import (
+    delete_pipeline_workdir,
 )
 
 
@@ -241,6 +245,13 @@ def run_assembly_analysis_pipeline_batch(
             f"Using {assembly_analyses_workspace_dir} as the batch nextflow outdir for ASA pipeline"
         )
 
+        workdir = (
+            Path(f"{EMG_CONFIG.slurm.default_workdir}")
+            / f"{mgnify_study.ena_study.accession}_rawreads"
+            / f"asa-sheet-{slugify(samplesheet)[-10:]}"
+        )
+        os.makedirs(workdir, exist_ok=True)
+
         command = cli_command(
             [
                 (
@@ -272,6 +283,7 @@ def run_assembly_analysis_pipeline_batch(
                 and "--use_fire_download",
                 ("--input", samplesheet),
                 ("--outdir", assembly_analyses_workspace_dir),
+                ("-work-dir", workdir),
                 EMG_CONFIG.slurm.use_nextflow_tower and "-with-tower",
                 ("-ansi-log", "false"),
             ]
@@ -370,6 +382,13 @@ def run_assembly_analysis_pipeline_batch(
                     assembly_analysis_batch,
                     AssemblyAnalysisPipeline.ASA,
                 )
+
+                delete_pipeline_workdir(
+                    workdir
+                )  # will also delete past "abandoned" nextflow files
+                # delete_pipeline_workdir(
+                #     assembly_analyses_workspace_dir
+                # )  # delete output directory as well?
             else:
                 logger.warning("No ASA analyses passed validation, skipping import")
 

@@ -1,3 +1,4 @@
+import os
 import uuid
 from datetime import timedelta
 from pathlib import Path
@@ -21,6 +22,9 @@ from workflows.prefect_utils.slurm_flow import (
 from workflows.prefect_utils.slurm_policies import ResubmitAlwaysPolicy
 from workflows.flows.analysis.assembly.utils.status_update_hooks import (
     update_batch_status_counts,
+)
+from workflows.flows.analyse_study_tasks.cleanup_pipeline_directories import (
+    delete_pipeline_workdir,
 )
 
 
@@ -127,6 +131,13 @@ def run_virify_batch(assembly_analyses_batch_id: uuid.UUID):
 
     logger.info(f"Using output dir {virify_outdir} for VIRify pipeline")
 
+    workdir = (
+        Path(EMG_CONFIG.assembly_analysis_pipeline.workdir_root)
+        / str(mgnify_study.first_accession)
+        / "virify"
+    )
+    os.makedirs(workdir, exist_ok=True)
+
     # Build the command to run the virify pipeline
     command = cli_command(
         [
@@ -146,12 +157,7 @@ def run_virify_batch(assembly_analyses_batch_id: uuid.UUID):
             ),
             ("-config", EMG_CONFIG.virify_pipeline.pipeline_config_file),
             "-resume",
-            (
-                "-work-dir",
-                Path(EMG_CONFIG.assembly_analysis_pipeline.workdir_root)
-                / mgnify_study.first_accession
-                / "virify",
-            ),
+            ("-work-dir", workdir),
             ("--samplesheet", virify_samplesheet_path),
             ("--output", virify_outdir),
             EMG_CONFIG.slurm.use_nextflow_tower and "-with-tower",
@@ -194,6 +200,13 @@ def run_virify_batch(assembly_analyses_batch_id: uuid.UUID):
             virify_status=AssemblyAnalysisPipelineStatus.RUNNING
         ).update(virify_status=AssemblyAnalysisPipelineStatus.FAILED)
     else:
+        delete_pipeline_workdir(
+            workdir
+        )  # will also delete past "abandoned" nextflow files
+        # delete_pipeline_workdir(
+        #     virify_outdir
+        # )  # delete output directory as well?
+
         logger.info("VIRify pipeline completed successfully")
 
         # Mark only RUNNING analyses as VIRify completed (don't overwrite already-COMPLETED ones)
