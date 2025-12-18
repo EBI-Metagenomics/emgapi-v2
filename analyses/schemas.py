@@ -289,11 +289,13 @@ class GenomeAssemblyLinkSchema(Schema):
     species_rep: Optional[str] = Field(
         None,
         description="Deposition database accession for species representative",
-        examples=["GCA_123456789.1"],
+        examples=["GCA_123456789"],
     )
     mag_accession: Optional[str] = Field(
         None, description="Deposition database for MAG", examples=["MGYG000000001"]
     )
+
+    updated_at: Optional[datetime] = Field()
 
     class Config:
         from_attributes = True
@@ -316,6 +318,7 @@ class AdditionalContainedGenomeSchema(Schema):
         description="Containment Average Nucleotide Identity (cANI)",
         examples=[0.97, 1.0],
     )
+    updated_at: Optional[datetime] = Field()
 
     @staticmethod
     def resolve_run_accession(obj) -> Optional[str]:

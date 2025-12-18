@@ -102,6 +102,9 @@ def process_csv_chunk(
         normalised.append((run_acc, genome_acc, containment, cani))
 
     if not normalised:
+        logger.info(
+            f"No valid rows after normalisation in chunk; rows={len(rows)}, skipped={skipped}"
+        )
         return 0, skipped, 0
 
     run_accessions = {t[0] for t in normalised}
@@ -146,26 +149,21 @@ def process_csv_chunk(
                 run_acc_to_ids.setdefault(acc, []).append(run.id)
 
     # Find assemblies linked to any of these runs either by FK or overlapping ena_accessions
-    assemblies_qs = (
-        Assembly.objects.filter(
-            Q(run_id__in=run_ids)
-            | Q(ena_accessions__overlap=list(run_acc_to_ids.keys()))
-        )
-        .select_related(None)
-        .only("id", "run_id", "ena_accessions")
-    )
+    assemblies_qs = Assembly.objects.filter(
+        Q(run_id__in=run_ids) | Q(ena_accessions__overlap=list(run_acc_to_ids.keys()))
+    ).only("id", "run_id", "ena_accessions")
 
     # Map run_id -> list of Assembly ids
     assemblies_by_run_id: Dict[int, List[int]] = {rid: [] for rid in run_ids}
-    for a in assemblies_qs:
+    for assembly in assemblies_qs:
         candidate_run_ids = set()
-        if a.run_id in assemblies_by_run_id:
-            candidate_run_ids.add(a.run_id)
-        for acc in getattr(a, "ena_accessions", []) or []:
+        if assembly.run_id in assemblies_by_run_id:
+            candidate_run_ids.add(assembly.run_id)
+        for acc in getattr(assembly, "ena_accessions", []) or []:
             for rid in run_acc_to_ids.get(acc, []):
                 candidate_run_ids.add(rid)
         for rid in candidate_run_ids:
-            assemblies_by_run_id.setdefault(rid, []).append(a.id)
+            assemblies_by_run_id.setdefault(rid, []).append(assembly.id)
 
     # Prepare rows to insert
     to_create: List[AdditionalContainedGenomes] = []

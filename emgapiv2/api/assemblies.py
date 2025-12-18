@@ -25,8 +25,6 @@ def _get_single_assembly_by_accession_or_404(
 ) -> analyses.models.Assembly:
     """
     Return a single Assembly matching the given ENA accession contained in ena_accessions.
-    If multiple Assemblies match (which can occur due to data duplication), choose the most
-    recent one deterministically by highest id. Raise 404 if none found.
     """
     qs = analyses.models.Assembly.public_objects.filter(
         ena_accessions__contains=[accession]
@@ -128,10 +126,12 @@ class AssemblyController(UnauthorisedIsUnfoundController):
     @paginate()
     def list_additional_contained_genomes_for_assembly(self, accession: str):
         assembly = _get_single_assembly_by_accession_or_404(accession)
-        qs = AdditionalContainedGenomes.objects.select_related(
-            "genome", "genome__catalogue", "run"
-        ).filter(assembly=assembly)
-        return qs
+        additional_contained_genomes_query_set = (
+            AdditionalContainedGenomes.objects.select_related(
+                "genome", "genome__catalogue", "run"
+            ).filter(assembly=assembly)
+        )
+        return additional_contained_genomes_query_set
 
     @http_get(
         "/{accession}/analyses",
@@ -149,5 +149,5 @@ class AssemblyController(UnauthorisedIsUnfoundController):
         assembly = _get_single_assembly_by_accession_or_404(accession)
         qs = analyses.models.Analysis.public_objects.select_related(
             "study", "sample", "run", "assembly"
-        ).filter(assembly_id=assembly.pk)
+        ).filter(assembly=assembly)
         return qs
