@@ -91,6 +91,7 @@ class AssemblyController(UnauthorisedIsUnfoundController):
     )
     @paginate()
     def list_genome_links_for_assembly(self, accession: str):
+        # TODO: optimize with prefetch_related if needed
         assembly = get_object_or_404(
             analyses.models.Assembly.public_objects,
             ena_accessions__contains=[accession],
