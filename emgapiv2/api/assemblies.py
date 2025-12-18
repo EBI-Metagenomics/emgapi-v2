@@ -1,4 +1,4 @@
-from django.http import Http404
+from django.shortcuts import get_object_or_404
 from ninja_extra import api_controller, http_get, paginate
 from ninja_extra.schemas import NinjaPaginationResponseSchema
 
@@ -18,21 +18,6 @@ from emgapiv2.api.schema_utils import (
     ApiSections,
 )
 from genomes.models import GenomeAssemblyLink, AdditionalContainedGenomes
-
-
-def _get_single_assembly_by_accession_or_404(
-    accession: str,
-) -> analyses.models.Assembly:
-    """
-    Return a single Assembly matching the given ENA accession contained in ena_accessions.
-    """
-    qs = analyses.models.Assembly.public_objects.filter(
-        ena_accessions__contains=[accession]
-    ).order_by("-id")
-    assembly = qs.first()
-    if assembly is None:
-        raise Http404("Assembly not found.")
-    return assembly
 
 
 @api_controller("assemblies", tags=[ApiSections.ANALYSES])
@@ -86,11 +71,12 @@ class AssemblyController(UnauthorisedIsUnfoundController):
         ),
     )
     def get_assembly(self, accession: str):
-        base = _get_single_assembly_by_accession_or_404(accession)
-        # Re-fetch with select_related for detailed response
-        assembly = analyses.models.Assembly.public_objects.select_related(
-            "run", "sample", "reads_study", "assembly_study", "assembler"
-        ).get(pk=base.pk)
+        assembly = get_object_or_404(
+            analyses.models.Assembly.public_objects.select_related(
+                "run", "sample", "reads_study", "assembly_study", "assembler"
+            ),
+            ena_accessions__contains=[accession],
+        )
         return assembly
 
     @http_get(
@@ -105,7 +91,10 @@ class AssemblyController(UnauthorisedIsUnfoundController):
     )
     @paginate()
     def list_genome_links_for_assembly(self, accession: str):
-        assembly = _get_single_assembly_by_accession_or_404(accession)
+        assembly = get_object_or_404(
+            analyses.models.Assembly.public_objects,
+            ena_accessions__contains=[accession],
+        )
 
         genome_links_query_set = GenomeAssemblyLink.objects.select_related(
             "genome", "genome__catalogue"
@@ -125,7 +114,10 @@ class AssemblyController(UnauthorisedIsUnfoundController):
     )
     @paginate()
     def list_additional_contained_genomes_for_assembly(self, accession: str):
-        assembly = _get_single_assembly_by_accession_or_404(accession)
+        assembly = get_object_or_404(
+            analyses.models.Assembly.public_objects,
+            ena_accessions__contains=[accession],
+        )
         additional_contained_genomes_query_set = (
             AdditionalContainedGenomes.objects.select_related(
                 "genome", "genome__catalogue", "run"
@@ -145,8 +137,10 @@ class AssemblyController(UnauthorisedIsUnfoundController):
     )
     @paginate()
     def list_analyses_for_assembly(self, accession: str):
-        # Ensure assembly exists (404 if not found) and resolve to a single Assembly
-        assembly = _get_single_assembly_by_accession_or_404(accession)
+        assembly = get_object_or_404(
+            analyses.models.Assembly.public_objects,
+            ena_accessions__contains=[accession],
+        )
         qs = analyses.models.Analysis.public_objects.select_related(
             "study", "sample", "run", "assembly"
         ).filter(assembly=assembly)
