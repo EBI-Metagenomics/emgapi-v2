@@ -252,7 +252,7 @@ def run_assembly_analysis_pipeline_batch(
                     "-r",
                     EMG_CONFIG.assembly_analysis_pipeline.pipeline_git_revision,
                 ),
-                "-latest",
+                # "-latest", this was causing issues - Cannot lock pack in assembly-analysis-pipeline/.git/objects/pack/pack-e....pack
                 (
                     "-c",
                     EMG_CONFIG.assembly_analysis_pipeline.pipeline_config_file,
