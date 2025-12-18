@@ -8,13 +8,19 @@ import glob
 logging.getLogger().setLevel(logging.INFO)
 
 
-def get_directory_time_since_modification(dir_path: str) -> datetime.timedelta:
+def get_directory_time_since_modification(
+    dir_path: str, min_age: datetime.timedelta
+) -> datetime.timedelta:
     max_mtime = 0.0
+    age = datetime.datetime.now() - datetime.datetime.now()
     for fp, _, _ in os.walk(dir_path):
         mtime = os.path.getmtime(fp)
         if mtime > max_mtime:
             max_mtime = float(mtime)
-    return datetime.datetime.now() - datetime.datetime.fromtimestamp(max_mtime)
+            age = datetime.datetime.now() - datetime.datetime.fromtimestamp(max_mtime)
+            if age <= min_age:
+                return age
+    return age
 
 
 def parse_timedelta(s: str) -> datetime.timedelta:
@@ -65,7 +71,7 @@ def generate_report(base_dir: str, n_level: int, min_age: str, manifest_fp: str)
     min_age_td = parse_timedelta(min_age)
     dir_ages = {}
     for dir_path in glob.glob(f"{base_dir}/{'/'.join(['*' for _ in range(n_level)])}"):
-        age = get_directory_time_since_modification(dir_path)
+        age = get_directory_time_since_modification(dir_path, min_age_td)
         if age > min_age_td:
             dir_ages[dir_path] = age
             logging.info(f"Found {dir_path} with age of {print_timedelta(age)}")

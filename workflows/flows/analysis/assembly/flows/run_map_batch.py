@@ -3,6 +3,7 @@ import uuid
 from datetime import timedelta
 from pathlib import Path
 
+from django.utils.text import slugify
 from django.db import close_old_connections
 from prefect import flow, get_run_logger
 from prefect.runtime import flow_run
@@ -132,13 +133,13 @@ def run_map_batch(assembly_analyses_batch_id: uuid.UUID):
 
     logger.info(f"Using output dir {map_outdir} for MAP pipeline")
 
-    workdir = (
-        Path(EMG_CONFIG.assembly_analysis_pipeline.workdir_root)
-        / str(mgnify_study.first_accession)
+    nextflow_workdir = (
+        Path(assembly_analysis_batch.workspace_dir)
         / "map"
+        / f"map-sheet-{slugify(map_samplesheet_path)[-10:]}"
     )
+    os.makedirs(nextflow_workdir, exist_ok=True)
 
-    os.makedirs(workdir, exist_ok=True)
     # TODO: we need to standardize pipelines params
     #       i.e. VIRIfy output => outdir
     #       i.e. MAP samplesheet => input
@@ -162,7 +163,7 @@ def run_map_batch(assembly_analyses_batch_id: uuid.UUID):
             ),
             ("-config", EMG_CONFIG.map_pipeline.pipeline_config_file),
             "-resume",
-            ("-work-dir", workdir),
+            ("-work-dir", nextflow_workdir),
             ("--input", map_samplesheet_path),
             ("--outdir", map_outdir),
             EMG_CONFIG.slurm.use_nextflow_tower and "-with-tower",
@@ -206,11 +207,8 @@ def run_map_batch(assembly_analyses_batch_id: uuid.UUID):
         ).update(map_status=AssemblyAnalysisPipelineStatus.FAILED)
     else:
         delete_pipeline_workdir(
-            workdir
+            nextflow_workdir
         )  # will also delete past "abandoned" nextflow files
-        # delete_pipeline_workdir(
-        #     map_outdir
-        # )  # delete output directory as well?
 
         logger.info("MAP pipeline completed successfully")
 

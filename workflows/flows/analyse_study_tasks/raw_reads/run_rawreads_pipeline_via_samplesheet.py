@@ -42,6 +42,7 @@ from workflows.flows.analyse_study_tasks.cleanup_pipeline_directories import (
 def run_rawreads_pipeline_via_samplesheet(
     mgnify_study: analyses.models.Study,
     rawreads_analysis_ids: List[Union[str, int]],
+    workdir: Path,
 ):
     rawreads_analyses = analyses.models.Analysis.objects.select_related("run").filter(
         id__in=rawreads_analysis_ids,
@@ -52,19 +53,13 @@ def run_rawreads_pipeline_via_samplesheet(
     for analysis in rawreads_analyses:
         mark_analysis_as_started(analysis)
 
-    rawreads_current_outdir = (
-        Path(f"{EMG_CONFIG.slurm.default_workdir}")
-        / f"{mgnify_study.ena_study.accession}_rawreads"
-        / ss_hash[:6]  # uses samplesheet hash prefix as dir name for the chunk
+    nextflow_outdir = (
+        workdir / ss_hash[:6]  # uses samplesheet hash prefix as dir name for the chunk
     )
-    print(f"Using output dir {rawreads_current_outdir} for this execution")
+    print(f"Using output dir {nextflow_outdir} for this execution")
 
-    workdir = (
-        Path(f"{EMG_CONFIG.slurm.default_workdir}")
-        / f"{mgnify_study.ena_study.accession}_rawreads"
-        / f"rawreads-v6-sheet-{slugify(samplesheet)[-10:]}"
-    )
-    os.makedirs(workdir, exist_ok=True)
+    nextflow_workdir = workdir / f"rawreads-v6-sheet-{slugify(samplesheet)[-10:]}"
+    os.makedirs(nextflow_workdir, exist_ok=True)
 
     command = cli_command(
         [
@@ -74,10 +69,10 @@ def run_rawreads_pipeline_via_samplesheet(
             ("-config", EMG_CONFIG.rawreads_pipeline.pipeline_config_file),
             "-resume",
             ("--samplesheet", samplesheet),
-            ("--outdir", rawreads_current_outdir),
+            ("--outdir", nextflow_outdir),
             EMG_CONFIG.slurm.use_nextflow_tower and "-with-tower",
             EMG_CONFIG.rawreads_pipeline.has_fire_access and "--use_fire_download",
-            ("-work-dir", workdir),
+            ("-work-dir", nextflow_workdir),
             ("-ansi-log", "false"),
         ]
     )
@@ -96,7 +91,7 @@ def run_rawreads_pipeline_via_samplesheet(
             memory=f"{EMG_CONFIG.rawreads_pipeline.nextflow_master_job_memory_gb}G",
             environment=env_variables,
             input_files_to_hash=[samplesheet],
-            working_dir=rawreads_current_outdir,
+            working_dir=nextflow_outdir,
             resubmit_policy=ResubmitIfFailedPolicy,
         )
         close_old_connections()
@@ -106,10 +101,10 @@ def run_rawreads_pipeline_via_samplesheet(
             mark_analysis_as_failed(analysis)
     else:
         # assume that if job finished, all finished... set statuses
-        set_post_analysis_states(rawreads_current_outdir, rawreads_analyses)
-        import_completed_analyses(rawreads_current_outdir, rawreads_analyses)
+        set_post_analysis_states(nextflow_outdir, rawreads_analyses)
+        import_completed_analyses(nextflow_outdir, rawreads_analyses)
         generate_study_summary_for_pipeline_run(
-            pipeline_outdir=rawreads_current_outdir,
+            pipeline_outdir=nextflow_outdir,
             mgnify_study_accession=mgnify_study.accession,
             analysis_type="rawreads",
             completed_runs_filename=EMG_CONFIG.rawreads_pipeline.completed_runs_csv,
@@ -117,6 +112,3 @@ def run_rawreads_pipeline_via_samplesheet(
         delete_pipeline_workdir(
             workdir
         )  # will also delete past "abandoned" nextflow files
-        # delete_pipeline_workdir(
-        #     rawreads_current_outdir
-        # )  # delete output directory as well?

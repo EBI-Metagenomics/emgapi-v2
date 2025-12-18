@@ -3,6 +3,7 @@ import uuid
 from datetime import timedelta
 from pathlib import Path
 
+from django.utils.text import slugify
 from django.db import close_old_connections
 from prefect import flow, get_run_logger
 from prefect.runtime import flow_run
@@ -131,12 +132,12 @@ def run_virify_batch(assembly_analyses_batch_id: uuid.UUID):
 
     logger.info(f"Using output dir {virify_outdir} for VIRify pipeline")
 
-    workdir = (
-        Path(EMG_CONFIG.assembly_analysis_pipeline.workdir_root)
-        / str(mgnify_study.first_accession)
+    nextflow_workdir = (
+        Path(assembly_analysis_batch.workspace_dir)
         / "virify"
+        / f"virify-sheet-{slugify(virify_samplesheet_path)[-10:]}"
     )
-    os.makedirs(workdir, exist_ok=True)
+    os.makedirs(nextflow_workdir, exist_ok=True)
 
     # Build the command to run the virify pipeline
     command = cli_command(
@@ -157,7 +158,7 @@ def run_virify_batch(assembly_analyses_batch_id: uuid.UUID):
             ),
             ("-config", EMG_CONFIG.virify_pipeline.pipeline_config_file),
             "-resume",
-            ("-work-dir", workdir),
+            ("-work-dir", nextflow_workdir),
             ("--samplesheet", virify_samplesheet_path),
             ("--output", virify_outdir),
             EMG_CONFIG.slurm.use_nextflow_tower and "-with-tower",
@@ -201,11 +202,8 @@ def run_virify_batch(assembly_analyses_batch_id: uuid.UUID):
         ).update(virify_status=AssemblyAnalysisPipelineStatus.FAILED)
     else:
         delete_pipeline_workdir(
-            workdir
+            nextflow_workdir
         )  # will also delete past "abandoned" nextflow files
-        # delete_pipeline_workdir(
-        #     virify_outdir
-        # )  # delete output directory as well?
 
         logger.info("VIRify pipeline completed successfully")
 
