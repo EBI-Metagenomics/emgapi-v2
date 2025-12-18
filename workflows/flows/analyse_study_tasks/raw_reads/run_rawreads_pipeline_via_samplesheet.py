@@ -110,5 +110,5 @@ def run_rawreads_pipeline_via_samplesheet(
             completed_runs_filename=EMG_CONFIG.rawreads_pipeline.completed_runs_csv,
         )
         delete_pipeline_workdir(
-            workdir
+            nextflow_workdir
         )  # will also delete past "abandoned" nextflow files
