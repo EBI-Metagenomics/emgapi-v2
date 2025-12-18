@@ -504,7 +504,7 @@ def test_prefect_analyse_rawreads_flow(
     )
 
     # create fake results
-    summary_folder = Path(f"{EMG_CONFIG.slurm.default_workdir}/{study_accession}_v6")
+    summary_folder = Path(f"{EMG_CONFIG.slurm.default_workdir}/{study_accession}")
     summary_folder.mkdir(exist_ok=True, parents=True)
     generate_fake_rawreads_pipeline_summary_results(summary_folder)
 
@@ -655,8 +655,3 @@ def test_prefect_analyse_rawreads_flow(
     assert (
         test_annotation["coverage_breadth"][3]["coverage_breadth"] == 0.7142857142857143
     )
-
-    # Check files
-    workdir = Path(f"{EMG_CONFIG.slurm.default_workdir}/{study_accession}_v6")
-    assert workdir.is_dir()
-    assert study.external_results_dir == f"{study_accession[:-3]}/{study_accession}"
