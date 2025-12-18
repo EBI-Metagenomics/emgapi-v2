@@ -503,15 +503,19 @@ def test_prefect_analyse_rawreads_flow(
         is_optional=True,
     )
 
-    # create fake results
-    summary_folder = Path(f"{EMG_CONFIG.slurm.default_workdir}/{study_accession}")
-    summary_folder.mkdir(exist_ok=True, parents=True)
-    generate_fake_rawreads_pipeline_summary_results(summary_folder)
-
     rawreads_folder = Path(
         f"{EMG_CONFIG.slurm.default_workdir}/{study_accession}_rawreads/abc123"
     )
     rawreads_folder.mkdir(exist_ok=True, parents=True)
+    logger = logging.getLogger("test_logger")
+    logger.info(f"Study working directory made at {rawreads_folder}")
+
+    # create fake results
+    summary_folder = Path(
+        f"{EMG_CONFIG.slurm.default_workdir}/{study_accession}_rawreads"
+    )
+    summary_folder.mkdir(exist_ok=True, parents=True)
+    generate_fake_rawreads_pipeline_summary_results(summary_folder)
 
     # Create CSV files for completed and failed assemblies
     with open(
