@@ -8,6 +8,7 @@ from analyses.schemas import (
     AssemblyDetail,
     MGnifyAnalysis,
     GenomeAssemblyLinkSchema,
+    AdditionalContainedGenomeSchema,
 )
 from emgapiv2.api.perms import UnauthorisedIsUnfoundController
 from emgapiv2.api.schema_utils import (
@@ -16,7 +17,7 @@ from emgapiv2.api.schema_utils import (
     make_child_link,
     ApiSections,
 )
-from genomes.models import GenomeAssemblyLink
+from genomes.models import GenomeAssemblyLink, AdditionalContainedGenomes
 
 
 @api_controller("assemblies", tags=[ApiSections.ANALYSES])
@@ -60,6 +61,12 @@ class AssemblyController(UnauthorisedIsUnfoundController):
                     self_object_name="assembly",
                     description="Genome/MAG links for this assembly",
                 ),
+                **make_child_link(
+                    operation_id="list_additional_contained_genomes_for_assembly",
+                    child_name="additional-contained-genomes",
+                    self_object_name="assembly",
+                    description="Additional contained genomes discovered for this assembly",
+                ),
             }
         ),
     )
@@ -84,6 +91,7 @@ class AssemblyController(UnauthorisedIsUnfoundController):
     )
     @paginate()
     def list_genome_links_for_assembly(self, accession: str):
+        # TODO: optimize with prefetch_related if needed
         assembly = get_object_or_404(
             analyses.models.Assembly.public_objects,
             ena_accessions__contains=[accession],
@@ -94,6 +102,29 @@ class AssemblyController(UnauthorisedIsUnfoundController):
         ).filter(assembly=assembly)
 
         return genome_links_query_set
+
+    @http_get(
+        "/{accession}/additional-contained-genomes",
+        response=NinjaPaginationResponseSchema[AdditionalContainedGenomeSchema],
+        summary="List additional contained genomes for an assembly",
+        description=(
+            "Return additional contained genomes (and their metrics) discovered for this assembly.\n"
+            "Accessible at `/assemblies/{accession}/additional-contained-genomes`."
+        ),
+        operation_id="list_additional_contained_genomes_for_assembly",
+    )
+    @paginate()
+    def list_additional_contained_genomes_for_assembly(self, accession: str):
+        assembly = get_object_or_404(
+            analyses.models.Assembly.public_objects,
+            ena_accessions__contains=[accession],
+        )
+        additional_contained_genomes_query_set = (
+            AdditionalContainedGenomes.objects.select_related(
+                "genome", "genome__catalogue", "run"
+            ).filter(assembly=assembly)
+        )
+        return additional_contained_genomes_query_set
 
     @http_get(
         "/{accession}/analyses",
@@ -107,12 +138,11 @@ class AssemblyController(UnauthorisedIsUnfoundController):
     )
     @paginate()
     def list_analyses_for_assembly(self, accession: str):
-        # Ensure assembly exists (404 if not found)
-        get_object_or_404(
+        assembly = get_object_or_404(
             analyses.models.Assembly.public_objects,
             ena_accessions__contains=[accession],
         )
         qs = analyses.models.Analysis.public_objects.select_related(
             "study", "sample", "run", "assembly"
-        ).filter(assembly__ena_accessions__contains=[accession])
+        ).filter(assembly=assembly)
         return qs
