@@ -21,6 +21,7 @@ from django.conf import settings
 from analyses.admin.study import (
     jump_to_latest_study_admin,
     jump_to_watched_studies_admin,
+    study_refresh_batch_counts_admin,
 )
 
 from .api import api
@@ -37,6 +38,11 @@ urlpatterns = [
         f"{BASE_URL}admin/watched_studies",
         jump_to_watched_studies_admin,
         name="admin_jump_watched_studies",
+    ),
+    path(
+        f"{BASE_URL}admin/study/<int:study_id>/refresh_study_assembly_analysis_counts",
+        study_refresh_batch_counts_admin,
+        name="admin_refresh_study_assembly_analysis_counts",
     ),
     path(f"{BASE_URL}admin/", admin.site.urls),
     path(f"{BASE_URL}__debug__/", include("debug_toolbar.urls")),

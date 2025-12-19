@@ -71,6 +71,7 @@ def test_copy_amplicon_pipeline_results(raw_read_analyses, prefect_harness):
             "gz",
             "fasta",
             "csv",
+            "deoverlapped",
         }
         for ext in expected_extensions:
             assert f"--include=*.{ext}" in move_command

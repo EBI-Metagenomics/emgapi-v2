@@ -2,7 +2,6 @@
 {% load unfold %}
 
 {% block content %}
-
     <!-- Summary card -->
     {% component "unfold/components/card.html" with title=summary_title %}
         <div class="grid grid-cols-1 gap-4 md:grid-cols-5">
@@ -15,6 +14,12 @@
                     </article>
                 </a>
             {% endfor %}
+        </div>
+        <div class="flex justify-start mt-4">
+            {% url "admin_refresh_study_assembly_analysis_counts" study_id=study.id as refresh_url %}
+            {% component "unfold/components/button.html" with href=refresh_url %}
+                Refresh the analysis counts
+            {% endcomponent %}
         </div>
     {% endcomponent %}
 

@@ -7,6 +7,7 @@ from django.db.models import Count
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse_lazy
 from django.utils.html import format_html
+from django.contrib import messages
 from unfold.admin import ModelAdmin
 from unfold.decorators import action, display
 
@@ -496,6 +497,35 @@ class StudyAdmin(ENABrowserLinkMixin, JSONFieldWidgetOverridesMixin, ModelAdmin)
                 **self.admin_site.each_context(request),
             },
         )
+
+
+@staff_member_required
+def study_refresh_batch_counts_admin(request, study_id: int):
+    """
+    Refresh pipeline status counts for all assembly analysis batches in the study.
+
+    :param request: Request
+    :param study_id: ID of the study to refresh counts for
+    """
+    study = get_object_or_404(Study.objects, pk=study_id)
+    batches = study.analysis_batches.all()
+    total_batches = batches.count()
+
+    for batch in batches:
+        batch.update_pipeline_status_counts()
+
+    messages.add_message(
+        request,
+        messages.SUCCESS,
+        f"Successfully refreshed counts for {total_batches} batch(es).",
+    )
+
+    return redirect(
+        reverse_lazy(
+            "admin:analyses_study_show_assembly_analysis_status_summary",
+            args=[study_id],
+        )
+    )
 
 
 @staff_member_required
