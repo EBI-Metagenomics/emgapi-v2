@@ -40,7 +40,7 @@ pydantic-settings~=2.11.0
 # Data handling
 pandas==2.3.3
 biopython==1.85
-numpy~=2.2.6
+numpy~=2.4.0
 
 # Legacy DB connectors (remove at some point)
 pymongo==4.13.2
