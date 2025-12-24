@@ -35,6 +35,8 @@ from workflows.flows.analysis.assembly.utils.status_update_hooks import (
     on_failure=[update_batch_status_counts],
     on_crashed=[update_batch_status_counts],
     on_cancellation=[update_batch_status_counts],
+    retries=2,
+    retry_delay_seconds=60,
 )
 def run_map_batch(assembly_analyses_batch_id: uuid.UUID):
     """
