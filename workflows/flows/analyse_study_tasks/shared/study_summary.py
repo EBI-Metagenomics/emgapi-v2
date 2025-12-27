@@ -34,6 +34,7 @@ from workflows.prefect_utils.dir_context import chdir
 
 STUDY_SUMMARY = "_study_summary"
 STUDY_SUMMARY_TSV = STUDY_SUMMARY + ".tsv"
+DWCREADY_CSV = "dwcready.csv"
 
 STUDY_SUMMARY_GENERATORS = {
     "amplicon": amplicon_study_summary_generator,
