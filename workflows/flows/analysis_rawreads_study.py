@@ -41,7 +41,7 @@ from workflows.prefect_utils.analyses_models_helpers import (
     add_study_watchers,
 )
 from workflows.flows.analyse_study_tasks.cleanup_pipeline_directories import (
-    delete_pipeline_workdir,
+    delete_study_nextflow_workdir,
 )
 
 _METAGENOMIC = "WGS"
@@ -167,12 +167,18 @@ def analysis_rawreads_study(study_accession: str):
     chunked_runs = chunk_list(
         analyses_to_attempt, EMG_CONFIG.rawreads_pipeline.samplesheet_chunk_size
     )
+    study_workdir = (
+        Path(f"{EMG_CONFIG.slurm.default_workdir}")
+        / f"{mgnify_study.ena_study.accession}_rawreads"
+    )
     for analyses_chunk in chunked_runs:
         # launch jobs for all analyses in this chunk in a single flow
         logger.info(
             f"Working on raw-reads analyses: {analyses_chunk[0]}-{analyses_chunk[-1]}"
         )
-        run_rawreads_pipeline_via_samplesheet(mgnify_study, analyses_chunk)
+        run_rawreads_pipeline_via_samplesheet(
+            mgnify_study, analyses_chunk, study_workdir
+        )
 
     merge_study_summaries(
         mgnify_study.accession,
@@ -182,13 +188,7 @@ def analysis_rawreads_study(study_accession: str):
     add_rawreads_study_summaries_to_downloads(mgnify_study.accession)
     copy_v6_study_summaries(mgnify_study.accession)
     # delete work directory
-    study_workdir = (
-        Path(f"{EMG_CONFIG.slurm.default_workdir}")
-        / f"{mgnify_study.ena_study.accession}_rawreads"
-    )
-    delete_pipeline_workdir(
-        study_workdir
-    )  # will also delete past "abandoned" nextflow files
+    delete_study_nextflow_workdir(study_workdir, analyses_to_attempt)
 
     mgnify_study.refresh_from_db()
     mgnify_study.features.has_v6_analyses = mgnify_study.analyses.filter(

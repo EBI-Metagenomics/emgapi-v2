@@ -1,3 +1,4 @@
+import os
 import uuid
 from datetime import timedelta
 from pathlib import Path
@@ -45,6 +46,9 @@ from workflows.prefect_utils.slurm_flow import (
 from workflows.prefect_utils.slurm_policies import ResubmitAlwaysPolicy
 from workflows.flows.analysis.assembly.utils.status_update_hooks import (
     update_batch_status_counts,
+)
+from workflows.flows.analyse_study_tasks.cleanup_pipeline_directories import (
+    delete_pipeline_workdir,
 )
 
 
@@ -242,6 +246,11 @@ def run_assembly_analysis_pipeline_batch(
         logger.info(
             f"Using {assembly_analyses_workspace_dir} as the batch nextflow outdir for ASA pipeline"
         )
+        nextflow_workdir = (
+            Path(assembly_analysis_batch.workspace_dir)
+            / f"asa-sheet-{slugify(samplesheet)[-10:]}"
+        )
+        os.makedirs(nextflow_workdir, exist_ok=True)
 
         command = cli_command(
             [
@@ -274,6 +283,7 @@ def run_assembly_analysis_pipeline_batch(
                 and "--use_fire_download",
                 ("--input", samplesheet),
                 ("--outdir", assembly_analyses_workspace_dir),
+                ("-work-dir", nextflow_workdir),
                 EMG_CONFIG.slurm.use_nextflow_tower and "-with-tower",
                 ("-ansi-log", "false"),
             ]
@@ -372,6 +382,13 @@ def run_assembly_analysis_pipeline_batch(
                     assembly_analysis_batch,
                     AssemblyAnalysisPipeline.ASA,
                 )
+
+                delete_pipeline_workdir(
+                    nextflow_workdir
+                )  # will also delete past "abandoned" nextflow files
+                # delete_pipeline_workdir(
+                #     assembly_analyses_workspace_dir
+                # )  # delete output directory as well?
             else:
                 logger.warning("No ASA analyses passed validation, skipping import")
 
@@ -379,9 +396,7 @@ def run_assembly_analysis_pipeline_batch(
     # === VIRify === #
     ##################
     logger.info("Starting VIRify pipeline")
-    run_virify_batch(
-        assembly_analyses_batch_id=assembly_analysis_batch.id,
-    )
+    run_virify_batch(assembly_analyses_batch_id=assembly_analysis_batch.id)
     close_old_connections()
     # Note: run_virify_batch updates counts internally
 

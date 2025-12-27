@@ -1,3 +1,4 @@
+import os
 import csv
 import json
 from datetime import timedelta
@@ -6,6 +7,7 @@ from typing import Iterable, Optional
 
 import pandas as pd
 from django.db.models import Q
+from django.utils.text import slugify
 from prefect import flow, get_run_logger, task
 
 from workflows.prefect_utils.build_cli_command import cli_command
@@ -24,6 +26,9 @@ from workflows.prefect_utils.slurm_flow import (
 )
 from workflows.prefect_utils.slurm_policies import (
     ResubmitIfFailedPolicy,
+)
+from workflows.flows.analyse_study_tasks.cleanup_pipeline_directories import (
+    delete_pipeline_workdir,
 )
 
 # TODO: move to a constants file
@@ -95,7 +100,7 @@ def get_reference_genome(
 
 @task
 def update_assembly_metadata(
-    miassembler_outdir: Path,
+    nextflow_outdir: Path,
     assembly: analyses.models.Assembly,
 ) -> None:
     """
@@ -106,7 +111,7 @@ def update_assembly_metadata(
     study_accession = assembly.reads_study.ena_study.accession
 
     assembly.dir = (
-        miassembler_outdir
+        nextflow_outdir
         / accession_prefix_separated_dir_path(study_accession, 7)
         / accession_prefix_separated_dir_path(run_accession, 7)
     )
@@ -190,7 +195,10 @@ def update_assemblers_and_contaminant_ref_of_assemblies_from_samplesheet(
 
 @flow(flow_run_name="Assemble {samplesheet_csv}", persist_result=True)
 def run_assembler_for_samplesheet(
-    mgnify_study: analyses.models.Study, samplesheet_csv: Path, samplesheet_hash: str
+    mgnify_study: analyses.models.Study,
+    samplesheet_csv: Path,
+    samplesheet_hash: str,
+    workdir: Path,
 ):
     samplesheet_df = pd.read_csv(samplesheet_csv, sep=",")
     assemblies: Iterable[analyses.models.Assembly] = (
@@ -213,12 +221,13 @@ def run_assembler_for_samplesheet(
             ],
         )
 
-    miassembler_outdir = (
-        Path(EMG_CONFIG.slurm.default_workdir)
-        / f"{mgnify_study.ena_study.accession}_miassembler"
-        / samplesheet_hash
+    nextflow_outdir = workdir / samplesheet_hash
+    assembled_runs_csv = nextflow_outdir / Path("assembled_runs.csv")
+
+    nextflow_workdir = (
+        workdir / f"miassembler-sheet-{slugify(samplesheet_csv.name)[-10:]}"
     )
-    assembled_runs_csv = miassembler_outdir / Path("assembled_runs.csv")
+    os.makedirs(nextflow_workdir, exist_ok=True)
 
     command = cli_command(
         [
@@ -231,7 +240,8 @@ def run_assembler_for_samplesheet(
             ("--samplesheet", samplesheet_csv),
             mgnify_study.is_private and "--private_study",
             EMG_CONFIG.assembler.has_fire_access and "--use_fire_download",
-            ("--outdir", miassembler_outdir),
+            ("--outdir", nextflow_outdir),
+            ("-work-dir", nextflow_workdir),
             EMG_CONFIG.slurm.use_nextflow_tower and "-with-tower",
         ]
     )
@@ -245,7 +255,7 @@ def run_assembler_for_samplesheet(
             environment="ALL,TOWER_ACCESS_TOKEN,TOWER_WORKSPACE_ID",
             input_files_to_hash=[samplesheet_csv],
             resubmit_policy=ResubmitIfFailedPolicy,
-            working_dir=miassembler_outdir,
+            working_dir=nextflow_outdir,
         )
     except ClusterJobFailedException:
         for assembly in assemblies:
@@ -260,7 +270,7 @@ def run_assembler_for_samplesheet(
         # QC failed / not assembled runs: qc_failed_runs.csv
         # Assembled runs: assembled_runs.csv
 
-        qc_failed_csv = miassembler_outdir / Path("qc_failed_runs.csv")
+        qc_failed_csv = nextflow_outdir / Path("qc_failed_runs.csv")
         qc_failed_runs = {}  # Stores {run_accession, qc_fail_reason}
 
         if qc_failed_csv.is_file():
@@ -300,13 +310,16 @@ def run_assembler_for_samplesheet(
                     status=analyses.models.Assembly.AssemblyStates.ASSEMBLY_COMPLETED,
                     unset_statuses=[assembly.AssemblyStates.ASSEMBLY_FAILED],
                 )
-                update_assembly_metadata(miassembler_outdir, assembly)
+                update_assembly_metadata(nextflow_outdir, assembly)
             else:
                 mark_assembly_status(
                     assembly,
                     status=analyses.models.Assembly.AssemblyStates.ASSEMBLY_FAILED,
                     reason="The assembly is missing from the pipeline end-of-run reports",
                 )
+        delete_pipeline_workdir(
+            nextflow_workdir
+        )  # will also delete past "abandoned" nextflow files
     finally:
         # output list of assembled runs
         assembled_runs = []
@@ -332,5 +345,8 @@ def run_standalone_assembler_for_samplesheet(
     :param samplesheet_hash: E.g. abcd1234 – this hash is used by other parts of automation e.g. the workdir
     :return: None
     """
+    workdir = (
+        Path(EMG_CONFIG.slurm.default_workdir) / f"{mgys_study_accession}_miassembler"
+    )
     study = analyses.models.Study.objects.get(accession=mgys_study_accession)
-    run_assembler_for_samplesheet(study, samplesheet_csv, samplesheet_hash)
+    run_assembler_for_samplesheet(study, samplesheet_csv, samplesheet_hash, workdir)
