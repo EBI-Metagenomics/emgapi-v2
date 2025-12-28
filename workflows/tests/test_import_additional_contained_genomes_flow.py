@@ -58,9 +58,9 @@ def _make_ena_study_sample_run(accession: str):
 @pytest.mark.django_db(transaction=True)
 def test_validate_csv_file(prefect_harness, tmp_path):
     # Prepare a real temp CSV file
-    csv_path = tmp_path / "test.csv"
+    csv_path = tmp_path / "test.tsv"
     csv_path.write_text(
-        "Run,Genome_Mgnify_accession,Containment,cANI\nSRR1,MGYG0001,0.1,0.9\n"
+        "Run\tGenome_Mgnify_accession\tContainment\tcANI\nSRR1\tMGYG0001\t0.1\t0.9\n"
     )
 
     @flow(name="Test Validate CSV File")
@@ -73,7 +73,7 @@ def test_validate_csv_file(prefect_harness, tmp_path):
 
     # Nonexistent file
     with pytest.raises(FileNotFoundError):
-        run_flow_and_capture_logs(test_flow, str(tmp_path / "nope.csv"))
+        run_flow_and_capture_logs(test_flow, str(tmp_path / "nope.tsv"))
 
     # Directory instead of file
     with pytest.raises(ValueError):
@@ -129,11 +129,11 @@ def test_import_additional_contained_genomes_flow_success(prefect_harness, tmp_p
     assembly_overlap.ena_accessions = [run_acc]
     assembly_overlap.save()
 
-    # Prepare CSV with a single valid row
-    csv_path = tmp_path / "acg.csv"
+    # Prepare TSV with a single valid row
+    csv_path = tmp_path / "acg.tsv"
     csv_path.write_text(
-        "Run,Genome_Mgnify_accession,Containment,cANI\n"
-        f"{run_acc},{genome.accession},0.65,0.97\n"
+        "Run\tGenome_Mgnify_accession\tContainment\tcANI\n"
+        f"{run_acc}\t{genome.accession}\t0.65\t0.97\n"
     )
 
     # Run the flow with small chunk sizes
@@ -198,11 +198,11 @@ def test_bom_header_is_accepted(prefect_harness, tmp_path):
     a2.ena_accessions = [run_acc]
     a2.save()
 
-    # Write CSV with BOM in the header for the first field name
-    csv_path = tmp_path / "bom.csv"
+    # Write TSV with BOM in the header for the first field name
+    csv_path = tmp_path / "bom.tsv"
     with open(csv_path, "w", encoding="utf-8") as f:
-        f.write("\ufeffRun,Genome_Mgnify_accession,Containment,cANI\n")
-        f.write(f"{run_acc},{genome.accession},1,1\n")
+        f.write("\ufeffRun\tGenome_Mgnify_accession\tContainment\tcANI\n")
+        f.write(f"{run_acc}\t{genome.accession}\t1\t1\n")
 
     logged = run_flow_and_capture_logs(
         import_additional_contained_genomes_flow,
@@ -224,9 +224,9 @@ def test_bom_header_is_accepted(prefect_harness, tmp_path):
 @pytest.mark.django_db(transaction=True)
 def test_invalid_header_raises_value_error(prefect_harness, tmp_path):
     # Missing the required 'Run' column
-    bad_csv = tmp_path / "bad.csv"
+    bad_csv = tmp_path / "bad.tsv"
     bad_csv.write_text(
-        "RUN_ID,Genome_Mgnify_accession,Containment,cANI\nRRR,MGYG000000999,0.1,0.2\n"
+        "RUN_ID\tGenome_Mgnify_accession\tContainment\tcANI\nRRR\tMGYG000000999\t0.1\t0.2\n"
     )
 
     with pytest.raises(ValueError):
