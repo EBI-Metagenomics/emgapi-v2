@@ -1,7 +1,6 @@
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Tuple
 
-from activate_django_first import EMG_CONFIG
 from django.db import transaction
 from django.db.models import Q
 from prefect import flow, task, get_run_logger
