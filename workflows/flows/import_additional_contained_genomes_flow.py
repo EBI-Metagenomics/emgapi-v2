@@ -1,7 +1,7 @@
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Tuple
 
-
+from activate_django_first import EMG_CONFIG
 from django.db import transaction
 from django.db.models import Q
 from prefect import flow, task, get_run_logger
@@ -20,17 +20,17 @@ from workflows.data_io_utils.file_rules.nodes import File
 import sys
 
 
-@task(name="Validate CSV file")
+@task(name="Validate TSV file")
 def validate_csv_file(csv_path: str) -> str:
     """
-    Validates that the CSV file exists and is readable.
+    Validates that the TSV file exists and is readable.
     """
     logger = get_run_logger()
     path = Path(csv_path)
 
     if not path.exists():
-        logger.error(f"CSV file not found: {csv_path}")
-        raise FileNotFoundError(f"CSV file not found: {csv_path}")
+        logger.error(f"TSV file not found: {csv_path}")
+        raise FileNotFoundError(f"TSV file not found: {csv_path}")
 
     if not path.is_file():
         logger.error(f"Path is not a file: {csv_path}")
@@ -44,7 +44,7 @@ def validate_csv_file(csv_path: str) -> str:
         ],
     )
 
-    logger.info(f"CSV file validated: {csv_path}")
+    logger.info(f"TSV file validated: {csv_path}")
     return csv_path
 
 
@@ -75,7 +75,7 @@ def _chunked_iterable(it: Iterable, size: int):
         yield chunk
 
 
-@task(name="Process CSV chunk")
+@task(name="Process TSV chunk")
 def process_csv_chunk(
     rows: List[Dict[str, str]], batch_size: int = 10000
 ) -> Tuple[int, int, int]:
@@ -206,9 +206,9 @@ def import_additional_contained_genomes_flow(
     csv_path: str, chunk_size: int = 50000, insert_batch_size: int = 10000
 ) -> Dict[str, int]:
     """
-    Imports data from a large CSV file into the AdditionalContainedGenomes model.
+    Imports data from a large TSV file into the AdditionalContainedGenomes model.
 
-    The CSV must contain the following columns:
+    The TSV must contain the following columns:
       - Run
       - Genome_Mgnify_accession
       - Containment
@@ -217,7 +217,7 @@ def import_additional_contained_genomes_flow(
     The flow reads the file in streaming chunks and performs batched DB operations.
     """
     logger = get_run_logger()
-    logger.info(f"Starting import of AdditionalContainedGenomes from {csv_path}")
+    logger.info(f"Starting import of AdditionalContainedGenomes from TSV: {csv_path}")
 
     validated_path = validate_csv_file(csv_path)
 
@@ -229,7 +229,7 @@ def import_additional_contained_genomes_flow(
     with open(validated_path, "r") as f:
         reader = CommentAwareDictReader(
             f,
-            delimiter=CSVDelimiter.COMMA,
+            delimiter=CSVDelimiter.TAB,
             none_values=["", "NA", "N/A", "null", "NULL"],
         )
         # Validate header
@@ -237,7 +237,7 @@ def import_additional_contained_genomes_flow(
         missing_cols = [c for c in REQUIRED_COLUMNS if c not in fieldnames]
         if missing_cols:
             raise ValueError(
-                f"Missing required columns in CSV: {', '.join(missing_cols)}; found: {', '.join(fieldnames)}"
+                f"Missing required columns in TSV: {', '.join(missing_cols)}; found: {', '.join(fieldnames)}"
             )
 
         # Iterate in chunks to limit memory usage
@@ -277,7 +277,7 @@ def import_additional_contained_genomes_flow(
 if __name__ == "__main__":
     if len(sys.argv) < 2:
         print(
-            "Usage: python import_additional_contained_genomes_flow.py <csv_path> [chunk_size] [insert_batch_size]"
+            "Usage: python import_additional_contained_genomes_flow.py <tsv_path> [chunk_size] [insert_batch_size]"
         )
         sys.exit(1)
 
