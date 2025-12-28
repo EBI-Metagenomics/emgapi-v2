@@ -257,9 +257,11 @@ def _make_samples_and_run(
             "sample": mgnify_sample,
         },
     )
+    # TODO: Review if this is the best way to handle this, but I've been loads of studies which
+    #       have missing metadata, for example when trying to run the assembly analysis of ERP117856
     run.set_experiment_type_by_metadata(
-        run_or_assembly_response[_.LIBRARY_STRATEGY],
-        run_or_assembly_response[_.LIBRARY_SOURCE],
+        run_or_assembly_response.get(_.LIBRARY_STRATEGY, ""),
+        run_or_assembly_response.get(_.LIBRARY_SOURCE, ""),
     )
 
     if ena_sample_was_created:
@@ -582,6 +584,7 @@ def get_study_assemblies_from_ena(accession: str, limit: int = 10) -> list[str]:
             )
         except analyses.models.Sample.DoesNotExist:
             # make sample based on metadata available from ENA assembly
+            logger.info(f"Creating sample for {assembly_data[_.SAMPLE_ACCESSION]}")
             __, mgnify_sample, run = _make_samples_and_run(assembly_data, study)
         else:
             run = mgnify_sample.runs.first()
