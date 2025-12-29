@@ -5,6 +5,8 @@ from django.db import transaction
 from django.db.models import Q
 from prefect import flow, task, get_run_logger
 
+from activate_django_first import EMG_CONFIG
+
 from analyses.models import Assembly, Run
 from genomes.models import Genome, AdditionalContainedGenomes
 from workflows.data_io_utils.csv.csv_comment_handler import (
@@ -17,6 +19,8 @@ from workflows.data_io_utils.file_rules.common_rules import (
 )
 from workflows.data_io_utils.file_rules.nodes import File
 import sys
+
+genome_config = EMG_CONFIG.genomes
 
 
 @task(name="Validate TSV file")
