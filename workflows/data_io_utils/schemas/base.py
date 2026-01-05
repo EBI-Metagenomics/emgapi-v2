@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import List, Optional, Type
 
 import pandas as pd
-import pandera as pa
+import pandera.pandas as pa
 from pydantic import BaseModel, Field
 
 from analyses.base_models.with_downloads_models import (
