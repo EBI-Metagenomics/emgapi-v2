@@ -4,14 +4,15 @@ from pathlib import Path
 from typing import Dict, Optional
 import json
 
-# Ensure Django is activated before any model imports
-from activate_django_first import EMG_CONFIG  # noqa: F401
+from activate_django_first import EMG_CONFIG
 
 from django.db import transaction
 from django.db.models import QuerySet
 from prefect import flow, get_run_logger
 
 from genomes.models import Genome
+
+genome_config = EMG_CONFIG.genomes
 
 
 def _json_path_for_accession(base_dir: Path, accession: str) -> Path:
@@ -22,15 +23,18 @@ def _json_path_for_accession(base_dir: Path, accession: str) -> Path:
     return base_dir / accession / f"{accession}.json"
 
 
-def _read_ncbi_from_json(json_path: Path) -> Optional[str]:
-    """Read a JSON file and return the value of the 'ncbi_genome_accession' key if present.
+def _read_ncbi_from_json(json_path: Path, logger) -> Optional[str]:
+    """Read a JSON file and return the value of the 'ncbi_genome_accession' or 'genome_accession' key if present.
 
     Returns None if the file cannot be read/parsed or the key is absent/empty.
     """
     try:
         with json_path.open("r") as fh:
             data = json.load(fh)
+            logger.info(f"Read data from {json_path}: {data}")
         val = data.get("ncbi_genome_accession")
+        if val is None:
+            val = data.get("genome_accession")
         if val is None:
             return None
         # Normalize empty strings
@@ -46,6 +50,7 @@ def update_ena_accession_from_json_flow(
     base_dir: str,
     read_chunk_size: int = 5000,
     update_batch_size: int = 2000,
+    catalogue_name: Optional[str] = None,
 ) -> Dict[str, int]:
     """
     Traverse per-genome JSON files to update Genome.ena_genome_accession from the
@@ -56,6 +61,8 @@ def update_ena_accession_from_json_flow(
         a JSON file named <accession>.json
       - read_chunk_size: Django iterator chunk size when scanning genomes
       - update_batch_size: number of rows to bulk update at once
+      - catalogue_name: optional; if provided, restrict processing to genomes whose
+        catalogue has this exact name
 
     Notes:
       - Designed to handle up to ~100k genomes using streaming DB and batched writes.
@@ -78,15 +85,20 @@ def update_ena_accession_from_json_flow(
     # We'll update in batches
     pending_updates: list[Genome] = []
 
+    qs_base = Genome.objects.all()
+    if catalogue_name:
+        qs_base = qs_base.filter(catalogue__name=catalogue_name)
+
     qs: QuerySet[Genome] = (
-        Genome.objects.all()
+        qs_base
         .only("genome_id", "accession", "ena_genome_accession")
         .order_by("genome_id")
     )
 
     logger.info(
-        "Starting scan of genomes for JSON-based ena accession update; base_dir=%s",
+        "Starting scan of genomes for JSON-based ena accession update; base_dir=%s; catalogue_name=%s",
         base_dir,
+        catalogue_name,
     )
 
     for genome in qs.iterator(chunk_size=read_chunk_size):
@@ -98,8 +110,9 @@ def update_ena_accession_from_json_flow(
             total_missing_file += 1
             continue
 
+        logger.info(f"Processing genome {accession} from {json_path}")
         total_with_file += 1
-        ncbi = _read_ncbi_from_json(json_path)
+        ncbi = _read_ncbi_from_json(json_path, logger)
         if not ncbi:
             total_missing_key_or_parse_error += 1
             continue
@@ -149,14 +162,15 @@ if __name__ == "__main__":
 
     if len(sys.argv) < 2:
         print(
-            "Usage: python -m workflows.flows.update_ena_accession_from_json_flow <base_dir> [read_chunk_size] [update_batch_size]"
+            "Usage: python -m workflows.flows.update_ena_accession_from_json_flow <base_dir> [read_chunk_size] [update_batch_size] [catalogue_name]"
         )
         sys.exit(1)
 
     base = sys.argv[1]
     read_cs = int(sys.argv[2]) if len(sys.argv) > 2 else 5000
     upd_bs = int(sys.argv[3]) if len(sys.argv) > 3 else 2000
+    cat_name = sys.argv[4] if len(sys.argv) > 4 else None
 
     # Run directly (synchronously)
-    result = update_ena_accession_from_json_flow(base, read_cs, upd_bs)
+    result = update_ena_accession_from_json_flow(base, read_cs, upd_bs, cat_name)
     print(result)
