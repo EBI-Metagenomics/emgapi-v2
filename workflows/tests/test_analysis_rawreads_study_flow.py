@@ -541,6 +541,7 @@ def test_prefect_analyse_rawreads_flow(
                 biome=BiomeChoices["root.engineered"],
                 watchers=[UserChoices[admin_user.username]],
                 library_strategy_policy=ENALibraryStrategyPolicy.ONLY_IF_CORRECT_IN_ENA,
+                webin_owner=None,
             )
 
     mock_suspend_flow_run.side_effect = suspend_side_effect
