@@ -757,11 +757,17 @@ def test_prefect_analyse_amplicon_flow(
     table_data = json.loads(assembly_samplesheet_table.data)
     assert len(table_data) == len(runs)
 
+    # Check all analyses were added to database
     assert (
-        analyses.models.Analysis.objects.filter(
-            run__ena_accessions__contains=[amplicon_run_all_results]
-        ).count()
-        == 1
+        sum(
+            [
+                analyses.models.Analysis.objects.filter(
+                    run__ena_accessions__contains=[r]
+                ).count()
+                for r in amplicon_run_all_results
+            ]
+        )
+        == 4
     )
 
     # check biome and watchers were set correctly
@@ -1081,12 +1087,19 @@ def test_prefect_analyse_amplicon_flow_private_data(
     table_data = json.loads(assembly_samplesheet_table.data)
     assert len(table_data) == len(runs)
 
+    # Check all analyses were added to database
     assert (
-        analyses.models.Analysis.objects.filter(
-            run__ena_accessions__contains=[amplicon_run_all_results]
-        ).count()
+        sum(
+            [
+                analyses.models.Analysis.objects.filter(
+                    run__ena_accessions__contains=[r]
+                ).count()
+                for r in amplicon_run_all_results
+            ]
+        )
         == 1
     )
+
 
     # check biome and watchers were set correctly
     study = analyses.models.Study.objects.get_or_create_for_ena_study(study_accession)
