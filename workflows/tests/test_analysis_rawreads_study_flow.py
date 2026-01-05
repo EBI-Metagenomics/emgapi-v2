@@ -533,6 +533,7 @@ def test_prefect_analyse_rawreads_flow(
         biome: BiomeChoices
         watchers: List[UserChoices]
         library_strategy_policy: Optional[ENALibraryStrategyPolicy]
+        webin_owner: Optional[str]
 
     def suspend_side_effect(wait_for_input=None):
         if wait_for_input.__name__ == "AnalyseStudyInput":
