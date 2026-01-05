@@ -45,6 +45,7 @@ def run_amplicon_pipeline_via_samplesheet(
     mgnify_study: analyses.models.Study,
     amplicon_analysis_ids: List[Union[str, int]],
     workdir: Path,
+    outdir: Path,
 ):
     amplicon_analyses = analyses.models.Analysis.objects.select_related("run").filter(
         id__in=amplicon_analysis_ids,
@@ -58,10 +59,12 @@ def run_amplicon_pipeline_via_samplesheet(
     nextflow_outdir = (
         workdir / ss_hash[:6]
     )  # uses samplesheet hash prefix as dir name for the chunk
+    os.makedirs(nextflow_outdir, exist_ok=True)
     print(f"Using output dir {nextflow_outdir} for this execution")
 
-    nextflow_workdir = workdir / f"amplicon-v6-sheet-{slugify(samplesheet)[-10:]}"
+    nextflow_workdir = workdir / ss_hash[:6]
     os.makedirs(nextflow_workdir, exist_ok=True)
+    print(f"Using work dir {nextflow_workdir} for this execution")
 
     command = cli_command(
         [

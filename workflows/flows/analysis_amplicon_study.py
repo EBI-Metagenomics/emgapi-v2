@@ -188,8 +188,12 @@ def analysis_amplicon_study(study_accession: str):
         analyses_to_attempt, EMG_CONFIG.amplicon_pipeline.samplesheet_chunk_size
     )
     study_workdir = (
+        Path(f"{EMG_CONFIG.slurm.default_nextflow_workdir}")
+        / "amplicon" / f"{mgnify_study.ena_study.accession}"
+    )
+    study_outdir = (
         Path(f"{EMG_CONFIG.slurm.default_workdir}")
-        / f"{mgnify_study.ena_study.accession}_amplicon_v6"
+        / "amplicon" / f"{mgnify_study.ena_study.accession}"
     )
 
     for analyses_chunk in chunked_runs:
@@ -198,7 +202,7 @@ def analysis_amplicon_study(study_accession: str):
             f"Working on amplicon analyses: {analyses_chunk[0]}-{analyses_chunk[-1]}"
         )
         run_amplicon_pipeline_via_samplesheet(
-            mgnify_study, analyses_chunk, study_workdir
+            mgnify_study, analyses_chunk, study_workdir, study_outdir
         )
 
     merge_study_summaries(

@@ -55,8 +55,8 @@ def run_rawreads_pipeline_via_samplesheet(
         mark_analysis_as_started(analysis)
 
     nextflow_outdir = (
-        outdir / ss_hash[:6]  # uses samplesheet hash prefix as dir name for the chunk
-    )
+        outdir / ss_hash[:6]
+    )  # uses samplesheet hash prefix as dir name for the chunk
     os.makedirs(nextflow_outdir, exist_ok=True)
     print(f"Using output dir {nextflow_outdir} for this execution")
 

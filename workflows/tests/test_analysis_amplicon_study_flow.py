@@ -659,7 +659,7 @@ def test_prefect_analyse_amplicon_flow(
 
     # create fake results
     amplicon_folder = Path(
-        f"{EMG_CONFIG.slurm.default_workdir}/{study_accession}_amplicon_v6/abc123"
+        f"{EMG_CONFIG.slurm.default_workdir}/amplicon/{study_accession}/abc123"
     )
     amplicon_folder.mkdir(exist_ok=True, parents=True)
 

@@ -198,6 +198,7 @@ def analysis_rawreads_study(study_accession: str):
         Path(f"{EMG_CONFIG.slurm.default_workdir}")
         / "raw-reads" / f"{mgnify_study.ena_study.accession}"
     )
+
     for analyses_chunk in chunked_runs:
         # launch jobs for all analyses in this chunk in a single flow
         logger.info(
