@@ -71,7 +71,9 @@ def update_ena_accession_from_json_flow(
     logger = get_run_logger()
     root = Path(base_dir)
     if not root.exists() or not root.is_dir():
-        raise ValueError(f"Base directory does not exist or is not a directory: {base_dir}")
+        raise ValueError(
+            f"Base directory does not exist or is not a directory: {base_dir}"
+        )
 
     # Prepare counters
     total_seen = 0
@@ -89,11 +91,9 @@ def update_ena_accession_from_json_flow(
     if catalogue_name:
         qs_base = qs_base.filter(catalogue__name=catalogue_name)
 
-    qs: QuerySet[Genome] = (
-        qs_base
-        .only("genome_id", "accession", "ena_genome_accession")
-        .order_by("genome_id")
-    )
+    qs: QuerySet[Genome] = qs_base.only(
+        "genome_id", "accession", "ena_genome_accession"
+    ).order_by("genome_id")
 
     logger.info(
         "Starting scan of genomes for JSON-based ena accession update; base_dir=%s; catalogue_name=%s",
@@ -129,7 +129,9 @@ def update_ena_accession_from_json_flow(
         if len(pending_updates) >= update_batch_size:
             with transaction.atomic():
                 Genome.objects.bulk_update(
-                    pending_updates, ["ena_genome_accession"], batch_size=update_batch_size
+                    pending_updates,
+                    ["ena_genome_accession"],
+                    batch_size=update_batch_size,
                 )
             total_updated += len(pending_updates)
             pending_updates.clear()

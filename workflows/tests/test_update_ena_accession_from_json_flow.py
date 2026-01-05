@@ -52,15 +52,15 @@ def _create_genome(
     )
 
 
-# @pytest.mark.httpx_mock(should_mock=should_not_mock_httpx_requests_to_prefect_server)
 @pytest.mark.django_db(transaction=True)
 def test_update_ena_accession_from_json_flow_basic(prefect_harness, tmp_path):
     biome, catalogue = _make_basic_genome_env()
 
-    # Create 6 genomes to exercise all branches
-    g1 = _create_genome("MGYG000000001", biome, catalogue)  # update via ncbi_genome_accession
-    g2 = _create_genome("MGYG000000002", biome, catalogue)  # update via genome_accession (fallback)
-    g3 = _create_genome("MGYG000000003", biome, catalogue, ena_genome_accession="GCA_000000003.1")  # skip no change
+    g1 = _create_genome("MGYG000000001", biome, catalogue)
+    g2 = _create_genome("MGYG000000002", biome, catalogue)
+    g3 = _create_genome(
+        "MGYG000000003", biome, catalogue, ena_genome_accession="GCA_000000003.1"
+    )
     g4 = _create_genome("MGYG000000004", biome, catalogue)  # missing file
     g5 = _create_genome("MGYG000000005", biome, catalogue)  # invalid JSON
     g6 = _create_genome("MGYG000000006", biome, catalogue)  # empty accession value
@@ -105,7 +105,12 @@ def test_update_ena_accession_from_json_flow_basic(prefect_harness, tmp_path):
     assert summary["total_skipped_no_change"] == 1
 
     # Verify DB updates
-    g1.refresh_from_db(); g2.refresh_from_db(); g3.refresh_from_db(); g4.refresh_from_db(); g5.refresh_from_db(); g6.refresh_from_db()
+    g1.refresh_from_db()
+    g2.refresh_from_db()
+    g3.refresh_from_db()
+    g4.refresh_from_db()
+    g5.refresh_from_db()
+    g6.refresh_from_db()
     assert g1.ena_genome_accession == "GCA_000000001.1"
     assert g2.ena_genome_accession == "GCA_000000002.2"
     assert g3.ena_genome_accession == "GCA_000000003.1"  # unchanged
@@ -116,7 +121,9 @@ def test_update_ena_accession_from_json_flow_basic(prefect_harness, tmp_path):
 
 @pytest.mark.httpx_mock(should_mock=should_not_mock_httpx_requests_to_prefect_server)
 @pytest.mark.django_db(transaction=True)
-def test_update_ena_accession_from_json_flow_catalogue_filter(prefect_harness, tmp_path):
+def test_update_ena_accession_from_json_flow_catalogue_filter(
+    prefect_harness, tmp_path
+):
     # Two catalogues
     biome = Biome.objects.create(biome_name="root")
     cat_a = GenomeCatalogue.objects.create(
@@ -144,7 +151,9 @@ def test_update_ena_accession_from_json_flow_catalogue_filter(prefect_harness, t
     for g, val in [(gA1, "GCA_100000001.1"), (gB1, "GCA_200000001.1")]:
         d = base / g.accession
         d.mkdir(parents=True, exist_ok=True)
-        (d / f"{g.accession}.json").write_text(json.dumps({"ncbi_genome_accession": val}))
+        (d / f"{g.accession}.json").write_text(
+            json.dumps({"ncbi_genome_accession": val})
+        )
 
     logged = run_flow_and_capture_logs(
         update_ena_accession_from_json_flow,
@@ -165,7 +174,9 @@ def test_update_ena_accession_from_json_flow_catalogue_filter(prefect_harness, t
     assert summary["total_skipped_no_change"] == 0
 
     # A1 updated, A2 unchanged, B1 ignored
-    gA1.refresh_from_db(); gA2.refresh_from_db(); gB1.refresh_from_db()
+    gA1.refresh_from_db()
+    gA2.refresh_from_db()
+    gB1.refresh_from_db()
     assert gA1.ena_genome_accession == "GCA_100000001.1"
     assert gA2.ena_genome_accession is None
     assert gB1.ena_genome_accession is None
