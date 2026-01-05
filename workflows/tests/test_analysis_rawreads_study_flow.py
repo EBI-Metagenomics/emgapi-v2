@@ -504,12 +504,12 @@ def test_prefect_analyse_rawreads_flow(
     )
 
     # create fake results
-    summary_folder = Path(f"{EMG_CONFIG.slurm.default_workdir}/{study_accession}_v6")
+    summary_folder = Path(f"{EMG_CONFIG.slurm.default_workdir}/raw-reads/{study_accession}")
     summary_folder.mkdir(exist_ok=True, parents=True)
     generate_fake_rawreads_pipeline_summary_results(summary_folder)
 
     rawreads_folder = Path(
-        f"{EMG_CONFIG.slurm.default_workdir}/{study_accession}_rawreads/abc123"
+        f"{EMG_CONFIG.slurm.default_workdir}/raw-reads/{study_accession}/abc123"
     )
     rawreads_folder.mkdir(exist_ok=True, parents=True)
 
