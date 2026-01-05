@@ -43,6 +43,7 @@ def run_rawreads_pipeline_via_samplesheet(
     mgnify_study: analyses.models.Study,
     rawreads_analysis_ids: List[Union[str, int]],
     workdir: Path,
+    outdir: Path,
 ):
     rawreads_analyses = analyses.models.Analysis.objects.select_related("run").filter(
         id__in=rawreads_analysis_ids,
@@ -54,12 +55,14 @@ def run_rawreads_pipeline_via_samplesheet(
         mark_analysis_as_started(analysis)
 
     nextflow_outdir = (
-        workdir / ss_hash[:6]  # uses samplesheet hash prefix as dir name for the chunk
+        outdir / ss_hash[:6]  # uses samplesheet hash prefix as dir name for the chunk
     )
+    os.makedirs(nextflow_outdir, exist_ok=True)
     print(f"Using output dir {nextflow_outdir} for this execution")
 
-    nextflow_workdir = workdir / f"rawreads-v6-sheet-{slugify(samplesheet)[-10:]}"
+    nextflow_workdir = workdir / ss_hash[:6]
     os.makedirs(nextflow_workdir, exist_ok=True)
+    print(f"Using work dir {nextflow_workdir} for this execution")
 
     command = cli_command(
         [
