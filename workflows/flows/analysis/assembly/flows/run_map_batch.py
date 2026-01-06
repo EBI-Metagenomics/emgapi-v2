@@ -40,6 +40,8 @@ from workflows.flows.analyse_study_tasks.cleanup_pipeline_directories import (
     on_failure=[update_batch_status_counts],
     on_crashed=[update_batch_status_counts],
     on_cancellation=[update_batch_status_counts],
+    retries=2,
+    retry_delay_seconds=60,
 )
 def run_map_batch(assembly_analyses_batch_id: uuid.UUID):
     """
@@ -156,7 +158,7 @@ def run_map_batch(assembly_analyses_batch_id: uuid.UUID):
                 "-r",
                 EMG_CONFIG.map_pipeline.pipeline_git_revision,
             ),
-            "-latest",
+            # "-latest", this was causing issues - Cannot lock pack in assembly-analysis-pipeline/.git/objects/pack/pack-e....pack
             (
                 "-profile",
                 EMG_CONFIG.map_pipeline.pipeline_nf_profile,

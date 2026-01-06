@@ -13,7 +13,7 @@ from analyses.base_models.with_downloads_models import (
 )
 from analyses.models import Analysis, Sample
 
-from genomes.models import GenomeAssemblyLink
+from genomes.models import GenomeAssemblyLink, AdditionalContainedGenomes
 
 R = TypeVar("R")
 
@@ -444,3 +444,56 @@ def test_api_assembly_genome_links_with_data(
 
     assert item["genome"]["accession"] == genome.accession
     assert item["genome"]["catalogue_version"] == genome.catalogue.version
+
+
+@pytest.mark.django_db
+def test_api_assembly_additional_contained_genomes_with_no_data(
+    mgnify_assemblies_with_ena, ninja_api_client
+):
+    assembly = mgnify_assemblies_with_ena[0]
+    items = call_endpoint_and_get_data(
+        ninja_api_client,
+        f"/assemblies/{assembly.ena_accessions[0]}/additional-contained-genomes",
+        count=0,
+    )
+    assert isinstance(items, list)
+    assert items == []
+
+
+@pytest.mark.django_db
+def test_api_assembly_additional_contained_genomes_with_data(
+    mgnify_assemblies, genomes, ninja_api_client
+):
+    # Ensure the assembly has a public accession to query by
+    assembly = mgnify_assemblies[0]
+    assembly.ena_accessions = ["ERZ3001"]
+    assembly.save()
+
+    genome = genomes[0]
+
+    AdditionalContainedGenomes.objects.create(
+        run=assembly.run,
+        genome=genome,
+        assembly=assembly,
+        containment=0.65,
+        cani=0.97,
+    )
+
+    items = call_endpoint_and_get_data(
+        ninja_api_client,
+        f"/assemblies/{assembly.ena_accessions[0]}/additional-contained-genomes",
+        count=1,
+    )
+
+    assert isinstance(items, list)
+    assert len(items) == 1
+    item = items[0]
+
+    # Metrics
+    assert item["containment"] == 0.65
+    assert item["cani"] == 0.97
+
+    # Linked objects
+    assert item["genome"]["accession"] == genome.accession
+    assert item["genome"]["catalogue_version"] == genome.catalogue.version
+    assert item["run_accession"] == assembly.run.first_accession

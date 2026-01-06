@@ -105,6 +105,7 @@ CORS_ALLOWED_ORIGINS = [
     "https://wwwint.ebi.ac.uk",
     "http://wwwint.ebi.ac.uk",
     "http://apiv2-dev.mgnify.org",
+    "http://branchwater-dev.mgnify.org",
 ]
 
 CORS_ALLOW_CREDENTIALS = True

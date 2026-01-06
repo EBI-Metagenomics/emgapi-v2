@@ -7,7 +7,9 @@ from workflows.prefect_utils.testing_utils import run_flow_and_capture_logs
 
 @pytest.mark.django_db
 @pytest.mark.use_large_genome_links_tsv
-def test_read_tsv_file_one_million_records(tmp_path):  # ← inject tmp_path
+def test_read_tsv_file_one_million_records(
+    prefect_harness, tmp_path
+):  # ← inject tmp_path
     """
     Generate a TSV file with 1,000,000 records and ensure read_tsv_file can read them.
     This test is opt-in because it is memory/time intensive. Enable with: pytest -m large_tsv
