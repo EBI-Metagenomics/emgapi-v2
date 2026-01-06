@@ -1,9 +1,6 @@
 from pathlib import Path
 import tempfile
 import click
-import pandas as pd
-from collections import defaultdict
-from unittest.mock import patch
 
 from activate_django_first import EMG_CONFIG
 
@@ -66,21 +63,13 @@ def generate_dwc_ready_summary_for_pipeline_run(
             content = runs.read_text()
             logger.debug(f"Content of runs file is\n{content}")
 
-            mock_dict = defaultdict()
-            mock_dict["SRR1111111"] = pd.DataFrame({"RunID": "SRR1111111"}, index=[0])
-            with patch(
-                "mgnify_pipelines_toolkit.analysis.shared.dwc_summary_generator.get_all_ena_metadata_from_runs",
-                return_value=(mock_dict),
-            ):
-                with click.Context(generate_dwcready_summaries) as ctx:
-                    ctx.invoke(
-                        generate_dwcready_summaries,
-                        runs=runs,
-                        analyses_dir="/app/data/tests/amplicon_v6_output/",
-                        output_prefix="chunk1",
-                    )
-
-            # generate_dwcready_summaries()
+            with click.Context(generate_dwcready_summaries) as ctx:
+                ctx.invoke(
+                    generate_dwcready_summaries,
+                    runs=runs,
+                    analyses_dir="/app/data/tests/amplicon_v6_output/",
+                    output_prefix="chunk1",
+                )
 
     return []
 
