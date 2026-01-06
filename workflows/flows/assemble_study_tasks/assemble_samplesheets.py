@@ -7,7 +7,6 @@ from typing import Iterable, Optional
 
 import pandas as pd
 from django.db.models import Q
-from django.utils.text import slugify
 from prefect import flow, get_run_logger, task
 
 from workflows.prefect_utils.build_cli_command import cli_command
@@ -199,6 +198,7 @@ def run_assembler_for_samplesheet(
     samplesheet_csv: Path,
     samplesheet_hash: str,
     workdir: Path,
+    outdir: Path,
 ):
     samplesheet_df = pd.read_csv(samplesheet_csv, sep=",")
     assemblies: Iterable[analyses.models.Assembly] = (
@@ -221,12 +221,11 @@ def run_assembler_for_samplesheet(
             ],
         )
 
-    nextflow_outdir = workdir / samplesheet_hash
+    nextflow_outdir = outdir / samplesheet_hash
+    os.makedirs(nextflow_outdir, exist_ok=True)
     assembled_runs_csv = nextflow_outdir / Path("assembled_runs.csv")
 
-    nextflow_workdir = (
-        workdir / f"miassembler-sheet-{slugify(samplesheet_csv.name)[-10:]}"
-    )
+    nextflow_workdir = workdir / samplesheet_hash
     os.makedirs(nextflow_workdir, exist_ok=True)
 
     command = cli_command(

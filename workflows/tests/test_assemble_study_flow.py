@@ -316,7 +316,7 @@ def test_prefect_assemble_study_flow(
     mock_queryset_hash_for_assemblies.return_value = "abc123"
 
     assembly_folder = Path(
-        f"{EMG_CONFIG.slurm.default_workdir}/PRJNA1_miassembler/abc123"
+        f"{EMG_CONFIG.slurm.default_workdir}/miassembler/PRJNA1/abc123"
     )
     assembly_folder.mkdir(exist_ok=True, parents=True)
 

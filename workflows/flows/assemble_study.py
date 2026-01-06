@@ -227,14 +227,24 @@ def assemble_study(
     logger.info("Flow resumed after samplesheet editing")
 
     study_workdir = (
+        Path(EMG_CONFIG.slurm.default_nextflow_workdir)
+        / "miassembler"
+        / f"{mgnify_study.ena_study.accession}"
+    )
+    study_outdir = (
         Path(EMG_CONFIG.slurm.default_workdir)
-        / f"{mgnify_study.ena_study.accession}_miassembler"
+        / "miassembler"
+        / f"{mgnify_study.ena_study.accession}"
     )
     for samplesheet_path, samplesheet_hash in samplesheets:
         logger.info(f"Will run assembler for samplesheet {samplesheet_path.name}")
 
         run_assembler_for_samplesheet(
-            mgnify_study, samplesheet_path, samplesheet_hash, study_workdir
+            mgnify_study,
+            samplesheet_path,
+            samplesheet_hash,
+            study_workdir,
+            study_outdir,
         )
 
     if upload:
