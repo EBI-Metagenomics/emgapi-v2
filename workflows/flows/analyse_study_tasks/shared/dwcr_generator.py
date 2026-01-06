@@ -1,5 +1,9 @@
 from pathlib import Path
 import tempfile
+import click
+import pandas as pd
+from collections import defaultdict
+from unittest.mock import patch
 
 from activate_django_first import EMG_CONFIG
 
@@ -29,11 +33,14 @@ def generate_dwc_ready_summary_for_pipeline_run(
     logger = get_run_logger()
     logger.warning("Not implemented yet")
     # TODO: implement me :)
+    logger.info(mgnify_study_accession)
+    logger.info(pipeline_outdir)
+    logger.info(completed_runs_filename)
     logger.info(
         f"Generating Darwin Core Ready (DwC-R) summary files for a pipeline execution of study {mgnify_study_accession}"
     )
     results_dir = Directory(
-        path=Path(pipeline_outdir),
+        path=Path("/app/data/tests/amplicon_v6_output/"),
         rules=[DirectoryExistsRule],
     )
     results_dir.files.append(
@@ -59,7 +66,21 @@ def generate_dwc_ready_summary_for_pipeline_run(
             content = runs.read_text()
             logger.debug(f"Content of runs file is\n{content}")
 
-            generate_dwcready_summaries()
+            mock_dict = defaultdict()
+            mock_dict["SRR1111111"] = pd.DataFrame({"RunID": "SRR1111111"}, index=[0])
+            with patch(
+                "mgnify_pipelines_toolkit.analysis.shared.dwc_summary_generator.get_all_ena_metadata_from_runs",
+                return_value=(mock_dict),
+            ):
+                with click.Context(generate_dwcready_summaries) as ctx:
+                    ctx.invoke(
+                        generate_dwcready_summaries,
+                        runs=runs,
+                        analyses_dir="/app/data/tests/amplicon_v6_output/",
+                        output_prefix="chunk1",
+                    )
+
+            # generate_dwcready_summaries()
 
     return []
 
