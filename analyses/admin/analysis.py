@@ -35,6 +35,7 @@ class AnalysisAdmin(JSONFieldWidgetOverridesMixin, ModelAdmin):
 
     search_fields = [
         "id",
+        "accession",
         "run__ena_accessions",
         "assembly__ena_accessions",
         "assembly__run__ena_accessions",
