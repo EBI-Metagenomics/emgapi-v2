@@ -599,7 +599,7 @@ def test_prefect_assemble_private_study_flow(
     mock_queryset_hash_for_assemblies.return_value = "xyz789"
 
     assembly_folder = Path(
-        f"{EMG_CONFIG.slurm.default_workdir}/PRJNA1_miassembler/xyz789"
+        f"{EMG_CONFIG.slurm.default_workdir}/miassembler/PRJNA1/xyz789"
     )
     assembly_folder.mkdir(exist_ok=True, parents=True)
 
