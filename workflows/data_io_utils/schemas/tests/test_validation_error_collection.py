@@ -1,6 +1,6 @@
 import pandas as pd
 import pytest
-import pandera.pandas as pa
+import pandera as pa
 from pandera.typing import Series
 
 from workflows.data_io_utils.file_rules.common_rules import (

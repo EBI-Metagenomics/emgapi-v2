@@ -12,7 +12,9 @@ from workflows.ena_utils.abstract import ENAPortalDataPortal
 class SlurmConfig(BaseModel):
     default_job_status_checks_limit: int = 10
     default_workdir: str = "/nfs/production/dev-slurm-work-dir"
-    default_nextflow_workdir: str = "/hps/nobackup/rdf/metagenomics/service-team/nextflow-workdir"
+    default_nextflow_workdir: str = (
+        "/hps/nobackup/rdf/metagenomics/service-team/nextflow-workdir"
+    )
     pipelines_root_dir: str = "/app/workflows/pipelines"
     ftp_results_dir: str = "/nfs/ftp/public/databases/metagenomics/mgnify_results"
     private_results_dir: str = "/nfs/public/services/private-data"

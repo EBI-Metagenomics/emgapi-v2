@@ -192,11 +192,13 @@ def analysis_rawreads_study(study_accession: str):
     )
     study_workdir = (
         Path(f"{EMG_CONFIG.slurm.default_nextflow_workdir}")
-        / "raw-reads" / f"{mgnify_study.ena_study.accession}"
+        / "raw-reads"
+        / f"{mgnify_study.ena_study.accession}"
     )
     study_outdir = (
         Path(f"{EMG_CONFIG.slurm.default_workdir}")
-        / "raw-reads" / f"{mgnify_study.ena_study.accession}"
+        / "raw-reads"
+        / f"{mgnify_study.ena_study.accession}"
     )
 
     for analyses_chunk in chunked_runs:
