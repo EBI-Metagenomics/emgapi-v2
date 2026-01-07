@@ -88,6 +88,7 @@ class AnalysisAdmin(JSONFieldWidgetOverridesMixin, ModelAdmin):
             },
         ),
         ("QC", {"classes": ["tab"], "fields": ["quality_control"]}),
+        ("Metadata", {"classes": ["tab"], "fields": ["metadata"]}),
     )
 
     class StudyFilterForAnalysis(StudyFilter):
