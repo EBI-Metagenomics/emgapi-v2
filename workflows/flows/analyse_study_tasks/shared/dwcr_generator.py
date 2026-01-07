@@ -1,5 +1,4 @@
 from pathlib import Path
-import tempfile
 import click
 
 from activate_django_first import EMG_CONFIG
@@ -30,23 +29,6 @@ def generate_dwc_ready_summary_for_pipeline_run(
     logger = get_run_logger()
 
     study = Study.objects.get(accession=mgnify_study_accession)
-    logger.info(f"Generating study summary for a pipeline execution of {study}")
-
-    logger.info(pipeline_outdir)
-    logger.info(completed_runs_filename)
-    logger.info(
-        f"Generating Darwin Core Ready (DwC-R) summary files for a pipeline execution of study {mgnify_study_accession}"
-    )
-    results_dir = Directory(
-        path=Path(pipeline_outdir),
-        rules=[DirectoryExistsRule],
-    )
-    results_dir.files.append(
-        File(
-            path=results_dir.path / completed_runs_filename,
-            rules=[FileExistsRule, FileIsNotEmptyRule],
-        )
-    )
 
     # Set the results_dir if it hasn't been set yet, so that it can be used in the summary generator'
     study.set_results_dir_default()
@@ -56,32 +38,44 @@ def generate_dwc_ready_summary_for_pipeline_run(
         rules=[DirectoryExistsRule],
     )
 
+    logger.info(pipeline_outdir)
+    logger.info(completed_runs_filename)
+    logger.info(
+        f"Generating Darwin Core Ready (DwC-R) summary files for a pipeline execution of study {mgnify_study_accession}"
+    )
+    results_dir = Directory(
+        path=Path("/".join(str(pipeline_outdir).split("/")[:-1])),
+        rules=[DirectoryExistsRule],
+    )
+    results_dir.files.append(
+        File(
+            path=results_dir.path / completed_runs_filename,
+            rules=[FileExistsRule, FileIsNotEmptyRule],
+        )
+    )
+
     runs = results_dir.files[0].path
-    logger.info(f"Expecting to find taxonomy summaries in {study_dir.path}")
+    logger.info(f"Expecting to find taxonomy summaries in {results_dir.path}")
     logger.info(f"Using runs from {runs}")
 
-    with tempfile.TemporaryDirectory() as workdir:
-        with chdir(workdir):
-            logger.info(f"Using temporary workdir {workdir}")
-            prefix = pipeline_outdir.name
+    with chdir(study.results_dir):
+        prefix = pipeline_outdir.name
 
-            logger.debug(
-                f"For DwC-R summary, {study_dir.path = }, {runs = }, {prefix = }"
+        logger.debug(f"For DwC-R summary, {study_dir.path = }, {runs = }, {prefix = }")
+        logger.debug(f"Glob of input_path is {list(results_dir.path.glob('*'))}")
+
+        content = runs.read_text()
+        logger.debug(f"Content of runs file is\n{content}")
+
+        with click.Context(generate_dwcready_summaries) as ctx:
+            ctx.invoke(
+                generate_dwcready_summaries,
+                runs=runs,
+                analyses_dir=results_dir.path,
+                output_prefix="chunk1",
             )
-            logger.debug(f"Glob of input_path is {list(study_dir.path.glob('*'))}")
 
-            content = runs.read_text()
-            logger.debug(f"Content of runs file is\n{content}")
-
-            with click.Context(generate_dwcready_summaries) as ctx:
-                ctx.invoke(
-                    generate_dwcready_summaries,
-                    runs=runs,
-                    analyses_dir=study_dir.path,
-                    output_prefix="chunk1",
-                )
-
-    generated_files = list(study_dir.path.glob(f"{study_dir.path.name}*_dwcready.csv"))
+    generated_files = list(Path(study.results_dir).glob("*_dwcready.csv"))
 
     logger.info(generated_files)
 
