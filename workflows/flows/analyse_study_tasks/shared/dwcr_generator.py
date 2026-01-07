@@ -28,16 +28,17 @@ def generate_dwc_ready_summary_for_pipeline_run(
     completed_runs_filename: str = EMG_CONFIG.amplicon_pipeline.completed_runs_csv,
 ) -> list[Path] | None:
     logger = get_run_logger()
-    logger.warning("Not implemented yet")
-    # TODO: implement me :)
-    logger.info(mgnify_study_accession)
+
+    study = Study.objects.get(accession=mgnify_study_accession)
+    logger.info(f"Generating study summary for a pipeline execution of {study}")
+
     logger.info(pipeline_outdir)
     logger.info(completed_runs_filename)
     logger.info(
         f"Generating Darwin Core Ready (DwC-R) summary files for a pipeline execution of study {mgnify_study_accession}"
     )
     results_dir = Directory(
-        path=Path("/app/data/tests/amplicon_v6_output/"),
+        path=Path(pipeline_outdir),
         rules=[DirectoryExistsRule],
     )
     results_dir.files.append(
@@ -47,9 +48,16 @@ def generate_dwc_ready_summary_for_pipeline_run(
         )
     )
 
-    input_path = results_dir.path
+    # Set the results_dir if it hasn't been set yet, so that it can be used in the summary generator'
+    study.set_results_dir_default()
+
+    study_dir = Directory(
+        path=Path(study.results_dir),
+        rules=[DirectoryExistsRule],
+    )
+
     runs = results_dir.files[0].path
-    logger.info(f"Expecting to find taxonomy summaries in {input_path}")
+    logger.info(f"Expecting to find taxonomy summaries in {study_dir.path}")
     logger.info(f"Using runs from {runs}")
 
     with tempfile.TemporaryDirectory() as workdir:
@@ -57,8 +65,10 @@ def generate_dwc_ready_summary_for_pipeline_run(
             logger.info(f"Using temporary workdir {workdir}")
             prefix = pipeline_outdir.name
 
-            logger.debug(f"For DwC-R summary, {input_path = }, {runs = }, {prefix = }")
-            logger.debug(f"Glob of input_path is {list(input_path.glob('*'))}")
+            logger.debug(
+                f"For DwC-R summary, {study_dir.path = }, {runs = }, {prefix = }"
+            )
+            logger.debug(f"Glob of input_path is {list(study_dir.path.glob('*'))}")
 
             content = runs.read_text()
             logger.debug(f"Content of runs file is\n{content}")
@@ -67,11 +77,15 @@ def generate_dwc_ready_summary_for_pipeline_run(
                 ctx.invoke(
                     generate_dwcready_summaries,
                     runs=runs,
-                    analyses_dir="/app/data/tests/amplicon_v6_output/",
+                    analyses_dir=study_dir.path,
                     output_prefix="chunk1",
                 )
 
-    return []
+    generated_files = list(study_dir.path.glob(f"{study_dir.path.name}*_dwcready.csv"))
+
+    logger.info(generated_files)
+
+    return generated_files
 
 
 @flow
