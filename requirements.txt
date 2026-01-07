@@ -38,11 +38,6 @@ pydantic<2.12.0  # TODO upgrade once https://github.com/eadwinCode/django-ninja-
 pydantic-settings~=2.11.0
 pydantic-xml[lxml]~=2.18.0
 email-validator==2.3.0
-
-# Data handling
-pandas==2.3.3
-biopython==1.85
-numpy~=2.2.6
 lxml==6.0.2
 
 # Legacy DB connectors (remove at some point)

@@ -1,5 +1,6 @@
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
+from activate_django_first import EMG_CONFIG
 
 from django.db import transaction
 from prefect import flow, task, get_run_logger
@@ -17,6 +18,8 @@ from workflows.data_io_utils.file_rules.common_rules import (
 )
 from workflows.data_io_utils.file_rules.nodes import File
 import sys
+
+genome_config = EMG_CONFIG.genomes
 
 
 @task(name="Validate TSV file")

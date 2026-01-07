@@ -1,0 +1,33 @@
+{% extends "unfold/layouts/base.html" %}
+{% load unfold %}
+
+{% block content %}
+    <!-- Summary card -->
+    {% component "unfold/components/card.html" with title=summary_title %}
+        <div class="grid grid-cols-1 gap-4 md:grid-cols-5">
+            {% for item in summary_items %}
+                <a href="{{ item.url }}" class="inline-block">
+                    <article class="rounded px-3 py-2 font-semibold text-xs uppercase whitespace-nowrap border-2
+                        bg-{{ item.colour }}-100 text-{{ item.colour }}-700 border-{{ item.colour }}-700 dark:bg-{{ item.colour }}-500/20 dark:text-{{ item.colour }}-400 dark:border-{{ item.colour }}-400">
+                        <span class="block text-xs">{{ item.label }}</span>
+                        <span class="block text-xl">{{ item.value }}</span>
+                    </article>
+                </a>
+            {% endfor %}
+        </div>
+        <div class="flex justify-start mt-4">
+            {% url "admin_refresh_study_assembly_analysis_counts" study_id=study.id as refresh_url %}
+            {% component "unfold/components/button.html" with href=refresh_url %}
+                Refresh the analysis counts
+            {% endcomponent %}
+        </div>
+    {% endcomponent %}
+
+    {% component "unfold/components/separator.html" %}{% endcomponent %}
+
+    <!-- Batches table -->
+    {% component "unfold/components/card.html" with title=title %}
+        {% component "unfold/components/table.html" with table=batches_table card_included=1 striped=1 %}{% endcomponent %}
+    {% endcomponent %}
+
+{% endblock %}

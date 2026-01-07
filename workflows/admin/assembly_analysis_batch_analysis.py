@@ -1,4 +1,5 @@
 from django.contrib import admin
+from django.db.models import Q
 from django.urls import reverse
 from django.utils.html import format_html
 from unfold.admin import ModelAdmin
@@ -12,6 +13,26 @@ from workflows.models import (
     AssemblyAnalysisPipeline,
     AssemblyAnalysisBatch,
 )
+
+
+class AssemblyBatchAnyPipelineStatusListFilter(admin.SimpleListFilter):
+    title = "Batch pipelines status"
+    parameter_name = "status"
+
+    def lookups(self, request, model_admin):
+        """Return available pipeline status values."""
+        return AssemblyAnalysisPipelineStatus.choices
+
+    def queryset(self, request, queryset):
+        """Filter batches by pipeline status across all pipeline types."""
+        status_filter = self.value()
+        if status_filter:
+            return queryset.filter(
+                Q(asa_status=status_filter)
+                | Q(virify_status=status_filter)
+                | Q(map_status=status_filter)
+            )
+        return queryset
 
 
 @admin.register(AssemblyAnalysisBatchAnalysis)
@@ -44,6 +65,7 @@ class AssemblyAnalysisBatchAnalysisAdmin(ModelAdmin):
         ("batch__study", AutocompleteSelectMultipleFilter),
         ("batch", AutocompleteSelectMultipleFilter),
         ("analysis__assembly", AutocompleteSelectMultipleFilter),
+        AssemblyBatchAnyPipelineStatusListFilter,
         "asa_status",
         "virify_status",
         "map_status",

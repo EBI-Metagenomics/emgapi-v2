@@ -57,7 +57,7 @@ fileignoreconfig:
   checksum: 3afe465b36e4e141124bd84c8459c5aa81332eedf49b691eff22c74df63a0f18
 
 - filename: emgapiv2/settings.py
-  checksum: 77b72bbe1f9003226068fcbc625fda59178fecb125bd96a5df07f0b0a40895c4
+  checksum: ab0fa7cdb6cd720aedd0a4f6bb9e2940187f9de91a39967e93ed4b91ca5050c5
 
 - filename: emgapiv2/settings_test.py
   checksum: ded898400b4eda7e3cf75694af1b66235975a85eb5b8f49f3a2c708163a7aad4
@@ -148,6 +148,9 @@ fileignoreconfig:
 
 - filename: workflows/flows/assemble_study_tasks/make_samplesheets.py
   allowed_patterns: [key, InstrumentPlatformKeys]
+
+- filename: workflows/flows/update_ena_accession_from_json_flow.py
+  checksum: eb3318a581a786d141a481dd8669879f7819e371b9a2ff2e182d108981725245
 
 - filename: workflows/flows/upload_assembly.py
   checksum: f82f92058dabd50b9b6caf557d4eadae227ec4f6a0233135653251c20cf3c64b

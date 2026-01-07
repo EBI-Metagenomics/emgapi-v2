@@ -19,9 +19,21 @@ from workflows.prefect_utils.slurm_flow import (
     ClusterJobFailedException,
 )
 from workflows.prefect_utils.slurm_policies import ResubmitAlwaysPolicy
+from workflows.flows.analysis.assembly.utils.status_update_hooks import (
+    update_batch_status_counts,
+)
 
 
-@flow(name="Run the VIRify pipeline batch")
+@flow(
+    name="Run the VIRify pipeline batch",
+    on_running=[update_batch_status_counts],
+    on_completion=[update_batch_status_counts],
+    on_failure=[update_batch_status_counts],
+    on_crashed=[update_batch_status_counts],
+    on_cancellation=[update_batch_status_counts],
+    retries=2,
+    retry_delay_seconds=60,
+)
 def run_virify_batch(assembly_analyses_batch_id: uuid.UUID):
     """
     Runs the VIRify pipeline for a batch of assemblies.
@@ -66,9 +78,6 @@ def run_virify_batch(assembly_analyses_batch_id: uuid.UUID):
         logger.info(
             "All ASA-completed analyses already have VIRify COMPLETED status, skipping VIRify execution"
         )
-        assembly_analysis_batch.update_pipeline_status_counts(
-            AssemblyAnalysisPipeline.VIRIFY
-        )
         return
 
     logger.info(
@@ -98,13 +107,10 @@ def run_virify_batch(assembly_analyses_batch_id: uuid.UUID):
         assembly_analysis_batch.last_error = (
             f"VIRify samplesheet not found at {virify_samplesheet_path}"
         )
+        assembly_analysis_batch.save()
         # Mark all batch relations as failed for VIRify
         assembly_analysis_batch.batch_analyses.update(
             virify_status=AssemblyAnalysisPipelineStatus.FAILED
-        )
-        # Update counts to reflect failures
-        assembly_analysis_batch.update_pipeline_status_counts(
-            AssemblyAnalysisPipeline.VIRIFY
         )
         return
 
@@ -135,7 +141,7 @@ def run_virify_batch(assembly_analyses_batch_id: uuid.UUID):
                 "-r",
                 EMG_CONFIG.virify_pipeline.pipeline_git_revision,
             ),
-            "-latest",
+            # "-latest", this was causing issues - Cannot lock pack in assembly-analysis-pipeline/.git/objects/pack/pack-e....pack
             (
                 "-profile",
                 EMG_CONFIG.virify_pipeline.pipeline_nf_profile,
@@ -184,14 +190,11 @@ def run_virify_batch(assembly_analyses_batch_id: uuid.UUID):
 
         # Mark batch as failed
         assembly_analysis_batch.last_error = str(e)
+        assembly_analysis_batch.save()
         # Only mark RUNNING analyses as FAILED (don't overwrite already-COMPLETED ones)
         assembly_analysis_batch.batch_analyses.filter(
             virify_status=AssemblyAnalysisPipelineStatus.RUNNING
         ).update(virify_status=AssemblyAnalysisPipelineStatus.FAILED)
-        # Update counts to reflect failures
-        assembly_analysis_batch.update_pipeline_status_counts(
-            AssemblyAnalysisPipeline.VIRIFY
-        )
     else:
         logger.info("VIRify pipeline completed successfully")
 
@@ -204,9 +207,3 @@ def run_virify_batch(assembly_analyses_batch_id: uuid.UUID):
             f"Marked {completed_count} analyses as VIRify completed "
             f"(out of {assembly_analysis_batch.total_analyses} total)"
         )
-
-        # Update counts to reflect completions
-        assembly_analysis_batch.update_pipeline_status_counts(
-            AssemblyAnalysisPipeline.VIRIFY
-        )
-        logger.info("VIRify pipeline completed successfully, counts updated")

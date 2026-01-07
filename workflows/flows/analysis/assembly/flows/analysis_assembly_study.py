@@ -1,3 +1,4 @@
+import time
 from pathlib import Path
 from textwrap import dedent as _
 from typing import Optional, List
@@ -135,10 +136,12 @@ def analysis_assembly_study(
         logger.info(
             f"Running batch {str(batch.id)[:8]} with {batch.total_analyses} analyses"
         )
+        # TODO: review this sleep, I've seen loads of batches failed (so we are probably scheduling too many too quickly)
+        time.sleep(0.25)
         run_deployment(
             # TODO: use the deployment name, re-deploy the flow properly
             name=EMG_CONFIG.assembly_analysis_pipeline.batch_runner_deployment_id,
-            parameters={"assembly_analysis_batch_id": batch.id},
+            parameters={"assembly_analyses_batch_id": batch.id},
             timeout=0,  # Timeout=0 means to run in background and return immediately
         )
 
