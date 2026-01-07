@@ -150,7 +150,7 @@ fileignoreconfig:
   allowed_patterns: [key, InstrumentPlatformKeys]
 
 - filename: workflows/flows/update_ena_accession_from_json_flow.py
-  checksum: eb3318a581a786d141a481dd8669879f7819e371b9a2ff2e182d108981725245
+  allowed_patterns: [total_missing_key_or_parse_error]
 
 - filename: workflows/flows/upload_assembly.py
   checksum: f82f92058dabd50b9b6caf557d4eadae227ec4f6a0233135653251c20cf3c64b
