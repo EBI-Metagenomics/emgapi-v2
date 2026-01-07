@@ -14,12 +14,19 @@ from prefect.artifacts import Artifact
 from pydantic import BaseModel
 
 import analyses.models
-from workflows.data_io_utils.file_rules.base_rules import FileRule
+from workflows.data_io_utils.file_rules.base_rules import FileRule, GlobRule
+from workflows.data_io_utils.file_rules.common_rules import GlobHasFilesCountRule
+from workflows.data_io_utils.file_rules.nodes import Directory
 from workflows.ena_utils.ena_api_requests import ENALibraryStrategyPolicy
+from workflows.flows.analyse_study_tasks.shared.study_summary import (
+    merge_study_summaries,
+    STUDY_SUMMARY_TSV,
+)
 from workflows.flows.analysis_rawreads_study import analysis_rawreads_study
 from workflows.prefect_utils.analyses_models_helpers import get_users_as_choices
 from workflows.prefect_utils.testing_utils import (
     should_not_mock_httpx_requests_to_prefect_server,
+    run_flow_and_capture_logs,
 )
 
 EMG_CONFIG = settings.EMG_CONFIG
@@ -376,10 +383,10 @@ def test_prefect_analyse_rawreads_flow(
     mock_run_deployment.return_value = Mock(id="mock-flow-run-id")
 
     os.environ["USER"] = "testuser"
-    mock_queryset_hash_for_rawreads.return_value = "abc123"
+    mock_queryset_hash_for_rawreads.return_value = "xyz789"
 
-    study_accession = "ERP136383"
-    all_results = ["ERR10889188", "ERR10889197", "ERR10889214", "ERR10889221"]
+    study_accession = "ERP136384"
+    all_results = ["ERR10889189", "ERR10889198", "ERR10889215", "ERR10889222"]
 
     # mock ENA response
     httpx_mock.add_response(
@@ -421,6 +428,451 @@ def test_prefect_analyse_rawreads_flow(
         f"&format=json"
         f"&fields=run_accession%2Csample_accession%2Csample_title%2Csecondary_sample_accession%2Cfastq_md5%2Cfastq_ftp%2Clibrary_layout%2Clibrary_strategy%2Clibrary_source%2Cscientific_name%2Chost_tax_id%2Chost_scientific_name%2Cinstrument_platform%2Cinstrument_model%2Clocation%2Clat%2Clon"
         f"&dataPortal=metagenome",
+        json=[
+            {
+                "run_accession": "ERR10889189",
+                "sample_accession": "SAMEA112437737",
+                "sample_title": "stool",
+                "secondary_sample_accession": "ERS14548047",
+                "fastq_md5": "67613b1159c7d80eb3e3ca2479650ad5;6e6c5b0db3919b904a5e283827321fb9;41dc11f68009af8bc1e955a2c8d95d05",
+                "fastq_ftp": "ftp.sra.ebi.ac.uk/vol1/fastq/ERR108/088/ERR10889188/ERR10889188.fastq.gz;ftp.sra.ebi.ac.uk/vol1/fastq/ERR108/088/ERR10889188/ERR10889188_1.fastq.gz;ftp.sra.ebi.ac.uk/vol1/fastq/ERR108/088/ERR10889188/ERR10889188_2.fastq.gz",
+                "library_layout": "PAIRED",
+                "library_strategy": "WGS",
+                "library_source": "METAGENOMIC",
+                "scientific_name": "human gut metagenome",
+                "host_tax_id": "",
+                "host_scientific_name": "",
+                "instrument_platform": "ILLUMINA",
+                "instrument_model": "Illumina HiSeq 2500",
+                "location": "19.754234 S 30.156915 E",
+                "lat": "-19.754234",
+                "lon": "30.156915",
+            },
+            {
+                "run_accession": "ERR10889198",
+                "sample_accession": "SAMEA112437712",
+                "sample_title": "stool",
+                "secondary_sample_accession": "ERS14548022",
+                "fastq_md5": "323cd88dc2b3ccd17b47d8581a2be280;265ec70078cbdf9e92acd0ebf45aed8d;9402981ef0e93ea329bda73eb779d65c",
+                "fastq_ftp": "ftp.sra.ebi.ac.uk/vol1/fastq/ERR108/097/ERR10889197/ERR10889197.fastq.gz;ftp.sra.ebi.ac.uk/vol1/fastq/ERR108/097/ERR10889197/ERR10889197_1.fastq.gz;ftp.sra.ebi.ac.uk/vol1/fastq/ERR108/097/ERR10889197/ERR10889197_2.fastq.gz",
+                "library_layout": "PAIRED",
+                "library_strategy": "WGS",
+                "library_source": "METAGENOMIC",
+                "scientific_name": "human gut metagenome",
+                "host_tax_id": "",
+                "host_scientific_name": "",
+                "instrument_platform": "ILLUMINA",
+                "instrument_model": "Illumina HiSeq 2500",
+                "location": "19.754234 S 30.156915 E",
+                "lat": "-19.754234",
+                "lon": "30.156915",
+            },
+            {
+                "run_accession": "ERR10889215",
+                "sample_accession": "SAMEA112437729",
+                "sample_title": "stool",
+                "secondary_sample_accession": "ERS14548039",
+                "fastq_md5": "4dd2c869a5870984af3147cd8c34cca2;edc7298b1598848a71583718ff54ba8d;2aeeea4a32fae3318baff8bc7b3bc70c",
+                "fastq_ftp": "ftp.sra.ebi.ac.uk/vol1/fastq/ERR108/014/ERR10889214/ERR10889214.fastq.gz;ftp.sra.ebi.ac.uk/vol1/fastq/ERR108/014/ERR10889214/ERR10889214_1.fastq.gz;ftp.sra.ebi.ac.uk/vol1/fastq/ERR108/014/ERR10889214/ERR10889214_2.fastq.gz",
+                "library_layout": "PAIRED",
+                "library_strategy": "WGS",
+                "library_source": "METAGENOMIC",
+                "scientific_name": "human gut metagenome",
+                "host_tax_id": "",
+                "host_scientific_name": "",
+                "instrument_platform": "ILLUMINA",
+                "instrument_model": "Illumina HiSeq 2500",
+                "location": "19.754234 S 30.156915 E",
+                "lat": "-19.754234",
+                "lon": "30.156915",
+            },
+            {
+                "run_accession": "ERR10889222",
+                "sample_accession": "SAMEA112437721",
+                "sample_title": "stool",
+                "secondary_sample_accession": "ERS14548031",
+                "fastq_md5": "700d1ace4b6142dd32935039fb457618;3afa250c864c960324d424c523673f5f;a585727360a76bb22a948c30c5c41dd1",
+                "fastq_ftp": "ftp.sra.ebi.ac.uk/vol1/fastq/ERR108/021/ERR10889221/ERR10889221.fastq.gz;ftp.sra.ebi.ac.uk/vol1/fastq/ERR108/021/ERR10889221/ERR10889221_1.fastq.gz;ftp.sra.ebi.ac.uk/vol1/fastq/ERR108/021/ERR10889221/ERR10889221_2.fastq.gz",
+                "library_layout": "PAIRED",
+                "library_strategy": "WGS",
+                "library_source": "METAGENOMIC",
+                "scientific_name": "human gut metagenome",
+                "host_tax_id": "",
+                "host_scientific_name": "",
+                "instrument_platform": "ILLUMINA",
+                "instrument_model": "Illumina HiSeq 2500",
+                "location": "19.754234 S 30.156915 E",
+                "lat": "-19.754234",
+                "lon": "30.156915",
+            },
+        ],
+        is_reusable=True,
+        is_optional=True,
+    )
+
+    # create fake results
+    summary_folder = Path(
+        f"{EMG_CONFIG.slurm.default_workdir}/raw-reads/{study_accession}"
+    )
+    summary_folder.mkdir(exist_ok=True, parents=True)
+    generate_fake_rawreads_pipeline_summary_results(summary_folder)
+
+    rawreads_folder = Path(
+        f"{EMG_CONFIG.slurm.default_workdir}/raw-reads/{study_accession}/xyz789"
+    )
+    rawreads_folder.mkdir(exist_ok=True, parents=True)
+
+    # Create CSV files for completed and failed assemblies
+    with open(
+        f"{rawreads_folder}/{EMG_CONFIG.rawreads_pipeline.completed_runs_csv}",
+        "w",
+    ) as file:
+        for r in all_results:
+            file.write(f"{r},all_results" + "\n")
+
+    # Generate fake pipeline results for the successful raw-reads run
+    for r in all_results:
+        generate_fake_rawreads_pipeline_results(rawreads_folder, r)
+
+    # Pretend that a human resumed the flow with the biome picker
+    BiomeChoices = Enum("BiomeChoices", {"root.engineered": "Root:Engineered"})
+    UserChoices = get_users_as_choices()
+
+    class AnalyseStudyInput(BaseModel):
+        biome: BiomeChoices
+        watchers: List[UserChoices]
+        library_strategy_policy: Optional[ENALibraryStrategyPolicy]
+        webin_owner: Optional[str]
+
+    def suspend_side_effect(wait_for_input=None):
+        if wait_for_input.__name__ == "AnalyseStudyInput":
+            return AnalyseStudyInput(
+                biome=BiomeChoices["root.engineered"],
+                watchers=[UserChoices[admin_user.username]],
+                library_strategy_policy=ENALibraryStrategyPolicy.ONLY_IF_CORRECT_IN_ENA,
+                webin_owner=None,
+            )
+
+    mock_suspend_flow_run.side_effect = suspend_side_effect
+
+    # RUN MAIN FLOW
+    analysis_rawreads_study(study_accession=study_accession)
+
+    mock_start_cluster_job.assert_called()
+    mock_check_cluster_job_all_completed.assert_called()
+    mock_suspend_flow_run.assert_called()
+
+    # Check samplesheet
+    samplesheet_table = Artifact.get("rawreads-v6-initial-sample-sheet")
+    assert samplesheet_table.type == "table"
+    table_data = json.loads(samplesheet_table.data)
+    assert len(table_data) == len(all_results)
+    assert table_data[0]["sample"] in all_results
+
+    # check biome and watchers were set correctly
+    study = analyses.models.Study.objects.get_or_create_for_ena_study(study_accession)
+    assert study.biome.biome_name == "Engineered"
+    assert admin_user == study.watchers.first()
+
+    # Check that the study has v6 analyses
+    study.refresh_from_db()
+    assert study.features.has_v6_analyses
+
+    # Check all analyses were added to database
+    assert (
+        sum(
+            [
+                analyses.models.Analysis.objects.filter(
+                    run__ena_accessions__contains=[r]
+                ).count()
+                for r in all_results
+            ]
+        )
+        == 4
+    )
+
+    # check completed runs (all runs in completed list - might contain sanity check not passed as well)
+    assert study.analyses.filter(status__analysis_completed=True).count() == 4
+
+    assert (
+        study.analyses.filter(status__analysis_completed_reason="all_results").count()
+        == 4
+    )
+
+    # Check taxonomic and functional annotations
+    analysis_which_should_have_annotations_imported: analyses.models.Analysis = (
+        analyses.models.Analysis.objects_and_annotations.get(
+            run__ena_accessions__contains=[all_results[0]]
+        )
+    )
+
+    assert (
+        analyses.models.Analysis.TAXONOMIES
+        in analysis_which_should_have_annotations_imported.annotations
+    )
+    assert (
+        analyses.models.Analysis.TaxonomySources.SSU
+        in analysis_which_should_have_annotations_imported.annotations[
+            analyses.models.Analysis.TAXONOMIES
+        ]
+    )
+    assert (
+        analyses.models.Analysis.TaxonomySources.LSU
+        in analysis_which_should_have_annotations_imported.annotations[
+            analyses.models.Analysis.TAXONOMIES
+        ]
+    )
+    assert (
+        analyses.models.Analysis.TaxonomySources.MOTUS
+        in analysis_which_should_have_annotations_imported.annotations[
+            analyses.models.Analysis.TAXONOMIES
+        ]
+    )
+    test_annotation = analysis_which_should_have_annotations_imported.annotations[
+        analyses.models.Analysis.TAXONOMIES
+    ][analyses.models.Analysis.TaxonomySources.SSU]
+    assert len(test_annotation) == 17
+    assert (
+        test_annotation[4]["organism"]
+        == "sk__Bacteria;k__;p__Actinomycetota;c__Actinomycetes;o__Bifidobacteriales;f__Bifidobacteriaceae;g__Bifidobacterium;s__Bifidobacterium_breve"
+    )
+    test_annotation = analysis_which_should_have_annotations_imported.annotations[
+        analyses.models.Analysis.TAXONOMIES
+    ][analyses.models.Analysis.TaxonomySources.LSU]
+    assert len(test_annotation) == 10
+    assert (
+        test_annotation[1]["organism"]
+        == "sk__Bacteria;k__;p__Bacillota;c__Bacilli;o__Lactobacillales;f__Streptococcaceae;g__Streptococcus;s__Streptococcus_pneumoniae"
+    )
+    test_annotation = analysis_which_should_have_annotations_imported.annotations[
+        analyses.models.Analysis.TAXONOMIES
+    ][analyses.models.Analysis.TaxonomySources.MOTUS]
+    assert len(test_annotation) == 4
+    assert (
+        test_annotation[0]["organism"]
+        == "k__Bacteria;p__Firmicutes;c__Bacilli;o__Lactobacillales;f__Lactobacillaceae;g__Lactobacillus;s__Lactobacillus gasseri"
+    )
+
+    assert (
+        analyses.models.Analysis.FUNCTIONAL_ANNOTATION
+        in analysis_which_should_have_annotations_imported.annotations
+    )
+    assert (
+        analyses.models.Analysis.FunctionalSources.PFAM
+        in analysis_which_should_have_annotations_imported.annotations[
+            analyses.models.Analysis.FUNCTIONAL_ANNOTATION
+        ]
+    )
+    test_annotation = analysis_which_should_have_annotations_imported.annotations[
+        analyses.models.Analysis.FUNCTIONAL_ANNOTATION
+    ][analyses.models.Analysis.FunctionalSources.PFAM]
+    assert len(test_annotation["read_count"]) == 63
+    assert test_annotation["read_count"][2]["function"] == "PF17802.7"
+    assert test_annotation["coverage_depth"][1]["coverage_depth"] == 0.926829268292683
+    assert (
+        test_annotation["coverage_breadth"][3]["coverage_breadth"] == 0.7142857142857143
+    )
+
+    # Check files
+    workdir = Path(f"{EMG_CONFIG.slurm.default_workdir}/{study_accession}")
+    assert workdir.is_dir()
+    assert study.external_results_dir == f"{study_accession[:-3]}/{study_accession}"
+
+    # Check summaries
+    Directory(
+        path=study.results_dir,
+        glob_rules=[
+            GlobHasFilesCountRule[12]
+        ],  # 5 for the samplesheet, same 5 for the "merge" (only 5 here, unlike public test, which has different hypervar regions)
+    )
+
+    with (workdir / "xyz789_motus_study_summary.tsv").open("r") as summary:
+        lines = summary.readlines()
+        assert (
+            lines[0] == "taxonomy\tERR10889189\tERR10889198\tERR10889215\tERR10889222\n"
+        )
+        assert (
+            lines[1]
+            == "k__Bacteria;p__Actinobacteria;c__Actinobacteria;o__Bifidobacteriales;f__Bifidobacteriaceae;g__Bifidobacterium;s__Bifidobacterium longum [Bifidobacterium longum CAG:69/Bifidobacterium longum]\t2\t2\t2\t2\n"
+        )
+        assert "g__Lactobacillus" in lines[-2]
+
+    # manually remove the merged study summaries
+    for file in Path(study.results_dir).glob(f"{study.first_accession}*"):
+        file.unlink()
+
+    # test merging of study summaries again, with cleanup disabled
+    merge_study_summaries(
+        mgnify_study_accession=study.accession,
+        cleanup_partials=False,
+        analysis_type="rawreads",
+    )
+    Directory(
+        path=study.results_dir,
+        glob_rules=[
+            GlobHasFilesCountRule[
+                12
+            ],  # study ones generated, and partials left in place
+            GlobRule(
+                rule_name="All study level files are present",
+                glob_patten=f"{study.first_accession}*{STUDY_SUMMARY_TSV}",
+                test=lambda f: len(list(f)) == 6,
+            ),
+        ],
+    )
+
+    study.refresh_from_db()
+    assert len(study.downloads_as_objects) == 6
+
+    # test merging of study summaries again – expect default bludgeon should overwrite the existing ones
+    logged_run = run_flow_and_capture_logs(
+        merge_study_summaries,
+        mgnify_study_accession=study.accession,
+        cleanup_partials=True,
+        analysis_type="rawreads",
+    )
+    assert (
+        logged_run.logs.count(
+            f"Deleting {str(Path(study.results_dir) / study.first_accession)}"
+        )
+        == 6
+    )
+    Directory(
+        path=study.results_dir,
+        glob_rules=[
+            GlobHasFilesCountRule[12],  # partials deleted, just merged ones
+            GlobRule(
+                rule_name="All files are study level",
+                glob_patten=f"{study.first_accession}*{STUDY_SUMMARY_TSV}",
+                test=lambda f: len(list(f)) == 6,
+            ),
+        ],
+    )
+
+    study.refresh_from_db()
+    assert len(study.downloads_as_objects) == 6
+    assert study.features.has_v6_analyses
+
+
+@pytest.mark.httpx_mock(should_mock=should_not_mock_httpx_requests_to_prefect_server)
+@pytest.mark.django_db(transaction=True)
+@patch(
+    "workflows.flows.analyse_study_tasks.raw_reads.make_samplesheet_rawreads.queryset_hash"
+)
+@patch(
+    "workflows.data_io_utils.mgnify_v6_utils.rawreads.FileIsNotEmptyRule",
+    MockFileIsNotEmptyRule,
+)
+@patch(
+    "workflows.flows.analyse_study_tasks.shared.copy_v6_pipeline_results.run_deployment"
+)
+@pytest.mark.parametrize(
+    "mock_suspend_flow_run", ["workflows.flows.analysis_rawreads_study"], indirect=True
+)
+def test_prefect_analyse_rawreads_flow_private_data(
+    mock_run_deployment,
+    mock_queryset_hash_for_rawreads,
+    prefect_harness,
+    httpx_mock,
+    ena_any_sample_metadata,
+    mock_cluster_can_accept_jobs_yes,
+    mock_start_cluster_job,
+    mock_check_cluster_job_all_completed,
+    raw_read_ena_study,
+    mock_suspend_flow_run,
+    admin_user,
+    top_level_biomes,
+):
+    """
+    Test should create/get ENA and MGnify study into DB.
+    Create analysis for assembly runs and launch it with samplesheet.
+    One assembly has all results, one assembly failed
+    """
+    # Mock run_deployment to prevent actual deployment execution
+    mock_run_deployment.return_value = Mock(id="mock-flow-run-id")
+
+    os.environ["USER"] = "testuser"
+    mock_queryset_hash_for_rawreads.return_value = "abc123"
+
+    study_accession = "ERP136383"
+    all_results = ["ERR10889188", "ERR10889197", "ERR10889214", "ERR10889221"]
+
+    # mock ENA response
+    httpx_mock.add_response(
+        url=f"{EMG_CONFIG.ena.portal_search_api}?"
+        f"result=study"
+        f"&query=%22%28study_accession%3D{study_accession}+OR+secondary_study_accession%3D{study_accession}%29%22"
+        f"&fields=study_title%2Cstudy_description%2Ccenter_name%2Csecondary_study_accession%2Cstudy_name"
+        f"&limit=10"
+        f"&format=json"
+        f"&dataPortal=metagenome",
+        match_headers={
+            "Authorization": "Basic ZGNjX2Zha2U6bm90LWEtZGNjLXB3"
+        },  # dcc_fake:not-a-dcc-pw
+        json=[
+            {
+                "study_accession": study_accession,
+                "secondary_study_accession": study_accession,
+                "study_title": "Infant stool metagenomic datasets",
+            },
+        ],
+        is_reusable=True,
+        is_optional=True,
+    )
+    httpx_mock.add_response(
+        url=f"{EMG_CONFIG.ena.portal_search_api}?"
+        f"result=study"
+        f"&query=%22%28study_accession%3D{study_accession}+OR+secondary_study_accession%3D{study_accession}%29%22"
+        f"&fields=study_title%2Cstudy_description%2Ccenter_name%2Csecondary_study_accession%2Cstudy_name"
+        f"&limit=10"
+        f"&format=json"
+        f"&dataPortal=metagenome",
+        match_headers={},  # public call should not find private study
+        json=[],
+        is_reusable=True,
+        is_optional=True,
+    )
+
+    httpx_mock.add_response(
+        url=f"{EMG_CONFIG.ena.portal_search_api}?"
+        f"result=study"
+        f"&query=%22%28study_accession%3D{study_accession}+OR+secondary_study_accession%3D{study_accession}%29%22"
+        f"&fields=study_accession"
+        f"&limit="
+        f"&format=json"
+        f"&dataPortal=metagenome",
+        match_headers={
+            "Authorization": "Basic ZGNjX2Zha2U6bm90LWEtZGNjLXB3"
+        },  # dcc_fake:not-a-dcc-pw
+        json=[{"study_accession": study_accession}],
+        is_reusable=True,
+        is_optional=True,
+    )
+    httpx_mock.add_response(
+        url=f"{EMG_CONFIG.ena.portal_search_api}?"
+        f"result=study"
+        f"&query=%22%28study_accession%3D{study_accession}+OR+secondary_study_accession%3D{study_accession}%29%22"
+        f"&fields=study_accession"
+        f"&limit="
+        f"&format=json"
+        f"&dataPortal=metagenome",
+        match_headers={},  # public call should not find private study
+        json=[],
+        is_reusable=True,
+        is_optional=True,
+    )
+
+    httpx_mock.add_response(
+        url=f"{EMG_CONFIG.ena.portal_search_api}?"
+        f"result=read_run"
+        f"&query=%22%28%28study_accession={study_accession}+OR+secondary_study_accession={study_accession}%29%20AND%20library_strategy=WGS%29%22"
+        f"&limit=10000"
+        f"&format=json"
+        f"&fields=run_accession%2Csample_accession%2Csample_title%2Csecondary_sample_accession%2Cfastq_md5%2Cfastq_ftp%2Clibrary_layout%2Clibrary_strategy%2Clibrary_source%2Cscientific_name%2Chost_tax_id%2Chost_scientific_name%2Cinstrument_platform%2Cinstrument_model%2Clocation%2Clat%2Clon"
+        f"&dataPortal=metagenome",
+        match_headers={
+            "Authorization": "Basic ZGNjX2Zha2U6bm90LWEtZGNjLXB3"
+        },  # dcc_fake:not-a-dcc-pw
         json=[
             {
                 "run_accession": "ERR10889188",
@@ -504,12 +956,14 @@ def test_prefect_analyse_rawreads_flow(
     )
 
     # create fake results
-    summary_folder = Path(f"{EMG_CONFIG.slurm.default_workdir}/{study_accession}_v6")
+    summary_folder = Path(
+        f"{EMG_CONFIG.slurm.default_workdir}/raw-reads/{study_accession}"
+    )
     summary_folder.mkdir(exist_ok=True, parents=True)
     generate_fake_rawreads_pipeline_summary_results(summary_folder)
 
     rawreads_folder = Path(
-        f"{EMG_CONFIG.slurm.default_workdir}/{study_accession}_rawreads/abc123"
+        f"{EMG_CONFIG.slurm.default_workdir}/raw-reads/{study_accession}/abc123"
     )
     rawreads_folder.mkdir(exist_ok=True, parents=True)
 
@@ -533,6 +987,7 @@ def test_prefect_analyse_rawreads_flow(
         biome: BiomeChoices
         watchers: List[UserChoices]
         library_strategy_policy: Optional[ENALibraryStrategyPolicy]
+        webin_owner: Optional[str]
 
     def suspend_side_effect(wait_for_input=None):
         if wait_for_input.__name__ == "AnalyseStudyInput":
@@ -540,6 +995,7 @@ def test_prefect_analyse_rawreads_flow(
                 biome=BiomeChoices["root.engineered"],
                 watchers=[UserChoices[admin_user.username]],
                 library_strategy_policy=ENALibraryStrategyPolicy.ONLY_IF_CORRECT_IN_ENA,
+                webin_owner="webin-1",
             )
 
     mock_suspend_flow_run.side_effect = suspend_side_effect
@@ -648,8 +1104,6 @@ def test_prefect_analyse_rawreads_flow(
         analyses.models.Analysis.FUNCTIONAL_ANNOTATION
     ][analyses.models.Analysis.FunctionalSources.PFAM]
     assert len(test_annotation["read_count"]) == 63
-    logger = logging.getLogger("test_logger")
-    logger.info(test_annotation)
     assert test_annotation["read_count"][2]["function"] == "PF17802.7"
     assert test_annotation["coverage_depth"][1]["coverage_depth"] == 0.926829268292683
     assert (
@@ -657,6 +1111,106 @@ def test_prefect_analyse_rawreads_flow(
     )
 
     # Check files
-    workdir = Path(f"{EMG_CONFIG.slurm.default_workdir}/{study_accession}_v6")
+    workdir = Path(f"{EMG_CONFIG.slurm.default_workdir}/{study_accession}")
     assert workdir.is_dir()
     assert study.external_results_dir == f"{study_accession[:-3]}/{study_accession}"
+
+    # Check summaries
+    Directory(
+        path=study.results_dir,
+        glob_rules=[
+            GlobHasFilesCountRule[12]
+        ],  # 5 for the samplesheet, same 5 for the "merge" (only 5 here, unlike public test, which has different hypervar regions)
+    )
+
+    with (workdir / "abc123_motus_study_summary.tsv").open("r") as summary:
+        lines = summary.readlines()
+        assert (
+            lines[0] == "taxonomy\tERR10889188\tERR10889197\tERR10889214\tERR10889221\n"
+        )
+        assert (
+            lines[1]
+            == "k__Bacteria;p__Actinobacteria;c__Actinobacteria;o__Bifidobacteriales;f__Bifidobacteriaceae;g__Bifidobacterium;s__Bifidobacterium longum [Bifidobacterium longum CAG:69/Bifidobacterium longum]\t2\t2\t2\t2\n"
+        )
+        assert "g__Lactobacillus" in lines[-2]
+
+    # manually remove the merged study summaries
+    for file in Path(study.results_dir).glob(f"{study.first_accession}*"):
+        file.unlink()
+
+    # test merging of study summaries again, with cleanup disabled
+    merge_study_summaries(
+        mgnify_study_accession=study.accession,
+        cleanup_partials=False,
+        analysis_type="rawreads",
+    )
+    Directory(
+        path=study.results_dir,
+        glob_rules=[
+            GlobHasFilesCountRule[
+                12
+            ],  # study ones generated, and partials left in place
+            GlobRule(
+                rule_name="All study level files are present",
+                glob_patten=f"{study.first_accession}*{STUDY_SUMMARY_TSV}",
+                test=lambda f: len(list(f)) == 6,
+            ),
+        ],
+    )
+
+    study.refresh_from_db()
+    assert len(study.downloads_as_objects) == 6
+
+    # test merging of study summaries again – expect default bludgeon should overwrite the existing ones
+    logged_run = run_flow_and_capture_logs(
+        merge_study_summaries,
+        mgnify_study_accession=study.accession,
+        cleanup_partials=True,
+        analysis_type="rawreads",
+    )
+    assert (
+        logged_run.logs.count(
+            f"Deleting {str(Path(study.results_dir) / study.first_accession)}"
+        )
+        == 6
+    )
+    Directory(
+        path=study.results_dir,
+        glob_rules=[
+            GlobHasFilesCountRule[12],  # partials deleted, just merged ones
+            GlobRule(
+                rule_name="All files are study level",
+                glob_patten=f"{study.first_accession}*{STUDY_SUMMARY_TSV}",
+                test=lambda f: len(list(f)) == 6,
+            ),
+        ],
+    )
+
+    study.refresh_from_db()
+    assert len(study.downloads_as_objects) == 6
+    assert study.features.has_v6_analyses
+
+    assert study.is_private
+    assert study.analyses.filter(is_private=True).count() == 4
+    assert study.analyses.exclude(is_private=True).count() == 0
+    assert study.runs.filter(is_private=True).count() == 4
+    assert study.runs.exclude(is_private=True).count() == 0
+
+    # Verify run_deployment was called for move operation with private results dir
+    assert (
+        mock_run_deployment.called
+    ), "run_deployment should be called for move operation"
+
+    # Check that at least one call used the private results directory
+    move_to_private_found = False
+    for call in mock_run_deployment.call_args_list:
+        args, kwargs = call
+        if "parameters" in kwargs and "target" in kwargs["parameters"]:
+            target = kwargs["parameters"]["target"]
+            if EMG_CONFIG.slurm.private_results_dir in target:
+                move_to_private_found = True
+                break
+
+    assert (
+        move_to_private_found
+    ), "No move operation found targeting private results directory"
