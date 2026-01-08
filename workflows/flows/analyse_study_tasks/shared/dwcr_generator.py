@@ -44,7 +44,7 @@ def generate_dwc_ready_summary_for_pipeline_run(
         f"Generating Darwin Core Ready (DwC-R) summary files for a pipeline execution of study {mgnify_study_accession}"
     )
     results_dir = Directory(
-        path=Path("/".join(str(pipeline_outdir).split("/")[:-1])),
+        path=pipeline_outdir,
         rules=[DirectoryExistsRule],
     )
     results_dir.files.append(
