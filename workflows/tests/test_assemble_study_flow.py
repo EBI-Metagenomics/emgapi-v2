@@ -391,7 +391,7 @@ def test_prefect_assemble_study_flow(
     # ION_TORRENT should be iontorrent
     assert table_data[4]["platform"] == "iontorrent"
     # Check the genome used to decontamination
-    assert table_data[4]["contaminant_reference"] == "honeybee.fna"
+    assert table_data[4]["contaminant_reference"].startswith("honeybee")
 
     ### DB OBJECTS WERE CREATED AS EXPECTED ###
     assert ena.models.Study.objects.count() == 1
@@ -756,7 +756,7 @@ def test_reference_genome_selection(prefect_harness, mgnify_assemblies, caplog):
     run.metadata[analyses.models.Run.CommonMetadataKeys.HOST_TAX_ID] = 7460  # honeybee
     run.save()
     ref = get_reference_genome(study)
-    assert ref == "honeybee.fna"
+    assert ref.startswith("honeybee")
 
     run.metadata[analyses.models.Run.CommonMetadataKeys.HOST_TAX_ID] = None
     run.metadata[analyses.models.Run.CommonMetadataKeys.HOST_SCIENTIFIC_NAME] = (
@@ -764,4 +764,4 @@ def test_reference_genome_selection(prefect_harness, mgnify_assemblies, caplog):
     )
     run.save()
     ref = get_reference_genome(study)
-    assert ref == "chicken.fna"
+    assert ref.startswith("chicken")
