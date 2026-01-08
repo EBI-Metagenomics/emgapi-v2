@@ -20,6 +20,7 @@ from workflows.ena_utils.ena_api_requests import ENALibraryStrategyPolicy
 from workflows.flows.analyse_study_tasks.shared.study_summary import (
     merge_study_summaries,
     STUDY_SUMMARY_TSV,
+    DWCREADY_CSV,
 )
 from workflows.flows.analysis_amplicon_study import analysis_amplicon_study
 from workflows.prefect_utils.testing_utils import (
@@ -907,6 +908,19 @@ def test_prefect_analyse_amplicon_flow(
     study.refresh_from_db()
     assert len(study.downloads_as_objects) == 6
     assert study.features.has_v6_analyses
+
+    # TODO: once DwCr tasks are implemented some more files should exist here
+    Directory(
+        path=study.results_dir,
+        glob_rules=[
+            GlobHasFilesCountRule[6 + 0],  # currently only study summaries, no DwCr
+            GlobRule(
+                rule_name="DwC Ready files are present",
+                glob_patten=f"{study.first_accession}*{DWCREADY_CSV}",
+                test=lambda f: len(list(f)) == 0,
+            ),
+        ],
+    )
 
 
 @pytest.mark.flaky(
