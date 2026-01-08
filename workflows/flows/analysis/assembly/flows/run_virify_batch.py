@@ -25,7 +25,7 @@ from workflows.flows.analysis.assembly.utils.status_update_hooks import (
 
 
 @flow(
-    name="Run the VIRify pipeline batch",
+    flow_run_name="Run VIRify Batch: {assembly_analyses_batch_id}",
     on_running=[update_batch_status_counts],
     on_completion=[update_batch_status_counts],
     on_failure=[update_batch_status_counts],

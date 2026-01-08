@@ -14,6 +14,7 @@ from workflows.prefect_utils.slurm_flow import ClusterJobFailedException
 
 
 @pytest.mark.django_db(transaction=True)
+@patch("workflows.flows.analysis.assembly.flows.run_map_batch.import_map_batch")
 @patch("workflows.flows.analysis.assembly.flows.run_map_batch.make_samplesheet_for_map")
 @patch("workflows.flows.analysis.assembly.flows.run_map_batch.flow_run")
 @patch("workflows.flows.analysis.assembly.flows.run_map_batch.run_cluster_job")
@@ -21,6 +22,7 @@ def test_run_map_batch_success(
     mock_run_cluster_job,
     mock_flow_run,
     mock_make_samplesheet,
+    mock_import_map_batch,
     prefect_harness,
     raw_reads_mgnify_study,
     raw_reads_mgnify_sample,
@@ -69,8 +71,9 @@ def test_run_map_batch_success(
     # Call the flow function
     run_map_batch(assembly_analyses_batch_id=batch.id)
 
-    # Verify that the cluster job was run
+    # Asserts methods are called
     mock_run_cluster_job.assert_called_once()
+    mock_import_map_batch.assert_called_once()
 
     # Verify that the batch state was updated to COMPLETED
     batch.refresh_from_db()

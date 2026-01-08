@@ -1,6 +1,8 @@
 from prefect import flow, get_run_logger
 from prefect.flow_engine import load_flow_run
 
+from activate_django_first import EMG_CONFIG  # noqa
+
 import analyses.models
 import workflows.models
 from workflows.flows.analyse_study_tasks.shared.copy_v6_pipeline_results import (
@@ -44,7 +46,7 @@ def finalize_assembly_study(study_accession: str):
     # Check if all batches are complete
     batches = workflows.models.AssemblyAnalysisBatch.objects.filter(
         study=mgnify_study,
-        pipeline_versions__in=[analyses.models.Analysis.PipelineVersions.v6],
+        pipeline_versions__contains=analyses.models.Analysis.PipelineVersions.v6,
     )
 
     logger.info(f"Found {batches.count()} batches for study {study_accession}")
@@ -55,16 +57,12 @@ def finalize_assembly_study(study_accession: str):
         # Each batch has 3 potential flows: aca, virify and map.
         # This is a blunt approach of fetching those flows and making sure they are not running
         flow_ids = [
-            batch.aca_flow_run_id,
+            batch.asa_flow_run_id,
             batch.virify_flow_run_id,
             batch.map_flow_run_id,
         ]
         for flow_id in flow_ids:
-            if flow_id is None:
-                logger.error(f"Flow ID {flow_id} is None. Skipping...")
-
             try:
-                load_flow_run(flow_id)
                 if load_flow_run(flow_id).is_running():
                     incomplete_count += 1
                     break
@@ -99,7 +97,6 @@ def finalize_assembly_study(study_accession: str):
 
     mgnify_study.refresh_from_db()
 
-    # Sanity check
     mgnify_study.features.has_v6_analyses = mgnify_study.analyses.filter(
         pipeline_version=analyses.models.Analysis.PipelineVersions.v6, is_ready=True
     ).exists()

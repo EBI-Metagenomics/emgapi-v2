@@ -9,6 +9,7 @@ from prefect.runtime import flow_run
 from activate_django_first import EMG_CONFIG
 
 from analyses.models import Study
+from workflows.flows.analysis.assembly.flows.import_map_batch import import_map_batch
 from workflows.flows.analysis.assembly.tasks.make_samplesheet_assembly import (
     make_samplesheet_for_map,
 )
@@ -29,7 +30,7 @@ from workflows.flows.analysis.assembly.utils.status_update_hooks import (
 
 
 @flow(
-    name="Run MAP pipeline batch",
+    flow_run_name="Run MAP Batch: {assembly_analyses_batch_id}",
     on_running=[update_batch_status_counts],
     on_completion=[update_batch_status_counts],
     on_failure=[update_batch_status_counts],
@@ -200,15 +201,21 @@ def run_map_batch(assembly_analyses_batch_id: uuid.UUID):
         assembly_analysis_batch.batch_analyses.filter(
             map_status=AssemblyAnalysisPipelineStatus.RUNNING
         ).update(map_status=AssemblyAnalysisPipelineStatus.FAILED)
-    else:
-        logger.info("MAP pipeline completed successfully")
+        return
 
-        # Mark only RUNNING analyses as MAP completed (don't overwrite already-COMPLETED ones)
-        completed_count = assembly_analysis_batch.batch_analyses.filter(
-            map_status=AssemblyAnalysisPipelineStatus.RUNNING
-        ).update(map_status=AssemblyAnalysisPipelineStatus.COMPLETED)
+    logger.info("MAP pipeline completed successfully")
 
-        logger.info(
-            f"Marked {completed_count} analyses as MAP completed "
-            f"(out of {assembly_analysis_batch.total_analyses} total)"
-        )
+    # Mark only RUNNING analyses as MAP completed (don't overwrite already-COMPLETED ones)
+    completed_count = assembly_analysis_batch.batch_analyses.filter(
+        map_status=AssemblyAnalysisPipelineStatus.RUNNING
+    ).update(map_status=AssemblyAnalysisPipelineStatus.COMPLETED)
+
+    logger.info(
+        f"Marked {completed_count} analyses as MAP completed "
+        f"(out of {assembly_analysis_batch.total_analyses} total)"
+    )
+
+    ##################
+    # Import results #
+    ##################
+    import_map_batch(assembly_analyses_batch_id=assembly_analysis_batch.id)
