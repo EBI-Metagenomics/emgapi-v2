@@ -157,10 +157,7 @@ fileignoreconfig:
   checksum: ac644b851d31913ca9328d5a83516146c4c76874201df0a2d7086df6b60435c8
 
 - filename: workflows/tests/test_analysis_rawreads_study_flow.py
-  checksum: 2f0b8ca1ad6048a7a306a5e884f9f96e1c3d87b2da9457cac16a98f8a27ef767
-
-- filename: workflows/tests/test_analysis_rawreads_study_flow.py
-  checksum: b9fad76ff7a839ac5f88a1aabd5a1c4009db9ac3ed6a6c40c42bd88cc1d1c8b0
+  checksum: 0f7255bdd7303269337a7d9be17d5246bfc32980697ba4135f54be201d13180a
 
 - filename: workflows/tests/test_analysis_rawreads_study_flow.py
   checksum: 4026282a93009d95525cde6ef6cab4664fcbf8e85e7339df2f8add8c36db36f3

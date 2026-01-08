@@ -18,6 +18,7 @@ from analyses.admin.base import (
     StudyFilter,
     TabularInlinePaginatedWithTabSupport,
 )
+from analyses.admin.publication import StudyPublicationInline
 from workflows.models import AssemblyAnalysisPipelineStatus
 from analyses.models import Analysis, Assembly, Run, Study
 from emgapiv2.widgets import StatusPathwayWidget
@@ -107,9 +108,18 @@ class StudyReadsInline(TabularInlinePaginatedWithTabSupport):
     }
 
 
+class _StudyPublicationInline(StudyPublicationInline):
+    verbose_name_plural = "Publications"
+
+
 @admin.register(Study)
 class StudyAdmin(ENABrowserLinkMixin, JSONFieldWidgetOverridesMixin, ModelAdmin):
-    inlines = [StudyRunsInline, StudyAssembliesInline, StudyReadsInline]
+    inlines = [
+        StudyRunsInline,
+        StudyAssembliesInline,
+        StudyReadsInline,
+        _StudyPublicationInline,
+    ]
     list_display = ["accession", "updated_at", "title", "display_accessions"]
     list_filter = ["updated_at", "created_at", "is_private", "watchers"]
     filter_horizontal = ("watchers",)

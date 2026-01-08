@@ -56,6 +56,13 @@ HOST_TAXON_TO_REFERENCE_GENOME = {
     "Ovis aries": "sheep.fna",
     "Glycine max": "soybean.fna",
     "Danio rerio": "zebrafish.fna",
+    # Common un-"scientific" names
+    "Porcine": "pig.fna",
+    "Bovine": "cow.fna",
+    "Murine": "mouse.fna",
+    "Ovine": "sheep.fna",
+    "Galline": "chicken.fna",
+    "Apine": "honeybee.fna",
 }
 
 
