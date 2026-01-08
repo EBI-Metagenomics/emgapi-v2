@@ -5,9 +5,6 @@ fileignoreconfig:
 - filename: .github/workflows/release_k8s.yml
   checksum: 0e93196d244417801fd40ad6bfa01f53a6bf04257371378a1dc3e14cbc7a04d8
 
-- filename: workflows/tests/test_analysis_rawreads_study_flow.py
-  checksum: 0f7255bdd7303269337a7d9be17d5246bfc32980697ba4135f54be201d13180a
-
 - filename: analyses/base_models/base_models.py
   allowed_patterns: [key]
 
@@ -160,7 +157,7 @@ fileignoreconfig:
   checksum: ac644b851d31913ca9328d5a83516146c4c76874201df0a2d7086df6b60435c8
 
 - filename: workflows/tests/test_analysis_rawreads_study_flow.py
-  checksum: b9fad76ff7a839ac5f88a1aabd5a1c4009db9ac3ed6a6c40c42bd88cc1d1c8b0
+  checksum: 0f7255bdd7303269337a7d9be17d5246bfc32980697ba4135f54be201d13180a
 
 - filename: workflows/flows/upload_assembly.py
   allowed_patterns: [key]
