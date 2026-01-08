@@ -30,6 +30,7 @@ from workflows.ena_utils.ena_api_requests import (
     library_strategy_policy_to_filter,
     ENALibraryStrategyPolicy,
 )
+from workflows.ena_utils.webin_owner_utils import validate_and_set_webin_owner
 from workflows.flows.analyse_study_tasks.shared.study_summary import (
     merge_study_summaries,
     add_rawreads_study_summaries_to_downloads,
@@ -73,6 +74,11 @@ def analysis_rawreads_study(study_accession: str):
     mgnify_study.refresh_from_db()
     logger.info(f"MGnify study is {mgnify_study.accession}: {mgnify_study.title}")
 
+    if mgnify_study.is_private:
+        logger.info(f"{mgnify_study} is a private study.")
+    else:
+        logger.info(f"{mgnify_study} is a public study.")
+
     read_runs = get_study_readruns_from_ena(
         ena_study.accession,
         limit=10000,
@@ -96,6 +102,10 @@ def analysis_rawreads_study(study_accession: str):
             ENALibraryStrategyPolicy.ONLY_IF_CORRECT_IN_ENA,
             description="Optionally treat read-runs with incorrect library strategy metadata as raw-reads.",
         )
+        webin_owner: Optional[str] = Field(
+            None,
+            description="Webin ID of study owner, if data is private. Can be left as None, if public.",
+        )
 
     analyse_study_input: AnalyseStudyInput = suspend_flow_run(
         wait_for_input=AnalyseStudyInput.with_initial_data(
@@ -112,10 +122,23 @@ def analysis_rawreads_study(study_accession: str):
                 **Biome tagger**
                 Please select a Biome for the entire study \
                 [{ena_study.accession}: {ena_study.title}](https://www.ebi.ac.uk/ena/browser/view/{ena_study.accession}).
+
+                **Webin owner**
+                If the study is private, the webin account owner is needed so that the user can view the study they own.
                 """
             )
         )
     )
+
+    ena_study, __ = validate_and_set_webin_owner(
+        ena_study, analyse_study_input.webin_owner
+    )
+    mgnify_study.refresh_from_db()
+
+    if mgnify_study.is_private and not mgnify_study.webin_submitter:
+        raise ValueError(
+            f"Study {mgnify_study.accession} is private, but no webin owner was provided."
+        )
 
     if (
         analyse_study_input.library_strategy_policy
