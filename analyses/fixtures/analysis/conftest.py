@@ -172,6 +172,7 @@ def amplicon_analysis_with_downloads(
     )
     analysis.mark_status(analysis.AnalysisStates.ANALYSIS_COMPLETED)
 
+    analysis.pipeline_outdir = "/app/data/tests/amplicon_v6_output"
     analysis.results_dir = "/app/data/tests/amplicon_v6_output/SRR1111111"
     analysis.metadata[analysis.KnownMetadataKeys.MARKER_GENE_SUMMARY] = {
         analysis.CLOSED_REFERENCE: {

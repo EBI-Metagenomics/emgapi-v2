@@ -21,9 +21,8 @@ def test_dwcr_generator(
     prefect_harness,
     completed_runs_filename: str = EMG_CONFIG.amplicon_pipeline.completed_runs_csv,
 ):
-    # from "/app/data/tests/amplicon_v6_output/SRR1111111" to "/app/data/tests/amplicon_v6_output"
     amplicon_pipeline_outdir = pathlib.Path(
-        "/".join(str(amplicon_analysis_with_downloads.results_dir).split("/")[:-1])
+        amplicon_analysis_with_downloads.pipeline_outdir
     )
 
     mock_dict = defaultdict()
