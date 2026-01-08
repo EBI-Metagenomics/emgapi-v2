@@ -382,7 +382,6 @@ def test_prefect_analyse_rawreads_flow(
     # Mock run_deployment to prevent actual deployment execution
     mock_run_deployment.return_value = Mock(id="mock-flow-run-id")
 
-    os.environ["USER"] = "testuser"
     mock_queryset_hash_for_rawreads.return_value = "xyz789"
 
     study_accession = "ERP136384"
@@ -789,7 +788,6 @@ def test_prefect_analyse_rawreads_flow_private_data(
     # Mock run_deployment to prevent actual deployment execution
     mock_run_deployment.return_value = Mock(id="mock-flow-run-id")
 
-    os.environ["USER"] = "testuser"
     mock_queryset_hash_for_rawreads.return_value = "abc123"
 
     study_accession = "ERP136383"
