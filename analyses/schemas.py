@@ -275,6 +275,7 @@ class GenomeSchema(Schema):
     catalogue_version: Optional[str] = Field(
         None, description="Version of the genome catalogue"
     )
+    ena_genome_accession: Optional[str] = Field()
 
     @staticmethod
     def resolve_catalogue_version(obj) -> Optional[str]:
