@@ -511,14 +511,12 @@ def test_prefect_analyse_rawreads_flow(
     )
 
     # create fake results
-    summary_folder = Path(
-        f"{EMG_CONFIG.slurm.default_workdir}/raw-reads/{study_accession}"
-    )
+    summary_folder = Path(f"{EMG_CONFIG.slurm.default_workdir}/{study_accession}_v6")
     summary_folder.mkdir(exist_ok=True, parents=True)
     generate_fake_rawreads_pipeline_summary_results(summary_folder)
 
     rawreads_folder = Path(
-        f"{EMG_CONFIG.slurm.default_workdir}/raw-reads/{study_accession}/xyz789"
+        f"{EMG_CONFIG.slurm.default_workdir}/{study_accession}_rawreads/xyz789"
     )
     rawreads_folder.mkdir(exist_ok=True, parents=True)
 
@@ -674,7 +672,7 @@ def test_prefect_analyse_rawreads_flow(
     )
 
     # Check files
-    workdir = Path(f"{EMG_CONFIG.slurm.default_workdir}/{study_accession}")
+    workdir = Path(f"{EMG_CONFIG.slurm.default_workdir}/{study_accession}_v6")
     assert workdir.is_dir()
     assert study.external_results_dir == f"{study_accession[:-3]}/{study_accession}"
 
@@ -682,8 +680,8 @@ def test_prefect_analyse_rawreads_flow(
     Directory(
         path=study.results_dir,
         glob_rules=[
-            GlobHasFilesCountRule[12]
-        ],  # 5 for the samplesheet, same 5 for the "merge" (only 5 here, unlike public test, which has different hypervar regions)
+            GlobHasFilesCountRule[13]
+        ],  # 6 for the samplesheet, same 6 for the "merge", and 1 for the study multiqc
     )
 
     with (workdir / "xyz789_motus_study_summary.tsv").open("r") as summary:
@@ -711,7 +709,7 @@ def test_prefect_analyse_rawreads_flow(
         path=study.results_dir,
         glob_rules=[
             GlobHasFilesCountRule[
-                12
+                13
             ],  # study ones generated, and partials left in place
             GlobRule(
                 rule_name="All study level files are present",
@@ -740,7 +738,7 @@ def test_prefect_analyse_rawreads_flow(
     Directory(
         path=study.results_dir,
         glob_rules=[
-            GlobHasFilesCountRule[12],  # partials deleted, just merged ones
+            GlobHasFilesCountRule[13],  # partials deleted, just merged ones
             GlobRule(
                 rule_name="All files are study level",
                 glob_patten=f"{study.first_accession}*{STUDY_SUMMARY_TSV}",
@@ -956,14 +954,12 @@ def test_prefect_analyse_rawreads_flow_private_data(
     )
 
     # create fake results
-    summary_folder = Path(
-        f"{EMG_CONFIG.slurm.default_workdir}/raw-reads/{study_accession}"
-    )
+    summary_folder = Path(f"{EMG_CONFIG.slurm.default_workdir}/{study_accession}_v6")
     summary_folder.mkdir(exist_ok=True, parents=True)
     generate_fake_rawreads_pipeline_summary_results(summary_folder)
 
     rawreads_folder = Path(
-        f"{EMG_CONFIG.slurm.default_workdir}/raw-reads/{study_accession}/abc123"
+        f"{EMG_CONFIG.slurm.default_workdir}/{study_accession}_rawreads/abc123"
     )
     rawreads_folder.mkdir(exist_ok=True, parents=True)
 
@@ -1111,7 +1107,7 @@ def test_prefect_analyse_rawreads_flow_private_data(
     )
 
     # Check files
-    workdir = Path(f"{EMG_CONFIG.slurm.default_workdir}/{study_accession}")
+    workdir = Path(f"{EMG_CONFIG.slurm.default_workdir}/{study_accession}_v6")
     assert workdir.is_dir()
     assert study.external_results_dir == f"{study_accession[:-3]}/{study_accession}"
 
@@ -1119,8 +1115,8 @@ def test_prefect_analyse_rawreads_flow_private_data(
     Directory(
         path=study.results_dir,
         glob_rules=[
-            GlobHasFilesCountRule[12]
-        ],  # 5 for the samplesheet, same 5 for the "merge" (only 5 here, unlike public test, which has different hypervar regions)
+            GlobHasFilesCountRule[13]
+        ],  # 6 for the samplesheet, same 6 for the "merge", and 1 for the study multiqc
     )
 
     with (workdir / "abc123_motus_study_summary.tsv").open("r") as summary:
@@ -1148,7 +1144,7 @@ def test_prefect_analyse_rawreads_flow_private_data(
         path=study.results_dir,
         glob_rules=[
             GlobHasFilesCountRule[
-                12
+                13
             ],  # study ones generated, and partials left in place
             GlobRule(
                 rule_name="All study level files are present",
@@ -1177,7 +1173,7 @@ def test_prefect_analyse_rawreads_flow_private_data(
     Directory(
         path=study.results_dir,
         glob_rules=[
-            GlobHasFilesCountRule[12],  # partials deleted, just merged ones
+            GlobHasFilesCountRule[13],  # partials deleted, just merged ones
             GlobRule(
                 rule_name="All files are study level",
                 glob_patten=f"{study.first_accession}*{STUDY_SUMMARY_TSV}",
