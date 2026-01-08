@@ -17,14 +17,7 @@ import analyses.models
 from workflows.data_io_utils.file_rules.base_rules import FileRule, GlobRule
 from workflows.data_io_utils.file_rules.common_rules import GlobHasFilesCountRule
 from workflows.data_io_utils.file_rules.nodes import Directory
-from workflows.data_io_utils.file_rules.base_rules import FileRule, GlobRule
-from workflows.data_io_utils.file_rules.common_rules import GlobHasFilesCountRule
-from workflows.data_io_utils.file_rules.nodes import Directory
 from workflows.ena_utils.ena_api_requests import ENALibraryStrategyPolicy
-from workflows.flows.analyse_study_tasks.shared.study_summary import (
-    merge_study_summaries,
-    STUDY_SUMMARY_TSV,
-)
 from workflows.flows.analyse_study_tasks.shared.study_summary import (
     merge_study_summaries,
     STUDY_SUMMARY_TSV,
@@ -33,7 +26,6 @@ from workflows.flows.analysis_rawreads_study import analysis_rawreads_study
 from workflows.prefect_utils.analyses_models_helpers import get_users_as_choices
 from workflows.prefect_utils.testing_utils import (
     should_not_mock_httpx_requests_to_prefect_server,
-    run_flow_and_capture_logs,
     run_flow_and_capture_logs,
 )
 
@@ -817,9 +809,6 @@ def test_prefect_analyse_rawreads_flow_private_data(
         match_headers={
             "Authorization": "Basic ZGNjX2Zha2U6bm90LWEtZGNjLXB3"
         },  # dcc_fake:not-a-dcc-pw
-        match_headers={
-            "Authorization": "Basic ZGNjX2Zha2U6bm90LWEtZGNjLXB3"
-        },  # dcc_fake:not-a-dcc-pw
         json=[
             {
                 "study_accession": study_accession,
@@ -869,9 +858,6 @@ def test_prefect_analyse_rawreads_flow_private_data(
         match_headers={
             "Authorization": "Basic ZGNjX2Zha2U6bm90LWEtZGNjLXB3"
         },  # dcc_fake:not-a-dcc-pw
-        match_headers={
-            "Authorization": "Basic ZGNjX2Zha2U6bm90LWEtZGNjLXB3"
-        },  # dcc_fake:not-a-dcc-pw
         json=[{"study_accession": study_accession}],
         is_reusable=True,
         is_optional=True,
@@ -911,9 +897,6 @@ def test_prefect_analyse_rawreads_flow_private_data(
         f"&format=json"
         f"&fields=run_accession%2Csample_accession%2Csample_title%2Csecondary_sample_accession%2Cfastq_md5%2Cfastq_ftp%2Clibrary_layout%2Clibrary_strategy%2Clibrary_source%2Cscientific_name%2Chost_tax_id%2Chost_scientific_name%2Cinstrument_platform%2Cinstrument_model%2Clocation%2Clat%2Clon"
         f"&dataPortal=metagenome",
-        match_headers={
-            "Authorization": "Basic ZGNjX2Zha2U6bm90LWEtZGNjLXB3"
-        },  # dcc_fake:not-a-dcc-pw
         match_headers={
             "Authorization": "Basic ZGNjX2Zha2U6bm90LWEtZGNjLXB3"
         },  # dcc_fake:not-a-dcc-pw
@@ -1032,7 +1015,6 @@ def test_prefect_analyse_rawreads_flow_private_data(
         watchers: List[UserChoices]
         library_strategy_policy: Optional[ENALibraryStrategyPolicy]
         webin_owner: Optional[str]
-        webin_owner: Optional[str]
 
     def suspend_side_effect(wait_for_input=None):
         if wait_for_input.__name__ == "AnalyseStudyInput":
@@ -1040,7 +1022,6 @@ def test_prefect_analyse_rawreads_flow_private_data(
                 biome=BiomeChoices["root.engineered"],
                 watchers=[UserChoices[admin_user.username]],
                 library_strategy_policy=ENALibraryStrategyPolicy.ONLY_IF_CORRECT_IN_ENA,
-                webin_owner="webin-1",
                 webin_owner="webin-1",
             )
 
