@@ -74,6 +74,7 @@ def test_prefect_assemble_study_flow(
 ):
     ### ENA MOCKING ###
     accession = "SRP1"
+    study_accession = "PRJNA1"
     number_of_runs = 9
     number_not_assembled_runs = 1
 
@@ -100,7 +101,7 @@ def test_prefect_assemble_study_flow(
             {
                 "study_title": "Metagenome of a wookie",
                 "secondary_study_accession": "SRP1",
-                "study_accession": "PRJNA1",
+                "study_accession": f"{study_accession}",
             }
         ],
     )
@@ -120,7 +121,7 @@ def test_prefect_assemble_study_flow(
     httpx_mock.add_response(
         url=f"{EMG_CONFIG.ena.portal_search_api}?"
         f"result=read_run"
-        f"&query=%22%28study_accession=PRJNA1%20OR%20secondary_study_accession=PRJNA1%29%22"
+        f"&query=%22%28study_accession={study_accession}%20OR%20secondary_study_accession={study_accession}%29%22"
         f"&limit=5000"
         f"&format=json"
         f"&fields=run_accession%2Csample_accession%2Csample_title%2Csecondary_sample_accession%2Cfastq_md5%2Cfastq_ftp%2Clibrary_layout%2Clibrary_strategy%2Clibrary_source%2Cscientific_name%2Chost_tax_id%2Chost_scientific_name%2Cinstrument_platform%2Cinstrument_model%2Clocation%2Clat%2Clon"
@@ -313,10 +314,16 @@ def test_prefect_assemble_study_flow(
 
     mock_suspend_flow_run.side_effect = suspend_side_effect
 
-    mock_queryset_hash_for_assemblies.return_value = "abc123"
+    samplesheet_hash = "abc123"
+    mock_queryset_hash_for_assemblies.return_value = samplesheet_hash
 
-    assembly_folder = Path(
-        f"{EMG_CONFIG.slurm.default_workdir}/miassembler/PRJNA1/abc123"
+    assembly_folder = (
+        Path(f"{EMG_CONFIG.slurm.default_workdir}")
+        / Path(study_accession)
+        / Path(
+            f"{EMG_CONFIG.assembler.pipeline_name}_{EMG_CONFIG.assembler.pipeline_version}"
+        )
+        / Path(samplesheet_hash)
     )
     assembly_folder.mkdir(exist_ok=True, parents=True)
 
@@ -482,6 +489,7 @@ def test_prefect_assemble_private_study_flow(
 ):
     ### ENA MOCKING ###
     accession = "SRP1"
+    study_accession = "PRJNA1"
 
     httpx_mock.add_response(
         url=f"{EMG_CONFIG.ena.portal_search_api}?"
@@ -524,7 +532,7 @@ def test_prefect_assemble_private_study_flow(
             {
                 "study_title": "Metagenome of a wookie",
                 "secondary_study_accession": "SRP1",
-                "study_accession": "PRJNA1",
+                "study_accession": f"{study_accession}",
             }
         ],
     )
@@ -532,7 +540,7 @@ def test_prefect_assemble_private_study_flow(
     httpx_mock.add_response(
         url=f"{EMG_CONFIG.ena.portal_search_api}?"
         f"result=read_run"
-        f"&query=%22%28study_accession=PRJNA1%20OR%20secondary_study_accession=PRJNA1%29%22"
+        f"&query=%22%28study_accession={study_accession}%20OR%20secondary_study_accession={study_accession}%29%22"
         f"&limit=5000"
         f"&format=json"
         f"&fields=run_accession%2Csample_accession%2Csample_title%2Csecondary_sample_accession%2Cfastq_md5%2Cfastq_ftp%2Clibrary_layout%2Clibrary_strategy%2Clibrary_source%2Cscientific_name%2Chost_tax_id%2Chost_scientific_name%2Cinstrument_platform%2Cinstrument_model%2Clocation%2Clat%2Clon"
@@ -596,10 +604,16 @@ def test_prefect_assemble_private_study_flow(
 
     mock_suspend_flow_run.side_effect = suspend_side_effect
 
-    mock_queryset_hash_for_assemblies.return_value = "xyz789"
+    samplesheet_hash = "xyz789"
+    mock_queryset_hash_for_assemblies.return_value = samplesheet_hash
 
-    assembly_folder = Path(
-        f"{EMG_CONFIG.slurm.default_workdir}/miassembler/PRJNA1/xyz789"
+    assembly_folder = (
+        Path(f"{EMG_CONFIG.slurm.default_workdir}")
+        / Path(study_accession)
+        / Path(
+            f"{EMG_CONFIG.assembler.pipeline_name}_{EMG_CONFIG.assembler.pipeline_version}"
+        )
+        / Path(samplesheet_hash)
     )
     assembly_folder.mkdir(exist_ok=True, parents=True)
 
