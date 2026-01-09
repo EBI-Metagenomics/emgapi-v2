@@ -111,6 +111,8 @@ class AmpliconPipelineConfig(MGnifyPipelineConfig):
     failed_runs_csv: str = "qc_failed_runs.csv"
 
     # Results folders
+    pipeline_name: str = "amplicon"
+    pipeline_version: str = "v6"
     qc_folder: str = "qc"
     sequence_categorisation_folder: str = "sequence-categorisation"
     amplified_region_inference_folder: str = "amplified-region-inference"
@@ -136,6 +138,8 @@ class RawReadsPipelineConfig(MGnifyPipelineConfig):
     failed_runs_csv: str = "qc_failed_runs.csv"
 
     # Results folders
+    pipeline_name: str = "rawreads"
+    pipeline_version: str = "v6"
     qc_folder: str = "qc"
     taxonomy_summary_folder: str = "taxonomy-summary"
     function_summary_folder: str = "function-summary"

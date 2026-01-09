@@ -85,8 +85,11 @@ def generate_study_summary_for_pipeline_run(
     # Set the results_dir if it hasn't been set yet, so that it can be used in the summary generator'
     study.set_results_dir_default()
 
+    summary_dir = Path(study.results_dir) / Path(
+        f"{PIPELINE_CONFIGS[analysis_type].pipeline_name}_{PIPELINE_CONFIGS[analysis_type].pipeline_version}"
+    )
     study_dir = Directory(
-        path=Path(study.results_dir),
+        path=Path(summary_dir),
         rules=[DirectoryExistsRule],
     )
 
@@ -114,12 +117,10 @@ def generate_study_summary_for_pipeline_run(
         summary_generator_kwargs["outdir"] = study_dir.path
         # TODO: these should be the same shape in MGnify Pipelines Toolkit really...
 
-    logger.info(
-        f"Study results_dir, where summaries will be made, is {study.results_dir}"
-    )
+    logger.info(f"Study results_dir, where summaries will be made, is {summary_dir}")
     logger.info(f"Args {summary_generator_kwargs}")
 
-    with chdir(study.results_dir):
+    with chdir(summary_dir):
         with click.Context(study_summary_generator.summarise_analyses) as ctx:
             ctx.invoke(
                 study_summary_generator.summarise_analyses,
@@ -154,37 +155,35 @@ def merge_study_summaries(
     logger = get_run_logger()
     study = Study.objects.get(accession=mgnify_study_accession)
 
-    logger.info(f"Merging study summaries for {study}, in {study.results_dir}")
-    if not study.results_dir:
+    summary_dir = Path(study.results_dir) / Path(
+        f"{PIPELINE_CONFIGS[analysis_type].pipeline_name}_{PIPELINE_CONFIGS[analysis_type].pipeline_version}"
+    )
+
+    logger.info(f"Merging study summaries for {study}, in {summary_dir}")
+    if not summary_dir:
         logger.warning(f"Study {study} has no results_dir, so cannot merge summaries")
         return []
-    logger.debug(f"Glob of dir is {list(Path(study.results_dir).glob('*'))}")
+    logger.debug(f"Glob of dir is {list(Path(summary_dir).glob('*'))}")
     existing_merged_files = list(
-        Path(study.results_dir).glob(
-            f"{INSDC_PROJECT_ACCESSION_GLOB}{STUDY_SUMMARY_TSV}"
-        )
-    ) + list(
-        Path(study.results_dir).glob(f"{INSDC_STUDY_ACCESSION_GLOB}{STUDY_SUMMARY_TSV}")
-    )
+        Path(summary_dir).glob(f"{INSDC_PROJECT_ACCESSION_GLOB}{STUDY_SUMMARY_TSV}")
+    ) + list(Path(summary_dir).glob(f"{INSDC_STUDY_ACCESSION_GLOB}{STUDY_SUMMARY_TSV}"))
     if existing_merged_files:
         logger.warning(
-            f"{len(existing_merged_files)} study-level summaries already exist in {study.results_dir}"
+            f"{len(existing_merged_files)} study-level summaries already exist in {summary_dir}"
         )
     if bludgeon:
         for existing_merged_file in existing_merged_files:
             logger.warning(f"Deleting {existing_merged_file}")
             existing_merged_file.unlink()
 
-    summary_files = list(Path(study.results_dir).glob(f"*{STUDY_SUMMARY_TSV}"))
+    summary_files = list(Path(summary_dir).glob(f"*{STUDY_SUMMARY_TSV}"))
     logger.info(
-        f"There appear to be {len(summary_files)} study summary files in {study.results_dir}"
+        f"There appear to be {len(summary_files)} study summary files in {summary_dir}"
     )
 
-    logger.info(
-        f"Study results_dir, where summaries will be merged, is {study.results_dir}"
-    )
+    logger.info(f"Study results_dir, where summaries will be merged, is {summary_dir}")
     study_dir = Directory(
-        path=Path(study.results_dir),
+        path=Path(summary_dir),
         rules=[DirectoryExistsRule],
     )
 
@@ -195,7 +194,7 @@ def merge_study_summaries(
     if analysis_type in {"assembly"}:
         extra_merge_kwargs["study_dir"] = study_dir.path
 
-    with chdir(study.results_dir):
+    with chdir(summary_dir):
         with click.Context(study_summary_generator.merge_summaries) as ctx:
             ctx.invoke(
                 study_summary_generator.merge_summaries,
@@ -208,7 +207,7 @@ def merge_study_summaries(
     )
 
     if not generated_files:
-        logger.warning(f"No study summary was merged in {study.results_dir}")
+        logger.warning(f"No study summary was merged in {summary_dir}")
         return []
 
     if cleanup_partials:
@@ -221,7 +220,10 @@ def merge_study_summaries(
 
 
 @task
-def add_study_summaries_to_downloads(mgnify_study_accession: str):
+def add_study_summaries_to_downloads(
+    mgnify_study_accession: str,
+    analysis_type: Literal["amplicon", "rawreads", "assembly"] = "amplicon",
+):
     """
     Adds study summary files to the download list of a specified study.
 
@@ -236,13 +238,18 @@ def add_study_summaries_to_downloads(mgnify_study_accession: str):
     """
     logger = get_run_logger()
     study = Study.objects.get(accession=mgnify_study_accession)
-    if not study.results_dir:
+
+    summary_dir = Path(study.results_dir) / Path(
+        f"{PIPELINE_CONFIGS[analysis_type].pipeline_name}_{PIPELINE_CONFIGS[analysis_type].pipeline_version}"
+    )
+
+    if not summary_dir:
         logger.warning(
             f"Study {study} has no results_dir, so cannot add study summaries to downloads"
         )
         return
 
-    for summary_file in Path(study.results_dir).glob(
+    for summary_file in Path(summary_dir).glob(
         f"{study.first_accession}*{STUDY_SUMMARY_TSV}"
     ):
         db_or_region = (

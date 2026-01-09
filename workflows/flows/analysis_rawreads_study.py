@@ -33,7 +33,7 @@ from workflows.ena_utils.ena_api_requests import (
 from workflows.ena_utils.webin_owner_utils import validate_and_set_webin_owner
 from workflows.flows.analyse_study_tasks.shared.study_summary import (
     merge_study_summaries,
-    add_rawreads_study_summaries_to_downloads,
+    add_study_summaries_to_downloads,
 )
 from workflows.flows.assemble_study import get_biomes_as_choices
 from workflows.prefect_utils.analyses_models_helpers import (
@@ -192,13 +192,13 @@ def analysis_rawreads_study(study_accession: str):
     )
     study_workdir = (
         Path(f"{EMG_CONFIG.slurm.default_nextflow_workdir}")
-        / "raw-reads"
-        / f"{mgnify_study.ena_study.accession}"
+        / Path(f"{mgnify_study.ena_study.accession}")
+        / f"{EMG_CONFIG.rawreads_pipeline.pipeline_name}_{EMG_CONFIG.rawreads_pipeline.pipeline_version}"
     )
     study_outdir = (
         Path(f"{EMG_CONFIG.slurm.default_workdir}")
-        / "raw-reads"
-        / f"{mgnify_study.ena_study.accession}"
+        / Path(f"{mgnify_study.ena_study.accession}")
+        / f"{EMG_CONFIG.rawreads_pipeline.pipeline_name}_{EMG_CONFIG.rawreads_pipeline.pipeline_version}"
     )
 
     for analyses_chunk in chunked_runs:
@@ -215,7 +215,7 @@ def analysis_rawreads_study(study_accession: str):
         cleanup_partials=not EMG_CONFIG.rawreads_pipeline.keep_study_summary_partials,
         analysis_type="rawreads",
     )
-    add_rawreads_study_summaries_to_downloads(mgnify_study.accession)
+    add_study_summaries_to_downloads(mgnify_study.accession, analysis_type="rawreads")
     copy_v6_study_summaries(mgnify_study.accession)
     # delete work directory
     delete_study_nextflow_workdir(study_workdir, analyses_to_attempt)

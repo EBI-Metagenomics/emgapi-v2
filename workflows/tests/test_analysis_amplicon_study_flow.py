@@ -533,7 +533,8 @@ def test_prefect_analyse_amplicon_flow(
 
     EMG_CONFIG.amplicon_pipeline.allow_non_insdc_run_names = True
 
-    mock_queryset_hash_for_amplicon.return_value = "abc123"
+    samplesheet_hash = "abc123"
+    mock_queryset_hash_for_amplicon.return_value = samplesheet_hash
 
     study_accession = "PRJNA398089"
     amplicon_run_all_results = "SRR_all_results"
@@ -658,8 +659,13 @@ def test_prefect_analyse_amplicon_flow(
     )
 
     # create fake results
-    amplicon_folder = Path(
-        f"{EMG_CONFIG.slurm.default_workdir}/amplicon/{study_accession}/abc123"
+    amplicon_folder = (
+        Path(EMG_CONFIG.slurm.default_workdir)
+        / Path(study_accession)
+        / Path(
+            f"{EMG_CONFIG.amplicon_pipeline.pipeline_name}_{EMG_CONFIG.amplicon_pipeline.pipeline_version}"
+        )
+        / Path(samplesheet_hash)
     )
     amplicon_folder.mkdir(exist_ok=True, parents=True)
 
@@ -838,28 +844,37 @@ def test_prefect_analyse_amplicon_flow(
         == 1
     )
 
-    workdir = Path(f"{EMG_CONFIG.slurm.default_workdir}/{study_accession}")
+    workdir = (
+        Path(EMG_CONFIG.slurm.default_workdir)
+        / Path(study_accession)
+        / Path(
+            f"{EMG_CONFIG.amplicon_pipeline.pipeline_name}_{EMG_CONFIG.amplicon_pipeline.pipeline_version}"
+        )
+    )
     assert workdir.is_dir()
 
     assert study.external_results_dir == f"{study_accession[:-3]}/{study_accession}"
 
+    summary_dir = Path(study.results_dir) / Path(
+        f"{EMG_CONFIG.amplicon_pipeline.pipeline_name}_{EMG_CONFIG.amplicon_pipeline.pipeline_version}"
+    )
     Directory(
-        path=study.results_dir,
+        path=summary_dir,
         glob_rules=[
-            GlobHasFilesCountRule[12]
+            GlobHasFilesCountRule[14]
         ],  # 6 for the samplesheet, same 6 for the "merge"
     )
 
-    with (workdir / "abc123_DADA2-SILVA_18S-V9_asv_study_summary.tsv").open(
-        "r"
-    ) as summary:
+    with (
+        workdir / f"{samplesheet_hash}_DADA2-SILVA_18S-V9_asv_study_summary.tsv"
+    ).open("r") as summary:
         lines = summary.readlines()
         assert lines[0] == "taxonomy\tSRR_all_results\n"  # one run (the one with ASVs)
         assert "100" in lines[-1]
         assert "g__Aeromicrobium" in lines[-1]
 
     # manually remove the merged study summaries
-    for file in Path(study.results_dir).glob(f"{study.first_accession}*"):
+    for file in Path(summary_dir).glob(f"{study.first_accession}*"):
         file.unlink()
 
     # test merging of study summaries again, with cleanup disabled
@@ -869,10 +884,10 @@ def test_prefect_analyse_amplicon_flow(
         analysis_type="amplicon",
     )
     Directory(
-        path=study.results_dir,
+        path=summary_dir,
         glob_rules=[
             GlobHasFilesCountRule[
-                12
+                14
             ],  # study ones generated, and partials left in place
             GlobRule(
                 rule_name="All study level files are present",
@@ -894,14 +909,14 @@ def test_prefect_analyse_amplicon_flow(
     )
     assert (
         logged_run.logs.count(
-            f"Deleting {str(Path(study.results_dir) / study.first_accession)}"
+            f"Deleting {str(Path(summary_dir) / study.first_accession)}"
         )
         == 6
     )
     Directory(
-        path=study.results_dir,
+        path=summary_dir,
         glob_rules=[
-            GlobHasFilesCountRule[12],  # partials deleted, just merged ones
+            GlobHasFilesCountRule[14],  # partials deleted, just merged ones
             GlobRule(
                 rule_name="All files are study level",
                 glob_patten=f"{study.first_accession}*{STUDY_SUMMARY_TSV}",
@@ -1005,7 +1020,8 @@ def test_prefect_analyse_amplicon_flow_private_data(
         ],
     )
 
-    mock_queryset_hash_for_amplicon.return_value = "xyz789"
+    samplesheet_hash = "xyz789"
+    mock_queryset_hash_for_amplicon.return_value = samplesheet_hash
 
     amplicon_run_all_results = "SRR_all_results"
     runs = [
@@ -1048,8 +1064,13 @@ def test_prefect_analyse_amplicon_flow_private_data(
     )
 
     # create fake results
-    amplicon_folder = Path(
-        f"{EMG_CONFIG.slurm.default_workdir}/amplicon/{study_accession}/xyz789"
+    amplicon_folder = (
+        Path(EMG_CONFIG.slurm.default_workdir)
+        / Path(study_accession)
+        / Path(
+            f"{EMG_CONFIG.amplicon_pipeline.pipeline_name}_{EMG_CONFIG.amplicon_pipeline.pipeline_version}"
+        )
+        / Path(samplesheet_hash)
     )
     amplicon_folder.mkdir(exist_ok=True, parents=True)
 
@@ -1145,28 +1166,37 @@ def test_prefect_analyse_amplicon_flow_private_data(
         == 1
     )
 
-    workdir = Path(f"{EMG_CONFIG.slurm.default_workdir}/{study_accession}")
+    workdir = (
+        Path(EMG_CONFIG.slurm.default_workdir)
+        / Path(study_accession)
+        / Path(
+            f"{EMG_CONFIG.amplicon_pipeline.pipeline_name}_{EMG_CONFIG.amplicon_pipeline.pipeline_version}"
+        )
+    )
     assert workdir.is_dir()
 
     assert study.external_results_dir == "SRP123/SRP123456"
 
+    summary_dir = Path(study.results_dir) / Path(
+        f"{EMG_CONFIG.amplicon_pipeline.pipeline_name}_{EMG_CONFIG.amplicon_pipeline.pipeline_version}"
+    )
     Directory(
-        path=study.results_dir,
+        path=summary_dir,
         glob_rules=[
-            GlobHasFilesCountRule[10]
+            GlobHasFilesCountRule[12]
         ],  # 5 for the samplesheet, same 5 for the "merge" (only 5 here, unlike public test, which has different hypervar regions)
     )
 
-    with (workdir / "xyz789_DADA2-SILVA_18S-V9_asv_study_summary.tsv").open(
-        "r"
-    ) as summary:
+    with (
+        workdir / f"{samplesheet_hash}_DADA2-SILVA_18S-V9_asv_study_summary.tsv"
+    ).open("r") as summary:
         lines = summary.readlines()
         assert lines[0] == "taxonomy\tSRR_all_results\n"  # one run (the one with ASVs)
         assert "100" in lines[-1]
         assert "g__Aeromicrobium" in lines[-1]
 
     # manually remove the merged study summaries
-    for file in Path(study.results_dir).glob(f"{study.first_accession}*"):
+    for file in Path(summary_dir).glob(f"{study.first_accession}*"):
         file.unlink()
 
     # test merging of study summaries again, with cleanup disabled
@@ -1176,10 +1206,10 @@ def test_prefect_analyse_amplicon_flow_private_data(
         analysis_type="amplicon",
     )
     Directory(
-        path=study.results_dir,
+        path=summary_dir,
         glob_rules=[
             GlobHasFilesCountRule[
-                10
+                12
             ],  # study ones generated, and partials left in place
             GlobRule(
                 rule_name="All study level files are present",
@@ -1201,14 +1231,14 @@ def test_prefect_analyse_amplicon_flow_private_data(
     )
     assert (
         logged_run.logs.count(
-            f"Deleting {str(Path(study.results_dir) / study.first_accession)}"
+            f"Deleting {str(Path(summary_dir) / study.first_accession)}"
         )
         == 5
     )
     Directory(
-        path=study.results_dir,
+        path=summary_dir,
         glob_rules=[
-            GlobHasFilesCountRule[10],  # partials deleted, just merged ones
+            GlobHasFilesCountRule[12],  # partials deleted, just merged ones
             GlobRule(
                 rule_name="All files are study level",
                 glob_patten=f"{study.first_accession}*{STUDY_SUMMARY_TSV}",
