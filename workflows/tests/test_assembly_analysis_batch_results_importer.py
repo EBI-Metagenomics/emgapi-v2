@@ -340,6 +340,7 @@ class TestProcessImportResults:
         raw_reads_mgnify_sample,
         mgnify_assemblies,
         tmp_path,
+        prefect_harness,
     ):
         """Test that failed imports update batch and analysis statuses correctly."""
         batch = AssemblyAnalysisBatch.objects.create(

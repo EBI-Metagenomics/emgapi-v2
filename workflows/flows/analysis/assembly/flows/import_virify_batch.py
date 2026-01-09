@@ -31,7 +31,7 @@ def import_virify_batch(assembly_analyses_batch_id: uuid.UUID):
     logger = get_run_logger()
 
     assembly_analysis_batch = AssemblyAnalysisBatch.objects.get(
-        assembly_analyses_batch_id=assembly_analyses_batch_id
+        id=assembly_analyses_batch_id
     )
 
     # Import results if any analyses completed

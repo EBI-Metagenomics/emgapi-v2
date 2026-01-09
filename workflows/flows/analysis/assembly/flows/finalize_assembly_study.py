@@ -54,7 +54,7 @@ def finalize_assembly_study(study_accession: str):
     # Check for incomplete batches
     incomplete_count = 0
     for batch in batches:
-        # Each batch has 3 potential flows: aca, virify and map.
+        # Each batch has 3 potential flows: asa, virify and map.
         # This is a blunt approach of fetching those flows and making sure they are not running
         flow_ids = [
             batch.asa_flow_run_id,

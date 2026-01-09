@@ -8,6 +8,9 @@ from prefect.runtime import flow_run
 
 from activate_django_first import EMG_CONFIG
 
+from workflows.flows.analysis.assembly.flows.import_virify_batch import (
+    import_virify_batch,
+)
 from workflows.models import (
     AssemblyAnalysisBatch,
     AssemblyAnalysisPipeline,
@@ -207,3 +210,8 @@ def run_virify_batch(assembly_analyses_batch_id: uuid.UUID):
             f"Marked {completed_count} analyses as VIRify completed "
             f"(out of {assembly_analysis_batch.total_analyses} total)"
         )
+
+    ##################
+    # Import results #
+    ##################
+    import_virify_batch(assembly_analyses_batch_id=assembly_analysis_batch.id)
