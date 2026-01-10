@@ -45,9 +45,13 @@ def make_samplesheet_amplicon(
 
     sample_sheet_csv = queryset_to_samplesheet(
         queryset=runs,
-        filename=Path(EMG_CONFIG.slurm.default_workdir)
-        / Path(
-            f"{mgnify_study.ena_study.accession}_samplesheet_amplicon-v6_{ss_hash}.csv"
+        filename=(
+            Path(EMG_CONFIG.slurm.default_workdir)
+            / Path(f"{mgnify_study.ena_study.accession}")
+            / Path(
+                f"{EMG_CONFIG.amplicon_pipeline.pipeline_name}_{EMG_CONFIG.amplicon_pipeline.pipeline_version}"
+            )
+            / f"samplesheet_{ss_hash}.csv"
         ),
         column_map={
             "sample": SamplesheetColumnSource(

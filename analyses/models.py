@@ -173,10 +173,9 @@ class Study(
         # we're trying to catch? Should it be a migration? Or a management command we run after
         # certain bad things happen? Or somewhere in the flows?
         if not self.results_dir:
-            # TODO: there is a v6 hardcoded here.
             self.results_dir = (
                 Path(settings.EMG_CONFIG.slurm.default_workdir)
-                / f"{self.ena_study.accession}_v6"
+                / f"{self.ena_study.accession}"
             )
             logger.info(f"Setting {self}'s results_dir to default {self.results_dir}")
             self.results_dir.mkdir(exist_ok=True)

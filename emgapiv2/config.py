@@ -12,6 +12,9 @@ from workflows.ena_utils.abstract import ENAPortalDataPortal
 class SlurmConfig(BaseModel):
     default_job_status_checks_limit: int = 10
     default_workdir: str = "/nfs/production/dev-slurm-work-dir"
+    default_nextflow_workdir: str = (
+        "/hps/nobackup/rdf/metagenomics/service-team/nextflow-workdir"
+    )
     pipelines_root_dir: str = "/app/workflows/pipelines"
     ftp_results_dir: str = "/nfs/ftp/public/databases/metagenomics/mgnify_results"
     private_results_dir: str = "/nfs/public/services/private-data"
@@ -89,6 +92,10 @@ class AssemblerConfig(MGnifyPipelineConfig):
     assembler_version_default: str = "3.15.5"
     suspend_timeout_for_editing_samplesheets_secs: int = 28800  # 8 hrs
 
+    # Results folders
+    pipeline_name: str = "miassemnbler"
+    pipeline_version: str = "v6"
+
 
 class AmpliconPipelineConfig(MGnifyPipelineConfig):
     pipeline_repo: str = "ebi-metagenomics/amplicon-analysis-pipeline"
@@ -108,6 +115,8 @@ class AmpliconPipelineConfig(MGnifyPipelineConfig):
     failed_runs_csv: str = "qc_failed_runs.csv"
 
     # Results folders
+    pipeline_name: str = "amplicon"
+    pipeline_version: str = "v6"
     qc_folder: str = "qc"
     sequence_categorisation_folder: str = "sequence-categorisation"
     amplified_region_inference_folder: str = "amplified-region-inference"
@@ -123,10 +132,6 @@ class RawReadsPipelineConfig(MGnifyPipelineConfig):
     # Resources
     pipeline_time_limit_days: int = 5
     samplesheet_chunk_size: int = 50
-    # TODO: remove this one, it is part of the default pipelines config
-    base_workdir: str = (
-        "/hps/nobackup/rdf/metagenomics/service-team/nextflow-workdir/rawreads-pipeline"
-    )
 
     # Settings
     allow_non_insdc_run_names: bool = False
@@ -137,6 +142,8 @@ class RawReadsPipelineConfig(MGnifyPipelineConfig):
     failed_runs_csv: str = "qc_failed_runs.csv"
 
     # Results folders
+    pipeline_name: str = "rawreads"
+    pipeline_version: str = "v6"
     qc_folder: str = "qc"
     taxonomy_summary_folder: str = "taxonomy-summary"
     function_summary_folder: str = "function-summary"
