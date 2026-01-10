@@ -4,6 +4,10 @@ import pytest
 from django.conf import settings
 
 from analyses.models import Analysis
+from workflows.data_io_utils.schemas.assembly import ImportResult
+from workflows.flows.analysis.assembly.flows.import_virify_batch import (
+    import_virify_batch,
+)
 from workflows.flows.analysis.assembly.flows.run_virify_batch import (
     run_virify_batch,
 )
@@ -50,11 +54,13 @@ def mock_assembly_pipeline_outdir(tmp_path):
 
 
 @pytest.mark.django_db(transaction=True)
+@patch("workflows.flows.analysis.assembly.flows.run_virify_batch.import_virify_batch")
 @patch("workflows.flows.analysis.assembly.flows.run_virify_batch.run_cluster_job")
 @patch("workflows.flows.analysis.assembly.flows.run_virify_batch.flow_run")
 def test_run_virify_batch_success(
     mock_flow_run,
     mock_run_cluster_job,
+    mock_import_virify_batch,
     prefect_harness,
     mock_assembly_pipeline_outdir,
     raw_reads_mgnify_study,
@@ -111,6 +117,9 @@ def test_run_virify_batch_success(
     run_virify_batch(assembly_analyses_batch_id=batch.id)
 
     mock_run_cluster_job.assert_called_once()
+    mock_import_virify_batch.assert_called_once_with(
+        assembly_analyses_batch_id=batch.id
+    )
 
     # Verify that the batch state was updated to COMPLETED
     batch.refresh_from_db()
@@ -225,3 +234,90 @@ def test_run_virify_batch_no_samplesheet(
     # Verify that the batch state shows failure (no samplesheet means it can't run)
     batch.refresh_from_db()
     assert batch.pipeline_status_counts.virify.failed == batch.total_analyses
+
+
+@pytest.mark.django_db(transaction=True)
+@patch(
+    "workflows.flows.analysis.assembly.flows.import_virify_batch.process_import_results"
+)
+@patch(
+    "workflows.flows.analysis.assembly.flows.import_virify_batch.assembly_analysis_batch_results_importer"
+)
+def test_import_virify_batch_success(
+    mock_importer,
+    mock_process_results,
+    prefect_harness,
+    raw_reads_mgnify_study,
+    raw_reads_mgnify_sample,
+    mgnify_assemblies,
+    tmp_path,
+):
+    """Test importing VIRify results successfully."""
+    # Create analyses with assemblies using fixtures
+    analysis_one = Analysis.objects.create(
+        study=raw_reads_mgnify_study,
+        sample=raw_reads_mgnify_sample[0],
+        ena_study=raw_reads_mgnify_study.ena_study,
+        assembly=mgnify_assemblies[0],
+    )
+    analysis_two = Analysis.objects.create(
+        study=raw_reads_mgnify_study,
+        sample=raw_reads_mgnify_sample[1],
+        ena_study=raw_reads_mgnify_study.ena_study,
+        assembly=mgnify_assemblies[1],
+    )
+
+    # Create batch
+    batches = AssemblyAnalysisBatch.objects.get_or_create_batches_for_study(
+        study=raw_reads_mgnify_study,
+        workspace_dir=tmp_path,
+        skip_completed=False,
+    )
+    batch = batches[0]
+
+    # Set status to COMPLETED so it gets picked up for import
+    batch.batch_analyses.update(
+        virify_status=AssemblyAnalysisPipelineStatus.COMPLETED,
+    )
+
+    # Mock validation results
+    validation_results = [
+        ImportResult(analysis_id=analysis_one.id, success=True, validation_only=True),
+        ImportResult(analysis_id=analysis_two.id, success=True, validation_only=True),
+    ]
+    # Mock import results
+    import_results = [
+        ImportResult(
+            analysis_id=analysis_one.id,
+            success=True,
+            downloads_count=5,
+            validation_only=False,
+        ),
+        ImportResult(
+            analysis_id=analysis_two.id,
+            success=True,
+            downloads_count=5,
+            validation_only=False,
+        ),
+    ]
+
+    mock_importer.side_effect = [validation_results, import_results]
+
+    # GoGoFlow
+    import_virify_batch(assembly_analyses_batch_id=batch.id)
+
+    # Verify calls
+    assert mock_importer.call_count == 2
+    assert mock_process_results.call_count == 2
+
+    # Verify first call (validation)
+    args, kwargs = mock_importer.call_args_list[0]
+    assert kwargs["assembly_analyses_batch_id"] == batch.id
+    assert kwargs["pipeline_type"] == AssemblyAnalysisPipeline.VIRIFY
+    assert kwargs["validation_only"] is True
+
+    # Verify second call (import)
+    args, kwargs = mock_importer.call_args_list[1]
+    assert kwargs["assembly_analyses_batch_id"] == batch.id
+    assert kwargs["pipeline_type"] == AssemblyAnalysisPipeline.VIRIFY
+    assert kwargs["validation_only"] is False
