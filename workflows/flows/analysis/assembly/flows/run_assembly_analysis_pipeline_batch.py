@@ -9,28 +9,20 @@ from prefect.runtime import flow_run
 
 from activate_django_first import EMG_CONFIG
 
-from analyses.models import Study, Analysis
-from workflows.data_io_utils.schemas.assembly import ImportResult
+from analyses.models import Study
 from workflows.flows.analyse_study_tasks.shared.copy_v6_pipeline_results import (
     copy_assembly_batch_results,
 )
+from workflows.flows.analysis.assembly.flows.import_asa_batch import import_asa_batch
 from workflows.flows.analysis.assembly.flows.run_map_batch import run_map_batch
 from workflows.flows.analysis.assembly.flows.run_virify_batch import (
     run_virify_batch,
 )
-import logging
-from workflows.flows.analysis.assembly.tasks.assembly_analysis_batch_results_importer import (
-    assembly_analysis_batch_results_importer,
-)
-from typing import List
 from workflows.flows.analysis.assembly.tasks.assembly_analysis_pipeline_batch_study_summary_generator import (
     generate_assembly_analysis_pipeline_batch_summary,
 )
 from workflows.flows.analysis.assembly.tasks.make_samplesheet_assembly import (
     make_samplesheet_assembly,
-)
-from workflows.flows.analysis.assembly.tasks.set_post_assembly_analysis_states import (
-    set_post_assembly_analysis_states,
 )
 from workflows.models import (
     AssemblyAnalysisBatch,
@@ -48,107 +40,9 @@ from workflows.flows.analysis.assembly.utils.status_update_hooks import (
 )
 
 
-def process_import_results(
-    import_results: List[ImportResult],
-    batch: AssemblyAnalysisBatch,
-    pipeline_type: AssemblyAnalysisPipeline,
-):
-    """
-    Process import results and update statuses in bulk.
-
-    Handles failed imports by:
-    - Marking batch analysis status as FAILED
-    - Marking Analysis status as ANALYSIS_QC_FAILED with reason
-
-    :param import_results: List of import results from the importer task
-    :param batch: The AssemblyAnalysisBatch being processed
-    :param pipeline_type: The pipeline type (ASA, VIRify, or MAP)
-    :param logger: Prefect logger
-    """
-    logger = logging.getLogger(__name__)
-
-    if not import_results:
-        logger.warning("No import results to process")
-        # Update counts to reflect the current status
-        batch.update_pipeline_status_counts(pipeline_type)
-        return
-
-    failed_analysis_ids = [r.analysis_id for r in import_results if not r.success]
-    is_validation_only = import_results[0].validation_only if import_results else False
-
-    if failed_analysis_ids:
-        mode = "validation" if is_validation_only else "import"
-        logger.warning(
-            f"{len(failed_analysis_ids)} {pipeline_type.value.upper()} analyses failed {mode}"
-        )
-
-        # Log status transitions before updating
-        status_field = f"{pipeline_type.value}_status"
-        for batch_analysis in batch.batch_analyses.filter(
-            analysis_id__in=failed_analysis_ids
-        ):
-            old_status = getattr(batch_analysis, status_field)
-            logger.warning(
-                f"Analysis {batch_analysis.analysis.accession} (ID={batch_analysis.analysis_id}): "
-                f"{pipeline_type.value.upper()} status transition {old_status} → FAILED. "
-                f"Mode: {mode}. "
-                f"Reason: {next((r.error[:200] for r in import_results if r.analysis_id == batch_analysis.analysis_id and not r.success), 'Unknown')}"
-            )
-
-        # Bulk update batch analysis statuses to FAILED
-        batch.batch_analyses.filter(analysis_id__in=failed_analysis_ids).update(
-            **{status_field: AssemblyAnalysisPipelineStatus.FAILED}
-        )
-
-        # Bulk update Analysis statuses to ANALYSIS_QC_FAILED
-        # Build lookup dict to avoid N+1 queries
-        failed_analyses = {
-            a.id: a for a in Analysis.objects.filter(id__in=failed_analysis_ids)
-        }
-        analyses_to_update = []
-        for result in import_results:
-            if not result.success:
-                analysis = failed_analyses[result.analysis_id]
-                analysis.status[Analysis.AnalysisStates.ANALYSIS_QC_FAILED] = True
-
-                # Distinguish between validation and import failures
-                error_prefix = (
-                    "Validation error" if result.validation_only else "Import error"
-                )
-                error_message = (
-                    f"{pipeline_type.value.upper()} {error_prefix}: {result.error}"
-                )
-                analysis.status[
-                    f"{Analysis.AnalysisStates.ANALYSIS_QC_FAILED}__reason"
-                ] = error_message
-                analyses_to_update.append(analysis)
-
-                # Log error to batch error_log
-                batch.log_error(
-                    pipeline_type=pipeline_type,
-                    error_type="validation" if result.validation_only else "import",
-                    message=result.error,
-                    analysis_id=result.analysis_id,
-                    save=False,  # Batch will be saved once after all errors logged
-                )
-
-        if analyses_to_update:
-            Analysis.objects.bulk_update(analyses_to_update, ["status"])
-            logger.info(
-                f"Marked {len(analyses_to_update)} analyses as ANALYSIS_QC_FAILED"
-            )
-
-        # Save batch with all error log entries
-        if failed_analysis_ids:
-            batch.save()
-
-    # Update counts to reflect the current status
-    batch.update_pipeline_status_counts(pipeline_type)
-
-
 @flow(
     name="Run assembly analysis pipeline-v6 for an assembly analysis batch (ASA, VIRIfy and MAP)",
-    flow_run_name="Assembly Analysis Batch {{ assembly_analyses_batch_id }}",
+    flow_run_name="Run Assembly Analysis Batch: {assembly_analyses_batch_id}",
     on_completion=[update_batch_status_counts],
     on_failure=[update_batch_status_counts],
     on_crashed=[update_batch_status_counts],
@@ -317,63 +211,13 @@ def run_assembly_analysis_pipeline_batch(
             assembly_analysis_batch.batch_analyses.filter(
                 asa_status=AssemblyAnalysisPipelineStatus.RUNNING
             ).update(asa_status=AssemblyAnalysisPipelineStatus.FAILED)
+
             return
-        else:
-            assembly_analyses_workspace_dir = (
-                assembly_analysis_batch.get_pipeline_workspace(
-                    AssemblyAnalysisPipeline.ASA
-                )
-            )
-            assembly_analyses_ids = list(
-                assembly_analysis_batch.analyses.values_list("id", flat=True)
-            )
 
-            # Set post-assembly analysis status based on pipeline output CSVs
-            # Docs https://github.com/EBI-Metagenomics/assembly-analysis-pipeline/blob/dev/docs/output.md#per-study-output-files
-            set_post_assembly_analysis_states(
-                assembly_analyses_workspace_dir, assembly_analyses_ids
-            )
-
-            # First, validate schemas (without importing)
-            # Note: This queries the database twice (validation + import). Could be optimized
-            # by passing analysis_ids to avoid re-querying, but acceptable for current batch sizes.
-
-            # TODO: this needs to be refactored even more I think (mbc), I was trying to split the validation from
-            #       the status update of the records (which I somewhat achieved here). A design session on this would be
-            #       needed.
-            logger.info("Validating ASA results schemas...")
-            validation_results = assembly_analysis_batch_results_importer(
-                assembly_analyses_batch_id=assembly_analyses_batch_id,
-                pipeline_type=AssemblyAnalysisPipeline.ASA,
-                validation_only=True,
-            )
-
-            # Process validation results - mark failures as FAILED
-            process_import_results(
-                validation_results,
-                assembly_analysis_batch,
-                AssemblyAnalysisPipeline.ASA,
-            )
-
-            # Only import if validation passed for at least one analysis
-            successful_validations = [r for r in validation_results if r.success]
-            if successful_validations:
-                logger.info(
-                    f"Importing {len(successful_validations)} validated ASA analyses..."
-                )
-                import_results = assembly_analysis_batch_results_importer(
-                    assembly_analyses_batch_id=assembly_analyses_batch_id,
-                    pipeline_type=AssemblyAnalysisPipeline.ASA,
-                    validation_only=False,
-                )
-                # Process import results (should all succeed since validation passed)
-                process_import_results(
-                    import_results,
-                    assembly_analysis_batch,
-                    AssemblyAnalysisPipeline.ASA,
-                )
-            else:
-                logger.warning("No ASA analyses passed validation, skipping import")
+    ######################
+    # Import the results #
+    ######################
+    import_asa_batch(assembly_analyses_batch_id)
 
     ##################
     # === VIRify === #
@@ -383,52 +227,6 @@ def run_assembly_analysis_pipeline_batch(
         assembly_analyses_batch_id=assembly_analysis_batch.id,
     )
     close_old_connections()
-    # Note: run_virify_batch updates counts internally
-
-    # Refresh batch to get updates from run_virify_batch
-    assembly_analysis_batch.refresh_from_db()
-
-    # Import results if any analyses completed
-    completed_virify_analyses_count = assembly_analysis_batch.batch_analyses.filter(
-        virify_status=AssemblyAnalysisPipelineStatus.COMPLETED
-    ).count()
-
-    if completed_virify_analyses_count:
-        logger.info(
-            f"Validating results for {completed_virify_analyses_count} VIRify completed analyses"
-        )
-        # First validate
-        validation_results = assembly_analysis_batch_results_importer(
-            assembly_analyses_batch_id=assembly_analyses_batch_id,
-            pipeline_type=AssemblyAnalysisPipeline.VIRIFY,
-            validation_only=True,
-        )
-        process_import_results(
-            validation_results,
-            assembly_analysis_batch,
-            AssemblyAnalysisPipeline.VIRIFY,
-        )
-
-        # Then import successful validations
-        successful_validations = [r for r in validation_results if r.success]
-        if successful_validations:
-            logger.info(
-                f"Importing {len(successful_validations)} validated VIRify analyses..."
-            )
-            import_results = assembly_analysis_batch_results_importer(
-                assembly_analyses_batch_id=assembly_analyses_batch_id,
-                pipeline_type=AssemblyAnalysisPipeline.VIRIFY,
-                validation_only=False,
-            )
-            process_import_results(
-                import_results,
-                assembly_analysis_batch,
-                AssemblyAnalysisPipeline.VIRIFY,
-            )
-        else:
-            logger.warning("No VIRify analyses passed validation, skipping import")
-    else:
-        logger.info("No VIRify analyses completed, skipping result import")
 
     ###############
     # === MAP === #
@@ -437,57 +235,10 @@ def run_assembly_analysis_pipeline_batch(
     run_map_batch(
         assembly_analyses_batch_id=assembly_analysis_batch.id,
     )
-    close_old_connections()
-
-    # Refresh batch to get updates from run_map_batch
-    assembly_analysis_batch.refresh_from_db()
-
-    # Import results if any analyses completed
-    completed_map_analyses_count = assembly_analysis_batch.batch_analyses.filter(
-        map_status=AssemblyAnalysisPipelineStatus.COMPLETED
-    ).count()
-
-    if completed_map_analyses_count:
-        logger.info(
-            f"Validating results for {completed_map_analyses_count} MAP completed analyses"
-        )
-        # First validate
-        validation_results = assembly_analysis_batch_results_importer(
-            assembly_analyses_batch_id=assembly_analyses_batch_id,
-            pipeline_type=AssemblyAnalysisPipeline.MAP,
-            validation_only=True,
-        )
-        process_import_results(
-            validation_results,
-            assembly_analysis_batch,
-            AssemblyAnalysisPipeline.MAP,
-        )
-
-        # Then import successful validations
-        successful_validations = [r for r in validation_results if r.success]
-        if successful_validations:
-            logger.info(
-                f"Importing {len(successful_validations)} validated MAP analyses..."
-            )
-            import_results = assembly_analysis_batch_results_importer(
-                assembly_analyses_batch_id=assembly_analyses_batch_id,
-                pipeline_type=AssemblyAnalysisPipeline.MAP,
-                validation_only=False,
-            )
-            process_import_results(
-                import_results,
-                assembly_analysis_batch,
-                AssemblyAnalysisPipeline.MAP,
-            )
-        else:
-            logger.warning("No MAP analyses passed validation, skipping import")
-    else:
-        logger.info("No MAP analyses completed, skipping result import")
-
-    # At this point, the batch is completed and all analyses are in the DB. #
-
     # Just in case the connection was closed because previous steps took a long time
     close_old_connections()
+
+    # At this point, the batch is completed and all analyses are in the DB. #
 
     #######################################
     # === Study summary for the batch === #
