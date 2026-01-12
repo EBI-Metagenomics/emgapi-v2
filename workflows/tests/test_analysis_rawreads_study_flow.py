@@ -334,7 +334,7 @@ MockFileIsNotEmptyRule = FileRule(
 @pytest.mark.httpx_mock(should_mock=should_not_mock_httpx_requests_to_prefect_server)
 @pytest.mark.django_db(transaction=True)
 @patch(
-    "workflows.flows.analyse_study_tasks.raw_reads.make_samplesheet_rawreads.queryset_hash"
+    "workflows.flows.analyse_study_tasks.raw_reads.run_rawreads_pipeline_via_samplesheet.queryset_hash"
 )
 @patch(
     "workflows.data_io_utils.mgnify_v6_utils.rawreads.FileIsNotEmptyRule",
@@ -676,7 +676,7 @@ def test_prefect_analyse_rawreads_flow(
     Directory(
         path=summary_dir,
         glob_rules=[
-            GlobHasFilesCountRule[14]
+            GlobHasFilesCountRule[13]
         ],  # 5 for the samplesheet, same 5 for the "merge" (only 5 here, unlike public test, which has different hypervar regions)
     )
 
@@ -705,7 +705,7 @@ def test_prefect_analyse_rawreads_flow(
         path=summary_dir,
         glob_rules=[
             GlobHasFilesCountRule[
-                14
+                13
             ],  # study ones generated, and partials left in place
             GlobRule(
                 rule_name="All study level files are present",
@@ -734,7 +734,7 @@ def test_prefect_analyse_rawreads_flow(
     Directory(
         path=summary_dir,
         glob_rules=[
-            GlobHasFilesCountRule[14],  # partials deleted, just merged ones
+            GlobHasFilesCountRule[13],  # partials deleted, just merged ones
             GlobRule(
                 rule_name="All files are study level",
                 glob_patten=f"{study.first_accession}*{STUDY_SUMMARY_TSV}",
@@ -751,7 +751,7 @@ def test_prefect_analyse_rawreads_flow(
 @pytest.mark.httpx_mock(should_mock=should_not_mock_httpx_requests_to_prefect_server)
 @pytest.mark.django_db(transaction=True)
 @patch(
-    "workflows.flows.analyse_study_tasks.raw_reads.make_samplesheet_rawreads.queryset_hash"
+    "workflows.flows.analyse_study_tasks.raw_reads.run_rawreads_pipeline_via_samplesheet.queryset_hash"
 )
 @patch(
     "workflows.data_io_utils.mgnify_v6_utils.rawreads.FileIsNotEmptyRule",
@@ -1148,7 +1148,7 @@ def test_prefect_analyse_rawreads_flow_private_data(
     Directory(
         path=summary_dir,
         glob_rules=[
-            GlobHasFilesCountRule[14]
+            GlobHasFilesCountRule[13]
         ],  # 5 for the samplesheet, same 5 for the "merge" (only 5 here, unlike public test, which has different hypervar regions)
     )
 
@@ -1177,7 +1177,7 @@ def test_prefect_analyse_rawreads_flow_private_data(
         path=summary_dir,
         glob_rules=[
             GlobHasFilesCountRule[
-                14
+                13
             ],  # study ones generated, and partials left in place
             GlobRule(
                 rule_name="All study level files are present",
@@ -1206,7 +1206,7 @@ def test_prefect_analyse_rawreads_flow_private_data(
     Directory(
         path=summary_dir,
         glob_rules=[
-            GlobHasFilesCountRule[14],  # partials deleted, just merged ones
+            GlobHasFilesCountRule[13],  # partials deleted, just merged ones
             GlobRule(
                 rule_name="All files are study level",
                 glob_patten=f"{study.first_accession}*{STUDY_SUMMARY_TSV}",

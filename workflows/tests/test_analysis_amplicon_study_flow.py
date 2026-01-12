@@ -494,7 +494,7 @@ def analysis_study_input_mocker(biome_choices, user_choices):
 @pytest.mark.httpx_mock(should_mock=should_not_mock_httpx_requests_to_prefect_server)
 @pytest.mark.django_db(transaction=True)
 @patch(
-    "workflows.flows.analyse_study_tasks.amplicon.make_samplesheet_amplicon.queryset_hash"
+    "workflows.flows.analyse_study_tasks.amplicon.run_amplicon_pipeline_via_samplesheet.queryset_hash"
 )
 @patch(
     "workflows.data_io_utils.mgnify_v6_utils.amplicon.FileIsNotEmptyRule",
@@ -861,7 +861,7 @@ def test_prefect_analyse_amplicon_flow(
     Directory(
         path=summary_dir,
         glob_rules=[
-            GlobHasFilesCountRule[14]
+            GlobHasFilesCountRule[13]
         ],  # 6 for the samplesheet, same 6 for the "merge"
     )
 
@@ -887,7 +887,7 @@ def test_prefect_analyse_amplicon_flow(
         path=summary_dir,
         glob_rules=[
             GlobHasFilesCountRule[
-                14
+                13
             ],  # study ones generated, and partials left in place
             GlobRule(
                 rule_name="All study level files are present",
@@ -916,7 +916,7 @@ def test_prefect_analyse_amplicon_flow(
     Directory(
         path=summary_dir,
         glob_rules=[
-            GlobHasFilesCountRule[14],  # partials deleted, just merged ones
+            GlobHasFilesCountRule[13],  # partials deleted, just merged ones
             GlobRule(
                 rule_name="All files are study level",
                 glob_patten=f"{study.first_accession}*{STUDY_SUMMARY_TSV}",
@@ -936,7 +936,7 @@ def test_prefect_analyse_amplicon_flow(
 @pytest.mark.httpx_mock(should_mock=should_not_mock_httpx_requests_to_prefect_server)
 @pytest.mark.django_db(transaction=True)
 @patch(
-    "workflows.flows.analyse_study_tasks.amplicon.make_samplesheet_amplicon.queryset_hash"
+    "workflows.flows.analyse_study_tasks.amplicon.run_amplicon_pipeline_via_samplesheet.queryset_hash"
 )
 @patch(
     "workflows.data_io_utils.mgnify_v6_utils.amplicon.FileIsNotEmptyRule",
@@ -1183,7 +1183,7 @@ def test_prefect_analyse_amplicon_flow_private_data(
     Directory(
         path=summary_dir,
         glob_rules=[
-            GlobHasFilesCountRule[12]
+            GlobHasFilesCountRule[11]
         ],  # 5 for the samplesheet, same 5 for the "merge" (only 5 here, unlike public test, which has different hypervar regions)
     )
 
@@ -1209,7 +1209,7 @@ def test_prefect_analyse_amplicon_flow_private_data(
         path=summary_dir,
         glob_rules=[
             GlobHasFilesCountRule[
-                12
+                11
             ],  # study ones generated, and partials left in place
             GlobRule(
                 rule_name="All study level files are present",
@@ -1238,7 +1238,7 @@ def test_prefect_analyse_amplicon_flow_private_data(
     Directory(
         path=summary_dir,
         glob_rules=[
-            GlobHasFilesCountRule[12],  # partials deleted, just merged ones
+            GlobHasFilesCountRule[11],  # partials deleted, just merged ones
             GlobRule(
                 rule_name="All files are study level",
                 glob_patten=f"{study.first_accession}*{STUDY_SUMMARY_TSV}",
