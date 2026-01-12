@@ -92,7 +92,7 @@ class AssemblerConfig(MGnifyPipelineConfig):
 
 class AmpliconPipelineConfig(MGnifyPipelineConfig):
     pipeline_repo: str = "ebi-metagenomics/amplicon-analysis-pipeline"
-    pipeline_git_revision: str = "v6.0.5"
+    pipeline_git_revision: str = "v6.0.6"
 
     # Resources
     pipeline_time_limit_days: int = 5
