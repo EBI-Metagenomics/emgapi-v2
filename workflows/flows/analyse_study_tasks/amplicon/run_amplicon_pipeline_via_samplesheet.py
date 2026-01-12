@@ -38,6 +38,7 @@ from workflows.prefect_utils.slurm_policies import ResubmitIfFailedPolicy
 from workflows.flows.analyse_study_tasks.cleanup_pipeline_directories import (
     delete_pipeline_workdir,
 )
+from workflows.nextflow_utils.samplesheets import queryset_hash
 
 
 @flow(name="Run analysis pipeline-v6 via samplesheet", log_prints=True)
@@ -51,10 +52,11 @@ def run_amplicon_pipeline_via_samplesheet(
         id__in=amplicon_analysis_ids,
         run__metadata__fastq_ftps__isnull=False,
     )
-    samplesheet, ss_hash = make_samplesheet_amplicon(mgnify_study, amplicon_analyses)
+    runs_ids = amplicon_analyses.values_list("run_id", flat=True)
+    runs = analyses.models.Run.objects.filter(id__in=runs_ids)
+    print(f"Making amplicon samplesheet for runs {runs_ids}")
 
-    for analysis in amplicon_analyses:
-        mark_analysis_as_started(analysis)
+    ss_hash = queryset_hash(runs, "id")
 
     nextflow_outdir = (
         outdir / ss_hash[:6]
@@ -65,6 +67,11 @@ def run_amplicon_pipeline_via_samplesheet(
     nextflow_workdir = workdir / ss_hash[:6]
     os.makedirs(nextflow_workdir, exist_ok=True)
     print(f"Using work dir {nextflow_workdir} for this execution")
+
+    samplesheet = make_samplesheet_amplicon(runs, nextflow_outdir / "samplesheet.csv")
+
+    for analysis in amplicon_analyses:
+        mark_analysis_as_started(analysis)
 
     command = cli_command(
         [
