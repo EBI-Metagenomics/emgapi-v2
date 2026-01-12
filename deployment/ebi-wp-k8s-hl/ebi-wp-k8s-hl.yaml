@@ -230,7 +230,7 @@ items:
         spec:
           containers:
             - name: prefect-server
-              image: prefecthq/prefect:3.4.4-python3.12
+              image: prefecthq/prefect:3.4.19-python3.12
               resources:
                 requests:
                   memory: "4Gi"
@@ -307,6 +307,41 @@ items:
                     port:
                       number: 4200
 
+  #### Upstream microservices
+  ##### Branchwater
+  - apiVersion: v1
+    kind: Service
+    metadata:
+      name: branchwater-upstream
+      namespace: emgapiv2-hl-exp
+    spec:
+      type: ExternalName
+      externalName: app-service.mgnifybranchwater-hl-prod.svc.cluster.local
+      ports:
+        - name: http
+          port: 8000
+          targetPort: 8000
+  - apiVersion: networking.k8s.io/v1
+    kind: Ingress
+    metadata:
+      name: branchwater-upstream-ingress
+      namespace: emgapiv2-hl-exp
+      annotations:
+        kubernetes.io/ingress.class: "nginx"
+        nginx.ingress.kubernetes.io/rewrite-target: /$1
+    spec:
+      rules:
+        - host: www.ebi.ac.uk
+          http:
+            paths:
+              - path: /metagenomics/api/v2/services/branchwater/(.*)
+                pathType: ImplementationSpecific
+                backend:
+                  service:
+                    name: branchwater-upstream
+                    port:
+                      number: 8000
+
   #### Website
   - apiVersion: v1
     kind: ConfigMap
@@ -362,6 +397,7 @@ items:
         {
           "api": "https://www.ebi.ac.uk/metagenomics/api/v1/",
           "api_v2": "https://www.ebi.ac.uk/metagenomics/api/v2/",
+          "api_branchwater": "https://www.ebi.ac.uk/metagenomics/api/v2/services/branchwater",
           "website": "https://www.ebi.ac.uk/metagenomics/v6-early-data-release/",
           "basename": "/metagenomics/v6-early-data-release"
         }
