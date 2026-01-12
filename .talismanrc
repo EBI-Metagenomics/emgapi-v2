@@ -201,6 +201,12 @@ fileignoreconfig:
 - filename: deployment/ebi-wp-k8s-hl/start_prefect_slurm_worker.sh
   checksum: c98eedfe5ad3c85b8e623344b151d2926cd148e98c199431f41c6bc52c866e6e
 
+- filename: workflows/flows/nf_traces/flows.py
+  allowed_patterns: [key]
+
+- filename: workflows/flows/nf_traces/tasks.py
+  allowed_patterns: [key]
+
 allowed_patterns:
 - cache_key_fn
 - CommonMetadataKeys
