@@ -145,7 +145,6 @@ def test_finalize_assembly_study_invalid_flow_ids(
 
 
 @pytest.mark.django_db
-@pytest.mark.skip
 @patch("workflows.flows.analysis.assembly.flows.finalize_assembly_study.get_run_logger")
 @patch("workflows.flows.analysis.assembly.flows.finalize_assembly_study.load_flow_run")
 @patch(
@@ -175,17 +174,16 @@ def test_finalize_assembly_study_features_update(
     batch.study = study
     batch.pipeline_versions = [Analysis.PipelineVersions.v6]
     batch.save()
-    # The finalization flow needs at least one v6 analysis to be ready (which is imported thourh the generated field
+    # The finalization flow needs at least one v6 analysis to be ready (which is imported through the generated field
     # is ready)
     analysis = study.analyses.first()
     analysis.pipeline_version = Analysis.PipelineVersions.v6
-    analysis.status = Analysis.AnalysisStates.ANALYSIS_ANNOTATIONS_IMPORTED
+    analysis.status[Analysis.AnalysisStates.ANALYSIS_ANNOTATIONS_IMPORTED] = True
     analysis.save()
 
     finalize_assembly_study.fn(study.accession)
 
     study.refresh_from_db()
-    # FIXME: this is failing, this value should be true
     assert study.features.has_v6_analyses is True
 
     # Now test with no ready v6 analyses
