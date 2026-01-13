@@ -23,6 +23,7 @@ from emgapiv2.enum_utils import FutureStrEnum
 from genomes.schemas.GenomeCatalogue import GenomeCatalogueList
 from workflows.data_io_utils.filenames import trailing_slash_ensured_dir
 from workflows.ena_utils.study import ENAStudyFields
+from genomes import models as genome_models
 
 logger = logging.getLogger(__name__)
 
@@ -253,10 +254,7 @@ class MGnifyGenomeDownloadFile(MGnifyAnalysisDownloadFile):
     url: str | None = None
 
     @staticmethod
-    def resolve_url(obj: "MGnifyGenomeDownloadFile"):
-        # Lazy import to avoid potential circular imports
-        from genomes import models as genome_models
-
+    def resolve_url(obj: MGnifyGenomeDownloadFile):
         try:
             genome = genome_models.Genome.objects.get(accession=obj.parent_identifier)
         except genome_models.Genome.DoesNotExist:
