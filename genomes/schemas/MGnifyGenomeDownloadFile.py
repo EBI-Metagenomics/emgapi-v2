@@ -15,9 +15,9 @@ if TYPE_CHECKING:
     from analyses.schemas import MGnifyAnalysisDownloadFile
 
 
-
 logger = logging.getLogger(__name__)
 EMG_CONFIG = settings.EMG_CONFIG
+
 
 class MGnifyGenomeDownloadFile(MGnifyAnalysisDownloadFile):
     path: Annotated[str, Field(exclude=True)]

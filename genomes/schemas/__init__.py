@@ -9,5 +9,5 @@ __all__ = [
     "GenomeCatalogueList",
     "GenomeCatalogueDetail",
     "GenomeWithAnnotations",
-    "MGnifyGenomeDownloadFile"
+    "MGnifyGenomeDownloadFile",
 ]
