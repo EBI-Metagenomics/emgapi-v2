@@ -23,7 +23,6 @@ from emgapiv2.enum_utils import FutureStrEnum
 from genomes.schemas.GenomeCatalogue import GenomeCatalogueList
 from workflows.data_io_utils.filenames import trailing_slash_ensured_dir
 from workflows.ena_utils.study import ENAStudyFields
-from genomes import models as genome_models
 
 logger = logging.getLogger(__name__)
 
@@ -245,32 +244,6 @@ class MGnifyStudyDownloadFile(MGnifyAnalysisDownloadFile):
             return private_storage.generate_secure_link(private_path)
 
         return f"{EMG_CONFIG.service_urls.transfer_services_url_root.rstrip('/')}/{study.external_results_dir}/{obj.path}"
-
-
-class MGnifyGenomeDownloadFile(MGnifyAnalysisDownloadFile):
-    path: Annotated[str, Field(exclude=True)]
-    parent_identifier: Annotated[Union[int, str], Field(exclude=True)]
-
-    url: str | None = None
-
-    @staticmethod
-    def resolve_url(obj: MGnifyGenomeDownloadFile):
-        try:
-            genome = genome_models.Genome.objects.get(accession=obj.parent_identifier)
-        except genome_models.Genome.DoesNotExist:
-            logger.warning(
-                f"No Genome found with accession {obj.parent_identifier} for download URL resolution"
-            )
-            return None
-
-        if not genome.result_directory:
-            # Without a results directory we cannot form a URL
-            return None
-
-        return urljoin(
-            EMG_CONFIG.service_urls.transfer_services_url_root,
-            urljoin(trailing_slash_ensured_dir(genome.result_directory), obj.path),
-        )
 
 
 class AnalysedRun(ModelSchema):
