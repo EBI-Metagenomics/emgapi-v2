@@ -1,4 +1,4 @@
-from typing import Optional, TYPE_CHECKING
+from typing import Optional
 from genomes.schemas.GenomeBase import GenomeBase
 from genomes.schemas.GenomeCatalogue import GenomeCatalogueBase
 from ninja import Field
