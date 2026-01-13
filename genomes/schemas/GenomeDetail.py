@@ -1,8 +1,9 @@
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 from genomes.schemas.GenomeBase import GenomeBase
 from genomes.schemas.GenomeCatalogue import GenomeCatalogueBase
 from ninja import Field
-from analyses.schemas import MGnifyGenomeDownloadFile
+if TYPE_CHECKING:
+    from analyses.schemas import MGnifyGenomeDownloadFile
 
 
 class GenomeDetail(GenomeBase):
