@@ -17,6 +17,9 @@ class SlurmConfig(BaseModel):
     private_results_dir: str = "/nfs/public/services/private-data"
     user: str = "root"
 
+    # Prefect / default work pool
+    work_pool_name: str = "slurm_work_pool"
+
     incomplete_job_limit: int = 100
     # if this many jobs are RUNNING or PENDING, no more are submitted
 
