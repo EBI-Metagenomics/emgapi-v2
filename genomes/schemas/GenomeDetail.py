@@ -3,8 +3,7 @@ from genomes.schemas.GenomeBase import GenomeBase
 from genomes.schemas.GenomeCatalogue import GenomeCatalogueBase
 from ninja import Field
 
-if TYPE_CHECKING:
-    from analyses.schemas import MGnifyGenomeDownloadFile
+from analyses.schemas import MGnifyGenomeDownloadFile
 
 
 class GenomeDetail(GenomeBase):
