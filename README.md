@@ -127,7 +127,7 @@ task add-deployment FILE=workflows/flows/analysis/assembly/flows/import_asa_batc
 
 > [!NOTE]
 > For production flows use `prefect-ebi-codon.yaml`
-> task add-deployment YAML=workflows/prefect_deployments/prefect-ebi-codon.yaml ILE=workflows/flows/analysis/assembly/flows/import_asa_batch.py FLOW=import_asa_batch
+> task add-deployment YAML=workflows/prefect_deployments/prefect-ebi-codon.yaml FILE=workflows/flows/analysis/assembly/flows/import_asa_batch.py FLOW=import_asa_batch
 
 To deploy (or update) all flows defined in the YAML file to the Prefect server (for dev/testing):
 ```shell
