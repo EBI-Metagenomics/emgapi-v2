@@ -3,12 +3,13 @@ from datetime import timedelta
 from pathlib import Path
 
 from django.db import close_old_connections
+from django.db.models import Q
 from prefect import flow, get_run_logger
 from prefect.runtime import flow_run
 
 from activate_django_first import EMG_CONFIG
 
-from analyses.models import Study
+from analyses.models import Study, Analysis
 from workflows.flows.analysis.assembly.flows.import_map_batch import import_map_batch
 from workflows.flows.analysis.assembly.tasks.make_samplesheet_assembly import (
     make_samplesheet_for_map,
@@ -58,7 +59,7 @@ def run_map_batch(assembly_analyses_batch_id: uuid.UUID):
     :param raise_on_failure: Raise an exception if the MAP pipeline fails
     """
 
-    # REFACTOR: There is a bit of repetition on this method:
+    # TODO: REFACTOR: There is a bit of repetition on this method:
     # `make_samplesheet_for_map` will also pull the analyses-batches from the DB
     # The status update process is done in a very "manual" way.. a few more generalistic methods in
     # Managers should help with this
@@ -79,15 +80,22 @@ def run_map_batch(assembly_analyses_batch_id: uuid.UUID):
         EMG_CONFIG.map_pipeline.pipeline_git_revision,
     )
 
-    # Check if all analyses are already completed for MAP
-    # Only process analyses that completed VIRify but haven't completed MAP yet
+    # Selection filters for analyses ready for MAP:
+    # - VIRify must have finished (either COMPLETED or FAILED)
+    # - If FAILED, it must be because of ANALYSIS_QC_FAILED
+    # - MAP must not be COMPLETED already
     analyses_to_process = assembly_analysis_batch.batch_analyses.filter(
-        virify_status=AssemblyAnalysisPipelineStatus.COMPLETED
+        Q(virify_status=AssemblyAnalysisPipelineStatus.COMPLETED)
+        | Q(
+            analysis__status__contains={
+                Analysis.AnalysisStates.ANALYSIS_QC_FAILED: True
+            }
+        )
     ).exclude(map_status=AssemblyAnalysisPipelineStatus.COMPLETED)
 
     if not analyses_to_process.exists():
         logger.warning(
-            "All VIRify-completed analyses already have MAP COMPLETED status, skipping MAP execution"
+            "No analyses ready for MAP execution (all already COMPLETED or none finished VIRify), skipping"
         )
         return
 
@@ -95,18 +103,20 @@ def run_map_batch(assembly_analyses_batch_id: uuid.UUID):
         f"Processing {analyses_to_process.count()} analyses for MAP (skipping already-completed)"
     )
 
-    # Mark only the analyses being processed as RUNNING (not the already-completed ones)
-    analyses_to_process.update(map_status=AssemblyAnalysisPipelineStatus.RUNNING)
+    # Create the MAP samplesheet using the updated task
+    # Note: we pass the IDs of the analyses to process
+    analyses_to_process_ids = list(analyses_to_process.values_list("id", flat=True))
 
-    # Create samplesheets directory in the batch workspace
-    mgnify_study: Study = assembly_analysis_batch.study
-
-    # Create the MAP samplesheet using the make_samplesheet_for_map function
-    # The function uses the filesystem to find CDS and VIRify GFF files
     map_samplesheet_path, _ = make_samplesheet_for_map(
         assembly_analysis_batch.id,
+        analysis_batch_job_ids=analyses_to_process_ids,
         output_dir=Path(assembly_analysis_batch.workspace_dir) / "samplesheets",
     )
+
+    # Mark selected analyses as RUNNING
+    if not map_samplesheet_path:
+        logger.warning("No MAP samplesheet generated, skipping MAP execution")
+        return
 
     # Check if the MAP samplesheet exists
     if not map_samplesheet_path.exists():
@@ -117,9 +127,13 @@ def run_map_batch(assembly_analyses_batch_id: uuid.UUID):
         assembly_analysis_batch.save()
         # Only mark RUNNING analyses as FAILED (don't overwrite already-COMPLETED ones)
         assembly_analysis_batch.batch_analyses.filter(
-            map_status=AssemblyAnalysisPipelineStatus.RUNNING
+            id__in=analyses_to_process_ids
         ).update(map_status=AssemblyAnalysisPipelineStatus.FAILED)
         return
+
+    analyses_to_process.update(map_status=AssemblyAnalysisPipelineStatus.RUNNING)
+
+    mgnify_study: Study = assembly_analysis_batch.study
 
     # Store samplesheet path
     assembly_analysis_batch.map_samplesheet_path = str(map_samplesheet_path)

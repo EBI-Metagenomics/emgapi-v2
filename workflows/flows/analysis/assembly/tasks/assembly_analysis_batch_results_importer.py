@@ -147,16 +147,12 @@ def assembly_analysis_batch_results_importer(
 
         try:
             # TODO: I think this needs a bit of thought, it just doesn't feel right. I smell repetition and things
-            #       that just don't feel like "natural"
+            #       that just don't feel "natural"
             if validation_only:
                 # Only validate, don't import
                 schema.validate_results(base_path, analysis.assembly.first_accession)
                 logger.info(f"Validation successful for {analysis}")
-                results.append(
-                    ImportResult(
-                        analysis_id=analysis.id, success=True, validation_only=True
-                    )
-                )
+                results.append(ImportResult(analysis_id=analysis.id, success=True))
             else:
                 # Validate and import
                 importer = AssemblyResultImporter(analysis)
@@ -178,7 +174,6 @@ def assembly_analysis_batch_results_importer(
                         analysis_id=analysis.id,
                         success=True,
                         downloads_count=downloads_count,
-                        validation_only=False,
                     )
                 )
         except PipelineValidationError as e:
@@ -188,7 +183,6 @@ def assembly_analysis_batch_results_importer(
                     analysis_id=analysis.id,
                     success=False,
                     error=str(e),
-                    validation_only=validation_only,
                 )
             )
         except Exception as e:
@@ -200,7 +194,6 @@ def assembly_analysis_batch_results_importer(
                     analysis_id=analysis.id,
                     success=False,
                     error=f"Unexpected error: {str(e)}",
-                    validation_only=validation_only,
                 )
             )
 
