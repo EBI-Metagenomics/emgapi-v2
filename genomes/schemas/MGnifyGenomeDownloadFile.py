@@ -1,25 +1,22 @@
 from __future__ import annotations
 
 import logging
+from typing import Union
 from urllib.parse import urljoin
+
 from django.conf import settings
-
-
+from ninja import Field, Schema
 from typing_extensions import Annotated
-from ninja import Field
-from typing import Union, TYPE_CHECKING
+
+from analyses.base_models.with_downloads_models import DownloadFile
 from genomes import models as genome_models
 from workflows.data_io_utils.filenames import trailing_slash_ensured_dir
-
-if TYPE_CHECKING:
-    from analyses.schemas import MGnifyAnalysisDownloadFile
-
 
 logger = logging.getLogger(__name__)
 EMG_CONFIG = settings.EMG_CONFIG
 
 
-class MGnifyGenomeDownloadFile(MGnifyAnalysisDownloadFile):
+class MGnifyGenomeDownloadFile(Schema, DownloadFile):
     path: Annotated[str, Field(exclude=True)]
     parent_identifier: Annotated[Union[int, str], Field(exclude=True)]
 
