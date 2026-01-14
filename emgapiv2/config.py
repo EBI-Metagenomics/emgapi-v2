@@ -107,6 +107,8 @@ class AmpliconPipelineConfig(MGnifyPipelineConfig):
     completed_runs_csv: str = "qc_passed_runs.csv"
     failed_runs_csv: str = "qc_failed_runs.csv"
 
+    # test reference DB OTU path
+    refdb_otus_dir: str = "/app/data/tests/refdb_otus"
     # Results folders
     qc_folder: str = "qc"
     sequence_categorisation_folder: str = "sequence-categorisation"

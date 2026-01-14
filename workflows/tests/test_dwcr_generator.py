@@ -23,6 +23,7 @@ def test_dwcr_generator(
     amplicon_pipeline_outdir = pathlib.Path(
         amplicon_analysis_with_downloads.pipeline_outdir
     )
+    refdb_otus = pathlib.Path(EMG_CONFIG.amplicon_pipeline.refdb_otus_dir)
 
     # Mock the read_run ENA API requests
     responses.add(
@@ -137,5 +138,6 @@ def test_dwcr_generator(
     generate_dwc_ready_summary_for_pipeline_run(
         raw_reads_mgnify_study.accession,
         amplicon_pipeline_outdir,
+        refdb_otus,
         completed_runs_filename,
     )

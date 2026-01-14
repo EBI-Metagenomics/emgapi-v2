@@ -24,6 +24,7 @@ from workflows.prefect_utils.dir_context import chdir
 def generate_dwc_ready_summary_for_pipeline_run(
     mgnify_study_accession: str,
     pipeline_outdir: Path | str,
+    refdb_otus_dir: Path | str,
     completed_runs_filename: str = EMG_CONFIG.amplicon_pipeline.completed_runs_csv,
 ) -> list[Path] | None:
     logger = get_run_logger()
@@ -72,6 +73,7 @@ def generate_dwc_ready_summary_for_pipeline_run(
                 generate_dwcready_summaries,
                 runs=runs,
                 analyses_dir=results_dir.path,
+                otu_dir=refdb_otus_dir,
                 output_prefix=prefix,
             )
 
