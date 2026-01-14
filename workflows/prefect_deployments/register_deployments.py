@@ -6,6 +6,8 @@ import argparse
 
 from typing import Optional, Dict
 
+# Replace this whenever this https://github.com/PrefectHQ/prefect/issues/19742 arrives
+
 
 def get_flow_info(file_path: str, flow_name_to_find: str) -> Optional[Dict[str, str]]:
     """
