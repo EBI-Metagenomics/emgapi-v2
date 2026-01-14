@@ -25,11 +25,10 @@ def delete_study_nextflow_workdir(
 
     # check for failed analyses first AnalysisStates.ANALYSIS_FAILED
     failed_analyses = (
-        analyses.models.Analysis.objects.select_related("run")
-        .filter(
+        analyses.models.Analysis.objects.filter(
             id__in=analyses_to_attempt,
             run__metadata__fastq_ftps__isnull=False,
-            status__equals=AnalysisStates.ANALYSIS_FAILED,
+            status__contains={AnalysisStates.ANALYSIS_FAILED: True},
         )
         .order_by("id")
         .values_list("id", flat=True)
@@ -63,13 +62,31 @@ def delete_study_results_dir(
     def getmd5(fp):
         return hashlib.md5(open(fp, "rb").read()).hexdigest()
 
+    allowed_extensions = {
+        "yml",
+        "yaml",
+        "txt",
+        "tsv",
+        "mseq",
+        "html",
+        "fa",
+        "json",
+        "gz",
+        "fasta",
+        "csv",
+        "deoverlapped",
+    }
     source_files = {
-        fp.name: getmd5(fp)
-        for fp in glob.glob(study.results_dir / "**" / "*", recursive=True)
+        Path(fp).name: getmd5(fp)
+        for fp in glob.glob(str(Path(study.results_dir) / "**/*"), recursive=True)
+        if Path(fp).name.split(".")[-1] in allowed_extensions
     }
     dest_files = {
-        fp.name: getmd5(fp)
-        for fp in glob.glob(study.external_results_dir / "**" / "*", recursive=True)
+        Path(fp).name: getmd5(fp)
+        for fp in glob.glob(
+            str(Path(study.external_results_dir) / "**/*"), recursive=True
+        )
+        if Path(fp).name.split(".")[-1] in allowed_extensions
     }
     if not all(
         [

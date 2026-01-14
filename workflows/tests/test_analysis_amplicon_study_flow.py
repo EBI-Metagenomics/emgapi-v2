@@ -891,7 +891,7 @@ def test_prefect_analyse_amplicon_flow(
             ],  # study ones generated, and partials left in place
             GlobRule(
                 rule_name="All study level files are present",
-                glob_patten=f"{study.first_accession}*{STUDY_SUMMARY_TSV}",
+                glob_pattern=f"{study.first_accession}*{STUDY_SUMMARY_TSV}",
                 test=lambda f: len(list(f)) == 6,
             ),
         ],
@@ -919,7 +919,7 @@ def test_prefect_analyse_amplicon_flow(
             GlobHasFilesCountRule[13],  # partials deleted, just merged ones
             GlobRule(
                 rule_name="All files are study level",
-                glob_patten=f"{study.first_accession}*{STUDY_SUMMARY_TSV}",
+                glob_pattern=f"{study.first_accession}*{STUDY_SUMMARY_TSV}",
                 test=lambda f: len(list(f)) == 6,
             ),
         ],
@@ -1213,7 +1213,7 @@ def test_prefect_analyse_amplicon_flow_private_data(
             ],  # study ones generated, and partials left in place
             GlobRule(
                 rule_name="All study level files are present",
-                glob_patten=f"{study.first_accession}*{STUDY_SUMMARY_TSV}",
+                glob_pattern=f"{study.first_accession}*{STUDY_SUMMARY_TSV}",
                 test=lambda f: len(list(f)) == 5,
             ),
         ],
@@ -1241,7 +1241,7 @@ def test_prefect_analyse_amplicon_flow_private_data(
             GlobHasFilesCountRule[11],  # partials deleted, just merged ones
             GlobRule(
                 rule_name="All files are study level",
-                glob_patten=f"{study.first_accession}*{STUDY_SUMMARY_TSV}",
+                glob_pattern=f"{study.first_accession}*{STUDY_SUMMARY_TSV}",
                 test=lambda f: len(list(f)) == 5,
             ),
         ],

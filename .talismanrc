@@ -110,6 +110,9 @@ fileignoreconfig:
 - filename: workflows/data_io_utils/file_rules.py
   checksum: 18b7d98b4778cf50b81961e026ef5ce8936692b2a2db11038656aca7940b6301
 
+- filename: workflows/data_io_utils/file_rules/nodes.py
+  checksum: 5d8b55346b263a4885debb1d0e40b4477a596abe284535ef9371389d36f5a0df
+
 - filename: workflows/data_io_utils/mgnify_v6_utils/assembly.py
   allowed_patterns: [_key]
 
