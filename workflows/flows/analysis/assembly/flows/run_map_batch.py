@@ -83,13 +83,14 @@ def run_map_batch(assembly_analyses_batch_id: uuid.UUID):
     # Selection filters for analyses ready for MAP:
     # - VIRify must have finished (either COMPLETED or FAILED)
     # - If FAILED, it must be because of ANALYSIS_QC_FAILED
-    # - MAP must not be COMPLETED already
+    # - MAP must not be COMPLETED yet
     analyses_to_process = assembly_analysis_batch.batch_analyses.filter(
         Q(virify_status=AssemblyAnalysisPipelineStatus.COMPLETED)
         | Q(
+            virify_status=AssemblyAnalysisPipelineStatus.FAILED,
             analysis__status__contains={
                 Analysis.AnalysisStates.ANALYSIS_QC_FAILED: True
-            }
+            },
         )
     ).exclude(map_status=AssemblyAnalysisPipelineStatus.COMPLETED)
 
