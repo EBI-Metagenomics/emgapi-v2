@@ -72,7 +72,7 @@ def generate_dwc_ready_summary_for_pipeline_run(
                 generate_dwcready_summaries,
                 runs=runs,
                 analyses_dir=results_dir.path,
-                output_prefix="chunk1",
+                output_prefix=prefix,
             )
 
     generated_files = list(Path(study.results_dir).glob("*_dwcready.csv"))
