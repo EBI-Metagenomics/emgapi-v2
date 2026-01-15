@@ -381,7 +381,7 @@ def test_virify_failure_partial_results(
 
         for analysis_id in assembly_analyses_ids:
             analysis = Analysis.objects.get(id=analysis_id)
-            analysis.status[f"{Analysis.AnalysisStates.ANALYSIS_STARTED}"] = True
+            analysis.status[Analysis.AnalysisStates.ANALYSIS_STARTED.value] = True
             analysis.save()
 
     mocked_set_post_states.side_effect = mock_set_states_side_effect
