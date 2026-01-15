@@ -13,8 +13,17 @@ from workflows.data_io_utils.file_rules.common_rules import (
 )
 from workflows.data_io_utils.file_rules.nodes import Directory, File
 
+from workflows.ena_utils.ena_accession_matching import (
+    INSDC_PROJECT_ACCESSION_GLOB,
+    INSDC_STUDY_ACCESSION_GLOB,
+)
+
+from workflows.flows.analyse_study_tasks.shared.study_summary import DWCREADY_CSV
+
+
 from mgnify_pipelines_toolkit.analysis.shared.dwc_summary_generator import (
     generate_dwcready_summaries,
+    merge_dwcr_summaries,
 )
 
 from workflows.prefect_utils.dir_context import chdir
@@ -91,6 +100,70 @@ def merge_dwc_ready_summaries(
     bludgeon: bool = True,
 ) -> list[Path] | None:
     logger = get_run_logger()
-    logger.warning("Not implemented yet")
-    # TODO: implement me :)
-    return []
+
+    study = Study.objects.get(accession=mgnify_study_accession)
+
+    # Set the results_dir if it hasn't been set yet, so that it can be used in the summary generator'
+    study.set_results_dir_default()
+
+    logger.info(f"Merging DwC-R summaries for {study}, in {study.results_dir}")
+
+    if not study.results_dir:
+        logger.warning(
+            f"Study {study} has no results_dir, so cannot merge DwC-R summaries"
+        )
+        return []
+
+    logger.debug(f"Glob of dir is {list(Path(study.results_dir).glob('*'))}")
+    existing_merged_files = list(
+        Path(study.results_dir).glob(f"{INSDC_PROJECT_ACCESSION_GLOB}{DWCREADY_CSV}")
+    ) + list(
+        Path(study.results_dir).glob(f"{INSDC_STUDY_ACCESSION_GLOB}{DWCREADY_CSV}")
+    )
+    if existing_merged_files:
+        logger.warning(
+            f"{len(existing_merged_files)} DwC-R summaries already exist in {study.results_dir}"
+        )
+    if bludgeon:
+        for existing_merged_file in existing_merged_files:
+            logger.warning(f"Deleting {existing_merged_file}")
+            existing_merged_file.unlink()
+
+    summary_files = list(Path(study.results_dir).glob(f"*{DWCREADY_CSV}"))
+    logger.info(
+        f"There appear to be {len(summary_files)} DwC-R summary files in {study.results_dir}"
+    )
+
+    logger.info(
+        f"Study results_dir, where DwC-R summaries will be merged, is {study.results_dir}"
+    )
+    study_dir = Directory(
+        path=Path(study.results_dir),
+        rules=[DirectoryExistsRule],
+    )
+
+    with chdir(study.results_dir):
+        with click.Context(merge_dwcr_summaries) as ctx:
+            ctx.invoke(
+                merge_dwcr_summaries,
+                analyses_dir=study_dir.path,
+                output_prefix=study.first_accession,
+            )
+
+    generated_files = list(
+        study_dir.path.glob(f"{study.first_accession}*{DWCREADY_CSV}")
+    )
+
+    if not generated_files:
+        logger.warning(f"No DwC-R  summary was merged in {study.results_dir}")
+        return []
+
+    logger.info(f"These are the merged DwC-R summary files: {generated_files}")
+
+    if cleanup_partials:
+        for file in summary_files:
+            logger.info(f"Removing partial study summary file {file}")
+            assert not file.name.startswith(
+                study.first_accession
+            )  # ensure we do not delete merged files
+            file.unlink()

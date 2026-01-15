@@ -104,6 +104,9 @@ fileignoreconfig:
 - filename: slurm-dev-environment/fs/nfs/public/tests/assembly_v6_output/ERZ857107/dram-distill/samplesheet_dram_input.tsv
   checksum: 17031e40bdc3447b7c6f98bf3c8cebf22e39c3e78ec129469ce83af6ca9609ed
 
+- filename: slurm-dev-environment/fs/nfs/public/tests/amplicon_v6_output/PRJNA398089_DADA2_SILVA_16S-V3-V4_dwcready.csv
+  checksum: 64dc192bb898582c90eb5ff990f6df05ebb56f29d58d8483a10b6f49a6ca96f9
+
 - filename: Taskfile.yaml
   allowed_patterns: [a password in, slurm-dev-environment/fs/nfs/public/tests/assembly_v6_output/ERZ857107/ERZ857107, slurm-dev-environment/fs/nfs/ftp/public/databases/metagenomics/mgnify_results/PRJNA398/PRJNA398089/ERZ857/ERZ857107/V6/assembly]
 

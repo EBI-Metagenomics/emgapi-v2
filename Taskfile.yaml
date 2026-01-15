@@ -100,6 +100,7 @@ tasks:
       - cp -r slurm-dev-environment/fs/nfs/public/tests/amplicon_v6_output/SRR1111111 slurm-dev-environment/fs/nfs/ftp/public/databases/metagenomics/mgnify_results/PRJNA398/PRJNA398089/SRR1111/SRR1111111/V6/amplicon
       - mkdir -p slurm-dev-environment/fs/nfs/ftp/public/databases/metagenomics/mgnify_results/PRJNA398/PRJNA398089/study-summaries
       - cp slurm-dev-environment/fs/nfs/public/tests/amplicon_v6_output/*study_summary.tsv slurm-dev-environment/fs/nfs/ftp/public/databases/metagenomics/mgnify_results/PRJNA398/PRJNA398089/study-summaries/
+      - cp slurm-dev-environment/fs/nfs/public/tests/amplicon_v6_output/*dwcready.csv slurm-dev-environment/fs/nfs/ftp/public/databases/metagenomics/mgnify_results/PRJNA398/PRJNA398089/study-summaries/
       - docker compose run app python manage.py shell -c "a=Analysis.objects.get(accession='MGYA00000004'); a.external_results_dir='PRJNA398/PRJNA398089/SRR1111/SRR1111111/V6/amplicon'; a.save()"
       # make results for assembly available
       - mkdir -p slurm-dev-environment/fs/nfs/ftp/public/databases/metagenomics/mgnify_results/PRJNA398/PRJNA398089/ERZ857/ERZ857107/V6/
