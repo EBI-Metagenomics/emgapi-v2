@@ -71,6 +71,7 @@ def import_asa_batch(assembly_analyses_batch_id: uuid.UUID):
         assembly_analysis_batch.id,
         validation_results,
         AssemblyAnalysisPipeline.ASA,
+        validation_only=True,
     )
 
     # Only import if validation passed for at least one analysis
@@ -89,6 +90,7 @@ def import_asa_batch(assembly_analyses_batch_id: uuid.UUID):
             assembly_analysis_batch.id,
             import_results,
             AssemblyAnalysisPipeline.ASA,
+            validation_only=False,
         )
     else:
         logger.error("No ASA analyses passed the results validation.")

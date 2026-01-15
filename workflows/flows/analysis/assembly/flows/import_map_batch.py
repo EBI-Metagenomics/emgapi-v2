@@ -54,6 +54,7 @@ def import_map_batch(assembly_analyses_batch_id: uuid.UUID):
             assembly_analysis_batch.id,
             validation_results,
             AssemblyAnalysisPipeline.MAP,
+            validation_only=True,
         )
 
         # Then import successful validations
@@ -71,6 +72,7 @@ def import_map_batch(assembly_analyses_batch_id: uuid.UUID):
                 assembly_analysis_batch.id,
                 import_results,
                 AssemblyAnalysisPipeline.MAP,
+                validation_only=False,
             )
         else:
             logger.warning("No MAP analyses passed the results validation.")

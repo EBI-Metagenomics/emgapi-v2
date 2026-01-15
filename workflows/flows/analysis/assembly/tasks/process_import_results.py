@@ -23,6 +23,7 @@ def process_import_results(
     assembly_analyses_batch_id: uuid.UUID,
     import_results: List[ImportResult],
     pipeline_type: AssemblyAnalysisPipeline,
+    validation_only: bool = False,
 ):
     """
     Process the pipeline_schema import results and update statuses in bulk.
@@ -34,6 +35,7 @@ def process_import_results(
     :param assembly_analyses_batch_id: The AssemblyAnalysisBatch to process
     :param import_results: List of import results from the importer task
     :param pipeline_type: The pipeline type (ASA, VIRify, or MAP)
+    :param validation_only: Whether this was validation-only (no import)
     """
     logger = get_run_logger()
 
@@ -46,16 +48,10 @@ def process_import_results(
         return
 
     failed_analysis_ids = [r.analysis_id for r in import_results if not r.success]
-    is_validation_only = import_results[0].validation_only if import_results else False
 
     # No failed analyses, nothing to do
     if not failed_analysis_ids:
         return
-
-    mode = "validation" if is_validation_only else "import"
-    logger.warning(
-        f"{len(failed_analysis_ids)} {pipeline_type.value.upper()} analyses failed {mode}"
-    )
 
     # Bulk update batch analysis statuses to FAILED
     batch.batch_analyses.filter(analysis_id__in=failed_analysis_ids).update(
@@ -71,12 +67,15 @@ def process_import_results(
     for result in import_results:
         if not result.success:
             analysis = failed_analyses[result.analysis_id]
-            analysis.status[Analysis.AnalysisStates.ANALYSIS_QC_FAILED] = True
+
+            # Ensure status is initialized as a dictionary
+            if not analysis.status:
+                analysis.status = Analysis.AnalysisStates.default_status()
+
+            analysis.status[f"{Analysis.AnalysisStates.ANALYSIS_QC_FAILED}"] = True
 
             # Distinguish between validation and import failures
-            error_prefix = (
-                "Validation error" if result.validation_only else "Import error"
-            )
+            error_prefix = "Validation error" if validation_only else "Import error"
             error_message = (
                 f"{pipeline_type.value.upper()} {error_prefix}: {result.error}"
             )
@@ -89,7 +88,7 @@ def process_import_results(
             # Log error to batch error_log
             batch.log_error(
                 pipeline_type=pipeline_type,
-                error_type="validation" if result.validation_only else "import",
+                error_type="validation" if validation_only else "import",
                 message=result.error,
                 analysis_id=result.analysis_id,
                 save=False,  # Batch will be saved once after all errors logged
