@@ -1,0 +1,8 @@
+2	sk__Archaea	k__	p__Nanoarchaeota
+4	sk__Archaea	k__	p__Nitrososphaerota	c__Nitrososphaeria
+469	sk__Bacteria
+1	sk__Bacteria	k__	p__Abditibacteriota	c__Abditibacteriia	o__Abditibacteriales	f__Abditibacteriaceae	g__Abditibacterium
+4491	sk__Bacteria	k__	p__Acidobacteriota
+2	sk__Bacteria	k__	p__Acidobacteriota	c__	o__	f__	g__	s__Acidobacteria_bacterium_LWQ117
+97	sk__Bacteria	k__	p__Acidobacteriota	c__Blastocatellia
+72	sk__Bacteria	k__	p__Acidobacteriota	c__Blastocatellia	o__Blastocatellales	f__Blastocatellaceae
