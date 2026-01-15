@@ -285,11 +285,7 @@ class TestProcessImportResults:
             batch_type="assembly_analysis",
         )
 
-        process_import_results(
-            batch.id,
-            [],
-            AssemblyAnalysisPipeline.ASA,
-        )
+        process_import_results(batch.id, [], AssemblyAnalysisPipeline.ASA)
 
         assert "No import results to process" in caplog.text
 
@@ -530,7 +526,6 @@ class TestValidationOnlyMode:
             # Verify result indicates validation-only
             assert len(results) == 1
             assert results[0].success is True
-            assert results[0].validation_only is True
             assert results[0].downloads_count is None
 
     @patch(
@@ -578,7 +573,6 @@ class TestValidationOnlyMode:
 
         assert len(validation_results) == 1
         assert validation_results[0].success is False
-        assert validation_results[0].validation_only is True
         assert "Schema error" in validation_results[0].error
 
         # Process results to update statuses
@@ -818,14 +812,13 @@ class TestErrorMessageDistinction:
         # Validation failure
         results = [
             ImportResult(
-                analysis_id=analysis.id,
-                success=False,
-                error="Missing required file",
-                validation_only=True,
+                analysis_id=analysis.id, success=False, error="Missing required file"
             )
         ]
 
-        process_import_results(batch.id, results, AssemblyAnalysisPipeline.VIRIFY)
+        process_import_results(
+            batch.id, results, AssemblyAnalysisPipeline.VIRIFY, validation_only=True
+        )
 
         analysis.refresh_from_db()
         reason = analysis.status.get(
@@ -865,7 +858,6 @@ class TestErrorMessageDistinction:
                 analysis_id=analysis.id,
                 success=False,
                 error="Database constraint violation",
-                validation_only=False,
             )
         ]
 
@@ -992,10 +984,7 @@ class TestErrorLogField:
 
         results = [
             ImportResult(
-                analysis_id=analysis.id,
-                success=False,
-                error="Validation failed",
-                validation_only=True,
+                analysis_id=analysis.id, success=False, error="Validation failed"
             )
         ]
 
@@ -1003,6 +992,7 @@ class TestErrorLogField:
             batch.id,
             results,
             AssemblyAnalysisPipeline.ASA,
+            validation_only=True,
         )
 
         batch.refresh_from_db()

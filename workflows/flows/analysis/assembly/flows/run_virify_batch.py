@@ -194,6 +194,7 @@ def run_virify_batch(assembly_analyses_batch_id: uuid.UUID):
         # Mark batch as failed
         assembly_analysis_batch.last_error = str(e)
         assembly_analysis_batch.save()
+
         # Only mark RUNNING analyses as FAILED (don't overwrite already-COMPLETED ones)
         assembly_analysis_batch.batch_analyses.filter(
             virify_status=AssemblyAnalysisPipelineStatus.RUNNING

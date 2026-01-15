@@ -48,14 +48,12 @@ class ImportResult(BaseModel):
     :param success: Whether import/validation succeeded
     :param downloads_count: Number of downloads imported (if successful and import mode)
     :param error: Error message (if failed)
-    :param validation_only: Whether this was validation-only (no import)
     """
 
     analysis_id: int
     success: bool
     downloads_count: Optional[int] = None
     error: Optional[str] = None
-    validation_only: bool = False
 
 
 class AssemblyResultSchema(PipelineResultSchema):
