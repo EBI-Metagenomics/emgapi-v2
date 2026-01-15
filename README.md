@@ -46,7 +46,7 @@ However, most common tasks are covered by the Taskfile, see below.)
 #### Create secrets-local.env
 That file is used in development (docker-compose.yml) to export variables into environment.
 Currently, that file has mandatory variables: username and password for assembly uploader using [webin-cli](https://ena-docs.readthedocs.io/en/latest/submit/general-guide/webin-cli.html)
-```commandline
+```shell
 export EMG_WEBIN__EMG_WEBIN_ACCOUNT="Webin-XXX"
 export EMG_WEBIN__EMG_WEBIN_PASSWORD="password"
 ```
@@ -116,18 +116,6 @@ It also "applies" the "flow deployment", which means the Prefect server knows ho
 It will register it as requiring a worker from the workpool "slurm" to run it.
 
 **2. Centralized declarative deployment (for production/stable flows)**
-
-For managing multiple flows, we use a `prefect.yaml` file.
-
-To add a flow to your `prefect.yaml` (boilerplate is filled automatically from the flow's docstring):
-```shell
-task add-deployment FILE=workflows/flows/analysis/assembly/flows/import_asa_batch.py FLOW=import_asa_batch
-```
-(By default, this updates `workflows/prefect_deployments/prefect-dev-donco.yaml`. Use another file path if needed.)
-
-> [!NOTE]
-> For production flows use `prefect-ebi-codon.yaml`
-> task add-deployment YAML=workflows/prefect_deployments/prefect-ebi-codon.yaml FILE=workflows/flows/analysis/assembly/flows/import_asa_batch.py FLOW=import_asa_batch
 
 To deploy (or update) all flows defined in the YAML file to the Prefect server (for dev/testing):
 ```shell
@@ -279,7 +267,6 @@ Run e.g. `FLOW=assembly_study task ebi-wp-k8s-hl:deploy-flow` to deploy a new fl
 
 You can also use the declarative approach in production:
 ```shell
-task ebi-wp-k8s-hl:add-deployment FILE=workflows/flows/analysis/assembly/flows/import_asa_batch.py FLOW=import_asa_batch
 task ebi-wp-k8s-hl:deploy-all
 ```
 (This uses `workflows/prefect_deployments/prefect-ebi-codon.yaml` by default.)

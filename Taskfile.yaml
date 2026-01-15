@@ -28,16 +28,6 @@ tasks:
     requires:
       vars: [FLOW]
 
-  add-deployment:
-    desc: "Add a flow from a python file to the prefect.yaml. E.g. FILE=workflows/flows/analysis/assembly/flows/import_asa_batch.py FLOW=import_asa_batch task add-deployment"
-    cmds:
-      - docker compose run app python workflows/prefect_deployments/register_deployments.py --file-path {{.FILE}} --yaml-path {{.YAML}} --flow-name {{.FLOW}} --pool {{.POOL}}
-    vars:
-      YAML: '{{.YAML | default "workflows/prefect_deployments/prefect-dev-donco.yaml"}}'
-      POOL: '{{.POOL | default "slurm"}}'
-    requires:
-      vars: [FILE, FLOW]
-
   deploy-all:
     desc: "Deploy all flows defined in a prefect.yaml file. E.g. YAML=workflows/prefect_deployments/prefect-dev-donco.yaml task deploy-all"
     cmds:
