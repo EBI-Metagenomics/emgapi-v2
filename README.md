@@ -46,7 +46,7 @@ However, most common tasks are covered by the Taskfile, see below.)
 #### Create secrets-local.env
 That file is used in development (docker-compose.yml) to export variables into environment.
 Currently, that file has mandatory variables: username and password for assembly uploader using [webin-cli](https://ena-docs.readthedocs.io/en/latest/submit/general-guide/webin-cli.html)
-```commandline
+```shell
 export EMG_WEBIN__EMG_WEBIN_ACCOUNT="Webin-XXX"
 export EMG_WEBIN__EMG_WEBIN_PASSWORD="password"
 ```
@@ -104,6 +104,9 @@ Meaningful flows, however, are run on separate infrastructure – and that is wh
 
 
 #### Register a Prefect flow (new shell)
+There are two ways to register a flow with the Prefect server:
+
+**1. Ad-hoc deployment (for development)**
 ```shell
 FLOW=realistic_example task deploy-flow
 ```
@@ -111,7 +114,15 @@ This "builds" a prefect flow (from the `workflows/flows/` directory, in a file o
 (Use `FILE=... FLOW=... task deploy-flow` if the filename doesn't match the method name.)
 It also "applies" the "flow deployment", which means the Prefect server knows how to execute it.
 It will register it as requiring a worker from the workpool "slurm" to run it.
-The Prefect agent in the docker compose setup is labelled as being from this "slurm" pool, so will pick it up.
+
+**2. Centralized declarative deployment (for production/stable flows)**
+
+To deploy (or update) all flows defined in the YAML file to the Prefect server (for dev/testing):
+```shell
+task deploy-all
+```
+
+The Prefect agent in the docker compose setup is labelled as being from the "slurm" pool, so will pick up these jobs.
 This agent simulates a worker node on an HPC cluster, e.g. it can submit `nextflow` pipeline executions which can in turn launch slurm jobs.
 Note that this is a very minimal development environment... the entire "slurm cluster" is just two docker containers on your computer.
 
@@ -253,6 +264,12 @@ E.g. see [the EBI WP K8s HL deployment README](deployment/ebi-wp-k8s-hl/README.m
 Run e.g. `task ebi-wp-k8s-hl:update-api` to build/push/restart the EMG API service in that deployment (**requires some secrets setup**).
 
 Run e.g. `FLOW=assembly_study task ebi-wp-k8s-hl:deploy-flow` to deploy a new flow to this production environment.
+
+You can also use the declarative approach in production:
+```shell
+task ebi-wp-k8s-hl:deploy-all
+```
+(This uses `workflows/prefect_deployments/prefect-ebi-codon.yaml` by default.)
 
 Note that the prefect workers *ALSO* need to have your new flow code, which is currently deployed separately.
 For EBI-WP-K8s-HL, there is a Jenkins job to deploy those workers to Codon.

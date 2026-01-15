@@ -30,6 +30,13 @@ tasks:
     requires:
       vars: [FLOW]
 
+  deploy-all:
+    desc: "Deploy all flows defined in the production prefect.yaml file."
+    cmds:
+      - kubectl --context=emgapiv2-hl-exp exec -it $(task get-api-pod-name) -- python manage.py prefectcli --no-prompt deploy --all --prefect-file {{.YAML}}
+    vars:
+      YAML: '{{.YAML | default "workflows/prefect_deployments/prefect-ebi-codon.yaml"}}'
+
   deploy:
     desc: "Deploys the EMG API and Prefect Server, plus their databases and ingresses etc, to kubernetes"
     cmds:
