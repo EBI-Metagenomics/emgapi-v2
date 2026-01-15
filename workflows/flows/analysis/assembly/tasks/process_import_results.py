@@ -69,7 +69,7 @@ def process_import_results(
             analysis = failed_analyses[result.analysis_id]
 
             # Ensure status is initialized as a dictionary
-            if analysis.status is None:
+            if not analysis.status:
                 analysis.status = Analysis.AnalysisStates.default_status()
 
             analysis.status[f"{Analysis.AnalysisStates.ANALYSIS_QC_FAILED}"] = True
