@@ -45,7 +45,7 @@ ZEBRAFISH_REFERENCE_GENOME = HostReferenceGenome(
     reference_genome="zebrafish_GCF_000002035.6",
 )
 BARLEY_REFERENCE_GENOME = HostReferenceGenome(
-    host_metadata=["barley", "112509", "Hordeum vulgare"],
+    host_metadata=["barley", "112509", "4513", "77009", "4516", "97361", "4519", "191506", "1288821", "Hordeum"],
     reference_genome="barley_GCA_904849725.1",
 )
 MAIZE_REFERENCE_GENOME = HostReferenceGenome(
