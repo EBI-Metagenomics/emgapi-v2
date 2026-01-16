@@ -49,7 +49,7 @@ BARLEY_REFERENCE_GENOME = HostReferenceGenome(
     reference_genome="barley_GCA_904849725.1",
 )
 MAIZE_REFERENCE_GENOME = HostReferenceGenome(
-    host_metadata=["maize", "Zea mays", "381124"],
+    host_metadata=["maize", "Zea mays", "Zea perennis", "Zea diploperennis", "Zea luxurians", "Zea nicaraguensis", "381124", "4577", "4580", "4576", "15945", "1293079"],
     reference_genome="maize_GCA_902167145.1",
 )
 RICE_REFERENCE_GENOME = HostReferenceGenome(
