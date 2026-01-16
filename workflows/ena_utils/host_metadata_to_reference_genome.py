@@ -58,7 +58,7 @@ RICE_REFERENCE_GENOME = HostReferenceGenome(
     reference_genome="rice_GCF_001433935.1",
 )
 WHEAT_REFERENCE_GENOME = HostReferenceGenome(
-    host_metadata=["wheat", "Triticum aestivum", "4565"],
+    host_metadata=["wheat", "Triticum", "4565", "376533", "860351", "52163", "295401", "69993", "85692", "4567", "376536", "376532", "376535", "69994", "58932", "4568", "376537", "501337", "77606", "58933", "4570", "4571", "4572", "77602"],
     reference_genome="wheat_GCA_018294505.1",
 )
 COD_REFERENCE_GENOME = HostReferenceGenome(
