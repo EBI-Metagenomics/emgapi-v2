@@ -53,7 +53,7 @@ MAIZE_REFERENCE_GENOME = HostReferenceGenome(
     reference_genome="maize_GCA_902167145.1",
 )
 RICE_REFERENCE_GENOME = HostReferenceGenome(
-    host_metadata=["rice", "Oryza sativa", "4530"],
+    host_metadata=["rice", "Oryza sativa", "Oryza glaberrima", "Oryza rufipogon", "Oryza nivara", "Oryza barthii", "Oryza longistaminata", "Oryza meridionalis", "Oryza glumaepatula", "Oryza punctata", "Oryza officinalis", "Oryza malampuzhaensis", "Oryza schweinfurthiana", "Oryza minuta", "Oryza latifolia", "Oryza alta", "Oryza grandiglumis", "Oryza australiensis", "Oryza brachyantha", "Oryza granulata", "Oryza meyeriana", "Oryza ridleyi", "Oryza longiglumis", "4530", "4538", "4529", "4536", "65489", "4528", "40149", "40148", "4537", "4535", "127571", "63629", "4534", "52545", "29690", "4532", "4533", "110450", "83307", "83308", "83309"],
     reference_genome="rice_GCF_001433935.1",
 )
 WHEAT_REFERENCE_GENOME = HostReferenceGenome(
