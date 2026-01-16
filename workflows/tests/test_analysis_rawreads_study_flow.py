@@ -357,6 +357,7 @@ def simulate_copy_results(
             os.makedirs(target_.parent, exist_ok=True)
             shutil.copyfile(fp, target_)
             continue
+
         # analysis results
         if fp.name.split(".")[-1] in allowed_extensions:
             target_ = target / "/".join(fp.parts[3:])

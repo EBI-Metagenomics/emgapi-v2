@@ -1,9 +1,12 @@
 import json
+import logging
 import os
+import re
 import shutil
+import glob
 from pathlib import Path
 from textwrap import dedent
-from typing import List, Optional
+from typing import List, Optional, Union
 from unittest.mock import Mock, patch
 
 import pytest
@@ -26,6 +29,10 @@ from workflows.prefect_utils.testing_utils import (
     should_not_mock_httpx_requests_to_prefect_server,
     run_flow_and_capture_logs,
     write_empty_fasta_file,
+)
+from workflows.flows.analyse_study_tasks.cleanup_pipeline_directories import (
+    delete_study_results_dir,
+    delete_study_nextflow_workdir,
 )
 
 EMG_CONFIG = settings.EMG_CONFIG
@@ -475,6 +482,39 @@ MockFileIsNotEmptyRule = FileRule(
 )
 
 
+def simulate_copy_results(
+    source: Path, target: Path, allowed_extensions: Union[set, list], logger=None
+):
+    for fp in (Path(v) for v in glob.glob(str(source / "**/*"), recursive=True)):
+        # study summaries
+        if any(
+            [
+                re.match(f"PRJ.*{STUDY_SUMMARY_TSV}", fp.name),
+                re.match(f"[DES]RP.*{STUDY_SUMMARY_TSV}", fp.name),
+            ]
+        ):
+            target_ = (
+                target
+                / "study-summaries"
+                / f"{EMG_CONFIG.amplicon_pipeline.pipeline_name}_{EMG_CONFIG.amplicon_pipeline.pipeline_version}"
+                / fp.name
+            )
+            if logger:
+                logger.info(f"Copying summary file {fp} to {target_}.")
+            os.makedirs(target_.parent, exist_ok=True)
+            shutil.copyfile(fp, target_)
+            continue
+
+        # analysis results
+        if fp.name.split(".")[-1] in allowed_extensions:
+            target_ = target / "/".join(fp.parts[3:])
+            if logger:
+                logger.info(f"Copying analysis results file {fp} to {target_}.")
+            os.makedirs(target_.parent, exist_ok=True)
+            shutil.copyfile(fp, target_)
+            continue
+
+
 @pytest.fixture
 def analysis_study_input_mocker(biome_choices, user_choices):
     ## Pretend that a human resumed the flow with the biome picker, and then with the assembler selector.
@@ -758,10 +798,21 @@ def test_prefect_analyse_amplicon_flow(
     mock_check_cluster_job_all_completed.assert_called()
     mock_suspend_flow_run.assert_called()
 
+    # Check samplesheet
     assembly_samplesheet_table = Artifact.get("amplicon-v6-initial-sample-sheet")
     assert assembly_samplesheet_table.type == "table"
     table_data = json.loads(assembly_samplesheet_table.data)
     assert len(table_data) == len(runs)
+    assert table_data[0]["sample"] in runs
+
+    # check biome and watchers were set correctly
+    study = analyses.models.Study.objects.get_or_create_for_ena_study(study_accession)
+    assert study.biome.biome_name == "Engineered"
+    assert admin_user == study.watchers.first()
+
+    # Check that the study has v6 analyses
+    study.refresh_from_db()
+    assert study.features.has_v6_analyses
 
     # Check all analyses were added to database
     assert (
@@ -775,11 +826,6 @@ def test_prefect_analyse_amplicon_flow(
         )
         == 5
     )
-
-    # check biome and watchers were set correctly
-    study = analyses.models.Study.objects.get_or_create_for_ena_study(study_accession)
-    assert study.biome.biome_name == "Engineered"
-    assert admin_user == study.watchers.first()
 
     # check completed runs (all runs in completed list - might contain sanity check not passed as well)
     assert study.analyses.filter(status__analysis_completed=True).count() == 4
@@ -928,6 +974,108 @@ def test_prefect_analyse_amplicon_flow(
     study.refresh_from_db()
     assert len(study.downloads_as_objects) == 6
     assert study.features.has_v6_analyses
+
+    # simulate copy_v6_pipeline_results and copy_v6_summaries
+    study.external_results_dir = (
+        f"/tmp/external/{study_accession[:-3]}/{study_accession}"
+    )
+    study.save()
+
+    logger = logging.getLogger("simulate_copy_results")
+
+    source = Path(study.results_dir)
+    target = Path(study.external_results_dir)
+
+    # test case where not everything is copied
+    allowed_extensions = {
+        "yml",
+        "yaml",
+        "txt",
+        "tsv",
+        "mseq",
+        "html",
+        "fa",
+        "gz",
+        "fasta",
+        "csv",
+        "deoverlapped",
+    }
+    simulate_copy_results(source, target, allowed_extensions, logger=logger)
+
+    # run deleting
+    # delete_study_nextflow_workdir(study_workdir, analyses_to_attempt)
+    delete_study_results_dir(study)
+
+    # check files
+    assert Path(study.results_dir).is_dir()
+
+    # test case where everything is copied
+    allowed_extensions = {
+        "yml",
+        "yaml",
+        "txt",
+        "tsv",
+        "mseq",
+        "html",
+        "fa",
+        "json",
+        "gz",
+        "fasta",
+        "csv",
+        "deoverlapped",
+    }
+    simulate_copy_results(source, target, allowed_extensions, logger=logger)
+
+    # run deleting
+    delete_study_results_dir(study)
+
+    # check files
+    assert not Path(study.results_dir).is_dir()
+
+    n = len(list(glob.glob(f"{study.external_results_dir}/**/*", recursive=True)))
+    logger.info(
+        f"External results directory {study.external_results_dir} has {n} files."
+    )
+    Directory(
+        path=Path(study.external_results_dir),
+        glob_rules=[
+            GlobRule(
+                rule_name="Recursive number of files",
+                glob_pattern="**/*",
+                test=lambda x: len(list(x)) == 144,
+            )
+        ],
+    )
+
+    # test Nextflow workdir cleanup
+    nextflow_workdir = (
+        Path("/tmp/work")
+        / Path(study_accession)
+        / Path(
+            f"{EMG_CONFIG.amplicon_pipeline.pipeline_name}_{EMG_CONFIG.amplicon_pipeline.pipeline_version}"
+        )
+        / samplesheet_hash
+    )
+    # generate plausible nextflow directories
+    os.makedirs(nextflow_workdir / "h5" / "h5scdo9q3u4nefpsldkfvubqp349", exist_ok=True)
+    assert nextflow_workdir.is_dir()
+
+    analyses_to_attempt = study.analyses.order_by("id").values_list("id", flat=True)
+    # set one of the analyses to incomplete
+    analysis_obj = analyses.models.Analysis.objects.get(pk=analyses_to_attempt[0])
+    analysis_obj.mark_status(
+        analyses.models.Analysis.AnalysisStates.ANALYSIS_FAILED, True
+    )
+
+    delete_study_nextflow_workdir(nextflow_workdir, analyses_to_attempt)
+    assert nextflow_workdir.is_dir()
+
+    # # set it to complete
+    analysis_obj.mark_status(
+        analyses.models.Analysis.AnalysisStates.ANALYSIS_FAILED, False
+    )
+    delete_study_nextflow_workdir(nextflow_workdir, analyses_to_attempt)
+    assert not nextflow_workdir.is_dir()
 
 
 @pytest.mark.flaky(
