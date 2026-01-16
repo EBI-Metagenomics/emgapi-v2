@@ -480,6 +480,9 @@ class AssemblyResultSchema(PipelineResultSchema):
                                 long_description="Table with counts for each BGC found",
                             ),
                             content_validator=AntismashSummarySchema,
+                            index_files=[
+                                DownloadFileIndexFileMetadata(index_type="gzi"),
+                            ],
                         ),
                     ],
                 ),
