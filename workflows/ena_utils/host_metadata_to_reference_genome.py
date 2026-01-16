@@ -69,7 +69,7 @@ RAT_REFERENCE_GENOME = HostReferenceGenome(
     reference_genome="rat_GCA_015227675.2",
 )
 SOYBEAN_REFERENCE_GENOME = HostReferenceGenome(
-    host_metadata=["soybean", "Solanum lycopersicum", "3847"],
+    host_metadata=["soybean", "Glycine max", "Glycine soja", "3847", "3848"],
     reference_genome="soybean_GCF_000004515.6",
 )
 RAINBOW_TROUT_REFERENCE_GENOME = HostReferenceGenome(
