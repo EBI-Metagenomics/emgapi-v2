@@ -10,7 +10,22 @@ class HostReferenceGenome(BaseModel):
 
 
 TOMATO_REFERENCE_GENOME = HostReferenceGenome(
-    host_metadata=["tomato", "Solanum lycopersicum", "Solanum pimpinellifolium", "Solanum chmielewskii", "Solanum habrochaites", "Solanum pennellii", "Solanum peruvianum", "Lycopersicon esculentum", "4081", "4084", "62889", "62890", "28526", "4082"], 
+    host_metadata=[
+        "tomato",
+        "Solanum lycopersicum",
+        "Solanum pimpinellifolium",
+        "Solanum chmielewskii",
+        "Solanum habrochaites",
+        "Solanum pennellii",
+        "Solanum peruvianum",
+        "Lycopersicon esculentum",
+        "4081",
+        "4084",
+        "62889",
+        "62890",
+        "28526",
+        "4082",
+    ],
     reference_genome="tomato",
 )
 CHICKEN_REFERENCE_GENOME = HostReferenceGenome(
@@ -46,19 +61,113 @@ ZEBRAFISH_REFERENCE_GENOME = HostReferenceGenome(
     reference_genome="zebrafish_GCF_000002035.6",
 )
 BARLEY_REFERENCE_GENOME = HostReferenceGenome(
-    host_metadata=["barley", "112509", "4513", "77009", "4516", "97361", "4519", "191506", "1288821", "Hordeum"],
+    host_metadata=[
+        "barley",
+        "112509",
+        "4513",
+        "77009",
+        "4516",
+        "97361",
+        "4519",
+        "191506",
+        "1288821",
+        "Hordeum",
+    ],
     reference_genome="barley_GCA_904849725.1",
 )
 MAIZE_REFERENCE_GENOME = HostReferenceGenome(
-    host_metadata=["maize", "Zea mays", "Zea perennis", "Zea diploperennis", "Zea luxurians", "Zea nicaraguensis", "381124", "4577", "4580", "4576", "15945", "1293079"],
+    host_metadata=[
+        "maize",
+        "Zea mays",
+        "Zea perennis",
+        "Zea diploperennis",
+        "Zea luxurians",
+        "Zea nicaraguensis",
+        "381124",
+        "4577",
+        "4580",
+        "4576",
+        "15945",
+        "1293079",
+    ],
     reference_genome="maize_GCA_902167145.1",
 )
 RICE_REFERENCE_GENOME = HostReferenceGenome(
-    host_metadata=["rice", "Oryza sativa", "Oryza glaberrima", "Oryza rufipogon", "Oryza nivara", "Oryza barthii", "Oryza longistaminata", "Oryza meridionalis", "Oryza glumaepatula", "Oryza punctata", "Oryza officinalis", "Oryza malampuzhaensis", "Oryza schweinfurthiana", "Oryza minuta", "Oryza latifolia", "Oryza alta", "Oryza grandiglumis", "Oryza australiensis", "Oryza brachyantha", "Oryza granulata", "Oryza meyeriana", "Oryza ridleyi", "Oryza longiglumis", "4530", "4538", "4529", "4536", "65489", "4528", "40149", "40148", "4537", "4535", "127571", "63629", "4534", "52545", "29690", "4532", "4533", "110450", "83307", "83308", "83309"],
+    host_metadata=[
+        "rice",
+        "Oryza sativa",
+        "Oryza glaberrima",
+        "Oryza rufipogon",
+        "Oryza nivara",
+        "Oryza barthii",
+        "Oryza longistaminata",
+        "Oryza meridionalis",
+        "Oryza glumaepatula",
+        "Oryza punctata",
+        "Oryza officinalis",
+        "Oryza malampuzhaensis",
+        "Oryza schweinfurthiana",
+        "Oryza minuta",
+        "Oryza latifolia",
+        "Oryza alta",
+        "Oryza grandiglumis",
+        "Oryza australiensis",
+        "Oryza brachyantha",
+        "Oryza granulata",
+        "Oryza meyeriana",
+        "Oryza ridleyi",
+        "Oryza longiglumis",
+        "4530",
+        "4538",
+        "4529",
+        "4536",
+        "65489",
+        "4528",
+        "40149",
+        "40148",
+        "4537",
+        "4535",
+        "127571",
+        "63629",
+        "4534",
+        "52545",
+        "29690",
+        "4532",
+        "4533",
+        "110450",
+        "83307",
+        "83308",
+        "83309",
+    ],
     reference_genome="rice_GCF_001433935.1",
 )
 WHEAT_REFERENCE_GENOME = HostReferenceGenome(
-    host_metadata=["wheat", "Triticum", "4565", "376533", "860351", "52163", "295401", "69993", "85692", "4567", "376536", "376532", "376535", "69994", "58932", "4568", "376537", "501337", "77606", "58933", "4570", "4571", "4572", "77602"],
+    host_metadata=[
+        "wheat",
+        "Triticum",
+        "4565",
+        "376533",
+        "860351",
+        "52163",
+        "295401",
+        "69993",
+        "85692",
+        "4567",
+        "376536",
+        "376532",
+        "376535",
+        "69994",
+        "58932",
+        "4568",
+        "376537",
+        "501337",
+        "77606",
+        "58933",
+        "4570",
+        "4571",
+        "4572",
+        "77602",
+    ],
     reference_genome="wheat_GCA_018294505.1",
 )
 COD_REFERENCE_GENOME = HostReferenceGenome(
@@ -103,10 +212,6 @@ def get_reference_genome_for_host(host_taxon: str | None) -> HostReferenceGenome
     for reference_genome in KNOWN_REFERENCE_GENOMES:
         for metadata_match in reference_genome.host_metadata:
             if metadata_match.lower() in host_taxon.lower():
-                return reference_genome
-            if " " in metadata_match and host_taxon.lower().startswith(
-                metadata_match.lower()
-            ):
                 # match overspecified species names, like "Hordeum vulgare subsp. vulgare" etc
                 return reference_genome
     return None
