@@ -10,7 +10,8 @@ class HostReferenceGenome(BaseModel):
 
 
 TOMATO_REFERENCE_GENOME = HostReferenceGenome(
-    host_metadata=["tomato", "Solanum lycopersicum", "4081"], reference_genome="tomato"
+    host_metadata=["tomato", "Solanum lycopersicum", "Solanum pimpinellifolium", "Solanum chmielewskii", "Solanum habrochaites", "Solanum pennellii", "Solanum peruvianum", "Lycopersicon esculentum", "4081", "4084", "62889", "62890", "28526", "4082"], 
+    reference_genome="tomato",
 )
 CHICKEN_REFERENCE_GENOME = HostReferenceGenome(
     host_metadata=["chicken", "Gallus gallus", "9031", "Galline"],
