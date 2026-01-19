@@ -16,7 +16,7 @@ django-ltree-2==0.1.12  # biome hierarchies
 django-ninja~=1.4.3  # api
 django-ninja-jwt~=5.3.9  # api auth
 django-db-file-storage~=0.5.6.1  # logo storage in db
-django-unfold==0.67.0  # admin panel
+django-unfold==0.76.0  # admin panel
 
 # Serving
 asgiref~=3.10.0
