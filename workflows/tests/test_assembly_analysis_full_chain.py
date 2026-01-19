@@ -131,10 +131,10 @@ def setup_map_output_helpers(map_outdir: Path, assembly_accession: str):
     "workflows.flows.analysis.assembly.flows.run_assembly_analysis_pipeline_batch.flow_run"
 )
 @patch(
-    "workflows.flows.analysis.assembly.flows.run_assembly_analysis_pipeline_batch.set_post_assembly_analysis_states"
+    "workflows.flows.analysis.assembly.flows.import_asa_batch.set_post_assembly_analysis_states"
 )
 @patch(
-    "workflows.flows.analysis.assembly.flows.run_assembly_analysis_pipeline_batch.assembly_analysis_batch_results_importer"
+    "workflows.flows.analysis.assembly.flows.import_asa_batch.assembly_analysis_batch_results_importer"
 )
 @patch(
     "workflows.flows.analysis.assembly.flows.run_assembly_analysis_pipeline_batch.generate_assembly_analysis_pipeline_batch_summary"
@@ -256,10 +256,10 @@ def test_full_chain_success(
     "workflows.flows.analysis.assembly.flows.run_assembly_analysis_pipeline_batch.flow_run"
 )
 @patch(
-    "workflows.flows.analysis.assembly.flows.run_assembly_analysis_pipeline_batch.assembly_analysis_batch_results_importer"
+    "workflows.flows.analysis.assembly.flows.import_asa_batch.assembly_analysis_batch_results_importer"
 )
 @patch(
-    "workflows.flows.analysis.assembly.flows.run_assembly_analysis_pipeline_batch.set_post_assembly_analysis_states"
+    "workflows.flows.analysis.assembly.flows.import_asa_batch.set_post_assembly_analysis_states"
 )
 @patch(
     "workflows.flows.analysis.assembly.flows.run_assembly_analysis_pipeline_batch.generate_assembly_analysis_pipeline_batch_summary"
@@ -332,13 +332,13 @@ def test_asa_failure_stops_chain(
     "workflows.flows.analysis.assembly.flows.run_assembly_analysis_pipeline_batch.flow_run"
 )
 @patch(
-    "workflows.flows.analysis.assembly.flows.run_assembly_analysis_pipeline_batch.set_post_assembly_analysis_states"
+    "workflows.flows.analysis.assembly.flows.import_asa_batch.set_post_assembly_analysis_states"
 )
 @patch(
     "workflows.flows.analysis.assembly.flows.run_assembly_analysis_pipeline_batch.generate_assembly_analysis_pipeline_batch_summary"
 )
 @patch(
-    "workflows.flows.analysis.assembly.flows.run_assembly_analysis_pipeline_batch.assembly_analysis_batch_results_importer"
+    "workflows.flows.analysis.assembly.flows.import_asa_batch.assembly_analysis_batch_results_importer"
 )
 @patch("workflows.flows.analysis.assembly.flows.run_map_batch.run_cluster_job")
 @patch("workflows.flows.analysis.assembly.flows.run_virify_batch.run_cluster_job")
@@ -381,7 +381,7 @@ def test_virify_failure_partial_results(
 
         for analysis_id in assembly_analyses_ids:
             analysis = Analysis.objects.get(id=analysis_id)
-            analysis.status = Analysis.AnalysisStates.ANALYSIS_STARTED
+            analysis.status[Analysis.AnalysisStates.ANALYSIS_STARTED.value] = True
             analysis.save()
 
     mocked_set_post_states.side_effect = mock_set_states_side_effect
@@ -449,10 +449,10 @@ def test_virify_failure_partial_results(
     "workflows.flows.analysis.assembly.flows.run_assembly_analysis_pipeline_batch.flow_run"
 )
 @patch(
-    "workflows.flows.analysis.assembly.flows.run_assembly_analysis_pipeline_batch.assembly_analysis_batch_results_importer"
+    "workflows.flows.analysis.assembly.flows.import_asa_batch.assembly_analysis_batch_results_importer"
 )
 @patch(
-    "workflows.flows.analysis.assembly.flows.run_assembly_analysis_pipeline_batch.set_post_assembly_analysis_states"
+    "workflows.flows.analysis.assembly.flows.import_asa_batch.set_post_assembly_analysis_states"
 )
 @patch(
     "workflows.flows.analysis.assembly.flows.run_assembly_analysis_pipeline_batch.generate_assembly_analysis_pipeline_batch_summary"

@@ -81,46 +81,47 @@ def make_samplesheet_assembly(
 
 @task
 def make_samplesheet_for_map(
-    assembly_analysis_id: uuid.UUID,
+    assembly_analysis_batch_id: uuid.UUID,
+    analysis_batch_job_ids: list[int],
     output_dir: Path = None,
 ) -> (Path, str):
     """
     Makes a samplesheet for a batch of assembly analyses for MAP.
 
-    Uses filesystem structure instead of database queries to find required files.
-    Assumes results follow the expected pipeline structure:
-    - ASA CDS GFF: {asa_workspace}/{assembly_accession}/cds/{assembly_accession}_predicted_cds.gff.gz
-    - VIRify GFF: {virify_workspace}/{assembly_accession}/08-final/gff/{assembly_accession}_virify.gff
+    Uses the provided analysis_batch_job_ids to select specific analyses from the batch.
+    The task validates that mandatory ASA files (filtered contigs FASTA and predicted CDS GFF)
+    exist for each selected analysis.
 
     The samplesheet has the following columns:
     - sample: the assembly first_accession
-    - assembly: the assembly fasta (from ENA metadata)
-    - user_proteins_gff: the assembly analysis CDS GFF file
-    - virify_gff: the VIRify GFF file
+    - assembly: the assembly filtered contigs fasta (from ASA)
+    - user_proteins_gff: the assembly analysis predicted CDS GFF file (from ASA)
+    - virify_gff: the VIRify GFF file (optional, only included if VIRify is COMPLETED and file exists)
 
-    :param assembly_analysis_id: The AssemblyAnalysisBatch id containing analyses to process
+    :param assembly_analysis_batch_id: The ID of the AssemblyAnalysisBatch
+    :param analysis_batch_job_ids: List of AssemblyAnalysisBatchAnalysis IDs to include in the samplesheet
     :param output_dir: Directory where the samplesheet should be saved. If None, uses default workdir.
-    :return: Tuple of the Path to the samplesheet file, and a hash of the assembly IDs which is used in the SS filename.
+    :return: Tuple of the Path to the samplesheet file, and a hash of the assembly IDs.
     """
     logger = get_run_logger()
-
-    batch = AssemblyAnalysisBatch.objects.get(id=assembly_analysis_id)
-
+    batch = AssemblyAnalysisBatch.objects.get(id=assembly_analysis_batch_id)
     mgnify_study = batch.study
 
-    # We only keep those that are VIRify completed (which requires them to be ASA completed)
-    completed_analysis_ids = batch.batch_analyses.filter(
-        virify_status=AssemblyAnalysisPipelineStatus.COMPLETED
-    ).values_list("analysis_id", flat=True)
+    # Use the provided IDs to get the specific batch analyses to process
+    # select_related('analysis__assembly') avoids N+1 queries in the loop
+    batch_analyses = batch.batch_analyses.filter(
+        id__in=analysis_batch_job_ids
+    ).select_related("analysis__assembly")
 
-    assembly_analyses = batch.analyses.filter(
-        id__in=completed_analysis_ids
-    ).select_related("assembly")
+    if not batch_analyses.exists():
+        logger.warning(
+            f"No analyses found matching IDs {analysis_batch_job_ids} for MAP"
+        )
+        return None, None
 
-    assemblies = analyses.models.Assembly.objects.filter(analyses__in=assembly_analyses)
-
-    logger.info("Making MAP samplesheet for assemblies.")
-
+    # Get assemblies for hashing
+    assembly_ids = [ba.analysis.assembly_id for ba in batch_analyses]
+    assemblies = analyses.models.Assembly.objects.filter(id__in=assembly_ids)
     ss_hash = queryset_hash(assemblies, "id")
 
     # Use provided output_dir or fall back to the default workdir
@@ -141,25 +142,22 @@ def make_samplesheet_for_map(
 
     # Create the samplesheet with the required columns
     with open(map_samplesheet_filename, "w", newline="") as csvfile:
-        # MAP requires these fields
-        # https://github.com/EBI-Metagenomics/mobilome-annotation-pipeline?tab=readme-ov-file#inputs
         fieldnames = ["sample", "assembly", "user_proteins_gff", "virify_gff"]
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
         writer.writeheader()
 
-        for analysis in assembly_analyses:
+        for batch_analysis in batch_analyses:
+            analysis = batch_analysis.analysis
             assembly = analysis.assembly
             assembly_accession = assembly.first_accession
 
-            # Use the cleaned contigs fasta file from the assembly analysis pipeline
-            # https://github.com/EBI-Metagenomics/assembly-analysis-pipeline/blob/dev/docs/output.md#output-files
+            # Mandatory ASA files
             assembly_fasta = (
                 asa_workspace
                 / assembly_accession
                 / EMG_CONFIG.assembly_analysis_pipeline.qc_folder
                 / f"{assembly_accession}_filtered_contigs.fasta.gz"
             )
-
             user_proteins_gff = (
                 asa_workspace
                 / assembly_accession
@@ -167,42 +165,36 @@ def make_samplesheet_for_map(
                 / f"{assembly_accession}_predicted_cds.gff.gz"
             )
 
-            virify_gff = (
-                virify_workspace
-                / assembly_accession
-                / EMG_CONFIG.virify_pipeline.final_gff_folder
-                / f"{assembly_accession}_virify.gff.gz"
-            )
-
-            # The files should exist at this point... but nevertheless check
-            if not assembly_fasta.exists():
+            # Validate mandatory files
+            if not assembly_fasta.exists() or not user_proteins_gff.exists():
                 raise ValueError(
-                    f"Can't run MAP for {analysis.accession} because contigs file doesn't exists here {assembly_fasta}"
+                    f"Mandatory ASA files missing for {assembly_accession}"
                 )
 
-            if not user_proteins_gff.exists():
-                raise ValueError(
-                    f"Can't run MAP for {analysis.accession} because CDS GFF file doesn't exists here {user_proteins_gff}"
+            # VIRify GFF is optional: only provide path if COMPLETED and file exists
+            virify_gff_str = ""
+            if batch_analysis.virify_status == AssemblyAnalysisPipelineStatus.COMPLETED:
+                virify_gff = (
+                    virify_workspace
+                    / assembly_accession
+                    / EMG_CONFIG.virify_pipeline.final_gff_folder
+                    / f"{assembly_accession}_virify.gff.gz"
                 )
+                if virify_gff.exists():
+                    virify_gff_str = str(virify_gff)
+                else:
+                    logger.warning(
+                        f"VIRify GFF not found for {assembly_accession} despite COMPLETED status"
+                    )
 
-            if not virify_gff.exists():
-                raise ValueError(
-                    f"Can't run MAP for {analysis.accession} because VIRify GFF file doesn't exist here {virify_gff}"
-                )
-
-            logger.info(f"Contigs: {assembly_fasta}")
-            logger.info(f"Proteins GFF: {user_proteins_gff}")
-            logger.info(f"VIRify GFF: {virify_gff}")
-
-            # Write the row to the samplesheet
             writer.writerow(
                 {
                     "sample": assembly_accession,
-                    "assembly": assembly_fasta,
+                    "assembly": str(assembly_fasta),
                     "user_proteins_gff": str(user_proteins_gff),
-                    "virify_gff": str(virify_gff),
+                    "virify_gff": virify_gff_str,
                 }
             )
 
-    print(f"Created MAP samplesheet at {map_samplesheet_filename}")
+    logger.info(f"Created MAP samplesheet at {map_samplesheet_filename}")
     return map_samplesheet_filename, ss_hash

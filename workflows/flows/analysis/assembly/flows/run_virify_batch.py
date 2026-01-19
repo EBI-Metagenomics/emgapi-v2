@@ -8,6 +8,9 @@ from prefect.runtime import flow_run
 
 from activate_django_first import EMG_CONFIG
 
+from workflows.flows.analysis.assembly.flows.import_virify_batch import (
+    import_virify_batch,
+)
 from workflows.models import (
     AssemblyAnalysisBatch,
     AssemblyAnalysisPipeline,
@@ -25,7 +28,7 @@ from workflows.flows.analysis.assembly.utils.status_update_hooks import (
 
 
 @flow(
-    name="Run the VIRify pipeline batch",
+    flow_run_name="Run VIRify Batch: {assembly_analyses_batch_id}",
     on_running=[update_batch_status_counts],
     on_completion=[update_batch_status_counts],
     on_failure=[update_batch_status_counts],
@@ -191,6 +194,7 @@ def run_virify_batch(assembly_analyses_batch_id: uuid.UUID):
         # Mark batch as failed
         assembly_analysis_batch.last_error = str(e)
         assembly_analysis_batch.save()
+
         # Only mark RUNNING analyses as FAILED (don't overwrite already-COMPLETED ones)
         assembly_analysis_batch.batch_analyses.filter(
             virify_status=AssemblyAnalysisPipelineStatus.RUNNING
@@ -207,3 +211,8 @@ def run_virify_batch(assembly_analyses_batch_id: uuid.UUID):
             f"Marked {completed_count} analyses as VIRify completed "
             f"(out of {assembly_analysis_batch.total_analyses} total)"
         )
+
+    ##################
+    # Import results #
+    ##################
+    import_virify_batch(assembly_analyses_batch_id=assembly_analysis_batch.id)

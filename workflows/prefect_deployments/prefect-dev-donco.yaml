@@ -1,33 +1,146 @@
-# Welcome to your prefect.yaml file! You can use this file for storing and managing
-# configuration for deploying your flows. We recommend committing this file to source
-# control along with your flow code.
-
-# Generic metadata about this project
 name: emgapi
 prefect-version: 3.4.4
-
-# build section allows you to manage and build docker images
 build: null
-
-# push section allows you to manage if and how this project is uploaded to remote locations
 push: null
-
-# pull section allows you to provide instructions for cloning this project in remote locations
 pull:
 - prefect.deployments.steps.set_working_directory:
     directory: /app
-
-# the deployments section allows you to provide configuration for deploying flows
 deployments:
-- name: null
-  version: null
-  tags: []
-  description: null
-  schedule: {}
-  flow_name: null
-  entrypoint: null
-  parameters: {}
+- name: analysis_assembly_study_deployment
+  description: |-
+    Get a study from ENA (or MGnify), and run assembly analysis the assemblies of the study.
+
+    This then chains the Assembly Analysis Pipeline, VIRIfy and the Mobilome Annotation Pipeline using
+    batches of assemblies to analise.
+
+    It keeps track of the batches and their statuses.
+
+    :param study_accession: e.g. PRJ or ERP accession
+    :param workspace_dir: Path for the workspace dir. Defaults to the configured SLURM default workdir.
+  entrypoint: workflows/flows/analysis/assembly/flows/analysis_assembly_study.py:analysis_assembly_study
+  schedule: null
   work_pool:
-    name: null
-    work_queue_name: null
-    job_variables: {}
+    name: slurm
+
+- name: run_assembly_analysis_pipeline_batch_deployment
+  description: |-
+    Run the assembly analysis pipeline-v6 for a given batch, including ASA, VIRify, and MAP.
+
+    This function orchestrates the execution of the ASA pipeline, VIRify, and MAP. It handles tasks such as generating
+    samplesheets, managing pipeline states, and storing relevant metadata into the database for further processing.
+
+    Additionally, it imports analysis download files for each pipeline, validating results, and generates
+    the study summary files for the batch.
+
+    The flow is idempotent and can be restarted from any point:
+    - ASA: Only processes analyses without asa_status=COMPLETED
+    - VIRify: Only processes analyses with asa_status=COMPLETED and virify_status!=COMPLETED
+    - MAP: Only processes analyses with virify_status=COMPLETED and map_status!=COMPLETED
+
+    :param assembly_analyses_batch_id: Unique identifier for the assembly analysis batch to process.
+    :type assembly_analyses_batch_id: uuid.UUID
+    :raises ClusterJobFailedException: If the cluster job fails during the ASA pipeline execution.
+    :raises Exception: For any unexpected errors encountered during the pipeline execution.
+  entrypoint: workflows/flows/analysis/assembly/flows/run_assembly_analysis_pipeline_batch.py:run_assembly_analysis_pipeline_batch
+  schedule: null
+  work_pool:
+    name: slurm
+
+- name: run_virify_batch_deployment
+  description: |-
+    Runs the VIRify pipeline for a batch of assemblies.
+
+    It expects the analyses to have been completed by ASA at this point. It will select those
+    analyses and uses the ASA end-of-run virify samplesheet to pick up the assemblies to execute.
+
+    The flow is idempotent: analyses that are already COMPLETED for VIRify will be skipped.
+    Only analyses with asa_status=COMPLETED and virify_status!=COMPLETED will be processed.
+
+    It doesn't validate the results or import them, but the results will be stored in the batch workspace.
+
+    :param assembly_analyses_batch_id: Unique identifier for the assembly batch to be
+        processed by the VIRify pipeline.
+    :type assembly_analyses_batch_id: uuid.UUID
+    :raises ClusterJobFailedException: If the VIRify pipeline execution job fails.
+    :raises Exception: For any unexpected errors during pipeline execution.
+  entrypoint: workflows/flows/analysis/assembly/flows/run_virify_batch.py:run_virify_batch
+  schedule: null
+  work_pool:
+    name: slurm
+
+- name: run_map_batch_deployment
+  description: |-
+    Run the MAP (Mobilome Annotation Pipeline) for a batch of assemblies.
+
+    It expects the analyses to have been completed with ASA and VIRify at this point. It will select those
+    analyses and generate a samplesheet for the MAP pipeline.
+
+    The flow is idempotent: analyses that are already COMPLETED for MAP will be skipped.
+    Only analyses with virify_status=COMPLETED and map_status!=COMPLETED will be processed.
+
+    It doesn't validate the results or import them, but the results will be stored in the batch workspace.
+
+    This flow won't raise an exception if the MAP pipeline fails unless raise_on_failure is set to True.
+    This behavior is useful for batch processing, where we want to continue processing batches even if one fails.
+
+    :param assembly_analyses_batch_id: The AssemblyAnalysisBatch to process
+    :param raise_on_failure: Raise an exception if the MAP pipeline fails
+  entrypoint: workflows/flows/analysis/assembly/flows/run_map_batch.py:run_map_batch
+  schedule: null
+  work_pool:
+    name: slurm
+
+- name: import_asa_batch_deployment
+  description: |-
+    Imports Assembly Analysis Pipeline results for a given batch.
+
+    This flow will validate the results, update statuses based on analysis outcomes,
+    and import data if validation succeeds.
+
+    :param assembly_analyses_batch_id: The AssemblyAnalysisBatch to process
+  entrypoint: workflows/flows/analysis/assembly/flows/import_asa_batch.py:import_asa_batch
+  schedule: null
+  work_pool:
+    name: slurm
+
+- name: import_virify_batch_deployment
+  description: |-
+    Imports VIRify analysis results for a given batch.
+
+    :param assembly_analyses_batch_id: The AssemblyAnalysisBatch to process
+  entrypoint: workflows/flows/analysis/assembly/flows/import_virify_batch.py:import_virify_batch
+  schedule: null
+  work_pool:
+    name: slurm
+
+- name: import_map_batch_deployment
+  description: |-
+    Imports MAP analysis results for a given batch.
+
+    :param assembly_analyses_batch_id: The AssemblyAnalysisBatch to process
+  entrypoint: workflows/flows/analysis/assembly/flows/import_map_batch.py:import_map_batch
+  schedule: null
+  work_pool:
+    name: slurm
+
+- name: finalize_assembly_study_deployment
+  description: |-
+    Run the last study level steps on study assembly analysis batches.
+    This method checks that all the study batches have finished running, as in each
+    batch 3 flows (aca, virify and map) are not running anymore. This is not ideal, and I'm
+    working to improve it.
+    TODO: Improve as is_running() is not enough, flows may have failed or haven't even started!
+    TODO: Add unit tests
+    TODO: Use events or automations to improve this
+
+    This includes:
+    - Merging assembly study summaries
+    - Adding summaries to downloads
+    - Copying v6 study summaries
+    - Updating study features
+
+    :param study_accession: Study accession (e.g., MGYS00001234)
+    :type study_accession: str
+  entrypoint: workflows/flows/analysis/assembly/flows/finalize_assembly_study.py:finalize_assembly_study
+  work_pool:
+    name: slurm
