@@ -19,6 +19,19 @@ from workflows.flows.analyse_study_tasks.amplicon.import_completed_amplicon_anal
 
 django.setup()
 
+from analyses.base_models.with_downloads_models import (
+DownloadFile,
+DownloadType,
+DownloadFileType,
+)
+from analyses.models import Run, Analysis
+from workflows.data_io_utils.mgnify_v6_utils.amplicon import import_qc, import_taxonomy
+from workflows.data_io_utils.mgnify_v6_utils.assembly import AssemblyResultImporter
+from workflows.data_io_utils.schemas import AssemblyResultSchema, MapResultSchema
+from workflows.flows.analyse_study_tasks.amplicon.import_completed_amplicon_analyses import (
+    import_completed_analysis as import_completed_amplicon_analysis,
+)
+
 import analyses.models as mg_models
 
 versions = {"metaspades": "3.15.5", "spades": "3.15.5", "megahit": "1.2.9"}
