@@ -195,58 +195,62 @@ def sanity_check_amplicon_results(
 
     # ASV optional folder
     if asv_folder.exists():
-        dada2_stats = Path(f"{asv_folder}/{run_id}_dada2_stats.tsv")
-        dada2_silva = Path(f"{asv_folder}/{run_id}_DADA2-SILVA_asv_tax.tsv")
-        dada2_pr2 = Path(f"{asv_folder}/{run_id}_DADA2-PR2_asv_tax.tsv")
-        asv_stats = Path(f"{asv_folder}/{run_id}_asv_seqs.fasta")
-        if not (
-            dada2_stats.exists()
-            and dada2_pr2.exists()
-            and dada2_silva.exists()
-            and asv_stats.exists()
-        ):
-            reason = (
-                f"missing required file in {EMG_CONFIG.amplicon_pipeline.asv_folder}"
-            )
-            logger.info(f"Post sanity check for {run_id}: {reason}")
-        else:
-            # check var regions
-            if amplified_regions:
-                for region in amplified_regions:
-                    if Path(f"{asv_folder}/{region}").exists():
+        asv_empty = not any(asv_folder.iterdir())
+        if not asv_empty:
+            dada2_stats = Path(f"{asv_folder}/{run_id}_dada2_stats.tsv")
+            dada2_silva = Path(f"{asv_folder}/{run_id}_DADA2-SILVA_asv_tax.tsv")
+            dada2_pr2 = Path(f"{asv_folder}/{run_id}_DADA2-PR2_asv_tax.tsv")
+            asv_stats = Path(f"{asv_folder}/{run_id}_asv_seqs.fasta")
+            if not (
+                dada2_stats.exists()
+                and dada2_pr2.exists()
+                and dada2_silva.exists()
+                and asv_stats.exists()
+            ):
+                reason = (
+                    f"missing required file in {EMG_CONFIG.amplicon_pipeline.asv_folder}"
+                )
+                logger.info(f"Post sanity check for {run_id}: {reason}")
+            else:
+                # check var regions
+                if amplified_regions:
+                    for region in amplified_regions:
+                        if Path(f"{asv_folder}/{region}").exists():
+                            if not Path(
+                                f"{asv_folder}/{region}/{run_id}_{region}_asv_read_counts.tsv"
+                            ).exists():
+                                reason = f"No asv_read_counts in {region}"
+                        else:
+                            reason = (
+                                f"No {region} in {EMG_CONFIG.amplicon_pipeline.asv_folder}"
+                            )
+                # check concat folder for more than 1 region
+                if len(amplified_regions) > 1:
+                    if Path(f"{asv_folder}/concat").exists():
                         if not Path(
-                            f"{asv_folder}/{region}/{run_id}_{region}_asv_read_counts.tsv"
+                            f"{asv_folder}/concat/{run_id}_concat_asv_read_counts.tsv"
                         ).exists():
-                            reason = f"No asv_read_counts in {region}"
+                            reason = f"No counts for concat folder in {EMG_CONFIG.amplicon_pipeline.asv_folder}"
                     else:
-                        reason = (
-                            f"No {region} in {EMG_CONFIG.amplicon_pipeline.asv_folder}"
-                        )
-            # check concat folder for more than 1 region
-            if len(amplified_regions) > 1:
-                if Path(f"{asv_folder}/concat").exists():
-                    if not Path(
-                        f"{asv_folder}/concat/{run_id}_concat_asv_read_counts.tsv"
-                    ).exists():
-                        reason = f"No counts for concat folder in {EMG_CONFIG.amplicon_pipeline.asv_folder}"
-                else:
-                    reason = f"Missing concat folder in {EMG_CONFIG.amplicon_pipeline.asv_folder} for {len(amplified_regions)} regions"
+                        reason = f"Missing concat folder in {EMG_CONFIG.amplicon_pipeline.asv_folder} for {len(amplified_regions)} regions"
 
     # TAXONOMY SUMMARY folder:
     if taxonomy_summary_folder.exists():
         dada2_tax_names = ["DADA2-SILVA", "DADA2-PR2"]
         tax_dbs = ["SILVA-SSU", "SILVA-LSU", "UNITE", "ITSoneDB", "PR2"]
         if asv_folder.exists():
-            if (
-                sum(
-                    [
-                        Path(f"{taxonomy_summary_folder}/{db}").exists()
-                        for db in dada2_tax_names
-                    ]
-                )
-                != 2
-            ):
-                reason = f"missing one of DADA2 tax folders in {EMG_CONFIG.amplicon_pipeline.taxonomy_summary_folder}"
+            asv_empty = not any(asv_folder.iterdir())
+            if not asv_empty:
+                if (
+                    sum(
+                        [
+                            Path(f"{taxonomy_summary_folder}/{db}").exists()
+                            for db in dada2_tax_names
+                        ]
+                    )
+                    != 2
+                ):
+                    reason = f"missing one of DADA2 tax folders in {EMG_CONFIG.amplicon_pipeline.taxonomy_summary_folder}"
         else:
             if (
                 sum(
