@@ -158,6 +158,7 @@ def run_virify_batch(assembly_analyses_batch_id: uuid.UUID):
                 / "virify",
             ),
             ("--samplesheet", virify_samplesheet_path),
+            "--use_proteins",
             ("--output", virify_outdir),
             EMG_CONFIG.slurm.use_nextflow_tower and "-with-tower",
             ("-ansi-log", "false"),
