@@ -643,3 +643,74 @@ def sync_study_metadata_from_ena(study: ena.models.Study):
     if portal_study := portal_study_response[0]:
         study.metadata = portal_study
         study.save()
+
+
+def get_study_accession_for_assembly(
+    assembly_accession: str,
+) -> str:
+    """
+    Derive the study accession from a single assembly accession using ENA API.
+
+    Queries the ENA Portal API with the assembly accession (ERZ format) to fetch
+    the associated study accession. An assembly in ENA is represented as an "analysis"
+    record, which contains the study_accession field.
+
+    Example:
+        Input: "ERZ18440741" (assembly accession)
+        Output: "ERP123456" (study accession)
+
+    :param assembly_accession: Assembly accession (e.g., ERZ format)
+    :return: Study accession (e.g., ERP/SRP/DRP/PRJ format)
+    :raises: ValueError if accession cannot be determined or not found in ENA
+    """
+    logger = get_run_logger()
+
+    if not assembly_accession:
+        raise ValueError("No assembly accession provided to derive study accession.")
+
+    logger.info(f"Querying ENA API for study accession of assembly {assembly_accession}")
+
+    try:
+        # Query ENA Portal API for analysis records matching the assembly accession
+        # In ENA, assemblies are represented as "analysis" results
+        _ = ENAAnalysisFields
+        portal_analyses = ENAAPIRequest(
+            result=ENAPortalResultType.ANALYSIS,
+            fields=[
+                _.ANALYSIS_ACCESSION,
+                _.STUDY_ACCESSION,
+                _.SECONDARY_STUDY_ACCESSION,
+            ],
+            limit=1,
+            query=ENAAnalysisQuery(analysis_accession=assembly_accession),
+        ).get()
+
+        if not portal_analyses:
+            raise ValueError(
+                f"Assembly accession {assembly_accession} not found in ENA Portal API"
+            )
+
+        analysis_record = portal_analyses[0]
+        study_accession = analysis_record.get(_.STUDY_ACCESSION)
+        
+        if not study_accession:
+            # Try secondary study accession if primary is missing
+            study_accession = analysis_record.get(_.SECONDARY_STUDY_ACCESSION)
+            if study_accession:
+                logger.warning(
+                    f"Assembly {assembly_accession}: Using secondary study accession {study_accession}"
+                )
+
+        if not study_accession:
+            raise ValueError(
+                f"No study accession found for assembly {assembly_accession} in ENA"
+            )
+
+        logger.info(f"Assembly {assembly_accession} belongs to study {study_accession}")
+        return study_accession
+
+    except Exception as e:
+        logger.exception(f"Error querying ENA API for assembly {assembly_accession}")
+        raise ValueError(
+            f"Failed to derive study accession for assembly {assembly_accession}: {e}"
+        )
