@@ -39,9 +39,6 @@ from workflows.prefect_utils.slurm_policies import ResubmitAlwaysPolicy
 from workflows.flows.analysis.assembly.utils.status_update_hooks import (
     update_batch_status_counts,
 )
-from workflows.flows.analyse_study_tasks.cleanup_pipeline_directories import (
-    delete_pipeline_workdir,
-)
 
 
 @flow(
