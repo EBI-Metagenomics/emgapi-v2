@@ -217,7 +217,7 @@ def analysis_amplicon_study(study_accession: str):
     copy_v6_study_summaries(mgnify_study.accession)
     # delete work directory
     delete_study_nextflow_workdir(study_workdir, analyses_to_attempt)
-    delete_study_results_dir(mgnify_study)
+    delete_study_results_dir(study_outdir, mgnify_study)
 
     mgnify_study.refresh_from_db()
     mgnify_study.features.has_v6_analyses = mgnify_study.analyses.filter(

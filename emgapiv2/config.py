@@ -93,7 +93,7 @@ class AssemblerConfig(MGnifyPipelineConfig):
     suspend_timeout_for_editing_samplesheets_secs: int = 28800  # 8 hrs
 
     # Results folders
-    pipeline_name: str = "miassemnbler"
+    pipeline_name: str = "miassembler"
     pipeline_version: str = "v6"
 
 

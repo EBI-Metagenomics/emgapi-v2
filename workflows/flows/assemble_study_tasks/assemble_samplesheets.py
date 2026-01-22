@@ -27,7 +27,7 @@ from workflows.prefect_utils.slurm_policies import (
     ResubmitIfFailedPolicy,
 )
 from workflows.flows.analyse_study_tasks.cleanup_pipeline_directories import (
-    delete_pipeline_workdir,
+    delete_assemble_study_nextflow_workdir,
 )
 
 # TODO: move to a constants file
@@ -323,9 +323,9 @@ def run_assembler_for_samplesheet(
                     status=analyses.models.Assembly.AssemblyStates.ASSEMBLY_FAILED,
                     reason="The assembly is missing from the pipeline end-of-run reports",
                 )
-        delete_pipeline_workdir(
-            nextflow_workdir
-        )  # will also delete past "abandoned" nextflow files
+        delete_assemble_study_nextflow_workdir(
+            nextflow_workdir, [a.id for a in assemblies]
+        )
     finally:
         # output list of assembled runs
         assembled_runs = []

@@ -40,7 +40,8 @@ from workflows.prefect_utils.analyses_models_helpers import (
     add_study_watchers,
 )
 from workflows.flows.analyse_study_tasks.cleanup_pipeline_directories import (
-    delete_study_nextflow_workdir,
+    delete_assemble_study_nextflow_workdir,
+    delete_study_results_dir,
 )
 
 
@@ -253,7 +254,8 @@ def assemble_study(
     if upload:
         upload_assemblies(mgnify_study, dry_run=use_ena_dropbox_dev)
 
-    delete_study_nextflow_workdir(study_workdir, assemblies_to_attempt)
+    delete_assemble_study_nextflow_workdir(study_workdir, assemblies_to_attempt)
+    delete_study_results_dir(study_outdir, mgnify_study)
 
     emit_event(
         event="flow.assembly.finished",

@@ -1004,7 +1004,7 @@ def test_prefect_analyse_amplicon_flow(
 
     # run deleting
     # delete_study_nextflow_workdir(study_workdir, analyses_to_attempt)
-    delete_study_results_dir(study)
+    delete_study_results_dir(study.results_dir, study)
 
     # check files
     assert Path(study.results_dir).is_dir()
@@ -1027,7 +1027,7 @@ def test_prefect_analyse_amplicon_flow(
     simulate_copy_results(source, target, allowed_extensions, logger=logger)
 
     # run deleting
-    delete_study_results_dir(study)
+    delete_study_results_dir(study.results_dir, study)
 
     # check files
     assert not Path(study.results_dir).is_dir()

@@ -60,9 +60,12 @@ def make_samplesheet(
 
     sample_sheet_tsv = queryset_to_samplesheet(
         queryset=assemblies,
-        filename=Path(EMG_CONFIG.slurm.default_workdir)
-        / Path(
-            f"{mgnify_study.ena_study.accession}_samplesheet_miassembler_{ss_hash}.csv"
+        filename=(
+            Path(EMG_CONFIG.slurm.default_workdir)
+            / mgnify_study.ena_study.accession
+            / f"{EMG_CONFIG.assembler.pipeline_name}_{EMG_CONFIG.assembler.pipeline_version}"
+            / ss_hash
+            / Path("samplesheet.csv")
         ),
         column_map={
             "study_accession": SamplesheetColumnSource(

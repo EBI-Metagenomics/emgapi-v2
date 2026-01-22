@@ -7,6 +7,7 @@ import glob
 import hashlib
 
 AnalysisStates = analyses.models.Analysis.AnalysisStates
+AssemblyStates = analyses.models.Assembly.AssemblyStates
 
 
 @task()
@@ -45,14 +46,39 @@ def delete_study_nextflow_workdir(
 
 
 @task()
-def delete_study_results_dir(
-    study: analyses.models.Study,
+def delete_assemble_study_nextflow_workdir(
+    study_workdir: Path,
+    assemblies: List[Union[int, str]],
 ):
     logger = get_run_logger()
 
-    if not study.results_dir:
-        logger.warning(f"Study {study} has no results dir, skipping")
-        return
+    # check for failed analyses first AnalysisStates.ANALYSIS_FAILED
+    failed_assemblies = (
+        analyses.models.Assembly.objects.filter(
+            id__in=assemblies,
+            run__metadata__fastq_ftps__isnull=False,
+            status__contains={AssemblyStates.ASSEMBLY_FAILED: True},
+        )
+        .order_by("id")
+        .values_list("id", flat=True)
+    )
+
+    # delete work directory
+    if failed_assemblies:
+        logger.warning(
+            f"Detected some assemblies failed, not deleting Nextflow work directory {study_workdir}"
+        )
+    else:
+        logger.info(f"Deleting Nextflow work directory {study_workdir}")
+        shutil.rmtree(study_workdir)
+
+
+@task()
+def delete_study_results_dir(
+    results_dir: Path,
+    study: analyses.models.Study,
+):
+    logger = get_run_logger()
 
     if not study.external_results_dir:
         logger.warning(f"Study {study} has no external results dir, skipping")
@@ -78,7 +104,7 @@ def delete_study_results_dir(
     }
     source_files = {
         Path(fp).name: getmd5(fp)
-        for fp in glob.glob(str(Path(study.results_dir) / "**/*"), recursive=True)
+        for fp in glob.glob(str(Path(results_dir) / "**/*"), recursive=True)
         if Path(fp).name.split(".")[-1] in allowed_extensions
     }
     dest_files = {
@@ -100,5 +126,5 @@ def delete_study_results_dir(
         return
 
     # delete work directory
-    logger.info(f"Deleting study results directory {study.results_dir}")
-    shutil.rmtree(study.results_dir)
+    logger.info(f"Deleting study results directory {results_dir}")
+    shutil.rmtree(results_dir)
