@@ -116,6 +116,7 @@ def assembly_analysis_with_downloads(mock_run_deployment, mgnify_assemblies_comp
         base_path=Path(analysis.results_dir).parent / "map",
         validate_first=True,
     )
+    analysis.mark_status(analysis.AnalysisStates.ANALYSIS_ANNOTATIONS_IMPORTED)
 
 
 # TODO: currently unused as download data fixtures are missing

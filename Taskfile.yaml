@@ -28,6 +28,13 @@ tasks:
     requires:
       vars: [FLOW]
 
+  deploy-all:
+    desc: "Deploy all flows defined in a prefect.yaml file. E.g. YAML=workflows/prefect_deployments/prefect-dev-donco.yaml task deploy-all"
+    cmds:
+      - docker compose run -e PREFECT_CLIENT_RETRY_EXTRA_CODES=0 app python manage.py prefectcli --no-prompt deploy --all --prefect-file {{.YAML}}
+    vars:
+      YAML: '{{.YAML | default "workflows/prefect_deployments/prefect-dev-donco.yaml"}}'
+
   run:
     desc: "Run everything"
     cmds:

@@ -9,16 +9,17 @@ import pandas as pd
 from django.db.models import Q
 from prefect import flow, get_run_logger, task
 
-from workflows.prefect_utils.build_cli_command import cli_command
-
-from activate_django_first import EMG_CONFIG
-
 import analyses.models
+from activate_django_first import EMG_CONFIG
 from workflows.data_io_utils.filenames import (
     accession_prefix_separated_dir_path,
     file_path_shortener,
 )
+from workflows.ena_utils.host_metadata_to_reference_genome import (
+    get_reference_genome_for_host,
+)
 from workflows.prefect_utils.analyses_models_helpers import mark_assembly_status
+from workflows.prefect_utils.build_cli_command import cli_command
 from workflows.prefect_utils.slurm_flow import (
     ClusterJobFailedException,
     run_cluster_job,
@@ -29,41 +30,6 @@ from workflows.prefect_utils.slurm_policies import (
 from workflows.flows.analyse_study_tasks.cleanup_pipeline_directories import (
     delete_assemble_study_nextflow_workdir,
 )
-
-# TODO: move to a constants file
-HOST_TAXON_TO_REFERENCE_GENOME = {
-    "9031": "chicken.fna",  # Gallus gallus
-    "8030": "salmon.fna",  # Salmo salar
-    "8049": "cod.fna",  # Gadus morhua
-    "9823": "pig.fna",  # Sus scrofa
-    "9913": "cow.fna",  # Bos taurus
-    "10090": "mouse.fna",  # Mus musculus
-    "7460": "honeybee.fna",  # Apis mellifera
-    "10116": "rat.fna",  # Rattus norvegicus
-    "8022": "rainbow_trout.fna",  # Oncorhynchus mykiss
-    "9940": "sheep.fna",  # Ovis aries
-    "3847": "soybean.fna",  # Glycine max
-    "7955": "zebrafish.fna",  # Danio rerio
-    "Gallus gallus": "chicken.fna",
-    "Salmo salar": "salmon.fna",
-    "Gadus morhua": "cod.fna",
-    "Sus scrofa": "pig.fna",
-    "Bos taurus": "cow.fna",
-    "Mus musculus": "mouse.fna",
-    "Apis mellifera": "honeybee.fna",
-    "Rattus norvegicus": "rat.fna",
-    "Oncorhynchus mykiss": "rainbow_trout.fna",
-    "Ovis aries": "sheep.fna",
-    "Glycine max": "soybean.fna",
-    "Danio rerio": "zebrafish.fna",
-    # Common un-"scientific" names
-    "Porcine": "pig.fna",
-    "Bovine": "cow.fna",
-    "Murine": "mouse.fna",
-    "Ovine": "sheep.fna",
-    "Galline": "chicken.fna",
-    "Apine": "honeybee.fna",
-}
 
 
 @task
@@ -98,10 +64,10 @@ def get_reference_genome(
     )
     if host_taxon:
         logger.info(f"Host taxon is {host_taxon}")
-        reference_genome = HOST_TAXON_TO_REFERENCE_GENOME.get(str(host_taxon), None)
+        reference_genome = get_reference_genome_for_host(str(host_taxon))
         logger.info(f"Reference genome will be: {reference_genome}")
 
-    return reference_genome
+    return reference_genome.reference_genome if reference_genome else None
 
 
 @task

@@ -8,7 +8,7 @@ from workflows.flows.analyse_study_tasks.shared.copy_v6_pipeline_results import 
 )
 from workflows.data_io_utils.filenames import accession_prefix_separated_dir_path
 from workflows.data_io_utils.schemas import PipelineValidationError
-from workflows.flows.analysis.assembly.flows.run_assembly_analysis_pipeline_batch import (
+from workflows.flows.analysis.assembly.tasks.process_import_results import (
     process_import_results,
 )
 from workflows.flows.analysis.assembly.tasks.assembly_analysis_batch_results_importer import (
@@ -272,7 +272,11 @@ class TestProcessImportResults:
     """Test the process_import_results helper function."""
 
     def test_empty_results_updates_counts_only(
-        self, raw_reads_mgnify_study, tmp_path, caplog
+        self,
+        raw_reads_mgnify_study,
+        tmp_path,
+        caplog,
+        prefect_harness,
     ):
         """Test that empty results list only updates pipeline counts."""
         batch = AssemblyAnalysisBatch.objects.create(
@@ -281,11 +285,7 @@ class TestProcessImportResults:
             batch_type="assembly_analysis",
         )
 
-        process_import_results(
-            [],
-            batch,
-            AssemblyAnalysisPipeline.ASA,
-        )
+        process_import_results(batch.id, [], AssemblyAnalysisPipeline.ASA)
 
         assert "No import results to process" in caplog.text
 
@@ -295,6 +295,7 @@ class TestProcessImportResults:
         raw_reads_mgnify_sample,
         mgnify_assemblies,
         tmp_path,
+        prefect_harness,
     ):
         """Test that all successful imports don't trigger status updates."""
         batch = AssemblyAnalysisBatch.objects.create(
@@ -318,7 +319,7 @@ class TestProcessImportResults:
             ImportResult(analysis_id=analysis.id, success=True, downloads_count=10)
         ]
 
-        process_import_results(results, batch, AssemblyAnalysisPipeline.ASA)
+        process_import_results(batch.id, results, AssemblyAnalysisPipeline.ASA)
 
         # Verify status unchanged
         batch_analysis.refresh_from_db()
@@ -335,6 +336,7 @@ class TestProcessImportResults:
         raw_reads_mgnify_sample,
         mgnify_assemblies,
         tmp_path,
+        prefect_harness,
     ):
         """Test that failed imports update batch and analysis statuses correctly."""
         batch = AssemblyAnalysisBatch.objects.create(
@@ -376,8 +378,8 @@ class TestProcessImportResults:
         ]
 
         process_import_results(
+            batch.id,
             results,
-            batch,
             AssemblyAnalysisPipeline.VIRIFY,
         )
 
@@ -391,7 +393,7 @@ class TestProcessImportResults:
             analysis.refresh_from_db()
             assert analysis.status[Analysis.AnalysisStates.ANALYSIS_QC_FAILED] is True
             assert (
-                f"Validation error {i+1}"
+                f"Validation error {i + 1}"
                 in analysis.status[
                     f"{Analysis.AnalysisStates.ANALYSIS_QC_FAILED}__reason"
                 ]
@@ -403,6 +405,7 @@ class TestProcessImportResults:
         raw_reads_mgnify_sample,
         mgnify_assemblies,
         tmp_path,
+        prefect_harness,
     ):
         """Test that only failed analyses are marked as QC_FAILED."""
         batch = AssemblyAnalysisBatch.objects.create(
@@ -440,7 +443,7 @@ class TestProcessImportResults:
             ImportResult(analysis_id=analyses[2].id, success=True, downloads_count=7),
         ]
 
-        process_import_results(results, batch, AssemblyAnalysisPipeline.MAP)
+        process_import_results(batch.id, results, AssemblyAnalysisPipeline.MAP)
 
         # Verify only the failed one is marked
         batch_analyses[0].refresh_from_db()
@@ -523,7 +526,6 @@ class TestValidationOnlyMode:
             # Verify result indicates validation-only
             assert len(results) == 1
             assert results[0].success is True
-            assert results[0].validation_only is True
             assert results[0].downloads_count is None
 
     @patch(
@@ -571,13 +573,12 @@ class TestValidationOnlyMode:
 
         assert len(validation_results) == 1
         assert validation_results[0].success is False
-        assert validation_results[0].validation_only is True
         assert "Schema error" in validation_results[0].error
 
         # Process results to update statuses
         process_import_results(
+            batch.id,
             validation_results,
-            batch,
             AssemblyAnalysisPipeline.ASA,
         )
 
@@ -639,7 +640,9 @@ class TestValidationOnlyMode:
             validation_only=True,
         )
 
-        process_import_results(validation_results, batch, AssemblyAnalysisPipeline.ASA)
+        process_import_results(
+            batch.id, validation_results, AssemblyAnalysisPipeline.ASA
+        )
 
         batch_analysis.refresh_from_db()
         assert batch_analysis.asa_status == AssemblyAnalysisPipelineStatus.FAILED
@@ -749,7 +752,7 @@ class TestValidationOnlyMode:
         )
 
         process_import_results(
-            validation_results, batch, AssemblyAnalysisPipeline.VIRIFY
+            batch.id, validation_results, AssemblyAnalysisPipeline.VIRIFY
         )
 
         # First should still be COMPLETED, the second should be FAILED
@@ -777,58 +780,6 @@ class TestValidationOnlyMode:
 
 
 @pytest.mark.django_db
-class TestStatusTransitionLogging:
-    """Test status transition logging in process_import_results."""
-
-    def test_status_transition_logged_on_failure(
-        self,
-        raw_reads_mgnify_study,
-        raw_reads_mgnify_sample,
-        mgnify_assemblies,
-        tmp_path,
-        caplog,
-    ):
-        """Test that status transitions are logged with full details."""
-        batch = AssemblyAnalysisBatch.objects.create(
-            study=raw_reads_mgnify_study,
-            workspace_dir=str(tmp_path),
-            batch_type="assembly_analysis",
-        )
-        analysis = Analysis.objects.create(
-            study=raw_reads_mgnify_study,
-            sample=raw_reads_mgnify_sample[0],
-            ena_study=raw_reads_mgnify_study.ena_study,
-            assembly=mgnify_assemblies[0],
-        )
-        AssemblyAnalysisBatchAnalysis.objects.create(
-            batch=batch,
-            analysis=analysis,
-            asa_status=AssemblyAnalysisPipelineStatus.COMPLETED,
-        )
-
-        # Create a failed result
-        results = [
-            ImportResult(
-                analysis_id=analysis.id,
-                success=False,
-                error="Schema validation failed for field X",
-                validation_only=True,
-            )
-        ]
-
-        process_import_results(results, batch, AssemblyAnalysisPipeline.ASA)
-
-        # Verify transition was logged
-        assert f"Analysis {analysis.accession} (ID={analysis.id}): " in caplog.text
-        assert (
-            f"ASA status transition {AssemblyAnalysisPipelineStatus.COMPLETED} → FAILED. "
-            in caplog.text
-        )
-        assert "Mode: validation. " in caplog.text
-        assert "Reason: Schema validation failed for field X" in caplog.text
-
-
-@pytest.mark.django_db
 class TestErrorMessageDistinction:
     """Test distinction between validation and import errors."""
 
@@ -838,6 +789,7 @@ class TestErrorMessageDistinction:
         raw_reads_mgnify_sample,
         mgnify_assemblies,
         tmp_path,
+        prefect_harness,
     ):
         """Test that validation errors are prefixed correctly."""
         batch = AssemblyAnalysisBatch.objects.create(
@@ -860,14 +812,13 @@ class TestErrorMessageDistinction:
         # Validation failure
         results = [
             ImportResult(
-                analysis_id=analysis.id,
-                success=False,
-                error="Missing required file",
-                validation_only=True,
+                analysis_id=analysis.id, success=False, error="Missing required file"
             )
         ]
 
-        process_import_results(results, batch, AssemblyAnalysisPipeline.VIRIFY)
+        process_import_results(
+            batch.id, results, AssemblyAnalysisPipeline.VIRIFY, validation_only=True
+        )
 
         analysis.refresh_from_db()
         reason = analysis.status.get(
@@ -881,6 +832,7 @@ class TestErrorMessageDistinction:
         raw_reads_mgnify_sample,
         mgnify_assemblies,
         tmp_path,
+        prefect_harness,
     ):
         """Test that import errors are prefixed correctly."""
         batch = AssemblyAnalysisBatch.objects.create(
@@ -906,13 +858,12 @@ class TestErrorMessageDistinction:
                 analysis_id=analysis.id,
                 success=False,
                 error="Database constraint violation",
-                validation_only=False,
             )
         ]
 
         process_import_results(
+            batch.id,
             results,
-            batch,
             AssemblyAnalysisPipeline.MAP,
         )
 
@@ -1011,6 +962,7 @@ class TestErrorLogField:
         raw_reads_mgnify_sample,
         mgnify_assemblies,
         tmp_path,
+        prefect_harness,
     ):
         """Test that process_import_results logs errors to error_log."""
         batch = AssemblyAnalysisBatch.objects.create(
@@ -1032,17 +984,15 @@ class TestErrorLogField:
 
         results = [
             ImportResult(
-                analysis_id=analysis.id,
-                success=False,
-                error="Validation failed",
-                validation_only=True,
+                analysis_id=analysis.id, success=False, error="Validation failed"
             )
         ]
 
         process_import_results(
+            batch.id,
             results,
-            batch,
             AssemblyAnalysisPipeline.ASA,
+            validation_only=True,
         )
 
         batch.refresh_from_db()

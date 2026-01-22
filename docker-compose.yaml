@@ -38,7 +38,7 @@ services:
 
   prefect-server:
     # Continuously running prefect server
-    image: prefecthq/prefect:3.4.4-python3.12
+    image: prefecthq/prefect:3.4.19-python3.12
     restart: always
     container_name: prefect-server
     volumes:
