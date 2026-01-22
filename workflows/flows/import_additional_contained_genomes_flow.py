@@ -85,6 +85,12 @@ def process_csv_chunk(
     """
     Process a list of rows: resolve Run, Genome, Assemblies and bulk-insert into AdditionalContainedGenomes.
     Returns tuple: (created_count, skipped_rows, run_or_genome_missing)
+
+    Enhanced logging explicitly lists which rows were skipped and why:
+      - rows with missing Run or Genome accessions (at parse time)
+      - unresolved Run accessions (no matching Run)
+      - unresolved Genome accessions (no matching Genome)
+      - runs that resolved but had no related Assemblies
     """
     logger = get_run_logger()
 
@@ -94,6 +100,8 @@ def process_csv_chunk(
     # Normalise and validate minimal fields, group by Run accession
     normalised: List[Tuple[str, str, Optional[float], Optional[float]]] = []
     skipped = 0
+    missing_required_examples: List[Tuple[str, str]] = []
+
     for r in rows:
         run_acc = (r.get("Run") or "").strip()
         genome_acc = (r.get("Genome_Mgnify_accession") or "").strip()
@@ -101,12 +109,19 @@ def process_csv_chunk(
         cani = _parse_float(r.get("cANI"))
         if not run_acc or not genome_acc:
             skipped += 1
+            if len(missing_required_examples) < 20:
+                missing_required_examples.append((run_acc, genome_acc))
             continue
         normalised.append((run_acc, genome_acc, containment, cani))
 
+    if skipped:
+        logger.warning(
+            f"Rows skipped at parse time due to missing required fields (Run/Genome): count={skipped}, examples={missing_required_examples}"
+        )
+
     if not normalised:
         logger.info(
-            f"No valid rows after normalisation in chunk; rows={len(rows)}, skipped={skipped}"
+            f"No valid rows after normalisation in chunk; rows={len(rows)}, skipped_missing_required={skipped}"
         )
         return 0, skipped, 0
 
@@ -122,19 +137,46 @@ def process_csv_chunk(
     )
     genomes_map: Dict[str, Genome] = {g.accession: g for g in genomes_qs}
 
+    # Identify unresolved accessions for explicit logging
+    unresolved_run_accs = sorted(a for a in run_accessions if a not in runs_map)
+    unresolved_genome_accs = sorted(a for a in genome_accessions if a not in genomes_map)
+    if unresolved_run_accs:
+        logger.warning(
+            f"Unresolved Run accessions in chunk: count={len(unresolved_run_accs)}, examples={unresolved_run_accs[:20]}"
+        )
+    if unresolved_genome_accs:
+        logger.warning(
+            f"Unresolved Genome accessions in chunk: count={len(unresolved_genome_accs)}, examples={unresolved_genome_accs[:20]}"
+        )
+
     # Group rows by found run id to optimise assembly lookups
     rows_by_run_id: Dict[
         int, List[Tuple[str, str, Optional[float], Optional[float]]]
     ] = {}
     missing_run_or_genome = 0
+    missing_due_to_run_examples: List[Tuple[str, str]] = []
+    missing_due_to_genome_examples: List[Tuple[str, str]] = []
+
     for run_acc, genome_acc, containment, cani in normalised:
         run = runs_map.get(run_acc)
         genome = genomes_map.get(genome_acc)
         if run is None or genome is None:
             missing_run_or_genome += 1
+            if run is None and len(missing_due_to_run_examples) < 20:
+                missing_due_to_run_examples.append((run_acc, genome_acc))
+            if genome is None and len(missing_due_to_genome_examples) < 20:
+                missing_due_to_genome_examples.append((run_acc, genome_acc))
             continue
         rows_by_run_id.setdefault(run.id, []).append(
             (run_acc, genome_acc, containment, cani)
+        )
+
+    if missing_run_or_genome:
+        logger.warning(
+            "Rows skipped after resolution due to missing Run/Genome: total=%d, examples_missing_run=%s, examples_missing_genome=%s",
+            missing_run_or_genome,
+            missing_due_to_run_examples,
+            missing_due_to_genome_examples,
         )
 
     if not rows_by_run_id:
@@ -170,9 +212,17 @@ def process_csv_chunk(
 
     # Prepare rows to insert
     to_create: List[AdditionalContainedGenomes] = []
+    runs_without_assemblies_examples: List[str] = []
+    runs_without_assemblies_count = 0
+
     for rid, row_list in rows_by_run_id.items():
         assembly_ids = assemblies_by_run_id.get(rid, [])
         if not assembly_ids:
+            runs_without_assemblies_count += 1
+            # Pick a representative run accession from the rows associated to this rid
+            if len(runs_without_assemblies_examples) < 20:
+                example_accs = {row[0] for row in row_list}  # run_acc values
+                runs_without_assemblies_examples.append(next(iter(example_accs)))
             continue
         for _run_acc, genome_acc, containment, cani in row_list:
             genome = genomes_map.get(genome_acc)
@@ -189,6 +239,11 @@ def process_csv_chunk(
                     )
                 )
 
+    if runs_without_assemblies_count:
+        logger.info(
+            f"Resolved runs with no related assemblies: count={runs_without_assemblies_count}, examples={runs_without_assemblies_examples}"
+        )
+
     created = 0
     # Insert in DB in batches with ignore_conflicts for unique constraint
     for batch in _chunked_iterable(to_create, batch_size):
@@ -199,7 +254,12 @@ def process_csv_chunk(
             created += len(batch)
 
     logger.info(
-        f"Chunk processed: rows={len(rows)}, valid={len(to_create)}, created={created}, skipped={skipped}, missing_run_or_genome={missing_run_or_genome}"
+        "Chunk processed: rows=%d, valid_rows_for_insert=%d, create_attempts=%d, skipped_missing_required=%d, skipped_missing_after_resolution=%d",
+        len(rows),
+        len(to_create),
+        created,
+        skipped,
+        missing_run_or_genome,
     )
     return created, skipped, missing_run_or_genome
 
