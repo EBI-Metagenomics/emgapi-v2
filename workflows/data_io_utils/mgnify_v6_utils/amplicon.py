@@ -316,7 +316,9 @@ def import_asv(analysis: analyses.models.Analysis, dir_for_analysis: Path):
         print(f"No asv dir in {dir_for_analysis}. Nothing to import.")
         return
 
-    if (dir_for_analysis / "qc" / f"{analysis.run.first_accession}_dada2_errors.txt").exists():
+    if (
+        dir_for_analysis / "qc" / f"{analysis.run.first_accession}_dada2_errors.txt"
+    ).exists():
         print(
             "ASV folder is empty, as dada2 wasn't able to run successfully. Nothing to import"
         )
