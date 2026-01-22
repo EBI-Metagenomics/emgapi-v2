@@ -4,13 +4,12 @@ from pathlib import Path
 from textwrap import dedent as _
 from typing import Optional, List
 
-from prefect import flow, get_run_logger, suspend_flow_run
+from prefect import flow, get_run_logger, suspend_flow_run, task
 from prefect.input import RunInput
 from pydantic import Field
 
 import analyses.models
 import ena.models
-from workflows.data_io_utils.mgnify_v6_utils.assembly import AssemblyResultImporter
 from workflows.data_io_utils.schemas import (
     AssemblyResultSchema, VirifyResultSchema, MapResultSchema
 )
@@ -19,12 +18,16 @@ from workflows.ena_utils.ena_api_requests import (
     get_study_assemblies_from_ena,
     get_study_accession_for_assembly,
 )
+from workflows.flows.analysis.assembly.tasks.assembly_analysis_batch_results_importer import (
+    validate_and_import_analysis_results,
+)
 from workflows.flows.analysis.assembly.tasks.create_analyses_for_assemblies import (
     create_analyses_for_assemblies,
 )
-from workflows.flows.analysis.assembly.tasks.set_post_assembly_analysis_states import (
-    set_post_assembly_analysis_states,
+from workflows.flows.analysis.assembly.tasks.process_import_results import (
+    mark_analyses_with_failed_status,
 )
+from workflows.flows.analyse_study_tasks.shared.analysis_states import AnalysisStates
 from workflows.flows.assemble_study import get_biomes_as_choices
 from workflows.flows.analyse_study_tasks.shared.copy_v6_pipeline_results import (
     copy_v6_study_summaries,
@@ -100,8 +103,9 @@ def external_assembly_ingestion(
     for assembly_accession in assembly_accessions:
         study_accession = get_study_accession_for_assembly(assembly_accession)
         study2assemblies_map[study_accession].append(assembly_accession)
+    
     # Process each study accession found
-    for study_accession in study2assemblies_map:
+    for study_accession, assembly_accessions in study2assemblies_map.items():
         logger.info(f"Processing study accession: {study_accession}")
         ena_study = ena.models.Study.objects.get_ena_study(study_accession)
         if not ena_study:
@@ -125,6 +129,7 @@ def external_assembly_ingestion(
         mgnify_study.save()
 
         # Check if biome-picker is needed
+        # TODO: think about how to avoid setting biome for 200 times if samplesheet has many studies
         if not mgnify_study.biome:
             BiomeChoices = get_biomes_as_choices()
             UserChoices = get_users_as_choices()
@@ -173,7 +178,7 @@ def external_assembly_ingestion(
         logger.info("Step 4: Creating Analysis objects for all assemblies...")
         create_analyses_for_assemblies(
             mgnify_study.id,
-            study2assemblies_map[study_accession],
+            assembly_accessions,
             pipeline=analyses.models.Analysis.PipelineVersions.v6,
         )
 
@@ -182,22 +187,25 @@ def external_assembly_ingestion(
         # =========================================================================
         logger.info("Step 5: Validating and importing pipeline results...")
         logger.info("Processing ASA results...")
-        _process_pipeline_results(
+        process_external_pipeline_results(
             mgnify_study,
+            assembly_accessions,
             results_path,
             AssemblyAnalysisPipeline.ASA,
         )
 
         logger.info("Processing VIRify results...")
-        _process_pipeline_results(
+        process_external_pipeline_results(
             mgnify_study,
+            assembly_accessions,
             results_path,
             AssemblyAnalysisPipeline.VIRIFY,
         )
 
         logger.info("Processing MAP results...")
-        _process_pipeline_results(
+        process_external_pipeline_results(
             mgnify_study,
+            assembly_accessions,
             results_path,
             AssemblyAnalysisPipeline.MAP,
         )
@@ -328,70 +336,75 @@ def _validate_results_structure(
         else:
             logger.info(f"Found {pipeline} results directory: {pipeline_path}")
 
-
-def _process_pipeline_results(
+@flow(
+    flow_run_name="Import externally generated analysis results: {pipeline_type}",
+    retries=2,
+    retry_delay_seconds=60,
+)
+def process_external_pipeline_results(
     mgnify_study: analyses.models.Study,
+    assembly_accessions: list[str],
     results_path: Path,
-    pipeline_type: str,
+    pipeline_type: AssemblyAnalysisPipeline,
 ) -> None:
     """Import pipeline results without using batch abstraction."""
     logger = get_run_logger()
     
-    pipeline_dir = results_path / pipeline_type.lower()
-    if not pipeline_dir.exists():
-        logger.warning(f"Pipeline directory for {pipeline_type} not found")
-        return
-
-    # Map pipeline types to schemas and directories
-    schema_map = {
-        AssemblyAnalysisPipeline.ASA: AssemblyResultSchema(),
-        AssemblyAnalysisPipeline.VIRIFY: VirifyResultSchema(),
-        AssemblyAnalysisPipeline.MAP: MapResultSchema(),
-    }
-    
-    schema = schema_map.get(pipeline_type)
-    if not schema:
-        raise ValueError(f"Unknown pipeline type: {pipeline_type}")
-
-    # Get all analyses for this study
+    # Get all analyses from the study matching the assembly accessions
     analyses = mgnify_study.analyses.filter(
-        pipeline_version=analyses.models.Analysis.PipelineVersions.v6
+        pipeline_version=analyses.models.Analysis.PipelineVersions.v6,
+        assembly__accession__in=assembly_accessions
     ).select_related("assembly")
 
-    failed_analyses = []
-    for analysis in analyses:
-        try:
-            logger.info(f"Validating results for {analysis}...")
-            
-            # Validate
-            schema.validate_results(pipeline_dir, analysis.assembly.first_accession)
-            
-            logger.info(f"Importing results for {analysis}...")
-            
-            # Import
-            importer = AssemblyResultImporter(analysis)
-            importer.import_results(
-                schema=schema,
-                base_path=pipeline_dir,
-                validate_first=False,  # Already validated above
-            )
-            
-            # Update analysis status
-            analysis.mark_as_complete()
-            analysis.save()
-            
-        except Exception as e:
-            logger.exception(f"Failed to import {analysis}: {e}")
-            failed_analyses.append((analysis.id, str(e)))
-            
-            # Mark analysis as failed
-            if not analysis.status:
-                analysis.status = analyses.models.Analysis.AnalysisStates.default_status()
-            analysis.status[analyses.models.Analysis.AnalysisStates.ANALYSIS_QC_FAILED] = True
-            analysis.save()
-    
-    if failed_analyses:
-        logger.error(f"{len(failed_analyses)} analyses failed import")
+    schema = None
+    base_path = None
+
+    # This is a bit ugly, but it is done like this to avoid having Prefect to serialize a complex schema as input
+    if pipeline_type == AssemblyAnalysisPipeline.ASA:
+        schema = AssemblyResultSchema()
+        base_path = results_path / "asa"
+    elif pipeline_type == AssemblyAnalysisPipeline.VIRIFY:
+        schema = VirifyResultSchema()
+        base_path = results_path / "virify"
+    elif pipeline_type == AssemblyAnalysisPipeline.MAP:
+        schema = MapResultSchema()
+        base_path = results_path / "map"
+
+    if schema is None or base_path is None:
+        raise ValueError(f"Unsupported pipeline type: {pipeline_type}")
+    if not base_path.exists():
+        raise FileNotFoundError(f"Results directory for the {pipeline_type} does not exist: {base_path}")
+
+    # First, validate schemas (without importing)
+    logger.info(f"Validating {pipeline_type} results schemas...")
+    validation_results = validate_and_import_analysis_results(
+        analyses, schema, base_path, pipeline_type, validation_only=True
+    )
+
+    # Process validation results - mark failures as FAILED
+    mark_analyses_with_failed_status(
+        validation_results,
+        pipeline_type,
+        validation_only=True,
+    )
+
+    # Only import if validation passed for at least one analysis
+    successful_validations = [r for r in validation_results if r.success]
+    if successful_validations:
+        logger.info(
+            f"Importing {len(successful_validations)} validated {pipeline_type} analyses..."
+        )
+        import_results = validate_and_import_analysis_results(
+            analyses, schema, base_path, pipeline_type, validation_only=False
+        )
+        # Process import results (should all succeed since validation passed)
+        mark_analyses_with_failed_status(
+            import_results,
+            pipeline_type,
+            validation_only=False,
+        )
+    else:
+        logger.error(f"No {pipeline_type} analyses passed the results validation.")
 
 
 def _copy_results_files(
