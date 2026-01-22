@@ -15,6 +15,65 @@ from workflows.models import (
 )
 
 
+def mark_analyses_with_failed_status(
+    import_results: List[ImportResult],
+    pipeline_type: AssemblyAnalysisPipeline,
+    validation_only: bool = False,
+) -> None:
+    """
+    Mark analyses as failed with appropriate error messages.
+
+    Updates Analysis.status to ANALYSIS_QC_FAILED and adds detailed error reasons
+    for all failed imports/validations. Uses bulk update for performance.
+
+    This function can be called independently to update analyses without batch context.
+
+    :param import_results: List of import results from the importer task
+    :param pipeline_type: The pipeline type (ASA, VIRify, or MAP)
+    :param validation_only: Whether this was validation-only (no import)
+    """
+    logger = get_run_logger()
+
+    # Extract failed analysis IDs
+    failed_analysis_ids = [r.analysis_id for r in import_results if not r.success]
+
+    if not failed_analysis_ids:
+        return
+
+    # Bulk fetch all failed analyses to avoid N+1 queries
+    failed_analyses = {
+        a.id: a for a in Analysis.objects.filter(id__in=failed_analysis_ids)
+    }
+
+    analyses_to_update = []
+    for result in import_results:
+        if not result.success:
+            analysis = failed_analyses[result.analysis_id]
+
+            # Ensure status is initialized as a dictionary
+            if not analysis.status:
+                analysis.status = Analysis.AnalysisStates.default_status()
+
+            # Mark as QC failed
+            analysis.status[f"{Analysis.AnalysisStates.ANALYSIS_QC_FAILED}"] = True
+
+            # Add detailed error reason
+            error_prefix = "Validation error" if validation_only else "Import error"
+            error_message = (
+                f"{pipeline_type.value.upper()} {error_prefix}: {result.error}"
+            )
+            analysis.status[f"{Analysis.AnalysisStates.ANALYSIS_QC_FAILED}__reason"] = (
+                error_message
+            )
+
+            analyses_to_update.append(analysis)
+
+    # Bulk update all analyses at once
+    if analyses_to_update:
+        Analysis.objects.bulk_update(analyses_to_update, ["status"])
+        logger.info(f"Marked {len(analyses_to_update)} analyses as ANALYSIS_QC_FAILED")
+
+
 @task(
     retries=2,
     retry_delay_seconds=60,
@@ -58,34 +117,14 @@ def process_import_results(
         **{f"{pipeline_type.value}_status": AssemblyAnalysisPipelineStatus.FAILED}
     )
 
-    # Bulk update Analysis statuses to ANALYSIS_QC_FAILED
-    # Build lookup dict to avoid N+1 queries
-    failed_analyses = {
-        a.id: a for a in Analysis.objects.filter(id__in=failed_analysis_ids)
-    }
-    analyses_to_update = []
+    # Update analysis statuses
+    mark_analyses_with_failed_status(
+        import_results, pipeline_type, validation_only
+    )
+
+    # Log errors to batch error_log
     for result in import_results:
         if not result.success:
-            analysis = failed_analyses[result.analysis_id]
-
-            # Ensure status is initialized as a dictionary
-            if not analysis.status:
-                analysis.status = Analysis.AnalysisStates.default_status()
-
-            analysis.status[f"{Analysis.AnalysisStates.ANALYSIS_QC_FAILED}"] = True
-
-            # Distinguish between validation and import failures
-            error_prefix = "Validation error" if validation_only else "Import error"
-            error_message = (
-                f"{pipeline_type.value.upper()} {error_prefix}: {result.error}"
-            )
-            analysis.status[f"{Analysis.AnalysisStates.ANALYSIS_QC_FAILED}__reason"] = (
-                error_message
-            )
-
-            analyses_to_update.append(analysis)
-
-            # Log error to batch error_log
             batch.log_error(
                 pipeline_type=pipeline_type,
                 error_type="validation" if validation_only else "import",
@@ -94,10 +133,5 @@ def process_import_results(
                 save=False,  # Batch will be saved once after all errors logged
             )
 
-    if analyses_to_update:
-        Analysis.objects.bulk_update(analyses_to_update, ["status"])
-        logger.info(f"Marked {len(analyses_to_update)} analyses as ANALYSIS_QC_FAILED")
-
     # Persist the errors in the batch
-    if failed_analysis_ids:
-        batch.save()
+    batch.save()
