@@ -44,6 +44,7 @@ from workflows.prefect_utils.analyses_models_helpers import (
 )
 from workflows.models import (
     AssemblyAnalysisPipeline,
+    Analysis
 )
 
 
@@ -194,24 +195,21 @@ def external_assembly_ingestion(
         )
         logger.info("Processing ASA results...")
         process_external_pipeline_results(
-            mgnify_study,
-            assembly_accessions,
+            exported_analyses,
             results_path,
             AssemblyAnalysisPipeline.ASA,
         )
 
         logger.info("Processing VIRify results...")
         process_external_pipeline_results(
-            mgnify_study,
-            assembly_accessions,
+            exported_analyses,
             results_path,
             AssemblyAnalysisPipeline.VIRIFY,
         )
 
         logger.info("Processing MAP results...")
         process_external_pipeline_results(
-            mgnify_study,
-            assembly_accessions,
+            exported_analyses,
             results_path,
             AssemblyAnalysisPipeline.MAP,
         )
@@ -348,19 +346,12 @@ def _validate_results_structure(
     retry_delay_seconds=60,
 )
 def process_external_pipeline_results(
-    mgnify_study: analyses.models.Study,
-    assembly_accessions: list[str],
+    analyses: list[Analysis],
     results_path: Path,
     pipeline_type: AssemblyAnalysisPipeline,
 ) -> None:
     """Import pipeline results without using batch abstraction."""
     logger = get_run_logger()
-    
-    # Get all analyses from the study matching the assembly accessions
-    analyses = mgnify_study.analyses.filter(
-        pipeline_version=analyses.models.Analysis.PipelineVersions.v6,
-        assembly__accession__in=assembly_accessions
-    ).select_related("assembly")
 
     schema = None
     base_path = None
