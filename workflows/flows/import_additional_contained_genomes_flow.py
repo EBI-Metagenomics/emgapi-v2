@@ -139,7 +139,9 @@ def process_csv_chunk(
 
     # Identify unresolved accessions for explicit logging
     unresolved_run_accs = sorted(a for a in run_accessions if a not in runs_map)
-    unresolved_genome_accs = sorted(a for a in genome_accessions if a not in genomes_map)
+    unresolved_genome_accs = sorted(
+        a for a in genome_accessions if a not in genomes_map
+    )
     if unresolved_run_accs:
         logger.warning(
             f"Unresolved Run accessions in chunk: count={len(unresolved_run_accs)}, examples={unresolved_run_accs[:20]}"
