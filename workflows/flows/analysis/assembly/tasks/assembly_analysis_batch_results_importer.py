@@ -82,6 +82,83 @@ def clear_pipeline_downloads(
         analysis.save()
 
 
+def validate_and_import_analysis_results(
+    analyses: List[Analysis],
+    schema,
+    base_path: str,
+    pipeline_type: AssemblyAnalysisPipeline,
+    validation_only: bool = False,
+) -> List[ImportResult]:
+    """
+    Processes validation and/or import for a list of analyses.
+
+    This can be reused in different contexts for processing of analyses.
+
+    :param analyses: List of Analysis objects to process
+    :param schema: The validation schema to use
+    :param base_path: The base path to pipeline results
+    :param pipeline_type: The pipeline type (ASA, VIRify, or MAP)
+    :param validation_only: If True, only validate without importing
+    :return: List of ImportResult objects with success status and details
+    """
+    logger = get_run_logger()
+    results = []
+
+    for analysis in analyses:
+        try:
+            if validation_only:
+                logger.info(
+                    f"Validating (without import) results for {analysis} using schema {schema}"
+                )
+                schema.validate_results(base_path, analysis.assembly.first_accession)
+                logger.info(f"Validation successful for {analysis}")
+                results.append(ImportResult(analysis_id=analysis.id, success=True))
+            else:
+                logger.info(
+                    f"Validating and importing results into the DB the downloads for {analysis} using schema {schema}"
+                )
+                importer = AssemblyResultImporter(analysis)
+                clear_pipeline_downloads(analysis, pipeline_type)
+
+                downloads_count = importer.import_results(
+                    schema=schema,
+                    base_path=base_path,
+                    validate_first=True,
+                )
+                logger.info(
+                    f"Successfully imported {downloads_count} downloads for {analysis}"
+                )
+                results.append(
+                    ImportResult(
+                        analysis_id=analysis.id,
+                        success=True,
+                        downloads_count=downloads_count,
+                    )
+                )
+        except PipelineValidationError as e:
+            logger.exception(f"Validation failed for {analysis}: {e}")
+            results.append(
+                ImportResult(
+                    analysis_id=analysis.id,
+                    success=False,
+                    error=str(e),
+                )
+            )
+        except Exception as e:
+            logger.exception(
+                f"Unexpected error {'validating' if validation_only else 'importing'} {analysis}: {e}"
+            )
+            results.append(
+                ImportResult(
+                    analysis_id=analysis.id,
+                    success=False,
+                    error=f"Unexpected error: {str(e)}",
+                )
+            )
+
+    return results
+
+
 @task
 def assembly_analysis_batch_results_importer(
     assembly_analyses_batch_id: uuid.UUID,
@@ -134,67 +211,8 @@ def assembly_analysis_batch_results_importer(
         "assembly"
     )
 
-    results = []
-    for analysis in analyses:
-        if validation_only:
-            logger.info(
-                f"Validating (without import) results for {analysis} using schema {schema}"
-            )
-        else:
-            logger.info(
-                f"Validating and importing results into the DB the downloads for {analysis} using schema {schema}"
-            )
-
-        try:
-            # TODO: I think this needs a bit of thought, it just doesn't feel right. I smell repetition and things
-            #       that just don't feel "natural"
-            if validation_only:
-                # Only validate, don't import
-                schema.validate_results(base_path, analysis.assembly.first_accession)
-                logger.info(f"Validation successful for {analysis}")
-                results.append(ImportResult(analysis_id=analysis.id, success=True))
-            else:
-                # Validate and import
-                importer = AssemblyResultImporter(analysis)
-
-                # Clear existing downloads for this pipeline to ensure idempotency
-                # This prevents duplicate download errors on retry
-                clear_pipeline_downloads(analysis, pipeline_type)
-
-                downloads_count = importer.import_results(
-                    schema=schema,
-                    base_path=base_path,
-                    validate_first=True,
-                )
-                logger.info(
-                    f"Successfully imported {downloads_count} downloads for {analysis}"
-                )
-                results.append(
-                    ImportResult(
-                        analysis_id=analysis.id,
-                        success=True,
-                        downloads_count=downloads_count,
-                    )
-                )
-        except PipelineValidationError as e:
-            logger.exception(f"Validation failed for {analysis}: {e}")
-            results.append(
-                ImportResult(
-                    analysis_id=analysis.id,
-                    success=False,
-                    error=str(e),
-                )
-            )
-        except Exception as e:
-            logger.exception(
-                f"Unexpected error {'validating' if validation_only else 'importing'} {analysis}: {e}"
-            )
-            results.append(
-                ImportResult(
-                    analysis_id=analysis.id,
-                    success=False,
-                    error=f"Unexpected error: {str(e)}",
-                )
-            )
+    results = validate_and_import_analysis_results(
+        list(analyses), schema, base_path, pipeline_type, validation_only
+    )
 
     return results
