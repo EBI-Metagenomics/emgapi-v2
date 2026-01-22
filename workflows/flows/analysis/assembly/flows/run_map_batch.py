@@ -223,7 +223,7 @@ def run_map_batch(assembly_analyses_batch_id: uuid.UUID):
         assembly_analysis_batch.batch_analyses.filter(
             map_status=AssemblyAnalysisPipelineStatus.RUNNING
         ).update(map_status=AssemblyAnalysisPipelineStatus.FAILED)
-        
+
         return
     else:
         delete_pipeline_workdir(
