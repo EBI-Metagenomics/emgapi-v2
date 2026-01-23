@@ -81,6 +81,7 @@ def copy_v6_pipeline_results(analysis_accession: str, timeout: int = 14400):
         [
             "rsync",
             "-av",
+            "--prune-empty-dirs",
             "--include=*/",
         ]
         + [f"--include=*.{ext}" for ext in allowed_extensions]
