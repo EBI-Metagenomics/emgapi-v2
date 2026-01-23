@@ -205,7 +205,9 @@ def sanity_check_amplicon_results(
             and dada2_silva.exists()
             and asv_stats.exists()
         ):
-            reason = f"missing required file in {EMG_CONFIG.amplicon_pipeline.asv_folder}"
+            reason = (
+                f"missing required file in {EMG_CONFIG.amplicon_pipeline.asv_folder}"
+            )
             logger.info(f"Post sanity check for {run_id}: {reason}")
         else:
             # check var regions
@@ -215,7 +217,9 @@ def sanity_check_amplicon_results(
                         if not Path(
                             f"{asv_folder}/{region}/{run_id}_{region}_asv_read_counts.tsv"
                         ).exists():
-                            reason = f"No asv_read_counts in {region}"
+                            reason = (
+                                f"No asv_read_counts in {region}"
+                            )
                     else:
                         reason = f"No {region} in {EMG_CONFIG.amplicon_pipeline.asv_folder}"
             # check concat folder for more than 1 region
