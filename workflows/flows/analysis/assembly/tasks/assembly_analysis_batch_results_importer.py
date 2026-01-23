@@ -179,8 +179,6 @@ def assembly_analysis_batch_results_importer(
     :rtype: List[ImportResult]
     :raises DoesNotExist: If the specified AssemblyAnalysisBatch does not exist.
     """
-    logger = get_run_logger()
-
     batch: AssemblyAnalysisBatch = AssemblyAnalysisBatch.objects.get(
         id=assembly_analyses_batch_id
     )
@@ -212,7 +210,7 @@ def assembly_analysis_batch_results_importer(
     )
 
     results = validate_and_import_analysis_results(
-        list(analyses), schema, base_path, pipeline_type, validation_only
+        analyses, schema, base_path, pipeline_type, validation_only
     )
 
     return results
