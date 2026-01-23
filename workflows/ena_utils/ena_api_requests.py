@@ -668,7 +668,9 @@ def get_study_accession_for_assembly(
     if not assembly_accession:
         raise ValueError("No assembly accession provided to derive study accession.")
 
-    logger.info(f"Querying ENA API for study accession of assembly {assembly_accession}")
+    logger.info(
+        f"Querying ENA API for study accession of assembly {assembly_accession}"
+    )
 
     try:
         # Query ENA Portal API for analysis records matching the assembly accession
@@ -692,7 +694,7 @@ def get_study_accession_for_assembly(
 
         analysis_record = portal_analyses[0]
         study_accession = analysis_record.get(_.STUDY_ACCESSION)
-        
+
         if not study_accession:
             # Try secondary study accession if primary is missing
             study_accession = analysis_record.get(_.SECONDARY_STUDY_ACCESSION)

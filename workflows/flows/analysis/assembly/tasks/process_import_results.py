@@ -118,9 +118,7 @@ def process_import_results(
     )
 
     # Update analysis statuses
-    mark_analyses_with_failed_status(
-        import_results, pipeline_type, validation_only
-    )
+    mark_analyses_with_failed_status(import_results, pipeline_type, validation_only)
 
     # Log errors to batch error_log
     for result in import_results:

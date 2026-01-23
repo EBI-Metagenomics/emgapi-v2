@@ -11,7 +11,9 @@ from pydantic import Field
 import analyses.models
 import ena.models
 from workflows.data_io_utils.schemas import (
-    AssemblyResultSchema, VirifyResultSchema, MapResultSchema
+    AssemblyResultSchema,
+    VirifyResultSchema,
+    MapResultSchema,
 )
 from workflows.ena_utils.ena_api_requests import (
     get_study_from_ena,
@@ -42,10 +44,7 @@ from workflows.prefect_utils.analyses_models_helpers import (
     get_users_as_choices,
     add_study_watchers,
 )
-from workflows.models import (
-    AssemblyAnalysisPipeline,
-    Analysis
-)
+from workflows.models import AssemblyAnalysisPipeline, Analysis
 
 
 @flow(
@@ -60,15 +59,14 @@ def external_assembly_ingestion(
     Ingest Assembly Analysis Pipeline results that were run externally.
 
     This flow accepts a path to externally-run ASA/VIRify/MAP results and:
-    1. Creates/fetches the required database models (study, samples, runs, assemblies)
+    1. Creates/fetches the required database models (study, assemblies and analyses)
     2. Validates that the results match the samplesheet and filesystem structure
     3. Imports the pipeline results into the production system
     4. Triggers study summary creation and file copying
 
     :param results_dir: Path to the directory containing externally-run results.
-                        Should contain samplesheets, end-of-run reports, and pipeline outputs.
-    :param study_accession: Optional. If provided, use this study accession directly.
-                            If not provided, will be extracted from samplesheet.
+                        Should contain folders: asa/, virify/, map/
+    :param samplesheet_path: Path to the samplesheet CSV used for the external run.
     """
     logger = get_run_logger()
     results_path = Path(results_dir)
@@ -81,10 +79,14 @@ def external_assembly_ingestion(
     # =========================================================================
     # STEP 1: Parse samplesheet structure and extract assembly accessions
     # =========================================================================
-    logger.info("Step 1: Parsing samplesheet structure and extracting assembly accessions...")
+    logger.info(
+        "Step 1: Parsing samplesheet structure and extracting assembly accessions..."
+    )
 
     assembly_accessions = _parse_and_validate_samplesheet(samplesheet_path)
-    logger.info(f"Extracted {len(assembly_accessions)} assembly accessions from samplesheet")
+    logger.info(
+        f"Extracted {len(assembly_accessions)} assembly accessions from samplesheet"
+    )
     for acc in assembly_accessions:
         logger.info(f"  - {acc}")
 
@@ -95,7 +97,7 @@ def external_assembly_ingestion(
     _validate_results_structure(results_path, assembly_accessions)
 
     # =========================================================================
-    # STEP 3: Create/fetch Study, Samples, Runs, and Assemblies
+    # STEP 3: Create/fetch Study, Assemblies and related objects, set Biome
     # =========================================================================
     logger.info("Step 3: Creating/fetching study and related models...")
 
@@ -104,8 +106,8 @@ def external_assembly_ingestion(
     for assembly_accession in assembly_accessions:
         study_accession = get_study_accession_for_assembly(assembly_accession)
         study2assemblies_map[study_accession].append(assembly_accession)
-    
-    # Process each study accession found
+
+    # Process each study accession and its assemblies
     for study_accession, assembly_accessions in study2assemblies_map.items():
         logger.info(f"Processing study accession: {study_accession}")
         ena_study = ena.models.Study.objects.get_ena_study(study_accession)
@@ -161,7 +163,9 @@ def external_assembly_ingestion(
             biome = analyses.models.Biome.objects.get(path=ingest_input.biome.name)
             mgnify_study.biome = biome
             mgnify_study.save()
-            logger.info(f"MGnify study {mgnify_study.accession} has biome {biome.path}.")
+            logger.info(
+                f"MGnify study {mgnify_study.accession} has biome {biome.path}."
+            )
 
             if ingest_input.watchers:
                 add_study_watchers(mgnify_study, ingest_input.watchers)
@@ -193,6 +197,7 @@ def external_assembly_ingestion(
             results_path / "asa",
             exported_analyses,
         )
+
         logger.info("Processing ASA results...")
         process_external_pipeline_results(
             exported_analyses,
@@ -219,11 +224,13 @@ def external_assembly_ingestion(
         # =========================================================================
         logger.info("Step 6: Copying results to production locations...")
         _copy_results_files(mgnify_study, results_path)
+        # TODO maybe copy_v6_pipeline_results flow can be reused here?
 
         # =========================================================================
         # STEP 7: Finalize study and create summaries
         # =========================================================================
         logger.info("Step 7: Finalizing study and creating summaries...")
+        # TODO add step to generate study summaries
 
         merge_assembly_study_summaries(
             mgnify_study.accession,
@@ -270,25 +277,30 @@ def _parse_and_validate_samplesheet(samplesheet_path: Path) -> list[str]:
     logger = get_run_logger()
     assembly_accessions = []
 
-    # TODO add validation with pandera model 
+    # TODO add validation with pandera model
     # TODO add validation of the fasta file using md5 checksums from ENA website
     try:
-        with open(samplesheet_path, 'r') as f:
+        with open(samplesheet_path, "r") as f:
             reader = csv.DictReader(f)
-            
+
             if reader.fieldnames is None:
                 raise ValueError("Samplesheet appears to be empty")
-            
-            expected_columns = {'sample', 'assembly_fasta', 'contaminant_reference', 
-                                'human_reference', 'phix_reference'}
+
+            expected_columns = {
+                "sample",
+                "assembly_fasta",
+                "contaminant_reference",
+                "human_reference",
+                "phix_reference",
+            }
             if not expected_columns.issubset(set(reader.fieldnames)):
                 logger.warning(
                     f"Samplesheet columns {set(reader.fieldnames)} may not match expected "
                     f"columns {expected_columns}"
                 )
-            
+
             for row in reader:
-                assembly_acc = row.get('sample', '').strip()
+                assembly_acc = row.get("sample", "").strip()
                 if assembly_acc:
                     assembly_accessions.append(assembly_acc)
                     logger.debug(f"Parsed assembly accession: {assembly_acc}")
@@ -297,9 +309,12 @@ def _parse_and_validate_samplesheet(samplesheet_path: Path) -> list[str]:
         raise ValueError(f"Error parsing samplesheet {samplesheet_path}: {e}")
 
     if not assembly_accessions:
-        raise ValueError(f"No assembly accessions found in samplesheet {samplesheet_path}")
+        raise ValueError(
+            f"No assembly accessions found in samplesheet {samplesheet_path}"
+        )
 
     return assembly_accessions
+
 
 # TODO: expand validation checks
 def _validate_results_structure(
@@ -340,6 +355,7 @@ def _validate_results_structure(
         else:
             logger.info(f"Found {pipeline} results directory: {pipeline_path}")
 
+
 @flow(
     flow_run_name="Import externally generated analysis results: {pipeline_type}",
     retries=2,
@@ -370,7 +386,9 @@ def process_external_pipeline_results(
     if schema is None or base_path is None:
         raise ValueError(f"Unsupported pipeline type: {pipeline_type}")
     if not base_path.exists():
-        raise FileNotFoundError(f"Results directory for the {pipeline_type} does not exist: {base_path}")
+        raise FileNotFoundError(
+            f"Results directory for the {pipeline_type} does not exist: {base_path}"
+        )
 
     # First, validate schemas (without importing)
     logger.info(f"Validating {pipeline_type} results schemas...")
@@ -426,7 +444,7 @@ def _copy_results_files(
     # 3. Copy VIRify results to /nfs/prod/{study_accession}/virify/
     # 4. Copy MAP results to /nfs/prod/{study_accession}/map/
     # 5. Copy public files to /nfs/services/
-    # 
+    #
     # Reuse utilities from workflows/data_io_utils/ if available
 
     logger.info(f"Copying results files for {mgnify_study.accession}...")
@@ -435,9 +453,7 @@ def _copy_results_files(
 
 
 @task
-def set_asa_analysis_states(
-    assembly_current_outdir: Path, analyses: List[Analysis]
-):
+def set_asa_analysis_states(assembly_current_outdir: Path, analyses: List[Analysis]):
     """
     This function processes the end-of-execution reports generated by the assembly analysis pipeline
     to determine the outcome of each assembly and updates their status accordingly.
