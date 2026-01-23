@@ -217,11 +217,11 @@ def sanity_check_amplicon_results(
                         if not Path(
                             f"{asv_folder}/{region}/{run_id}_{region}_asv_read_counts.tsv"
                         ).exists():
-                            reason = (
-                                f"No asv_read_counts in {region}"
-                            )
+                            reason = f"No asv_read_counts in {region}"
                     else:
-                        reason = f"No {region} in {EMG_CONFIG.amplicon_pipeline.asv_folder}"
+                        reason = (
+                            f"No {region} in {EMG_CONFIG.amplicon_pipeline.asv_folder}"
+                        )
             # check concat folder for more than 1 region
             if len(amplified_regions) > 1:
                 if Path(f"{asv_folder}/concat").exists():
