@@ -253,7 +253,7 @@ def external_assembly_ingestion(
         # STEP 7: Copy results files to production locations
         # =========================================================================
         logger.info("Step 7: Copying results to production locations...")
-        copy_external_v6_results(
+        copy_external_assembly_analysis_results(
             study=mgnify_study,
             results_dir=results_path,
             analyses=exported_analyses,
@@ -516,12 +516,16 @@ def set_asa_analysis_states(assembly_current_outdir: Path, analyses: List[Analys
     Analysis.objects.bulk_update(analyses_to_update, ["status"])
 
 
-def copy_external_v6_results(
+def copy_external_assembly_analysis_results(
     study: Study, results_dir: Path, analyses: Analysis, timeout: int = 14400
 ):
     """
-    Copy results from all three assembly analysis pipelines (ASA, VIRify, MAP) for all
-    analyses in the input list to external results directories.
+    TODO: this function is a copy-paste of copy_assembly_batch_results with some changes,
+    needs refactoring (ochkalova).
+
+    Copy results from all three assembly analysis pipelines (ASA, VIRify, MAP)
+    generated outside of production system for all analyses in the input list
+    to destination directories with results.
 
     For each analysis in the batch, creates the following structure:
     - {target_root}/{study_path}/{assembly_accession}/ - ASA results at root
@@ -543,20 +547,23 @@ def copy_external_v6_results(
     )
 
     # Only copy results for analyses where ASA completed successfully
-    # TODO understand how to get this
-    asa_completed_analyses_ids = []
+    asa_completed_analyses = study.analyses.filter(
+        pipeline_version=analyses.models.Analysis.PipelineVersions.v6,
+        is_ready=True,  # TODO: check if I can use is_ready=True in this context
+        id__in=[analysis.id for analysis in analyses],
+    ).filter_by_statuses([AnalysisStates.ANALYSIS_COMPLETED])
 
     logger.info(
-        f"Copying results for study {study.id} ({len(asa_completed_analyses_ids)} ASA-completed analyses "
+        f"Copying results for study {study.accession} ({asa_completed_analyses.count()} ASA-completed analyses "
         f"out of {len(analyses)} total) to {target_root}"
     )
 
     # Process each analysis that completed ASA
     copied_analysis_ids = []
     copy_failed_analysis_ids = []
-    for analysis in asa_completed_analyses_ids:
+    for analysis in asa_completed_analyses:
         try:
-            # TODO: This is calls another flow, which feels too nested. We should review this
+            # TODO: This is calls another flow, which feels too nested. We should review this (mbc)
             _copy_external_single_analysis_results(
                 analysis=analysis,
                 results_workspace=results_dir,
@@ -565,12 +572,11 @@ def copy_external_v6_results(
                 timeout=timeout,
             )
         except Exception as e:
-            copy_failed_analysis_ids.append(analysis.accession)
+            copy_failed_analysis_ids.append(analysis.id)
             logger.error(f"Failed to copy results for {analysis.accession}: {e}")
             continue
         else:
-            copied_analysis_ids.append(analysis.accession)
-
+            copied_analysis_ids.append(analysis.id)
     # Bulk update analysis statuses for all successfully copied analyses
     if copied_analysis_ids:
         analyses_to_update = Analysis.objects.filter(id__in=copied_analysis_ids)
