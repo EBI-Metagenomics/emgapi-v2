@@ -8,6 +8,8 @@ from prefect import flow, get_run_logger, suspend_flow_run, task
 from prefect.input import RunInput
 from pydantic import Field
 
+from activate_django_first import EMG_CONFIG
+
 import analyses.models
 import ena.models
 from workflows.data_io_utils.schemas import (
@@ -33,6 +35,10 @@ from workflows.flows.analyse_study_tasks.shared.analysis_states import AnalysisS
 from workflows.flows.assemble_study import get_biomes_as_choices
 from workflows.flows.analyse_study_tasks.shared.copy_v6_pipeline_results import (
     copy_v6_study_summaries,
+    _copy_external_single_analysis_results,
+)
+from workflows.flows.analysis.assembly.tasks.assembly_analysis_pipeline_batch_study_summary_generator import (
+    generate_assembly_analysis_pipeline_summary,
 )
 from workflows.flows.analyse_study_tasks.shared.study_summary import (
     merge_assembly_study_summaries,
@@ -44,7 +50,7 @@ from workflows.prefect_utils.analyses_models_helpers import (
     get_users_as_choices,
     add_study_watchers,
 )
-from workflows.models import AssemblyAnalysisPipeline, Analysis
+from workflows.models import AssemblyAnalysisPipeline, Analysis, Study
 
 
 @flow(
@@ -126,6 +132,7 @@ def external_assembly_ingestion(
         # Run this function to fetch related runs/samples for this study and save them in the DB
         get_study_assemblies_from_ena(ena_study.accession, limit=10000)
 
+        # TODO check if this code makes sense in this context
         # Set results_dir to the provided external path
         logger.info(f"Set results_dir to {results_path}")
         mgnify_study.results_dir = str(results_path)
@@ -220,17 +227,13 @@ def external_assembly_ingestion(
         )
 
         # =========================================================================
-        # STEP 6: Copy results files to production locations
+        # STEP 6: Finalize study and create summaries
         # =========================================================================
-        logger.info("Step 6: Copying results to production locations...")
-        _copy_results_files(mgnify_study, results_path)
-        # TODO maybe copy_v6_pipeline_results flow can be reused here?
+        logger.info("Step 6: Finalizing study and creating summaries...")
 
-        # =========================================================================
-        # STEP 7: Finalize study and create summaries
-        # =========================================================================
-        logger.info("Step 7: Finalizing study and creating summaries...")
-        # TODO add step to generate study summaries
+        generate_assembly_analysis_pipeline_summary(
+            study=mgnify_study,
+        )
 
         merge_assembly_study_summaries(
             mgnify_study.accession,
@@ -250,6 +253,17 @@ def external_assembly_ingestion(
             pipeline_version=analyses.models.Analysis.PipelineVersions.v6, is_ready=True
         ).exists()
         mgnify_study.save()
+
+        # =========================================================================
+        # STEP 7: Copy results files to production locations
+        # =========================================================================
+        logger.info("Step 7: Copying results to production locations...")
+        copy_external_v6_results(
+            study=mgnify_study,
+            results_dir=results_path,
+            analyses=exported_analyses,
+            timeout=14400,
+        )
 
         logger.info(f"Ingestion complete for study {mgnify_study.accession}")
 
@@ -422,36 +436,6 @@ def process_external_pipeline_results(
         logger.error(f"No {pipeline_type} analyses passed the results validation.")
 
 
-def _copy_results_files(
-    mgnify_study: analyses.models.Study, results_path: Path
-) -> None:
-    """
-    Copy pipeline results to production locations.
-
-    Copies results to:
-    - /nfs/prod/ for production results
-    - /nfs/services/ for service files (public downloads)
-
-    :param mgnify_study: The MGnify Study object
-    :param results_path: Path to source results directory
-    """
-    logger = get_run_logger()
-
-    # TODO: Implement file copying logic
-    # This should:
-    # 1. Identify which files need to be copied based on pipeline types
-    # 2. Copy ASA results to /nfs/prod/{study_accession}/asa/
-    # 3. Copy VIRify results to /nfs/prod/{study_accession}/virify/
-    # 4. Copy MAP results to /nfs/prod/{study_accession}/map/
-    # 5. Copy public files to /nfs/services/
-    #
-    # Reuse utilities from workflows/data_io_utils/ if available
-
-    logger.info(f"Copying results files for {mgnify_study.accession}...")
-    logger.info(f"Source: {results_path}")
-    logger.info("File copying not yet implemented (placeholder)")
-
-
 @task
 def set_asa_analysis_states(assembly_current_outdir: Path, analyses: List[Analysis]):
     """
@@ -535,3 +519,90 @@ def set_asa_analysis_states(assembly_current_outdir: Path, analyses: List[Analys
 
     # Bulk update - slightly gentler on the DB
     Analysis.objects.bulk_update(analyses_to_update, ["status"])
+
+
+def copy_external_v6_results(
+    study: Study, results_dir: Path, analyses: Analysis, timeout: int = 14400
+):
+    """
+    Copy results from all three assembly analysis pipelines (ASA, VIRify, MAP) for all
+    analyses in the input list to external results directories.
+
+    For each analysis in the batch, creates the following structure:
+    - {target_root}/{study_path}/{assembly_accession}/ - ASA results at root
+    - {target_root}/{study_path}/{assembly_accession}/virify/ - VIRify results
+    - {target_root}/{study_path}/{assembly_accession}/mobilome-annotation/ - MAP results
+
+    :param study: The study object to copy results for
+    :param results_dir: The base path where the results are located
+    :param analyses: The list of analyses objects to copy results for
+    :param timeout: Timeout in seconds for each move operation (default: 4 hours)
+    """
+    logger = get_run_logger()
+
+    # Determine target root based on privacy
+    target_root = (
+        EMG_CONFIG.slurm.private_results_dir
+        if study.is_private
+        else EMG_CONFIG.slurm.ftp_results_dir
+    )
+
+    # Only copy results for analyses where ASA completed successfully
+    # TODO understand how to get this
+    asa_completed_analyses_ids = []
+
+    logger.info(
+        f"Copying results for study {study.id} ({len(asa_completed_analyses_ids)} ASA-completed analyses "
+        f"out of {len(analyses)} total) to {target_root}"
+    )
+
+    # Process each analysis that completed ASA
+    copied_analysis_ids = []
+    copy_failed_analysis_ids = []
+    for analysis in asa_completed_analyses_ids:
+        try:
+            # TODO: This is calls another flow, which feels too nested. We should review this
+            _copy_external_single_analysis_results(
+                analysis=analysis,
+                results_workspace=results_dir,
+                target_root=target_root,
+                logger=logger,
+                timeout=timeout,
+            )
+        except Exception as e:
+            copy_failed_analysis_ids.append(analysis.accession)
+            logger.error(f"Failed to copy results for {analysis.accession}: {e}")
+            continue
+        else:
+            copied_analysis_ids.append(analysis.accession)
+
+    # Bulk update analysis statuses for all successfully copied analyses
+    if copied_analysis_ids:
+        analyses_to_update = Analysis.objects.filter(id__in=copied_analysis_ids)
+        # Update status flags in bulk
+        for analysis in analyses_to_update:
+            analysis.status[Analysis.AnalysisStates.ANALYSIS_ANNOTATIONS_IMPORTED] = (
+                True
+            )
+            # Unset failure/blocked statuses
+            analysis.status[Analysis.AnalysisStates.ANALYSIS_QC_FAILED] = False
+            analysis.status[
+                Analysis.AnalysisStates.ANALYSIS_POST_SANITY_CHECK_FAILED
+            ] = False
+            analysis.status[Analysis.AnalysisStates.ANALYSIS_BLOCKED] = False
+        Analysis.objects.bulk_update(analyses_to_update, ["status"])
+        logger.info(f"Bulk updated status for {len(copied_analysis_ids)} analyses")
+
+    if copy_failed_analysis_ids:
+        analyses_to_update = Analysis.objects.filter(id__in=copy_failed_analysis_ids)
+        # Update status flags in bulk
+        for analysis in analyses_to_update:
+            analysis.status[Analysis.AnalysisStates.ANALYSIS_ANNOTATIONS_IMPORTED] = (
+                False
+            )
+        Analysis.objects.bulk_update(analyses_to_update, ["status"])
+        logger.info(f"Bulk updated status for {len(copy_failed_analysis_ids)} analyses")
+
+    logger.info(
+        f"Completed copying results for study {study.ena_accessions.first_accession}"
+    )
