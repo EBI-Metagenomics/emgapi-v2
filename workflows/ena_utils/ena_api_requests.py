@@ -645,6 +645,12 @@ def sync_study_metadata_from_ena(study: ena.models.Study):
         study.save()
 
 
+@task(
+    retries=RETRIES,
+    retry_delay_seconds=RETRY_DELAY,
+    cache_key_fn=task_input_hash,
+    task_run_name="Get study for assembly {assembly_accession} from ENA",
+)
 def get_study_accession_for_assembly(
     assembly_accession: str,
 ) -> str:

@@ -15,6 +15,7 @@ from workflows.ena_utils.ena_api_requests import (
     is_ena_study_public,
     sync_privacy_state_of_ena_study_and_derived_objects,
     library_strategy_policy_to_filter,
+    get_study_accession_for_assembly,
     ENALibraryStrategyPolicy,
 )
 from workflows.ena_utils.requestors import (
@@ -983,3 +984,37 @@ def test_library_strategy_policy_to_filter():
         )
         == []
     )
+
+
+@pytest.mark.httpx_mock(should_mock=should_not_mock_httpx_requests_to_prefect_server)
+@pytest.mark.django_db(transaction=True)
+def test_get_study_accession_for_assembly_primary(httpx_mock, prefect_harness):
+    assembly_accession = "ERZ25038795"
+    primary_study_accession = "PRJEB85401"
+
+    httpx_mock.add_response(
+        url=f"{EMG_CONFIG.ena.portal_search_api}?result=analysis&query=%22analysis_accession={assembly_accession}%22&fields=analysis_accession%2Cstudy_accession%2Csecondary_study_accession&limit=1&format=json&dataPortal=metagenome",
+        json=[{"study_accession": primary_study_accession}],
+    )
+
+    study_accession = get_study_accession_for_assembly(assembly_accession)
+    assert study_accession == primary_study_accession
+
+
+@pytest.mark.httpx_mock(should_mock=should_not_mock_httpx_requests_to_prefect_server)
+@pytest.mark.django_db(transaction=True)
+def test_get_study_accession_for_assembly_secondary(httpx_mock, prefect_harness):
+    assembly_accession = "ERZ25038795"
+    secondary_study_accession = "ERP168778"
+    httpx_mock.add_response(
+        url=f"{EMG_CONFIG.ena.portal_search_api}?result=analysis&query=%22analysis_accession={assembly_accession}%22&fields=analysis_accession%2Cstudy_accession%2Csecondary_study_accession&limit=1&format=json&dataPortal=metagenome",
+        json=[
+            {
+                "secondary_study_accession": secondary_study_accession,
+                "study_accession": "",  # primary study accession missing
+            }
+        ],
+    )
+
+    study_accession = get_study_accession_for_assembly(assembly_accession)
+    assert study_accession == secondary_study_accession
