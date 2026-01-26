@@ -22,7 +22,7 @@ def _run_assembly_summary_generator(
     study_results_dir: Path,
     asa_workspace: Path,
     assemblies_csv: Path,
-    output_prefix: uuid.UUID,
+    output_prefix: str,
 ) -> List[Path]:
     logger = get_run_logger()
 
@@ -94,7 +94,7 @@ def generate_assembly_analysis_pipeline_batch_summary(
         study_results_dir=Path(study.results_dir),
         asa_workspace=Path(asa_workspace),
         assemblies_csv=assemblies_csv,
-        output_prefix=assembly_batch.id,
+        output_prefix=str(assembly_batch.id),
     )
 
 
