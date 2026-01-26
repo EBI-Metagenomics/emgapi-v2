@@ -2,6 +2,7 @@ import json
 import os
 import shutil
 from pathlib import Path
+import responses
 from textwrap import dedent
 from typing import List, Optional
 from unittest.mock import Mock, patch
@@ -20,6 +21,7 @@ from workflows.ena_utils.ena_api_requests import ENALibraryStrategyPolicy
 from workflows.flows.analyse_study_tasks.shared.study_summary import (
     merge_study_summaries,
     STUDY_SUMMARY_TSV,
+    DWCREADY_CSV,
 )
 from workflows.flows.analysis_amplicon_study import analysis_amplicon_study
 from workflows.prefect_utils.testing_utils import (
@@ -118,21 +120,68 @@ def generate_fake_pipeline_all_results(amplicon_run_folder: Path, run):
         / EMG_CONFIG.amplicon_pipeline.asv_folder
         / f"{run}_dada2_stats.tsv"
     ).touch()
-    (
+
+    with open(
         amplicon_run_folder
         / EMG_CONFIG.amplicon_pipeline.asv_folder
-        / f"{run}_DADA2-SILVA_asv_tax.tsv"
-    ).touch()
-    (
+        / f"{run}_DADA2-SILVA_asv_tax.tsv",
+        "w",
+    ) as fw:
+        fw.write(
+            dedent(
+                """\
+        ASV	Superkingdom	Kingdom	Phylum	Class	Order	Family	Genus	Species
+        seq_1	sk__Bacteria	k__	p__Actinomycetota	c__Actinomycetes	o__Kitasatosporales	f__Streptomycetaceae	g__Streptomyces NA
+        seq_2	sk__Bacteria	k__	p__Actinomycetota	c__Actinomycetes	o__Micrococcales	f__Microbacteriaceae    NA  NA
+        seq_3	sk__Bacteria	k__	p__Actinomycetota	c__Actinomycetes	o__Micrococcales	f__Micrococcaceae	g__Arthrobacter NA
+        seq_4	sk__Bacteria	k__	p__Actinomycetota	c__Actinomycetes	o__Micrococcales	f__Micrococcaceae	g__Pseudarthrobacter    NA
+        seq_5	sk__Bacteria	k__	p__Actinomycetota	c__Actinomycetes	o__Propionibacteriales	f__Nocardioidaceae	g__Aeromicrobium    NA
+                """
+            )
+        )
+
+    with open(
         amplicon_run_folder
         / EMG_CONFIG.amplicon_pipeline.asv_folder
-        / f"{run}_DADA2-PR2_asv_tax.tsv"
-    ).touch()
-    (
+        / f"{run}_DADA2-PR2_asv_tax.tsv",
+        "w",
+    ) as fw:
+        fw.write(
+            dedent(
+                """\
+        ASV	Domain	Supergroup	Division	Subdivision	Class	Order	Family	Genus	Species
+        seq_1	d__Bacteria	sg__FCB	dv__Bacteroidetes	sdv__Bacteroidetes_X	c__Bacteroidia	o__Chitinophagales	f__Chitinophagaceae	g__Chitinophaga	s__Chitinophaga_sp.
+        seq_2	d__Bacteria	sg__FCB	dv__Bacteroidetes	sdv__Bacteroidetes_X	c__Bacteroidia	o__Cytophagales	f__Spirosomaceae	g__Dyadobacter	s__Dyadobacter_sp.
+        seq_3	d__Bacteria	sg__FCB	dv__Bacteroidetes	sdv__Bacteroidetes_X	c__Bacteroidia	o__Flavobacteriales	f__Flavobacteriaceae	g__Flavobacterium	s__Flavobacterium_sp.
+        seq_4	d__Bacteria	sg__FCB	dv__Bacteroidetes	sdv__Bacteroidetes_X	c__Bacteroidia	o__Sphingobacteriales	f__Sphingobacteriaceae	g__Pedobacter	s__Pedobacter_sp.
+        seq_5	d__Bacteria	sg__PANNAM	dv__Proteobacteria	sdv__Proteobacteria_X	c__Alphaproteobacteria	o__Caulobacterales	f__Caulobacteraceae	g__Caulobacter	s__Caulobacter_sp.
+                """
+            )
+        )
+
+    with open(
         amplicon_run_folder
         / EMG_CONFIG.amplicon_pipeline.asv_folder
-        / f"{run}_asv_seqs.fasta"
-    ).touch()
+        / f"{run}_asv_seqs.fasta",
+        "w",
+    ) as fw:
+        fw.write(
+            dedent(
+                """\
+        >seq_1
+        TGGGGAATATTGGACAATGGGCGCAAGCCTGATCCA
+        >seq_2
+        TGGGGAATCTTGCACAATGGGCGAAAGCCTGATGCA
+        >seq_3
+        TGGGGAATATTGGACAATGGGCGCAAGCCTGATCCA
+        >seq_4
+        TCGAGAATTTTTCTCAATGGGGGAAACCCTGAAGGA
+        >seq_5
+        TGGGGAATCTTGCACAATGGACGAAAGTCTGATGCA
+                """
+            )
+        )
+
     (
         amplicon_run_folder
         / EMG_CONFIG.amplicon_pipeline.asv_folder
@@ -312,6 +361,34 @@ def generate_fake_pipeline_all_results(amplicon_run_folder: Path, run):
             """
                 )
             )
+    with open(dada2_silva_dir / f"{run}_16S-V3-V4_DADA2-SILVA.mseq", "w") as fw:
+        fw.write(
+            dedent(
+                """\
+        #query	dbhit	bitscore	identity	matches	mismatches	gaps	query_start	query_end	dbhit_start	dbhit_end	strand		SILVA
+        seq_1	EF019080.1.1347	400	0.9975124597549438	401	1	0	0	402	331	733	+	sk__Bacteria;k__;p__Actinomycetota;c__Actinomycetes;o__Kitasatosporales;f__Streptomycetaceae;g__Streptomyces
+        seq_2	HE818674.1.1466	402	1	402	0	0	0	402	284	686	+	sk__Bacteria;k__;p__Actinomycetota;c__Actinomycetes;o__Micrococcales;f__Microbacteriaceae
+        seq_3	GQ339135.1.1517	424	0.9953271150588989	426	2	0	0	428	360	788	+	sk__Bacteria;k__;p__Actinomycetota;c__Actinomycetes;o__Micrococcales;f__Micrococcaceae;g__Arthrobacter
+        seq_4	LN563935.1.1317	400	0.9975124597549438	401	1	0	0	402	298	700	+	sk__Bacteria;k__;p__Actinomycetota;c__Actinomycetes;o__Micrococcales;f__Micrococcaceae;g__Pseudarthrobacter
+        seq_5	EF018928.1.1401	424	0.9953271150588989	426	2	0	0	428	358	786	+	sk__Bacteria;k__;p__Actinomycetota;c__Actinomycetes;o__Propionibacteriales;f__Nocardioidaceae;g__Aeromicrobium
+                """
+            )
+        )
+
+    with open(dada2_silva_dir / f"{run}_18S-V9_DADA2-SILVA.mseq", "w") as fw:
+        fw.write(
+            dedent(
+                """\
+        #query	dbhit	bitscore	identity	matches	mismatches	gaps	query_start	query_end	dbhit_start	dbhit_end	strand		SILVA
+        seq_1	EF019080.1.1347	400	0.9975124597549438	401	1	0	0	402	331	733	+	sk__Bacteria;k__;p__Actinomycetota;c__Actinomycetes;o__Kitasatosporales;f__Streptomycetaceae;g__Streptomyces
+        seq_2	HE818674.1.1466	402	1	402	0	0	0	402	284	686	+	sk__Bacteria;k__;p__Actinomycetota;c__Actinomycetes;o__Micrococcales;f__Microbacteriaceae
+        seq_3	GQ339135.1.1517	424	0.9953271150588989	426	2	0	0	428	360	788	+	sk__Bacteria;k__;p__Actinomycetota;c__Actinomycetes;o__Micrococcales;f__Micrococcaceae;g__Arthrobacter
+        seq_4	LN563935.1.1317	400	0.9975124597549438	401	1	0	0	402	298	700	+	sk__Bacteria;k__;p__Actinomycetota;c__Actinomycetes;o__Micrococcales;f__Micrococcaceae;g__Pseudarthrobacter
+        seq_5	EF018928.1.1401	424	0.9953271150588989	426	2	0	0	428	358	786	+	sk__Bacteria;k__;p__Actinomycetota;c__Actinomycetes;o__Propionibacteriales;f__Nocardioidaceae;g__Aeromicrobium
+                """
+            )
+        )
+
     dada2_pr2_dir = (
         amplicon_run_folder
         / EMG_CONFIG.amplicon_pipeline.taxonomy_summary_folder
@@ -348,6 +425,33 @@ def generate_fake_pipeline_all_results(amplicon_run_folder: Path, run):
             """
                 )
             )
+    with open(dada2_pr2_dir / f"{run}_16S-V3-V4_DADA2-PR2.mseq", "w") as fw:
+        fw.write(
+            dedent(
+                """\
+        #query	dbhit	bitscore	identity	matches	mismatches	gaps	query_start	query_end	dbhit_start	dbhit_end	strand		SILVA
+        seq_1	EF019080.1.1347	400	0.9975124597549438	401	1	0	0	402	331	733	+	d__Bacteria;sg__FCB;dv__Bacteroidetes;sdv__Bacteroidetes_X;c__Bacteroidia;o__Chitinophagales;f__Chitinophagaceae;g__Chitinophaga;s__Chitinophaga_sp.
+        seq_2	HE818674.1.1466	402	1	402	0	0	0	402	284	686	+	d__Bacteria;sg__FCB;dv__Bacteroidetes;sdv__Bacteroidetes_X;c__Bacteroidia;o__Cytophagales;f__Spirosomaceae;g__Dyadobacter;s__Dyadobacter_sp.
+        seq_3	GQ339135.1.1517	424	0.9953271150588989	426	2	0	0	428	360	788	+	d__Bacteria;sg__FCB;dv__Bacteroidetes;sdv__Bacteroidetes_X;c__Bacteroidia;o__Flavobacteriales;f__Flavobacteriaceae;g__Flavobacterium;s__Flavobacterium_sp.
+        seq_4	LN563935.1.1317	400	0.9975124597549438	401	1	0	0	402	298	700	+	d__Bacteria;sg__FCB;dv__Bacteroidetes;sdv__Bacteroidetes_X;c__Bacteroidia;o__Sphingobacteriales;f__Sphingobacteriaceae;g__Pedobacter;s__Pedobacter_sp.
+        seq_5	EF018928.1.1401	424	0.9953271150588989	426	2	0	0	428	358	786	+	d__Bacteria;sg__PANNAM;dv__Proteobacteria;sdv__Proteobacteria_X;c__Alphaproteobacteria;o__Caulobacterales;f__Caulobacteraceae;g__Caulobacter;s__Caulobacter_sp.
+                """
+            )
+        )
+
+    with open(dada2_pr2_dir / f"{run}_18S-V9_DADA2-PR2.mseq", "w") as fw:
+        fw.write(
+            dedent(
+                """\
+        #query	dbhit	bitscore	identity	matches	mismatches	gaps	query_start	query_end	dbhit_start	dbhit_end	strand		SILVA
+        seq_1	EF019080.1.1347	400	0.9975124597549438	401	1	0	0	402	331	733	+	d__Bacteria;sg__FCB;dv__Bacteroidetes;sdv__Bacteroidetes_X;c__Bacteroidia;o__Chitinophagales;f__Chitinophagaceae;g__Chitinophaga;s__Chitinophaga_sp.
+        seq_2	HE818674.1.1466	402	1	402	0	0	0	402	284	686	+	d__Bacteria;sg__FCB;dv__Bacteroidetes;sdv__Bacteroidetes_X;c__Bacteroidia;o__Cytophagales;f__Spirosomaceae;g__Dyadobacter;s__Dyadobacter_sp.
+        seq_3	GQ339135.1.1517	424	0.9953271150588989	426	2	0	0	428	360	788	+	d__Bacteria;sg__FCB;dv__Bacteroidetes;sdv__Bacteroidetes_X;c__Bacteroidia;o__Flavobacteriales;f__Flavobacteriaceae;g__Flavobacterium;s__Flavobacterium_sp.
+        seq_4	LN563935.1.1317	400	0.9975124597549438	401	1	0	0	402	298	700	+	d__Bacteria;sg__FCB;dv__Bacteroidetes;sdv__Bacteroidetes_X;c__Bacteroidia;o__Sphingobacteriales;f__Sphingobacteriaceae;g__Pedobacter;s__Pedobacter_sp.
+        seq_5	EF018928.1.1401	424	0.9953271150588989	426	2	0	0	428	358	786	+	d__Bacteria;sg__PANNAM;dv__Proteobacteria;sdv__Proteobacteria_X;c__Alphaproteobacteria;o__Caulobacterales;f__Caulobacteraceae;g__Caulobacter;s__Caulobacter_sp.
+                """
+            )
+        )
 
 
 def generate_fake_pipeline_no_asvs(amplicon_run_folder, run):
@@ -506,6 +610,7 @@ def analysis_study_input_mocker(biome_choices, user_choices):
 @pytest.mark.parametrize(
     "mock_suspend_flow_run", ["workflows.flows.analysis_amplicon_study"], indirect=True
 )
+@responses.activate
 def test_prefect_analyse_amplicon_flow(
     mock_run_deployment,
     mock_queryset_hash_for_amplicon,
@@ -536,7 +641,7 @@ def test_prefect_analyse_amplicon_flow(
     mock_queryset_hash_for_amplicon.return_value = "abc123"
 
     study_accession = "PRJNA398089"
-    amplicon_run_all_results = "SRR_all_results"
+    amplicon_run_all_results = "SRRALLRESULTS"
     amplicon_run_failed = "SRR_failed"
     amplicon_run_no_asv = "SRR_no_asv"
     amplicon_run_no_qc = "SRR_no_qc"
@@ -654,6 +759,278 @@ def test_prefect_analyse_amplicon_flow(
                 "lon": "0",
                 "location": "hinxton",
             },
+        ],
+    )
+
+    # Mock the read_run ENA API requests that `dwc_summary_generator` uses
+    responses.add(
+        responses.GET,
+        EMG_CONFIG.ena.portal_search_api,
+        json=[
+            {
+                "run_accession": amplicon_run_all_results,
+                "secondary_study_accession": "PRJNA398089",
+                "sample_accession": "SAMN08514017",
+                "instrument_model": "Illumina MiSeq",
+            }
+        ],
+        match=[
+            responses.matchers.query_param_matcher(
+                {
+                    "result": "read_run",
+                    "includeAccessions": amplicon_run_all_results,
+                    "fields": "secondary_study_accession,sample_accession,instrument_model",
+                    "limit": "10",
+                    "format": "json",
+                    "download": "false",
+                }
+            )
+        ],
+    )
+
+    responses.add(
+        responses.GET,
+        EMG_CONFIG.ena.portal_search_api,
+        json=[
+            {
+                "run_accession": amplicon_run_failed,
+                "secondary_study_accession": "PRJNA398089",
+                "sample_accession": "SAMN08514018",
+                "instrument_model": "Illumina MiSeq",
+            }
+        ],
+        match=[
+            responses.matchers.query_param_matcher(
+                {
+                    "result": "read_run",
+                    "includeAccessions": amplicon_run_failed,
+                    "fields": "secondary_study_accession,sample_accession,instrument_model",
+                    "limit": "10",
+                    "format": "json",
+                    "download": "false",
+                }
+            )
+        ],
+    )
+
+    responses.add(
+        responses.GET,
+        EMG_CONFIG.ena.portal_search_api,
+        json=[
+            {
+                "run_accession": amplicon_run_no_asv,
+                "secondary_study_accession": "PRJNA398089",
+                "sample_accession": "SAMN08514019",
+                "instrument_model": "Illumina MiSeq",
+            }
+        ],
+        match=[
+            responses.matchers.query_param_matcher(
+                {
+                    "result": "read_run",
+                    "includeAccessions": amplicon_run_no_asv,
+                    "fields": "secondary_study_accession,sample_accession,instrument_model",
+                    "limit": "10",
+                    "format": "json",
+                    "download": "false",
+                }
+            )
+        ],
+    )
+
+    responses.add(
+        responses.GET,
+        EMG_CONFIG.ena.portal_search_api,
+        json=[
+            {
+                "run_accession": amplicon_run_no_qc,
+                "secondary_study_accession": "PRJNA398089",
+                "sample_accession": "SAMN08514020",
+                "instrument_model": "Illumina MiSeq",
+            }
+        ],
+        match=[
+            responses.matchers.query_param_matcher(
+                {
+                    "result": "read_run",
+                    "includeAccessions": amplicon_run_no_qc,
+                    "fields": "secondary_study_accession,sample_accession,instrument_model",
+                    "limit": "10",
+                    "format": "json",
+                    "download": "false",
+                }
+            )
+        ],
+    )
+
+    responses.add(
+        responses.GET,
+        EMG_CONFIG.ena.portal_search_api,
+        json=[
+            {
+                "run_accession": amplicon_run_extra_dada2,
+                "secondary_study_accession": "PRJNA398089",
+                "sample_accession": "SAMN08514021",
+                "instrument_model": "Illumina MiSeq",
+            }
+        ],
+        match=[
+            responses.matchers.query_param_matcher(
+                {
+                    "result": "read_run",
+                    "includeAccessions": amplicon_run_extra_dada2,
+                    "fields": "secondary_study_accession,sample_accession,instrument_model",
+                    "limit": "10",
+                    "format": "json",
+                    "download": "false",
+                }
+            )
+        ],
+    )
+
+    # mock the sample ENA API requests that `dwc_summary_generator` uses
+    responses.add(
+        responses.GET,
+        EMG_CONFIG.ena.portal_search_api,
+        json=[
+            {
+                "lat": "52",
+                "lon": "0",
+                "collection_date": "2025-05-25",
+                "depth": 0.12,
+                "center_name": "Devonshire Building",
+                "temperature": 12,
+                "salinity": 0.12,
+                "country": "United Kingdom",
+            }
+        ],
+        match=[
+            responses.matchers.query_param_matcher(
+                {
+                    "result": "sample",
+                    "includeAccessions": "SAMN08514017",
+                    "fields": "lat,lon,collection_date,depth,center_name,temperature,salinity,country",
+                    "limit": "10",
+                    "format": "json",
+                    "download": "false",
+                }
+            )
+        ],
+    )
+
+    responses.add(
+        responses.GET,
+        EMG_CONFIG.ena.portal_search_api,
+        json=[
+            {
+                "lat": "52",
+                "lon": "0",
+                "collection_date": "2025-05-25",
+                "depth": 0.12,
+                "center_name": "Devonshire Building",
+                "temperature": 12,
+                "salinity": 0.12,
+                "country": "United Kingdom",
+            }
+        ],
+        match=[
+            responses.matchers.query_param_matcher(
+                {
+                    "result": "sample",
+                    "includeAccessions": "SAMN08514018",
+                    "fields": "lat,lon,collection_date,depth,center_name,temperature,salinity,country",
+                    "limit": "10",
+                    "format": "json",
+                    "download": "false",
+                }
+            )
+        ],
+    )
+
+    responses.add(
+        responses.GET,
+        EMG_CONFIG.ena.portal_search_api,
+        json=[
+            {
+                "lat": "52",
+                "lon": "0",
+                "collection_date": "2025-05-25",
+                "depth": 0.12,
+                "center_name": "Devonshire Building",
+                "temperature": 12,
+                "salinity": 0.12,
+                "country": "United Kingdom",
+            }
+        ],
+        match=[
+            responses.matchers.query_param_matcher(
+                {
+                    "result": "sample",
+                    "includeAccessions": "SAMN08514019",
+                    "fields": "lat,lon,collection_date,depth,center_name,temperature,salinity,country",
+                    "limit": "10",
+                    "format": "json",
+                    "download": "false",
+                }
+            )
+        ],
+    )
+
+    responses.add(
+        responses.GET,
+        EMG_CONFIG.ena.portal_search_api,
+        json=[
+            {
+                "lat": "52",
+                "lon": "0",
+                "collection_date": "2025-05-25",
+                "depth": 0.12,
+                "center_name": "Devonshire Building",
+                "temperature": 12,
+                "salinity": 0.12,
+                "country": "United Kingdom",
+            }
+        ],
+        match=[
+            responses.matchers.query_param_matcher(
+                {
+                    "result": "sample",
+                    "includeAccessions": "SAMN08514020",
+                    "fields": "lat,lon,collection_date,depth,center_name,temperature,salinity,country",
+                    "limit": "10",
+                    "format": "json",
+                    "download": "false",
+                }
+            )
+        ],
+    )
+
+    responses.add(
+        responses.GET,
+        EMG_CONFIG.ena.portal_search_api,
+        json=[
+            {
+                "lat": "52",
+                "lon": "0",
+                "collection_date": "2025-05-25",
+                "depth": 0.12,
+                "center_name": "Devonshire Building",
+                "temperature": 12,
+                "salinity": 0.12,
+                "country": "United Kingdom",
+            }
+        ],
+        match=[
+            responses.matchers.query_param_matcher(
+                {
+                    "result": "sample",
+                    "includeAccessions": "SAMN08514021",
+                    "fields": "lat,lon,collection_date,depth,center_name,temperature,salinity,country",
+                    "limit": "10",
+                    "format": "json",
+                    "download": "false",
+                }
+            )
         ],
     )
 
@@ -837,23 +1214,33 @@ def test_prefect_analyse_amplicon_flow(
 
     assert study.external_results_dir == f"{study_accession[:-3]}/{study_accession}"
 
+    samplesheet_study_summary_count = 6
+    merge_study_summary_count = 6
+    samplesheet_dwcr_summary_count = 6
+    merge_dwcr_summary_count = 6
+
+    total_expected_summary_count = (
+        samplesheet_study_summary_count
+        + merge_study_summary_count
+        + samplesheet_dwcr_summary_count
+        + merge_dwcr_summary_count
+    )  # adds up to 24
+
     Directory(
         path=study.results_dir,
-        glob_rules=[
-            GlobHasFilesCountRule[12]
-        ],  # 6 for the samplesheet, same 6 for the "merge"
+        glob_rules=[GlobHasFilesCountRule[total_expected_summary_count]],
     )
 
     with (workdir / "abc123_DADA2-SILVA_18S-V9_asv_study_summary.tsv").open(
         "r"
     ) as summary:
         lines = summary.readlines()
-        assert lines[0] == "taxonomy\tSRR_all_results\n"  # one run (the one with ASVs)
+        assert lines[0] == "taxonomy\tSRRALLRESULTS\n"  # one run (the one with ASVs)
         assert "100" in lines[-1]
         assert "g__Aeromicrobium" in lines[-1]
 
     # manually remove the merged study summaries
-    for file in Path(study.results_dir).glob(f"{study.first_accession}*"):
+    for file in Path(study.results_dir).glob(f"{study.first_accession}*.tsv"):
         file.unlink()
 
     # test merging of study summaries again, with cleanup disabled
@@ -866,7 +1253,7 @@ def test_prefect_analyse_amplicon_flow(
         path=study.results_dir,
         glob_rules=[
             GlobHasFilesCountRule[
-                12
+                total_expected_summary_count
             ],  # study ones generated, and partials left in place
             GlobRule(
                 rule_name="All study level files are present",
@@ -895,7 +1282,9 @@ def test_prefect_analyse_amplicon_flow(
     Directory(
         path=study.results_dir,
         glob_rules=[
-            GlobHasFilesCountRule[12],  # partials deleted, just merged ones
+            GlobHasFilesCountRule[
+                total_expected_summary_count
+            ],  # partials deleted, just merged ones
             GlobRule(
                 rule_name="All files are study level",
                 glob_patten=f"{study.first_accession}*{STUDY_SUMMARY_TSV}",
@@ -907,6 +1296,31 @@ def test_prefect_analyse_amplicon_flow(
     study.refresh_from_db()
     assert len(study.downloads_as_objects) == 6
     assert study.features.has_v6_analyses
+
+    Directory(
+        path=study.results_dir,
+        glob_rules=[
+            GlobHasFilesCountRule[total_expected_summary_count],
+            GlobRule(
+                rule_name="Samplesheet-specific DwC Ready files are present",
+                glob_patten=f"abc123*{DWCREADY_CSV}",
+                test=lambda f: len(list(f))
+                == 6,  # 6 samplesheet-specific DwC-R summary files
+            ),
+        ],
+    )
+
+    Directory(
+        path=study.results_dir,
+        glob_rules=[
+            GlobHasFilesCountRule[total_expected_summary_count],
+            GlobRule(
+                rule_name="Samplesheet-specific DwC Ready files are present",
+                glob_patten=f"{study.first_accession}*{DWCREADY_CSV}",
+                test=lambda f: len(list(f)) == 6,  # 6 merged DwC-R summary files
+            ),
+        ],
+    )
 
 
 @pytest.mark.flaky(
@@ -927,6 +1341,7 @@ def test_prefect_analyse_amplicon_flow(
 @pytest.mark.parametrize(
     "mock_suspend_flow_run", ["workflows.flows.analysis_amplicon_study"], indirect=True
 )
+@responses.activate
 def test_prefect_analyse_amplicon_flow_private_data(
     mock_run_deployment,
     mock_queryset_hash_for_amplicon,
@@ -1001,7 +1416,7 @@ def test_prefect_analyse_amplicon_flow_private_data(
 
     mock_queryset_hash_for_amplicon.return_value = "xyz789"
 
-    amplicon_run_all_results = "SRR_all_results"
+    amplicon_run_all_results = "SRRALLRESULTS"
     runs = [
         amplicon_run_all_results,
     ]
@@ -1038,6 +1453,62 @@ def test_prefect_analyse_amplicon_flow_private_data(
                 "lon": "0",
                 "location": "hinxton",
             },
+        ],
+    )
+
+    # Mock the read_run ENA API requests that `dwc_summary_generator` uses
+    responses.add(
+        responses.GET,
+        EMG_CONFIG.ena.portal_search_api,
+        json=[
+            {
+                "run_accession": amplicon_run_all_results,
+                "secondary_study_accession": "PRJNA398089",
+                "sample_accession": "SAMN08514017",
+                "instrument_model": "Illumina MiSeq",
+            }
+        ],
+        match=[
+            responses.matchers.query_param_matcher(
+                {
+                    "result": "read_run",
+                    "includeAccessions": amplicon_run_all_results,
+                    "fields": "secondary_study_accession,sample_accession,instrument_model",
+                    "limit": "10",
+                    "format": "json",
+                    "download": "false",
+                }
+            )
+        ],
+    )
+
+    # mock the sample ENA API requests that `dwc_summary_generator` uses
+    responses.add(
+        responses.GET,
+        EMG_CONFIG.ena.portal_search_api,
+        json=[
+            {
+                "lat": "52",
+                "lon": "0",
+                "collection_date": "2025-05-25",
+                "depth": 0.12,
+                "center_name": "Devonshire Building",
+                "temperature": 12,
+                "salinity": 0.12,
+                "country": "United Kingdom",
+            }
+        ],
+        match=[
+            responses.matchers.query_param_matcher(
+                {
+                    "result": "sample",
+                    "includeAccessions": "SAMN08514017",
+                    "fields": "lat,lon,collection_date,depth,center_name,temperature,salinity,country",
+                    "limit": "10",
+                    "format": "json",
+                    "download": "false",
+                }
+            )
         ],
     )
 
@@ -1138,23 +1609,33 @@ def test_prefect_analyse_amplicon_flow_private_data(
 
     assert study.external_results_dir == "SRP123/SRP123456"
 
+    samplesheet_study_summary_count = 5
+    merge_study_summary_count = 5
+    samplesheet_dwcr_summary_count = 6
+    merge_dwcr_summary_count = 6
+
+    total_expected_summary_count = (
+        samplesheet_study_summary_count
+        + merge_study_summary_count
+        + samplesheet_dwcr_summary_count
+        + merge_dwcr_summary_count
+    )  # adds up to 22
+
     Directory(
         path=study.results_dir,
-        glob_rules=[
-            GlobHasFilesCountRule[10]
-        ],  # 5 for the samplesheet, same 5 for the "merge" (only 5 here, unlike public test, which has different hypervar regions)
+        glob_rules=[GlobHasFilesCountRule[total_expected_summary_count]],
     )
 
     with (workdir / "xyz789_DADA2-SILVA_18S-V9_asv_study_summary.tsv").open(
         "r"
     ) as summary:
         lines = summary.readlines()
-        assert lines[0] == "taxonomy\tSRR_all_results\n"  # one run (the one with ASVs)
+        assert lines[0] == "taxonomy\tSRRALLRESULTS\n"  # one run (the one with ASVs)
         assert "100" in lines[-1]
         assert "g__Aeromicrobium" in lines[-1]
 
     # manually remove the merged study summaries
-    for file in Path(study.results_dir).glob(f"{study.first_accession}*"):
+    for file in Path(study.results_dir).glob(f"{study.first_accession}*.tsv"):
         file.unlink()
 
     # test merging of study summaries again, with cleanup disabled
@@ -1167,7 +1648,7 @@ def test_prefect_analyse_amplicon_flow_private_data(
         path=study.results_dir,
         glob_rules=[
             GlobHasFilesCountRule[
-                10
+                total_expected_summary_count
             ],  # study ones generated, and partials left in place
             GlobRule(
                 rule_name="All study level files are present",
@@ -1196,11 +1677,38 @@ def test_prefect_analyse_amplicon_flow_private_data(
     Directory(
         path=study.results_dir,
         glob_rules=[
-            GlobHasFilesCountRule[10],  # partials deleted, just merged ones
+            GlobHasFilesCountRule[
+                total_expected_summary_count
+            ],  # partials deleted, just merged ones
             GlobRule(
                 rule_name="All files are study level",
                 glob_patten=f"{study.first_accession}*{STUDY_SUMMARY_TSV}",
                 test=lambda f: len(list(f)) == 5,
+            ),
+        ],
+    )
+
+    Directory(
+        path=study.results_dir,
+        glob_rules=[
+            GlobHasFilesCountRule[total_expected_summary_count],
+            GlobRule(
+                rule_name="Samplesheet-specific DwC Ready files are present",
+                glob_patten=f"xyz789*{DWCREADY_CSV}",
+                test=lambda f: len(list(f))
+                == 6,  # 6 samplesheet-specific DwC-R summary files
+            ),
+        ],
+    )
+
+    Directory(
+        path=study.results_dir,
+        glob_rules=[
+            GlobHasFilesCountRule[total_expected_summary_count],
+            GlobRule(
+                rule_name="Samplesheet-specific DwC Ready files are present",
+                glob_patten=f"{study.first_accession}*{DWCREADY_CSV}",
+                test=lambda f: len(list(f)) == 6,  # 6 merged DwC-R summary files
             ),
         ],
     )
