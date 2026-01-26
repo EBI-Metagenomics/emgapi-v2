@@ -180,7 +180,7 @@ def make_samplesheets_for_runs_to_assemble(
     mgnify_study_accession: str,
     assembler: analyses.models.Assembler,
     chunk_size: int = 10,
-    output_dir: Path = Union[Path, None],
+    output_dir: Union[Path, None] = None,
 ) -> list[tuple[Path, str]]:
     """Generate samplesheets for assemblies in a study for processing by the specified assembler.
 
