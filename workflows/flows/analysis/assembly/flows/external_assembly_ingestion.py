@@ -40,9 +40,6 @@ from workflows.flows.analyse_study_tasks.shared.copy_v6_pipeline_results import 
 from workflows.flows.analysis.assembly.tasks.assembly_analysis_pipeline_batch_study_summary_generator import (
     generate_assembly_analysis_pipeline_summary,
 )
-from workflows.flows.analyse_study_tasks.shared.study_summary import (
-    merge_assembly_study_summaries,
-)
 from workflows.flows.analysis.assembly.tasks.add_assembly_study_summaries_to_downloads import (
     add_assembly_study_summaries_to_downloads,
 )
@@ -201,7 +198,7 @@ def external_assembly_ingestion(
 
         logger.info("Setting ASA analysis states...")
         set_asa_analysis_states(
-            results_path / "asa",
+            results_path / "asa",  # may as well be mgnify_study.results_dir / "asa"
             exported_analyses,
         )
 
@@ -213,6 +210,7 @@ def external_assembly_ingestion(
         )
 
         logger.info("Processing VIRify results...")
+        # TODO in production we only import if VIRIFY statuses are present, do we want same here?
         process_external_pipeline_results(
             exported_analyses,
             results_path,
@@ -220,6 +218,7 @@ def external_assembly_ingestion(
         )
 
         logger.info("Processing MAP results...")
+        # TODO in production we only import if MAP statuses are present, do we want same here?
         process_external_pipeline_results(
             exported_analyses,
             results_path,
@@ -235,11 +234,7 @@ def external_assembly_ingestion(
             study=mgnify_study,
         )
 
-        merge_assembly_study_summaries(
-            mgnify_study.accession,
-            cleanup_partials=True,
-        )
-        logger.info("Merged assembly study summaries")
+        # TODO: if more analysis will be analyses in future, how to update summaries?
 
         add_assembly_study_summaries_to_downloads(mgnify_study.accession)
         logger.info("Added study summaries to downloads")
