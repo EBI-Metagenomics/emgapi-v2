@@ -395,3 +395,134 @@ def _copy_single_analysis_results(
     logger.info(
         f"Analysis {analysis.accession} now has results at {analysis.external_results_dir} in {target_root}"
     )
+
+
+def _copy_external_single_analysis_results(
+    analysis: Analysis,
+    results_workspace: Path,
+    target_root: str,
+    logger,
+    timeout: int = 14400,
+):
+    """
+    TODO: This is a duplicate of the function above adjusted to work without batch context, needs to be cleaned up.
+    Copy results for a single analysis from the batch workspace to external results.
+
+    :param analysis: The analysis to copy results for
+    :param results_workspace: The source directory for the results
+    :param target_root: The root directory for external results
+    :param logger: Prefect logger
+    :param timeout: Timeout in seconds for each move operation (default: 4 hours)
+    """
+    # Get assembly accession
+    assembly_accession = analysis.assembly_or_run.first_accession
+    study_accession = analysis.study.first_accession
+
+    # Build target directory structure
+    target_base = (
+        Path(target_root)
+        / accession_prefix_separated_dir_path(study_accession, -3)
+        / accession_prefix_separated_dir_path(assembly_accession, -3)
+        / analysis.pipeline_version
+        / Analysis.ExperimentTypes.ASSEMBLY.label.lower()
+    )
+
+    logger.info(
+        f"Copying results for {analysis.accession} (assembly: {assembly_accession})"
+    )
+
+    # rsync command for copying all files
+    command = cli_command(
+        [
+            "rsync",
+            "-av",
+        ]
+    )
+
+    # Copy ASA results to root (ASA is always completed since we filter for it)
+    asa_workspace = results_workspace / "asa"
+    asa_source = asa_workspace / assembly_accession
+    if asa_source.exists():
+        logger.info(f"Copying ASA results: {asa_source} -> {target_base}")
+
+        flowrun = run_deployment(
+            name="move-data/move_data_deployment",
+            parameters={
+                "move_command": command,
+                "source": trailing_slash_ensured_dir(str(asa_source)),
+                "target": str(target_base),
+                "make_target": True,
+            },
+            job_variables={
+                "partition": EMG_CONFIG.slurm.datamover_paritition,
+            },
+            timeout=timeout,
+        )
+        logger.info(f"ASA mover flowrun is {flowrun}")
+
+    else:
+        logger.warning(
+            f"ASA results not found for {assembly_accession} at {asa_source}"
+        )
+
+    # Copy VIRify results to virify/ (only if VIRify completed)
+    virify_workspace = results_workspace / "virify"
+    virify_source = virify_workspace / assembly_accession
+    virify_target = target_base / "virify"
+    # TODO we need a way to know if VIRify completed here? any way to check status without batch context?
+    if virify_source.exists():
+        logger.info(f"Copying VIRify results: {virify_source} -> {virify_target}")
+        flowrun = run_deployment(
+            name="move-data/move_data_deployment",
+            parameters={
+                "move_command": command,
+                "source": trailing_slash_ensured_dir(str(virify_source)),
+                "target": str(virify_target),
+                "make_target": True,
+            },
+            job_variables={
+                "partition": EMG_CONFIG.slurm.datamover_paritition,
+            },
+            timeout=timeout,
+        )
+        logger.info(f"VIRify mover flowrun is {flowrun}")
+    else:
+        logger.info(
+            f"VIRify not completed or results not found for {assembly_accession} at {virify_source}"
+        )
+
+    # Copy MAP results to mobilome-annotation/ (only if MAP completed)
+    map_workspace = results_workspace / "map"
+    map_source = map_workspace / assembly_accession
+    map_target = target_base / "mobilome-annotation"
+    # TODO we need a way to know if MAP completed here? any way to check status without batch context?
+    if map_source.exists():
+        logger.info(f"Copying MAP results: {map_source} -> {map_target}")
+        flowrun = run_deployment(
+            name="move-data/move_data_deployment",
+            parameters={
+                "move_command": command,
+                "source": trailing_slash_ensured_dir(str(map_source)),
+                "target": str(map_target),
+                "make_target": True,
+            },
+            job_variables={
+                "partition": EMG_CONFIG.slurm.datamover_paritition,
+            },
+            timeout=timeout,
+        )
+        logger.info(f"MAP mover flowrun is {flowrun}")
+    else:
+        logger.info(
+            f"MAP not completed or results not found for {assembly_accession} at {map_source}"
+        )
+
+    # Update analysis and study external_results_dir
+    analysis.external_results_dir = target_base.relative_to(target_root)
+    analysis.save()
+    analysis.study.external_results_dir = target_base.parent.relative_to(target_root)
+    analysis.study.save()
+
+    logger.info(
+        f"Analysis {analysis.accession} now has results at {analysis.external_results_dir} in {target_root}"
+    )
