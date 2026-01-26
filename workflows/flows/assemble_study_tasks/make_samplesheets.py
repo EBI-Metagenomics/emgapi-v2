@@ -1,3 +1,4 @@
+import os
 import csv
 from collections import defaultdict
 from pathlib import Path
@@ -59,6 +60,7 @@ def make_samplesheet(
     else:
         output_dir = Path(output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
+    os.makedirs(output_dir / ss_hash, exist_ok=True)
 
     memory = get_memory_for_assembler(mgnify_study.biome, assembler)
 
