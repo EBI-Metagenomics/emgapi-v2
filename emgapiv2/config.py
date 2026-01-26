@@ -107,6 +107,8 @@ class AmpliconPipelineConfig(MGnifyPipelineConfig):
     completed_runs_csv: str = "qc_passed_runs.csv"
     failed_runs_csv: str = "qc_failed_runs.csv"
 
+    # test reference DB OTU path
+    refdb_otus_dir: str = "/app/data/tests/refdb_otus"
     # Results folders
     qc_folder: str = "qc"
     sequence_categorisation_folder: str = "sequence-categorisation"
@@ -299,6 +301,19 @@ class EuropePMCConfig(BaseModel):
     annotations_provider: str = Field("Metagenomics")
 
 
+class DarwinCoreArchiveConfig(BaseModel):
+    language: str = Field("en")
+    license_url: str = Field("https://www.ebi.ac.uk/licencing/")
+    license_name: str = Field("EMBL-EBI Terms Of Use")
+    license_text: str = Field(
+        "EMBL-EBI's MGnify imposes no additional restriction on the use of the contributed data than those provided by the data owner."
+    )
+    keywords: list[str] = Field(["metagenomics", "environmental genomics"])
+    studies_url_root_for_distribution: str = Field(
+        "https://www.ebi.ac.uk/metagenomics/studies/"
+    )
+
+
 class EMGConfig(BaseSettings):
     amplicon_pipeline: AmpliconPipelineConfig = AmpliconPipelineConfig()
     rawreads_pipeline: RawReadsPipelineConfig = RawReadsPipelineConfig()
@@ -317,6 +332,7 @@ class EMGConfig(BaseSettings):
     log_masking: LogMaskingConfig = LogMaskingConfig()
     europe_pmc: EuropePMCConfig = EuropePMCConfig()
     genomes: GenomeConfig = GenomeConfig()
+    darwin_core_archive: DarwinCoreArchiveConfig = DarwinCoreArchiveConfig()
 
     model_config = {
         "env_prefix": "emg_",
