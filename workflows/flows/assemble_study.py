@@ -188,13 +188,24 @@ def assemble_study(
     )
     # assumes latest version...
 
+    study_workdir = (
+        Path(f"{EMG_CONFIG.slurm.default_nextflow_workdir}")
+        / Path(f"{mgnify_study.ena_study.accession}")
+        / f"{EMG_CONFIG.assembler.pipeline_name}_{EMG_CONFIG.assembler.pipeline_version}"
+    )
+    study_outdir = (
+        Path(f"{EMG_CONFIG.slurm.default_workdir}")
+        / Path(f"{mgnify_study.ena_study.accession}")
+        / f"{EMG_CONFIG.assembler.pipeline_name}_{EMG_CONFIG.assembler.pipeline_version}"
+    )
+
     assemblies_to_attempt = get_or_create_assemblies_for_runs(
         mgnify_study.accession,
         read_runs,
         library_strategy_policy=assemble_study_input.library_strategy_policy,
     )
     samplesheets = make_samplesheets_for_runs_to_assemble(
-        mgnify_study.accession, assembler
+        mgnify_study.accession, assembler, output_dir=study_outdir
     )
 
     # If allow_samplesheet_editing is True, suspend the flow to allow editing
@@ -230,16 +241,6 @@ def assemble_study(
 
     logger.info("Flow resumed after samplesheet editing")
 
-    study_workdir = (
-        Path(f"{EMG_CONFIG.slurm.default_nextflow_workdir}")
-        / Path(f"{mgnify_study.ena_study.accession}")
-        / f"{EMG_CONFIG.assembler.pipeline_name}_{EMG_CONFIG.assembler.pipeline_version}"
-    )
-    study_outdir = (
-        Path(f"{EMG_CONFIG.slurm.default_workdir}")
-        / Path(f"{mgnify_study.ena_study.accession}")
-        / f"{EMG_CONFIG.assembler.pipeline_name}_{EMG_CONFIG.assembler.pipeline_version}"
-    )
     for samplesheet_path, samplesheet_hash in samplesheets:
         logger.info(f"Will run assembler for samplesheet {samplesheet_path.name}")
 
@@ -247,8 +248,8 @@ def assemble_study(
             mgnify_study,
             samplesheet_path,
             samplesheet_hash,
-            study_workdir,
-            study_outdir,
+            study_workdir / samplesheet_hash,
+            study_outdir / samplesheet_hash,
         )
 
     if upload:
