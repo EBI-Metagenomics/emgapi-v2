@@ -1,0 +1,8 @@
+2	d__Archaea	sg__Methanoteca
+3	d__Archaea	sg__TACK
+1	d__Archaea	sg__TACK	dv__Thaumarchaeota	sdv__Thaumarchaeota_X	c__Nitrososphaeria	o__Nitrososphaerales
+107	d__Bacteria
+300	d__Bacteria	sg__CCD
+45	d__Bacteria	sg__CCD	dv__Chloroflexi	sdv__Chloroflexi_X
+2	d__Bacteria	sg__CCD	dv__Chloroflexi	sdv__Chloroflexi_X	c__Anaerolineae
+1	d__Bacteria	sg__CCD	dv__Chloroflexi	sdv__Chloroflexi_X	c__Anaerolineae	o__Anaerolineales

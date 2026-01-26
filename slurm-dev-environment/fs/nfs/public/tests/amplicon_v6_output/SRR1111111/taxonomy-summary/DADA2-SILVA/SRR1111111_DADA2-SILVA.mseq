@@ -1,0 +1,8 @@
+#query	dbhit	bitscore	identity	matches	mismatches	gaps	query_start	query_end	dbhit_start	dbhit_end	strand		SILVA
+seq_1	HE818674.1.1466	402	1	402	0	0	0	402	284	686	+		sk__Bacteria;k__;p__Pseudomonadota;c__Alphaproteobacteria;o__Hyphomicrobiales;f__Nitrobacteraceae;g__Bradyrhizobium
+seq_2	EF019080.1.1347	400	0.9975124597549438	401	1	0	0	402	331	733	+		sk__Bacteria;k__;p__Acidobacteriota;c__Terriglobia;o__Bryobacterales;f__Bryobacteraceae;g__Bryobacter;s__
+seq_3	EF018928.1.1401	424	0.9953271150588989	426	2	0	0	428	358	786	+		sk__Bacteria;k__;p__Acidobacteriota;c__Vicinamibacteria;o__Vicinamibacterales;f__;g__;s__
+seq_4	LN563935.1.1317	400	0.9975124597549438	401	1	0	0	402	298	700	+		sk__Bacteria;k__;p__Pseudomonadota;c__Alphaproteobacteria;o__Sphingomonadales;f__Sphingomonadaceae;g__Novosphingobium;s__
+seq_5	GQ339135.1.1517	424	0.9953271150588989	426	2	0	0	428	360	788	+		sk__Bacteria;k__;p__Acidobacteriota;c__;o__;f__;g__;s__
+seq_6	AB236170.1.1409	402	1	402	0	0	0	402	298	700	+		sk__Bacteria;k__;p__Pseudomonadota;c__Alphaproteobacteria;o__Hyphomicrobiales;f__Xanthobacteraceae;g__Labrys
+seq_7	JF833911.1.1500	416	1	416	0	0	0	416	353	769	+		sk__Bacteria;k__;p__Acidobacteriota;c__;o__;f__;g__;s__

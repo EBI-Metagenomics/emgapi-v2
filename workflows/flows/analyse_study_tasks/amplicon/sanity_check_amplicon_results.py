@@ -194,7 +194,7 @@ def sanity_check_amplicon_results(
             logger.info(f"Post sanity check for {run_id}: {reason}")
 
     # ASV optional folder
-    if asv_folder.exists():
+    if asv_folder.exists() and any(asv_folder.iterdir()):
         dada2_stats = Path(f"{asv_folder}/{run_id}_dada2_stats.tsv")
         dada2_silva = Path(f"{asv_folder}/{run_id}_DADA2-SILVA_asv_tax.tsv")
         dada2_pr2 = Path(f"{asv_folder}/{run_id}_DADA2-PR2_asv_tax.tsv")
@@ -236,7 +236,7 @@ def sanity_check_amplicon_results(
     if taxonomy_summary_folder.exists():
         dada2_tax_names = ["DADA2-SILVA", "DADA2-PR2"]
         tax_dbs = ["SILVA-SSU", "SILVA-LSU", "UNITE", "ITSoneDB", "PR2"]
-        if asv_folder.exists():
+        if asv_folder.exists() and any(asv_folder.iterdir()):
             if (
                 sum(
                     [

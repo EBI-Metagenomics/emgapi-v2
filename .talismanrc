@@ -54,7 +54,7 @@ fileignoreconfig:
   checksum: 3afe465b36e4e141124bd84c8459c5aa81332eedf49b691eff22c74df63a0f18
 
 - filename: emgapiv2/settings.py
-  checksum: 77b72bbe1f9003226068fcbc625fda59178fecb125bd96a5df07f0b0a40895c4
+  checksum: ab0fa7cdb6cd720aedd0a4f6bb9e2940187f9de91a39967e93ed4b91ca5050c5
 
 - filename: emgapiv2/settings_test.py
   checksum: ded898400b4eda7e3cf75694af1b66235975a85eb5b8f49f3a2c708163a7aad4
@@ -101,11 +101,17 @@ fileignoreconfig:
 - filename: slurm-dev-environment/fs/nfs/public/tests/assembly_v6_output/ERZ857107/dram-distill/samplesheet_dram_input.tsv
   checksum: 17031e40bdc3447b7c6f98bf3c8cebf22e39c3e78ec129469ce83af6ca9609ed
 
+- filename: slurm-dev-environment/fs/nfs/public/tests/amplicon_v6_output/PRJNA398089_DADA2_SILVA_16S-V3-V4_dwcready.csv
+  checksum: 64dc192bb898582c90eb5ff990f6df05ebb56f29d58d8483a10b6f49a6ca96f9
+
 - filename: Taskfile.yaml
   allowed_patterns: [a password in, slurm-dev-environment/fs/nfs/public/tests/assembly_v6_output/ERZ857107/ERZ857107, slurm-dev-environment/fs/nfs/ftp/public/databases/metagenomics/mgnify_results/PRJNA398/PRJNA398089/ERZ857/ERZ857107/V6/assembly]
 
 - filename: workflows/data_io_utils/csv/csv_comment_handler.py
   allowed_patterns: [keys()]
+
+- filename: workflows/data_io_utils/darwin_core/dwca_models.py
+  allowed_patterns: [KeywordSet, keyword]
 
 - filename: workflows/data_io_utils/file_rules.py
   checksum: 18b7d98b4778cf50b81961e026ef5ce8936692b2a2db11038656aca7940b6301
@@ -137,11 +143,17 @@ fileignoreconfig:
 - filename: workflows/flows/analyse_study_tasks/sanity_check_amplicon_results.py
   checksum: 6f0d0012faefa871ada95216a04997ce6ae54ff3e508b57399cccc859e1eccfa
 
+- filename: workflows/flows/analyse_study_tasks/shared/dwca_generator.py
+  allowed_patterns: [keywordSet, KeywordSet, keyword]
+
 - filename: workflows/flows/assemble_study_tasks/assemble_samplesheets.py
   allowed_patterns: [key]
 
 - filename: workflows/flows/assemble_study_tasks/make_samplesheets.py
   allowed_patterns: [key, InstrumentPlatformKeys]
+
+- filename: workflows/flows/update_ena_accession_from_json_flow.py
+  allowed_patterns: [total_missing_key_or_parse_error]
 
 - filename: workflows/flows/upload_assembly.py
   checksum: f82f92058dabd50b9b6caf557d4eadae227ec4f6a0233135653251c20cf3c64b

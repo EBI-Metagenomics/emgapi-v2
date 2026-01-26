@@ -152,6 +152,7 @@ class Genome(WithDownloadsModel, TimeStampedModel):
             genome_data["annotations"] = cls.default_annotations()
         genome_data.pop("genome_accession", None)
         genome_data.pop("pangenome", None)
+        genome_data.pop("study_accession", None)
 
         return genome_data
 
