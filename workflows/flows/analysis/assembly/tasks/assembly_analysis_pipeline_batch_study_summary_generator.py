@@ -132,5 +132,5 @@ def generate_assembly_analysis_pipeline_summary(
         study_results_dir=Path(study.results_dir),
         asa_workspace=asa_workspace,
         assemblies_csv=assemblies_csv,
-        output_prefix=study.id,
+        output_prefix=study.first_accession,
     )
