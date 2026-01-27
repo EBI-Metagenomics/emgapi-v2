@@ -14,7 +14,13 @@ AssemblyStates = analyses.models.Assembly.AssemblyStates
 def delete_pipeline_workdir(workdir: Path):
     # The pipeline uses a directory as a work directory. This should be deleted on completion.
     # This function deletes the directory passed to it.
-    shutil.rmtree(workdir)
+    logger = get_run_logger()
+
+    logger.info(f"Deleting Nextflow work directory {workdir}")
+    try:
+        shutil.rmtree(workdir)
+    except Exception as e:
+        logger.warn(f"Deleting Nextflow work directory failed with {e}")
 
 
 @task()
@@ -40,9 +46,13 @@ def delete_study_nextflow_workdir(
         logger.warning(
             f"Detected some analyses failed, not deleting Nextflow work directory {study_workdir}"
         )
-    else:
-        logger.info(f"Deleting Nextflow work directory {study_workdir}")
+        return
+
+    logger.info(f"Deleting Nextflow work directory {study_workdir}")
+    try:
         shutil.rmtree(study_workdir)
+    except Exception as e:
+        logger.warn(f"Deleting Nextflow work directory failed with {e}")
 
 
 @task()
@@ -68,9 +78,13 @@ def delete_assemble_study_nextflow_workdir(
         logger.warning(
             f"Detected some assemblies failed, not deleting Nextflow work directory {study_workdir}"
         )
-    else:
-        logger.info(f"Deleting Nextflow work directory {study_workdir}")
+        return
+
+    logger.info(f"Deleting Nextflow work directory {study_workdir}")
+    try:
         shutil.rmtree(study_workdir)
+    except Exception as e:
+        logger.warn(f"Deleting Nextflow work directory failed with {e}")
 
 
 @task()
@@ -127,4 +141,7 @@ def delete_study_results_dir(
 
     # delete work directory
     logger.info(f"Deleting study results directory {results_dir}")
-    shutil.rmtree(results_dir)
+    try:
+        shutil.rmtree(results_dir)
+    except Exception as e:
+        logger.warn(f"Deleting study results directory failed with {e}")
