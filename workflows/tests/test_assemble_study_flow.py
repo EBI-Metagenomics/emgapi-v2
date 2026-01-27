@@ -826,7 +826,6 @@ def test_assembler_changed_in_samplesheet(
     mock_check_cluster_job_all_completed,
     top_level_biomes,
 ):
-    logger = logging.getLogger("assemble_study_flow_test")
     # all assemblies should be initially metaspades, except one which was initially megahit
     assert (
         analyses.models.Assembly.objects.filter(
@@ -848,12 +847,11 @@ def test_assembler_changed_in_samplesheet(
     samplesheets = make_samplesheets_for_runs_to_assemble(
         mgnify_study_accession=study.accession,
         assembler=mgnify_assemblies[0].assembler,
-        output_dir=Path("/tmp"),
+        output_dir=Path(EMG_CONFIG.slurm.default_workdir),
     )
     samplesheet: Path = samplesheets[0][
         0
     ]  # first samplesheet, path component of path,hash tuple
-    logger.info(f"Samplesheet at {samplesheet}")
     assert samplesheet.exists()
 
     # edit samplesheet, change assembler

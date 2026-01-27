@@ -142,7 +142,7 @@ def run_amplicon_pipeline_via_samplesheet(
         )
         generate_dwc_ready_summary_for_pipeline_run(
             mgnify_study_accession=mgnify_study.accession,
-            pipeline_outdir=amplicon_current_outdir,
+            pipeline_outdir=nextflow_outdir,
             refdb_otus_dir=Path(EMG_CONFIG.amplicon_pipeline.refdb_otus_dir),
             completed_runs_filename=EMG_CONFIG.amplicon_pipeline.completed_runs_csv,
         )

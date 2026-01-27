@@ -1,3 +1,4 @@
+import os
 import uuid
 from pathlib import Path
 from typing import Union, List
@@ -6,10 +7,8 @@ import click
 from prefect import get_run_logger, task
 
 from mgnify_pipelines_toolkit.analysis.assembly import study_summary_generator
+from activate_django_first import EMG_CONFIG
 
-from workflows.data_io_utils.file_rules.common_rules import (
-    DirectoryExistsRule,
-)
 from workflows.data_io_utils.file_rules.nodes import Directory
 from workflows.flows.analyse_study_tasks.shared.study_summary import STUDY_SUMMARY_TSV
 from workflows.models import AssemblyAnalysisBatch, AssemblyAnalysisPipeline
@@ -51,17 +50,23 @@ def generate_assembly_analysis_pipeline_batch_summary(
 
     # Ensure the study has a results_dir to write summaries to
     study.set_results_dir_default()
+    assert isinstance(study.results_dir, Path)
 
-    study_dir = Directory(
-        path=Path(study.results_dir),
-        rules=[DirectoryExistsRule],
+    pipeline_config = EMG_CONFIG.assembly_analysis_pipeline
+    summary_dir = Directory(
+        path=(
+            Path(study.results_dir)
+            / f"{pipeline_config.pipeline_name}_{pipeline_config.pipeline_version}"
+            / "summaries"
+        ),
     )
+    os.makedirs(summary_dir.path, exist_ok=True)
 
     logger.info(
-        f"Study results_dir, where summaries will be made, is {study.results_dir}"
+        f"Study results_dir, where summaries will be made, is {summary_dir.path}"
     )
 
-    with chdir(study.results_dir):
+    with chdir(asa_workspace):
         # TODO: we need to expose the summary as a lib component we can just import instead of having to use
         #       click to bootstrap the environment
         with click.Context(study_summary_generator.summarise_analyses) as ctx:
@@ -73,11 +78,11 @@ def generate_assembly_analysis_pipeline_batch_summary(
                     / "analysed_assemblies.csv"
                 ).absolute(),
                 study_dir=Path(asa_workspace).absolute(),
-                outdir=Path(study.results_dir).absolute(),
+                outdir=summary_dir.path.absolute(),
             )
 
     generated_files = list(
-        study_dir.path.glob(f"{assembly_batch.id}*_{STUDY_SUMMARY_TSV}")
+        summary_dir.path.glob(f"{assembly_batch.id}*_{STUDY_SUMMARY_TSV}")
     )
 
     logger.info(f"Assembly batch summary generator made files: {generated_files}")

@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 from typing import Union, Tuple, Literal, List
 
@@ -52,7 +53,7 @@ PIPELINE_CONFIGS = {
 @flow
 def generate_study_summary_for_pipeline_run(
     mgnify_study_accession: str,
-    pipeline_outdir: Path | str,
+    pipeline_outdir: Path,
     analysis_type: Literal["amplicon", "assembly", "rawreads"] = "amplicon",
     completed_runs_filename: str = EMG_CONFIG.amplicon_pipeline.completed_runs_csv,
 ) -> Union[List[Path], None]:
@@ -66,44 +67,44 @@ def generate_study_summary_for_pipeline_run(
     :param completed_runs_filename: E.g. qs_completed_runs.csv, expects to be found in pipeline_outdir
     :return: List of paths to the study summary files generated in the study dir
     """
-    logger = get_run_logger()
-    study = Study.objects.get(accession=mgnify_study_accession)
-
-    logger.info(f"Generating study summary for a pipeline execution of {study}")
-
-    results_dir = Directory(
-        path=Path(pipeline_outdir),
-        rules=[DirectoryExistsRule],
-    )
-    results_dir.files.append(
-        File(
-            path=results_dir.path / completed_runs_filename,
-            rules=[FileExistsRule, FileIsNotEmptyRule],
-        )
-    )
-    logger.info(f"Expecting to find taxonomy summaries in {results_dir.path}")
-    logger.info(f"Using runs from {results_dir.files[0].path}")
-
-    # Set the results_dir if it hasn't been set yet, so that it can be used in the summary generator'
-    study.set_results_dir_default()
-
-    summary_dir = Path(study.results_dir) / Path(
-        f"{PIPELINE_CONFIGS[analysis_type].pipeline_name}_{PIPELINE_CONFIGS[analysis_type].pipeline_version}"
-    )
-    study_dir = Directory(
-        path=Path(summary_dir),
-        rules=[DirectoryExistsRule],
-    )
-
     if (analysis_type not in STUDY_SUMMARY_GENERATORS) and (
         analysis_type not in PIPELINE_CONFIGS
     ):
         raise ValueError(
             f"analysis_type must be 'amplicon', 'rawreads' or 'assembly', got {analysis_type}"
         )
-
     study_summary_generator = STUDY_SUMMARY_GENERATORS[analysis_type]
     pipeline_config = PIPELINE_CONFIGS[analysis_type]
+
+    logger = get_run_logger()
+    study = Study.objects.get(accession=mgnify_study_accession)
+
+    logger.info(f"Generating study summary for a pipeline execution of {study}")
+
+    # Set the results_dir if it hasn't been set yet, so that it can be used in the summary generator'
+    study.set_results_dir_default()
+    assert isinstance(study.results_dir, Path)
+
+    pipeline_run_dir = Directory(
+        path=pipeline_outdir,
+        rules=[DirectoryExistsRule],
+    )
+    summary_dir = Directory(
+        path=(
+            Path(study.results_dir)
+            / f"{pipeline_config.pipeline_name}_{pipeline_config.pipeline_version}"
+            / "summaries"
+        ),
+    )
+    os.makedirs(summary_dir.path, exist_ok=True)
+    pipeline_run_dir.files.append(
+        File(
+            path=pipeline_run_dir.path / completed_runs_filename,
+            rules=[FileExistsRule, FileIsNotEmptyRule],
+        )
+    )
+    logger.info(f"Expecting to find taxonomy summaries in {pipeline_run_dir.path}")
+    logger.info(f"Using runs from {pipeline_run_dir.files[0].path}")
 
     summary_generator_kwargs = {}
     if "allow_non_insdc_run_names" in pipeline_config.__dict__:
@@ -111,27 +112,27 @@ def generate_study_summary_for_pipeline_run(
             pipeline_config.allow_non_insdc_run_names
         )
     if analysis_type in {"rawreads", "amplicon"}:
-        summary_generator_kwargs["runs"] = results_dir.files[0].path
-        summary_generator_kwargs["analyses_dir"] = results_dir.path
+        summary_generator_kwargs["runs"] = pipeline_run_dir.files[0].path
+        summary_generator_kwargs["analyses_dir"] = pipeline_run_dir.path
     if analysis_type in {"assembly"}:
-        summary_generator_kwargs["assemblies"] = results_dir.files[0].path
-        summary_generator_kwargs["study_dir"] = results_dir.path
-        summary_generator_kwargs["outdir"] = study_dir.path
+        summary_generator_kwargs["assemblies"] = pipeline_run_dir.files[0].path
+        summary_generator_kwargs["study_dir"] = pipeline_run_dir.path
+        summary_generator_kwargs["outdir"] = pipeline_run_dir.path
         # TODO: these should be the same shape in MGnify Pipelines Toolkit really...
 
-    logger.info(f"Study results_dir, where summaries will be made, is {summary_dir}")
+    logger.info(f"Study summaries will be made in {summary_dir}")
     logger.info(f"Args {summary_generator_kwargs}")
 
-    with chdir(summary_dir):
+    with chdir(pipeline_run_dir.path):
         with click.Context(study_summary_generator.summarise_analyses) as ctx:
             ctx.invoke(
                 study_summary_generator.summarise_analyses,
-                output_prefix=pipeline_outdir.name,  # e.g. a hash of the samplesheet
+                output_prefix=f"{str(summary_dir.path)}/{pipeline_run_dir.path.name}",  # e.g. a hash of the samplesheet
                 **summary_generator_kwargs,
             )
 
     generated_files = list(
-        study_dir.path.glob(f"{pipeline_outdir.name}*_{STUDY_SUMMARY_TSV}")
+        summary_dir.path.glob(f"{pipeline_outdir.name}*_{STUDY_SUMMARY_TSV}")
     )
     logger.info(f"Study summary generator made files: {generated_files}")
     return generated_files
@@ -154,21 +155,39 @@ def merge_study_summaries(
     :param bludgeon: If True, will delete any existing study-level summaries before merging.
     :return: List of paths to the study summary files generated in the study dir
     """
+    if (analysis_type not in STUDY_SUMMARY_GENERATORS) and (
+        analysis_type not in PIPELINE_CONFIGS
+    ):
+        raise ValueError(
+            f"analysis_type must be 'amplicon', 'rawreads' or 'assembly', got {analysis_type}"
+        )
+    study_summary_generator = STUDY_SUMMARY_GENERATORS[analysis_type]
+    pipeline_config = PIPELINE_CONFIGS[analysis_type]
+
     logger = get_run_logger()
     study = Study.objects.get(accession=mgnify_study_accession)
 
-    summary_dir = Path(study.results_dir) / Path(
-        f"{PIPELINE_CONFIGS[analysis_type].pipeline_name}_{PIPELINE_CONFIGS[analysis_type].pipeline_version}"
+    # Set the results_dir if it hasn't been set yet, so that it can be used in the summary generator'
+    study.set_results_dir_default()
+    assert isinstance(study.results_dir, Path)
+
+    study_dir = Directory(
+        path=(
+            Path(study.results_dir)
+            / f"{pipeline_config.pipeline_name}_{pipeline_config.pipeline_version}"
+        ),
+        rules=[DirectoryExistsRule],
+    )
+    summary_dir = Directory(
+        path=study_dir.path / "summaries",
+        rules=[DirectoryExistsRule],
     )
 
     logger.info(f"Merging study summaries for {study}, in {summary_dir}")
-    if not summary_dir:
-        logger.warning(f"Study {study} has no results_dir, so cannot merge summaries")
-        return []
-    logger.debug(f"Glob of dir is {list(Path(summary_dir).glob('*'))}")
+    logger.debug(f"Glob of dir is {list(summary_dir.path.glob('*'))}")
     existing_merged_files = list(
-        Path(summary_dir).glob(f"{INSDC_PROJECT_ACCESSION_GLOB}{STUDY_SUMMARY_TSV}")
-    ) + list(Path(summary_dir).glob(f"{INSDC_STUDY_ACCESSION_GLOB}{STUDY_SUMMARY_TSV}"))
+        study_dir.path.glob(f"{INSDC_PROJECT_ACCESSION_GLOB}{STUDY_SUMMARY_TSV}")
+    ) + list(study_dir.path.glob(f"{INSDC_STUDY_ACCESSION_GLOB}{STUDY_SUMMARY_TSV}"))
     if existing_merged_files:
         logger.warning(
             f"{len(existing_merged_files)} study-level summaries already exist in {summary_dir}"
@@ -178,29 +197,26 @@ def merge_study_summaries(
             logger.warning(f"Deleting {existing_merged_file}")
             existing_merged_file.unlink()
 
-    summary_files = list(Path(summary_dir).glob(f"*{STUDY_SUMMARY_TSV}"))
+    summary_files = list(summary_dir.path.glob(f"*{STUDY_SUMMARY_TSV}"))
     logger.info(
-        f"There appear to be {len(summary_files)} study summary files in {summary_dir}"
+        f"There appear to be {len(summary_files)} study summary files in {summary_dir.path}"
     )
 
-    logger.info(f"Study results_dir, where summaries will be merged, is {summary_dir}")
-    study_dir = Directory(
-        path=Path(summary_dir),
-        rules=[DirectoryExistsRule],
+    logger.info(
+        f"Study results_dir, where summaries will be merged, is {study_dir.path}"
     )
 
-    study_summary_generator = STUDY_SUMMARY_GENERATORS[analysis_type]
     extra_merge_kwargs = {}
     if analysis_type in {"rawreads", "amplicon"}:
-        extra_merge_kwargs["analyses_dir"] = study_dir.path
+        extra_merge_kwargs["analyses_dir"] = summary_dir.path
     if analysis_type in {"assembly"}:
-        extra_merge_kwargs["study_dir"] = study_dir.path
+        extra_merge_kwargs["study_dir"] = summary_dir.path
 
-    with chdir(summary_dir):
+    with chdir(summary_dir.path):
         with click.Context(study_summary_generator.merge_summaries) as ctx:
             ctx.invoke(
                 study_summary_generator.merge_summaries,
-                output_prefix=study.first_accession,
+                output_prefix=f"{study_dir.path}/{study.first_accession}",
                 **extra_merge_kwargs,
             )
 
@@ -209,7 +225,7 @@ def merge_study_summaries(
     )
 
     if not generated_files:
-        logger.warning(f"No study summary was merged in {summary_dir}")
+        logger.warning(f"No study summary was merged in {study_dir}")
         return []
 
     if cleanup_partials:
@@ -238,11 +254,22 @@ def add_study_summaries_to_downloads(
 
     :param mgnify_study_accession: The accession identifier for the study to process.
     """
+    if analysis_type not in PIPELINE_CONFIGS:
+        raise ValueError(
+            f"analysis_type must be 'amplicon', 'rawreads' or 'assembly', got {analysis_type}"
+        )
+    pipeline_config = PIPELINE_CONFIGS[analysis_type]
+
     logger = get_run_logger()
     study = Study.objects.get(accession=mgnify_study_accession)
 
-    summary_dir = Path(study.results_dir) / Path(
-        f"{PIPELINE_CONFIGS[analysis_type].pipeline_name}_{PIPELINE_CONFIGS[analysis_type].pipeline_version}"
+    # Set the results_dir if it hasn't been set yet, so that it can be used in the summary generator'
+    study.set_results_dir_default()
+    assert isinstance(study.results_dir, Path)
+
+    summary_dir = (
+        Path(study.results_dir)
+        / f"{pipeline_config.pipeline_name}_{pipeline_config.pipeline_version}"
     )
 
     if not summary_dir:
@@ -354,6 +381,7 @@ def merge_assembly_study_summaries(
     :return: List of paths to the merged study summary files
     """
     logger = get_run_logger()
+    pipeline_config = PIPELINE_CONFIGS["assembly"]
 
     # Accept either Study object or accession string
     if isinstance(study, str):
@@ -362,49 +390,53 @@ def merge_assembly_study_summaries(
         # Refresh from DB to get the latest results_dir set by batch runs
         study.refresh_from_db()
 
-    logger.info(f"Merging assembly study summaries for {study}, in {study.results_dir}")
-    if not study.results_dir:
-        logger.warning(f"Study {study} has no results_dir, so cannot merge summaries")
-        return []
+    # Set the results_dir if it hasn't been set yet, so that it can be used in the summary generator'
+    study.set_results_dir_default()
+    assert isinstance(study.results_dir, Path)
 
-    logger.debug(f"Glob of dir is {list(Path(study.results_dir).glob('*'))}")
-    existing_merged_files = list(
-        Path(study.results_dir).glob(
-            f"{INSDC_PROJECT_ACCESSION_GLOB}{STUDY_SUMMARY_TSV}"
-        )
-    ) + list(
-        Path(study.results_dir).glob(f"{INSDC_STUDY_ACCESSION_GLOB}{STUDY_SUMMARY_TSV}")
+    study_dir = Directory(
+        path=(
+            Path(study.results_dir)
+            / f"{pipeline_config.pipeline_name}_{pipeline_config.pipeline_version}"
+        ),
+        rules=[DirectoryExistsRule],
     )
+    logger.info(
+        f"Study results_dir, where summaries will be merged, is {study_dir.path}"
+    )
+
+    summary_dir = Directory(
+        path=study_dir.path / "summaries",
+        rules=[DirectoryExistsRule],
+    )
+    logger.info(f"Merging assembly study summaries for {study}, in {summary_dir}")
+
+    logger.debug(f"Glob of dir is {list(summary_dir.path.glob('*'))}")
+    existing_merged_files = list(
+        study_dir.path.glob(f"{INSDC_PROJECT_ACCESSION_GLOB}{STUDY_SUMMARY_TSV}")
+    ) + list(study_dir.path.glob(f"{INSDC_STUDY_ACCESSION_GLOB}{STUDY_SUMMARY_TSV}"))
     if existing_merged_files:
         logger.warning(
-            f"{len(existing_merged_files)} study-level summaries already exist in {study.results_dir}"
+            f"{len(existing_merged_files)} study-level summaries already exist in {summary_dir.path}"
         )
     if bludgeon:
         for existing_merged_file in existing_merged_files:
             logger.warning(f"Deleting {existing_merged_file}")
             existing_merged_file.unlink()
 
-    summary_files = list(Path(study.results_dir).glob(f"*{STUDY_SUMMARY_TSV}"))
+    summary_files = list(summary_dir.path.glob(f"*{STUDY_SUMMARY_TSV}"))
     logger.info(
-        f"There appear to be {len(summary_files)} study summary files in {study.results_dir}"
-    )
-
-    logger.info(
-        f"Study results_dir, where summaries will be merged, is {study.results_dir}"
-    )
-    study_dir = Directory(
-        path=Path(study.results_dir),
-        rules=[DirectoryExistsRule],
+        f"There appear to be {len(summary_files)} study summary files in {summary_dir.path}"
     )
 
     assembly_summary_generator = STUDY_SUMMARY_GENERATORS["assembly"]
 
-    with chdir(study.results_dir):
+    with chdir(summary_dir.path):
         with click.Context(assembly_summary_generator.merge_summaries) as ctx:
             ctx.invoke(
                 assembly_summary_generator.merge_summaries,
-                output_prefix=study.first_accession,
-                study_dir=study_dir.path,
+                output_prefix=f"{study_dir.path}/{study.first_accession}",
+                study_dir=summary_dir.path,
             )
 
     generated_files = list(
@@ -412,7 +444,7 @@ def merge_assembly_study_summaries(
     )
 
     if not generated_files:
-        logger.warning(f"No study summary was merged in {study.results_dir}")
+        logger.warning(f"No study summary was merged in {summary_dir}")
         return []
 
     if cleanup_partials:
@@ -429,15 +461,21 @@ def merge_assembly_study_summaries(
 @task
 def add_rawreads_study_summaries_to_downloads(mgnify_study_accession: str):
     logger = get_run_logger()
+    pipeline_config = PIPELINE_CONFIGS["rawreads"]
+
     study = Study.objects.get(accession=mgnify_study_accession)
-    if not study.results_dir:
-        logger.warning(
-            f"Study {study} has no results_dir, so cannot add study summaries to downloads"
-        )
-        return
+
+    # Set the results_dir if it hasn't been set yet, so that it can be used in the summary generator'
+    study.set_results_dir_default()
+    assert isinstance(study.results_dir, Path)
+
+    summary_dir = (
+        Path(study.results_dir)
+        / f"{pipeline_config.pipeline_name}_{pipeline_config.pipeline_version}"
+    )
 
     study_summary_files = list(
-        Path(study.results_dir).glob(f"{study.first_accession}*{STUDY_SUMMARY_TSV}")
+        Path(summary_dir).glob(f"{study.first_accession}*{STUDY_SUMMARY_TSV}")
     )
 
     for summary_file in study_summary_files:

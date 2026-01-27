@@ -177,6 +177,8 @@ class AssemblyAnalysisPipelineConfig(MGnifyPipelineConfig):
 
     # Results folders
     # TODO: there is some repetition with the Pipeline Schemas used to validate and import results
+    pipeline_name: str = "asa"
+    pipeline_version: str = "v6"
     qc_folder: str = "qc"
     cds_folder: str = "cds"
     taxonomy_folder: str = "taxonomy"

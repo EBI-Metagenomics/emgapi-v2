@@ -718,12 +718,12 @@ def test_prefect_analyse_rawreads_flow(
     )
     Directory(
         path=summary_dir,
-        glob_rules=[
-            GlobHasFilesCountRule[13]
-        ],  # 5 for the samplesheet, same 5 for the "merge" (only 5 here, unlike public test, which has different hypervar regions)
+        glob_rules=[GlobHasFilesCountRule[8]],  # 6 study summaries, 2 directories
     )
 
-    with (workdir / f"{samplesheet_hash}_motus_study_summary.tsv").open("r") as summary:
+    with (
+        summary_dir / "summaries" / f"{samplesheet_hash}_motus_study_summary.tsv"
+    ).open("r") as summary:
         lines = summary.readlines()
         assert (
             lines[0] == "taxonomy\tERR10889189\tERR10889198\tERR10889215\tERR10889222\n"
@@ -748,7 +748,7 @@ def test_prefect_analyse_rawreads_flow(
         path=summary_dir,
         glob_rules=[
             GlobHasFilesCountRule[
-                13
+                8
             ],  # study ones generated, and partials left in place
             GlobRule(
                 rule_name="All study level files are present",
@@ -777,7 +777,7 @@ def test_prefect_analyse_rawreads_flow(
     Directory(
         path=summary_dir,
         glob_rules=[
-            GlobHasFilesCountRule[13],  # partials deleted, just merged ones
+            GlobHasFilesCountRule[8],  # partials deleted, just merged ones
             GlobRule(
                 rule_name="All files are study level",
                 glob_pattern=f"{study.first_accession}*{STUDY_SUMMARY_TSV}",
@@ -857,7 +857,7 @@ def test_prefect_analyse_rawreads_flow(
             GlobRule(
                 rule_name="Recursive number of files",
                 glob_pattern="**/*",
-                test=lambda x: len(list(x)) == 95,
+                test=lambda x: len(list(x)) == 96,
             )
         ],
     )
@@ -1292,12 +1292,12 @@ def test_prefect_analyse_rawreads_flow_private_data(
     )
     Directory(
         path=summary_dir,
-        glob_rules=[
-            GlobHasFilesCountRule[13]
-        ],  # 5 for the samplesheet, same 5 for the "merge" (only 5 here, unlike public test, which has different hypervar regions)
+        glob_rules=[GlobHasFilesCountRule[8]],  # 6 study summaries, 2 directories
     )
 
-    with (workdir / f"{samplesheet_hash}_motus_study_summary.tsv").open("r") as summary:
+    with (
+        summary_dir / "summaries" / f"{samplesheet_hash}_motus_study_summary.tsv"
+    ).open("r") as summary:
         lines = summary.readlines()
         assert (
             lines[0] == "taxonomy\tERR10889188\tERR10889197\tERR10889214\tERR10889221\n"
@@ -1322,7 +1322,7 @@ def test_prefect_analyse_rawreads_flow_private_data(
         path=summary_dir,
         glob_rules=[
             GlobHasFilesCountRule[
-                13
+                8
             ],  # study ones generated, and partials left in place
             GlobRule(
                 rule_name="All study level files are present",
@@ -1351,7 +1351,7 @@ def test_prefect_analyse_rawreads_flow_private_data(
     Directory(
         path=summary_dir,
         glob_rules=[
-            GlobHasFilesCountRule[13],  # partials deleted, just merged ones
+            GlobHasFilesCountRule[8],  # partials deleted, just merged ones
             GlobRule(
                 rule_name="All files are study level",
                 glob_pattern=f"{study.first_accession}*{STUDY_SUMMARY_TSV}",

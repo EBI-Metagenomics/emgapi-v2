@@ -172,6 +172,9 @@ class Study(
         # This feels like it probably belongs elsewhere, though exactly where depends on what odd case
         # we're trying to catch? Should it be a migration? Or a management command we run after
         # certain bad things happen? Or somewhere in the flows?
+        if isinstance(self.results_dir, str):
+            self.results_dir = Path(self.results_dir)
+            self.save()
         if not self.results_dir:
             self.results_dir = (
                 Path(settings.EMG_CONFIG.slurm.default_workdir)

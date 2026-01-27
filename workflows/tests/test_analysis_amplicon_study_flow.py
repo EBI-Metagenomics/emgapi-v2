@@ -1278,17 +1278,20 @@ def test_prefect_analyse_amplicon_flow(
 
     assert study.external_results_dir == f"{study_accession[:-3]}/{study_accession}"
 
-    summary_dir = Path(study.results_dir) / Path(
-        f"{EMG_CONFIG.amplicon_pipeline.pipeline_name}_{EMG_CONFIG.amplicon_pipeline.pipeline_version}"
+    study.set_results_dir_default()
+    assert isinstance(study.results_dir, Path)
+    summary_dir = (
+        Path(study.results_dir)
+        / f"{EMG_CONFIG.amplicon_pipeline.pipeline_name}_{EMG_CONFIG.amplicon_pipeline.pipeline_version}"
     )
 
+    merge_study_summary_count = 6
+    merge_dwcr_summary_count = 6
+    directory_count = 2
+
     total_expected_summary_count = (
-        samplesheet_study_summary_count
-        + merge_study_summary_count
-        + samplesheet_dwcr_summary_count
-        + merge_dwcr_summary_count
-        + 1
-    )  # adds up to 25
+        merge_study_summary_count + merge_dwcr_summary_count + directory_count
+    )  # adds up to 14
 
     Directory(
         path=summary_dir,
@@ -1296,7 +1299,9 @@ def test_prefect_analyse_amplicon_flow(
     )
 
     with (
-        workdir / f"{samplesheet_hash}_DADA2-SILVA_18S-V9_asv_study_summary.tsv"
+        summary_dir
+        / "summaries"
+        / f"{samplesheet_hash}_DADA2-SILVA_18S-V9_asv_study_summary.tsv"
     ).open("r") as summary:
         lines = summary.readlines()
         assert lines[0] == "taxonomy\tSRRALLRESULTS\n"  # one run (the one with ASVs)
@@ -1354,34 +1359,14 @@ def test_prefect_analyse_amplicon_flow(
                 glob_pattern=f"{study.first_accession}*{STUDY_SUMMARY_TSV}",
                 test=lambda f: len(list(f)) == 6,
             ),
-        ],
-    )
-
-    Directory(
-        path=summary_dir,
-        glob_rules=[
-            GlobHasFilesCountRule[total_expected_summary_count],
             GlobRule(
                 rule_name="Samplesheet-specific DwC Ready files are present",
-                glob_patten=f"abc123*{DWCREADY_CSV}",
-                test=lambda f: len(list(f))
-                == 6,  # 6 samplesheet-specific DwC-R summary files
-            ),
-        ],
-    )
-
-    Directory(
-        path=summary_dir,
-        glob_rules=[
-            GlobHasFilesCountRule[total_expected_summary_count],
-            GlobRule(
-                rule_name="Samplesheet-specific DwC Ready files are present",
-                glob_patten=f"{study.first_accession}*{DWCREADY_CSV}",
+                glob_pattern=f"{study.first_accession}*{DWCREADY_CSV}",
                 test=lambda f: len(list(f)) == 6,  # 6 merged DwC-R summary files
             ),
         ],
     )
-    
+
     study.refresh_from_db()
     assert len(study.downloads_as_objects) == 6
     assert study.features.has_v6_analyses
@@ -1453,14 +1438,15 @@ def test_prefect_analyse_amplicon_flow(
             GlobRule(
                 rule_name="Recursive number of files",
                 glob_pattern="**/*",
-                test=lambda x: len(list(x)) == 144,
+                test=lambda x: len(list(x)) == 161,
             )
         ],
     )
 
     # test Nextflow workdir cleanup
     nextflow_workdir = (
-        Path("/tmp/work")
+        Path(EMG_CONFIG.slurm.default_workdir)
+        / "work"
         / Path(study_accession)
         / Path(
             f"{EMG_CONFIG.amplicon_pipeline.pipeline_name}_{EMG_CONFIG.amplicon_pipeline.pipeline_version}"
@@ -1793,22 +1779,20 @@ def test_prefect_analyse_amplicon_flow_private_data(
 
     assert study.external_results_dir == "SRP123/SRP123456"
 
-    summary_dir = Path(study.results_dir) / Path(
-        f"{EMG_CONFIG.amplicon_pipeline.pipeline_name}_{EMG_CONFIG.amplicon_pipeline.pipeline_version}"
+    study.set_results_dir_default()
+    assert isinstance(study.results_dir, Path)
+    summary_dir = (
+        Path(study.results_dir)
+        / f"{EMG_CONFIG.amplicon_pipeline.pipeline_name}_{EMG_CONFIG.amplicon_pipeline.pipeline_version}"
     )
-    
-    samplesheet_study_summary_count = 5
-    merge_study_summary_count = 5
-    samplesheet_dwcr_summary_count = 6
-    merge_dwcr_summary_count = 6
+
+    merge_study_summary_count = 6
+    merge_dwcr_summary_count = 5
+    directory_count = 2
 
     total_expected_summary_count = (
-        samplesheet_study_summary_count
-        + merge_study_summary_count
-        + samplesheet_dwcr_summary_count
-        + merge_dwcr_summary_count
-        + 1
-    )  # adds up to 23
+        merge_study_summary_count + merge_dwcr_summary_count + directory_count
+    )  # adds up to 13
 
     Directory(
         path=summary_dir,
@@ -1816,7 +1800,9 @@ def test_prefect_analyse_amplicon_flow_private_data(
     )
 
     with (
-        workdir / f"{samplesheet_hash}_DADA2-SILVA_18S-V9_asv_study_summary.tsv"
+        summary_dir
+        / "summaries"
+        / f"{samplesheet_hash}_DADA2-SILVA_18S-V9_asv_study_summary.tsv"
     ).open("r") as summary:
         lines = summary.readlines()
         assert lines[0] == "taxonomy\tSRRALLRESULTS\n"  # one run (the one with ASVs)
@@ -1874,29 +1860,9 @@ def test_prefect_analyse_amplicon_flow_private_data(
                 glob_pattern=f"{study.first_accession}*{STUDY_SUMMARY_TSV}",
                 test=lambda f: len(list(f)) == 5,
             ),
-        ],
-    )
-
-    Directory(
-        path=study.results_dir,
-        glob_rules=[
-            GlobHasFilesCountRule[total_expected_summary_count],
             GlobRule(
                 rule_name="Samplesheet-specific DwC Ready files are present",
-                glob_patten=f"xyz789*{DWCREADY_CSV}",
-                test=lambda f: len(list(f))
-                == 6,  # 6 samplesheet-specific DwC-R summary files
-            ),
-        ],
-    )
-
-    Directory(
-        path=study.results_dir,
-        glob_rules=[
-            GlobHasFilesCountRule[total_expected_summary_count],
-            GlobRule(
-                rule_name="Samplesheet-specific DwC Ready files are present",
-                glob_patten=f"{study.first_accession}*{DWCREADY_CSV}",
+                glob_pattern=f"{study.first_accession}*{DWCREADY_CSV}",
                 test=lambda f: len(list(f)) == 6,  # 6 merged DwC-R summary files
             ),
         ],
