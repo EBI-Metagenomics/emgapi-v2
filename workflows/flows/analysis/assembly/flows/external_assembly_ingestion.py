@@ -73,9 +73,13 @@ def external_assembly_ingestion(
     """
     logger = get_run_logger()
     results_path = Path(results_dir)
+    samplesheet_path = Path(samplesheet_path)
 
     if not results_path.exists():
         raise FileNotFoundError(f"Results directory does not exist: {results_dir}")
+
+    if not samplesheet_path.is_file():
+        raise FileNotFoundError(f"Samplesheet file does not exist: {samplesheet_path}")
 
     logger.info(f"Starting external assembly ingestion from {results_dir}")
 
