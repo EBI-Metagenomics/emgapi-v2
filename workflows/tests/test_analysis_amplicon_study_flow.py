@@ -18,6 +18,9 @@ from workflows.data_io_utils.file_rules.base_rules import FileRule, GlobRule
 from workflows.data_io_utils.file_rules.common_rules import GlobHasFilesCountRule
 from workflows.data_io_utils.file_rules.nodes import Directory
 from workflows.ena_utils.ena_api_requests import ENALibraryStrategyPolicy
+from workflows.flows.analyse_study_tasks.shared.dwcr_generator import (
+    add_dwcr_summaries_to_downloads,
+)
 from workflows.flows.analyse_study_tasks.shared.study_summary import (
     merge_study_summaries,
     STUDY_SUMMARY_TSV,
@@ -1322,6 +1325,9 @@ def test_prefect_analyse_amplicon_flow(
         ],
     )
 
+    # Test that you don't add the same downloadable DwC-R file twice
+    add_dwcr_summaries_to_downloads(study.accession)
+
 
 @pytest.mark.flaky(
     reruns=2
@@ -1741,3 +1747,6 @@ def test_prefect_analyse_amplicon_flow_private_data(
     assert (
         move_to_private_found
     ), "No move operation found targeting private results directory"
+
+    # Test that you don't add the same downloadable DwC-R file twice
+    add_dwcr_summaries_to_downloads(study.accession)
