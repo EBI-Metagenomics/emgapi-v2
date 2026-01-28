@@ -13,7 +13,7 @@ import analyses.models
 import ena.models
 from emgapiv2.dict_utils import some
 from emgapiv2.enum_utils import FutureStrEnum
-from workflows.ena_utils.abstract import ENAPortalResultType
+from workflows.ena_utils.abstract import ENAPortalDataPortal, ENAPortalResultType
 from workflows.ena_utils.analysis import ENAAnalysisFields, ENAAnalysisQuery
 from workflows.ena_utils.ena_accession_matching import (
     extract_all_accessions,
@@ -691,6 +691,7 @@ def get_study_accession_for_assembly(
             ],
             limit=1,
             query=ENAAnalysisQuery(analysis_accession=assembly_accession),
+            data_portals=[ENAPortalDataPortal.METAGENOME, ENAPortalDataPortal.ENA],
         ).get()
 
         if not portal_analyses:
