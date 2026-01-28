@@ -1,5 +1,4 @@
 import csv
-from collections import defaultdict
 from pathlib import Path
 from textwrap import dedent as _
 from typing import Optional, List
@@ -109,162 +108,166 @@ def external_assembly_ingestion(
     logger.info("Step 3: Creating/fetching study and related models...")
 
     # Find study accession for each assembly accession in the samplesheet
-    study2assemblies_map = defaultdict(list)
+    study_accessions = set()
     for assembly_accession in assembly_accessions:
         study_accession = get_study_accession_for_assembly(assembly_accession)
-        study2assemblies_map[study_accession].append(assembly_accession)
+        study_accessions.add(study_accession)
 
-    # Process each study accession and its assemblies
-    for study_accession, assembly_accessions in study2assemblies_map.items():
-        logger.info(f"Processing study accession: {study_accession}")
-        ena_study = ena.models.Study.objects.get_ena_study(study_accession)
-        if not ena_study:
-            ena_study = get_study_from_ena(study_accession)
-
-        ena_study.refresh_from_db()
-        logger.info(f"ENA Study is {ena_study.accession}: {ena_study.title}")
-
-        mgnify_study = analyses.models.Study.objects.get_or_create_for_ena_study(
-            study_accession
+    if len(study_accessions) > 1:
+        raise ValueError(
+            f"Samplesheet contains assemblies from multiple studies: {study_accessions}. "
+            "Please provide a samplesheet with assemblies from a single study."
         )
-        mgnify_study.refresh_from_db()
-        logger.info(f"MGnify study is {mgnify_study.accession}: {mgnify_study.title}")
 
-        # Run this function to fetch related runs/samples for this study and save them in the DB
-        get_study_assemblies_from_ena(ena_study.accession, limit=10000)
+    study_accession = study_accessions.pop()
 
-        # TODO check if this code makes sense in this context
-        # Set results_dir to the provided external path
-        logger.info(f"Set results_dir to {results_path}")
-        mgnify_study.results_dir = str(results_path)
+    # Process the study and its assemblies
+    logger.info(f"Processing study accession: {study_accession}")
+    ena_study = ena.models.Study.objects.get_ena_study(study_accession)
+    if not ena_study:
+        ena_study = get_study_from_ena(study_accession)
+
+    ena_study.refresh_from_db()
+    logger.info(f"ENA Study is {ena_study.accession}: {ena_study.title}")
+
+    mgnify_study = analyses.models.Study.objects.get_or_create_for_ena_study(
+        study_accession
+    )
+    mgnify_study.refresh_from_db()
+    logger.info(f"MGnify study is {mgnify_study.accession}: {mgnify_study.title}")
+
+    # Run this function to fetch related runs/samples for this study and save them in the DB
+    get_study_assemblies_from_ena(ena_study.accession, limit=10000)
+
+    # TODO check if this code makes sense in this context
+    # Set results_dir to the provided external path
+    logger.info(f"Set results_dir to {results_path}")
+    mgnify_study.results_dir = str(results_path)
+    mgnify_study.save()
+
+    # Check if biome-picker is needed
+    if not mgnify_study.biome:
+        BiomeChoices = get_biomes_as_choices()
+        UserChoices = get_users_as_choices()
+
+        class IngestExternalInput(RunInput):
+            biome: BiomeChoices
+            watchers: Optional[List[UserChoices]] = Field(
+                None,
+                description="Admin users watching this study will get status notifications.",
+            )
+
+        ingest_input: IngestExternalInput = suspend_flow_run(
+            wait_for_input=IngestExternalInput.with_initial_data(
+                description=_(
+                    f"""\
+                        **External Assembly Analysis Ingestion**
+                        Ingesting externally-run Assembly Analysis results for study {ena_study.accession} \
+                        produced by [Assembly Analysis Pipeline V6](https://github.com/EBI-Metagenomics/assembly-analysis-pipeline).
+
+                        **Biome tagger**
+                        Please select a Biome for the entire study \
+                        [{ena_study.accession}: {ena_study.title}](https://www.ebi.ac.uk/ena/browser/view/{ena_study.accession}).
+                        """
+                ),
+            )
+        )
+
+        biome = analyses.models.Biome.objects.get(path=ingest_input.biome.name)
+        mgnify_study.biome = biome
         mgnify_study.save()
+        logger.info(f"MGnify study {mgnify_study.accession} has biome {biome.path}.")
 
-        # Check if biome-picker is needed
-        # TODO: think about how to avoid setting biome for 200 times if samplesheet has many studies
-        if not mgnify_study.biome:
-            BiomeChoices = get_biomes_as_choices()
-            UserChoices = get_users_as_choices()
-
-            class IngestExternalInput(RunInput):
-                biome: BiomeChoices
-                watchers: Optional[List[UserChoices]] = Field(
-                    None,
-                    description="Admin users watching this study will get status notifications.",
-                )
-
-            ingest_input: IngestExternalInput = suspend_flow_run(
-                wait_for_input=IngestExternalInput.with_initial_data(
-                    description=_(
-                        f"""\
-                            **External Assembly Analysis Ingestion**
-                            Ingesting externally-run Assembly Analysis results for study {ena_study.accession} \
-                            produced by [Assembly Analysis Pipeline V6](https://github.com/EBI-Metagenomics/assembly-analysis-pipeline).
-
-                            **Biome tagger**
-                            Please select a Biome for the entire study \
-                            [{ena_study.accession}: {ena_study.title}](https://www.ebi.ac.uk/ena/browser/view/{ena_study.accession}).
-                            """
-                    ),
-                )
-            )
-
-            biome = analyses.models.Biome.objects.get(path=ingest_input.biome.name)
-            mgnify_study.biome = biome
-            mgnify_study.save()
-            logger.info(
-                f"MGnify study {mgnify_study.accession} has biome {biome.path}."
-            )
-
-            if ingest_input.watchers:
-                add_study_watchers(mgnify_study, ingest_input.watchers)
-        else:
-            logger.info(
-                f"Biome {mgnify_study.biome} was already set for this study. If an change is needed, do so in the DB Admin Panel."
-            )
-            logger.info(
-                f"MGnify study has watchers: {mgnify_study.watchers.values_list('username', flat=True)}. Add more in the DB Admin Panel if needed."
-            )
-
-        # =========================================================================
-        # STEP 4: Create Analysis objects
-        # =========================================================================
-        logger.info("Step 4: Creating Analysis objects for all assemblies...")
-        exported_analyses = create_analyses_for_assemblies(
-            mgnify_study.id,
-            assembly_accessions,
-            pipeline=analyses.models.Analysis.PipelineVersions.v6,
+        if ingest_input.watchers:
+            add_study_watchers(mgnify_study, ingest_input.watchers)
+    else:
+        logger.info(
+            f"Biome {mgnify_study.biome} was already set for this study. If an change is needed, do so in the DB Admin Panel."
+        )
+        logger.info(
+            f"MGnify study has watchers: {mgnify_study.watchers.values_list('username', flat=True)}. Add more in the DB Admin Panel if needed."
         )
 
-        # =========================================================================
-        # STEP 5: Validate and Import Pipeline Results
-        # =========================================================================
-        logger.info("Step 5: Validating and importing pipeline results...")
+    # =========================================================================
+    # STEP 4: Create Analysis objects
+    # =========================================================================
+    logger.info("Step 4: Creating Analysis objects for all assemblies...")
+    exported_analyses = create_analyses_for_assemblies(
+        mgnify_study.id,
+        assembly_accessions,
+        pipeline=analyses.models.Analysis.PipelineVersions.v6,
+    )
 
-        logger.info("Setting ASA analysis states...")
-        set_asa_analysis_states(
-            results_path / "asa",  # may as well be mgnify_study.results_dir / "asa"
-            exported_analyses,
-        )
+    # =========================================================================
+    # STEP 5: Validate and Import Pipeline Results
+    # =========================================================================
+    logger.info("Step 5: Validating and importing pipeline results...")
 
-        logger.info("Processing ASA results...")
-        process_external_pipeline_results(
-            exported_analyses,
-            results_path,
-            AssemblyAnalysisPipeline.ASA,
-        )
+    logger.info("Setting ASA analysis states...")
+    set_asa_analysis_states(
+        results_path / "asa",  # may as well be mgnify_study.results_dir / "asa"
+        exported_analyses,
+    )
 
-        logger.info("Processing VIRify results...")
-        # TODO in production we only import if VIRIFY statuses are present, do we want same here?
-        process_external_pipeline_results(
-            exported_analyses,
-            results_path,
-            AssemblyAnalysisPipeline.VIRIFY,
-        )
+    logger.info("Processing ASA results...")
+    process_external_pipeline_results(
+        exported_analyses,
+        results_path,
+        AssemblyAnalysisPipeline.ASA,
+    )
 
-        logger.info("Processing MAP results...")
-        # TODO in production we only import if MAP statuses are present, do we want same here?
-        process_external_pipeline_results(
-            exported_analyses,
-            results_path,
-            AssemblyAnalysisPipeline.MAP,
-        )
+    logger.info("Processing VIRify results...")
+    # TODO in production we only import if VIRIFY statuses are present, do we want same here?
+    process_external_pipeline_results(
+        exported_analyses,
+        results_path,
+        AssemblyAnalysisPipeline.VIRIFY,
+    )
 
-        # =========================================================================
-        # STEP 6: Finalize study and create summaries
-        # =========================================================================
-        logger.info("Step 6: Finalizing study and creating summaries...")
+    logger.info("Processing MAP results...")
+    # TODO in production we only import if MAP statuses are present, do we want same here?
+    process_external_pipeline_results(
+        exported_analyses,
+        results_path,
+        AssemblyAnalysisPipeline.MAP,
+    )
 
-        generate_assembly_analysis_pipeline_summary(
-            study=mgnify_study,
-        )
+    # =========================================================================
+    # STEP 6: Finalize study and create summaries
+    # =========================================================================
+    logger.info("Step 6: Finalizing study and creating summaries...")
 
-        # TODO: if more analysis will be analyses in future, how to update summaries?
+    generate_assembly_analysis_pipeline_summary(
+        study=mgnify_study,
+    )
 
-        add_assembly_study_summaries_to_downloads(mgnify_study.accession)
-        logger.info("Added study summaries to downloads")
+    # TODO: if more analysis will be analyses in future, how to update summaries?
 
-        copy_v6_study_summaries(mgnify_study.accession)
-        logger.info("Copied v6 study summaries")
+    add_assembly_study_summaries_to_downloads(mgnify_study.accession)
+    logger.info("Added study summaries to downloads")
 
-        # Update study features
-        mgnify_study.refresh_from_db()
-        mgnify_study.features.has_v6_analyses = mgnify_study.analyses.filter(
-            pipeline_version=analyses.models.Analysis.PipelineVersions.v6, is_ready=True
-        ).exists()
-        mgnify_study.save()
+    copy_v6_study_summaries(mgnify_study.accession)
+    logger.info("Copied v6 study summaries")
 
-        # =========================================================================
-        # STEP 7: Copy results files to production locations
-        # =========================================================================
-        logger.info("Step 7: Copying results to production locations...")
-        copy_external_assembly_analysis_results(
-            study=mgnify_study,
-            results_dir=results_path,
-            analyses=exported_analyses,
-            timeout=14400,
-        )
+    # Update study features
+    mgnify_study.refresh_from_db()
+    mgnify_study.features.has_v6_analyses = mgnify_study.analyses.filter(
+        pipeline_version=analyses.models.Analysis.PipelineVersions.v6, is_ready=True
+    ).exists()
+    mgnify_study.save()
 
-        logger.info(f"Ingestion complete for study {mgnify_study.accession}")
+    # =========================================================================
+    # STEP 7: Copy results files to production locations
+    # =========================================================================
+    logger.info("Step 7: Copying results to production locations...")
+    copy_external_assembly_analysis_results(
+        study=mgnify_study,
+        results_dir=results_path,
+        analyses=exported_analyses,
+        timeout=14400,
+    )
+
+    logger.info(f"Ingestion complete for study {mgnify_study.accession}")
 
 
 # ============================================================================
