@@ -11,6 +11,21 @@ logging.getLogger().setLevel(logging.INFO)
 def get_directory_time_since_modification(
     dir_path: str, min_age: datetime.timedelta
 ) -> datetime.timedelta:
+    """
+    :param dir_path: directory path to be searched
+    :param min_age: minimum age for the condition upon which the search is terminated early
+    :returns: youngest age of file/subdirectory found in the directory
+
+    Find the youngest file/subdirectory in the directory specified by `dir_path`.
+    If any file is found to be younger than the `min_age` then the search is ended early.
+    This found minimum age of the directory is returned.
+
+    Implemented with a recursive walk (`os.walk`) of the directory.
+    The modification time of each file/subdirectory is found and the maximum modification time (ie. the minimum age) is tracked and updated.
+    If a new maximum modification time is found then an age is calculated and checked against the minimum age condition.
+    The recursive walk is terminated early if this minimum age condition is met.
+    The youngest file/subdirectory age found is returned.
+    """
     max_mtime = 0.0
     dir_age = datetime.datetime.now() - datetime.datetime.now()
     for fp, _, _ in os.walk(dir_path):
