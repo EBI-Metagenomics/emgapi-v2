@@ -63,7 +63,6 @@ def run_amplicon_pipeline_via_samplesheet(
             / Path(f"{mgnify_study.ena_study.accession}")
             / f"{EMG_CONFIG.amplicon_pipeline.pipeline_name}_{EMG_CONFIG.amplicon_pipeline.pipeline_version}"
         )
-
     amplicon_analyses = analyses.models.Analysis.objects.select_related("run").filter(
         id__in=amplicon_analysis_ids,
         run__metadata__fastq_ftps__isnull=False,
