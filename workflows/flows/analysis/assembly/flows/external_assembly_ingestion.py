@@ -309,7 +309,7 @@ def _parse_and_validate_samplesheet(samplesheet_path: Path) -> list[str]:
                 "human_reference",
                 "phix_reference",
             }
-            if not expected_columns.issubset(set(reader.fieldnames)):
+            if not set(reader.fieldnames).issubset(expected_columns):
                 logger.warning(
                     f"Samplesheet columns {set(reader.fieldnames)} may not match expected "
                     f"columns {expected_columns}"
