@@ -74,7 +74,7 @@ def generate_report(base_dir: str, n_level: int, min_age: str, manifest_fp: str)
         min_age_td = parse_timedelta(min_age)
     except ValueError as e:
         logging.error(
-            "Error parsing age, must be of format <days>-<hours>:<minutes>:<seconds> e.g. 1-00:00:00, 365-00:00:00"
+            'Error parsing age "{min_age}", must be of format <days>-<hours>:<minutes>:<seconds> e.g. 1-00:00:00, 365-00:00:00'
         )
         raise e
 

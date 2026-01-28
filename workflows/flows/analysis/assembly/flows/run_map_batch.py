@@ -31,7 +31,7 @@ from workflows.flows.analysis.assembly.utils.status_update_hooks import (
     update_batch_status_counts,
 )
 from workflows.flows.analyse_study_tasks.cleanup_pipeline_directories import (
-    delete_pipeline_workdir,
+    remove_dir,
 )
 
 
@@ -154,7 +154,7 @@ def run_map_batch(assembly_analyses_batch_id: uuid.UUID):
     nextflow_workdir = (
         Path(assembly_analysis_batch.workspace_dir)
         / "map"
-        / f"map-sheet-{slugify(map_samplesheet_path)[-10:]}"
+        / f"map-sheet-{slugify(map_samplesheet_path)}"
     )
     os.makedirs(nextflow_workdir, exist_ok=True)
 
@@ -226,9 +226,7 @@ def run_map_batch(assembly_analyses_batch_id: uuid.UUID):
 
         return
     else:
-        delete_pipeline_workdir(
-            nextflow_workdir
-        )  # will also delete past "abandoned" nextflow files
+        remove_dir(nextflow_workdir)  # will also delete past "abandoned" nextflow files
 
         logger.info("MAP pipeline completed successfully")
 

@@ -67,12 +67,6 @@ def generate_study_summary_for_pipeline_run(
     :param completed_runs_filename: E.g. qs_completed_runs.csv, expects to be found in pipeline_outdir
     :return: List of paths to the study summary files generated in the study dir
     """
-    if (analysis_type not in STUDY_SUMMARY_GENERATORS) and (
-        analysis_type not in PIPELINE_CONFIGS
-    ):
-        raise ValueError(
-            f"analysis_type must be 'amplicon', 'rawreads' or 'assembly', got {analysis_type}"
-        )
     study_summary_generator = STUDY_SUMMARY_GENERATORS[analysis_type]
     pipeline_config = PIPELINE_CONFIGS[analysis_type]
 
@@ -155,12 +149,6 @@ def merge_study_summaries(
     :param bludgeon: If True, will delete any existing study-level summaries before merging.
     :return: List of paths to the study summary files generated in the study dir
     """
-    if (analysis_type not in STUDY_SUMMARY_GENERATORS) and (
-        analysis_type not in PIPELINE_CONFIGS
-    ):
-        raise ValueError(
-            f"analysis_type must be 'amplicon', 'rawreads' or 'assembly', got {analysis_type}"
-        )
     study_summary_generator = STUDY_SUMMARY_GENERATORS[analysis_type]
     pipeline_config = PIPELINE_CONFIGS[analysis_type]
 
@@ -254,10 +242,6 @@ def add_study_summaries_to_downloads(
 
     :param mgnify_study_accession: The accession identifier for the study to process.
     """
-    if analysis_type not in PIPELINE_CONFIGS:
-        raise ValueError(
-            f"analysis_type must be 'amplicon', 'rawreads' or 'assembly', got {analysis_type}"
-        )
     pipeline_config = PIPELINE_CONFIGS[analysis_type]
 
     logger = get_run_logger()

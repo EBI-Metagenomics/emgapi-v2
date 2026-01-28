@@ -11,16 +11,16 @@ AssemblyStates = analyses.models.Assembly.AssemblyStates
 
 
 @task()
-def delete_pipeline_workdir(workdir: Path):
+def remove_dir(dir: Path):
     # The pipeline uses a directory as a work directory. This should be deleted on completion.
     # This function deletes the directory passed to it.
     logger = get_run_logger()
 
-    logger.info(f"Deleting Nextflow work directory {workdir}")
+    logger.info(f"Deleting directory {dir}")
     try:
-        shutil.rmtree(workdir)
+        shutil.rmtree(dir)
     except Exception as e:
-        logger.warn(f"Deleting Nextflow work directory failed with {e}")
+        logger.warn(f"Deleting directory failed with {e}")
 
 
 @task()

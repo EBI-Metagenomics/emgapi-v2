@@ -139,7 +139,7 @@ def run_assembly_analysis_pipeline_batch(
         )
         nextflow_workdir = (
             Path(assembly_analysis_batch.workspace_dir)
-            / f"asa-sheet-{slugify(samplesheet)[-10:]}"
+            / f"asa-sheet-{slugify(samplesheet)}"
         )
         os.makedirs(nextflow_workdir, exist_ok=True)
 

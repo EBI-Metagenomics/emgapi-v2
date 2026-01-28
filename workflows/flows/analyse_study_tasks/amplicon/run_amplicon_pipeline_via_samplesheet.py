@@ -39,7 +39,7 @@ from workflows.prefect_utils.slurm_flow import (
 )
 from workflows.prefect_utils.slurm_policies import ResubmitIfFailedPolicy
 from workflows.flows.analyse_study_tasks.cleanup_pipeline_directories import (
-    delete_pipeline_workdir,
+    remove_dir,
 )
 from workflows.nextflow_utils.samplesheets import queryset_hash
 
@@ -146,6 +146,4 @@ def run_amplicon_pipeline_via_samplesheet(
             refdb_otus_dir=Path(EMG_CONFIG.amplicon_pipeline.refdb_otus_dir),
             completed_runs_filename=EMG_CONFIG.amplicon_pipeline.completed_runs_csv,
         )
-        delete_pipeline_workdir(
-            nextflow_workdir
-        )  # will also delete past "abandoned" nextflow files
+        remove_dir(nextflow_workdir)  # will also delete past "abandoned" nextflow files
