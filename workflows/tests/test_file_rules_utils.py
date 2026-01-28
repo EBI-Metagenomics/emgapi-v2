@@ -78,7 +78,7 @@ def test_dir_rules_utils(tmp_path):
     # test custom glob test
     ShouldContainHelloRule = GlobRule(
         rule_name="Directory contains a file matching hello",
-        glob_patten="*hello*",
+        glob_pattern="*hello*",
         test=lambda matches: len(list(matches)) > 0,
     )
 

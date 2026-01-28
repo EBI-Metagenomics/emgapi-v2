@@ -92,7 +92,7 @@ class Directory(File):
         failures = []
         for rule in self.glob_rules:
             try:
-                passes = rule.test(self.path.glob(rule.glob_patten))
+                passes = rule.test(self.path.glob(rule.glob_pattern))
             except Exception as e:
                 logging.error(
                     f"Unexpected failure applying rule <<{rule.__class__.__name__}: {rule.rule_name}>> to files of {self}. Treating as rule failure. {e}"
@@ -104,11 +104,11 @@ class Directory(File):
         if failures:
             for failure in failures:
                 matched_failed = "\n\t ├─> ".join(
-                    [str(p) for p in self.path.glob(failure.glob_patten)]
+                    [str(p) for p in self.path.glob(failure.glob_pattern)]
                 )
                 logging.warning(
                     f"Glob rule failure for {failure.rule_name}:"
-                    f"\n\t {failure.glob_patten}"
+                    f"\n\t {failure.glob_pattern}"
                     f"\n\t ├─> {matched_failed}"
                     f"\n\t Test: {inspect.getsource(failure.test)}"
                 )

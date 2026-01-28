@@ -73,25 +73,25 @@ FileConformsToFunctionalTSVSchemaRule = generate_csv_schema_file_rule(
 
 GlobOfTaxonomyFolderHasHtmlAndMseqRule = GlobRule(
     rule_name="Folder should contain html and mseq files",
-    glob_patten="*",
+    glob_pattern="*",
     test=lambda files: sum(f.suffix in [".html", ".mseq"] for f in files) == 2,
 )
 
 GlobOfTaxonomyFolderHasTxtGzRule = GlobRule(
     rule_name="Folder should contain txt.gz and krona html files",
-    glob_patten="*",
+    glob_pattern="*",
     test=lambda files: sum(f.suffix in [".txt.gz"] for f in files) == 1,
 )
 
 GlobOfTaxonomyFolderHasKronaHtmlRule = GlobRule(
     rule_name="Folder should contain txt.gz and krona html files",
-    glob_patten="*",
+    glob_pattern="*",
     test=lambda files: sum(f.suffix in [".html"] for f in files) == 1,
 )
 
 GlobOfTaxonomyFolderHasHtmlAndKronaTxtRule = GlobRule(
     rule_name="Folder should contain html and krona txt files",
-    glob_patten="*",
+    glob_pattern="*",
     test=lambda files: sum(
         f.suffixes
         in [
@@ -108,7 +108,7 @@ GlobOfTaxonomyFolderHasHtmlAndKronaTxtRule = GlobRule(
 
 GlobOfQcFolderHasFastpAndMultiqc = GlobRule(
     rule_name="Folder should contain fastp and multiqc files",
-    glob_patten="*",
+    glob_pattern="*",
     test=lambda files: sum(
         f.name.endswith("multiqc_report.html") or f.name.endswith("fastp.json")
         for f in files
@@ -118,7 +118,7 @@ GlobOfQcFolderHasFastpAndMultiqc = GlobRule(
 
 GlobOfRawReadsQcFolderHasFastpAndMultiqc = GlobRule(
     rule_name="Folder should contain two fastp files and a multiqc file",
-    glob_patten="*",
+    glob_pattern="*",
     test=lambda files: sum(
         any(
             [
@@ -134,32 +134,32 @@ GlobOfRawReadsQcFolderHasFastpAndMultiqc = GlobRule(
 
 GlobOfMultiqcFolderHasMultiqc = GlobRule(
     rule_name="Folder should contain multiQC report file",
-    glob_patten="*",
+    glob_pattern="*",
     test=lambda files: sum(f.name.endswith("multiqc_report.html") for f in files) == 1,
 )
 
 GlobOfQcFolderHasFastp = GlobRule(
     rule_name="Folder should contain fastp file",
-    glob_patten="*/*",
+    glob_pattern="*/*",
     test=lambda files: sum(f.name.endswith("fastp.json") for f in files) == 1,
 )
 
 GlobOfDecontamFolderHasSummaryStats = GlobRule(
     rule_name="Folder should contain at least one summary stats file",
-    glob_patten="*/*",
+    glob_pattern="*/*",
     test=lambda files: sum(f.name.endswith("summary_stats.txt") for f in files) > 0,
 )
 
 GlobOfAsvFolderHasRegionFolders = GlobRule(
     rule_name="Folder should contain either one region subfolder, or two regions plus a concatenation, with asv-read-count files",
-    glob_patten="*/*_asv_read_counts.tsv",
+    glob_pattern="*/*_asv_read_counts.tsv",
     test=lambda files: len(list(files))
     in [1, 3],  # e.g. ["16S-V3-V4"] or ["18S-V9", "16S-V3-V4", "concat"]
 )
 
 GlobOfFolderHasTsvGzAndIndex = GlobRule(
     rule_name="Folder should contain a .tsv.gz file and sibling .tsv.gz.gzi",
-    glob_patten="*.tsv.gz*",
+    glob_pattern="*.tsv.gz*",
     test=lambda files: sum(f.suffix in [".gz", ".gzi"] for f in files) % 2
     == 0,  # in case e.g. 2 sets of tsv.gz files
 )
