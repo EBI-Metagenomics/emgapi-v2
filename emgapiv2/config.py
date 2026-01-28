@@ -11,7 +11,7 @@ from workflows.ena_utils.abstract import ENAPortalDataPortal
 
 class SlurmConfig(BaseModel):
     default_job_status_checks_limit: int = 10
-    default_workdir: str = "/nfs/production/dev-slurm-work-dir"
+    default_workdir: str = "/path/to/pipeline-results-dir"
     default_nextflow_workdir: str = (
         "/path/to/pipeline-workdir"
     )
