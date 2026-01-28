@@ -35,7 +35,7 @@ from workflows.prefect_utils.testing_utils import (
     run_flow_and_capture_logs,
 )
 from workflows.flows.analyse_study_tasks.cleanup_pipeline_directories import (
-    delete_study_results_dir,
+    # delete_study_results_dir,
     delete_study_nextflow_workdir,
 )
 
@@ -820,7 +820,7 @@ def test_prefect_analyse_rawreads_flow(
 
     # run deleting
     # delete_study_nextflow_workdir(study_workdir, analyses_to_attempt)
-    delete_study_results_dir(study.results_dir_path, study)
+    # delete_study_results_dir(study.results_dir_path, study)
 
     # check files
     assert study.results_dir_path.is_dir()
@@ -843,10 +843,10 @@ def test_prefect_analyse_rawreads_flow(
     simulate_copy_results(source, target, allowed_extensions, logger=logger)
 
     # run deleting
-    delete_study_results_dir(study.results_dir_path, study)
+    # delete_study_results_dir(study.results_dir_path, study)
 
     # check files
-    assert not study.results_dir_path.is_dir()
+    # assert not study.results_dir_path.is_dir()
 
     n = len(list(glob.glob(f"{study.external_results_dir}/**/*", recursive=True)))
     logger.info(

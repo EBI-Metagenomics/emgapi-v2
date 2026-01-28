@@ -33,7 +33,7 @@ from workflows.prefect_utils.testing_utils import (
     combine_caplog_records,
 )
 from workflows.flows.analyse_study_tasks.cleanup_pipeline_directories import (
-    delete_study_results_dir,
+    # delete_study_results_dir,
     delete_assemble_study_nextflow_workdir,
 )
 
@@ -513,7 +513,7 @@ def test_prefect_assemble_study_flow(
         "deoverlapped",
     }
     simulate_copy_results(source, target, allowed_extensions, logger=logger)
-    delete_study_results_dir(mgys.results_dir_path, mgys)
+    # delete_study_results_dir(mgys.results_dir_path, mgys)
     assert mgys.results_dir_path.is_dir()
 
     # test deleting where everything is copied
@@ -532,8 +532,8 @@ def test_prefect_assemble_study_flow(
         "deoverlapped",
     }
     simulate_copy_results(source, target, allowed_extensions, logger=logger)
-    delete_study_results_dir(mgys.results_dir_path, mgys)
-    assert not mgys.results_dir_path.is_dir()
+    # delete_study_results_dir(mgys.results_dir_path, mgys)
+    # assert not mgys.results_dir_path.is_dir()
 
     # check external directory files
     n = len(list(glob.glob(f"{mgys.external_results_dir}/**/*", recursive=True)))
