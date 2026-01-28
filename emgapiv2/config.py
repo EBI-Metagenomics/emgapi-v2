@@ -64,6 +64,8 @@ class MGnifyPipelineConfig(BaseModel):
     Subclasses must override pipeline_repo and pipeline_git_revision.
     """
 
+    pipeline_name: str = ...  # Required
+    pipeline_version: str = ...  # Required
     pipeline_repo: str = ...  # Required
     pipeline_git_revision: str = ...  # Required
     pipeline_config_file: str = "/nfs/public/donco.config"
@@ -77,6 +79,8 @@ class MGnifyPipelineConfig(BaseModel):
 
 
 class AssemblerConfig(MGnifyPipelineConfig):
+    pipeline_name: str = "miassembler"
+    pipeline_version: str = "v6"
     pipeline_repo: str = "ebi-metagenomics/miassembler"
     pipeline_git_revision: str = "v3.0.3"
 
@@ -90,12 +94,10 @@ class AssemblerConfig(MGnifyPipelineConfig):
     assembler_version_default: str = "3.15.5"
     suspend_timeout_for_editing_samplesheets_secs: int = 28800  # 8 hrs
 
-    # Results folders
-    pipeline_name: str = "miassembler"
-    pipeline_version: str = "v6"
-
 
 class AmpliconPipelineConfig(MGnifyPipelineConfig):
+    pipeline_name: str = "amplicon"
+    pipeline_version: str = "v6"
     pipeline_repo: str = "ebi-metagenomics/amplicon-analysis-pipeline"
     pipeline_git_revision: str = "v6.0.6"
 
@@ -114,9 +116,8 @@ class AmpliconPipelineConfig(MGnifyPipelineConfig):
 
     # test reference DB OTU path
     refdb_otus_dir: str = "/app/data/tests/refdb_otus"
+
     # Results folders
-    pipeline_name: str = "amplicon"
-    pipeline_version: str = "v6"
     qc_folder: str = "qc"
     sequence_categorisation_folder: str = "sequence-categorisation"
     amplified_region_inference_folder: str = "amplified-region-inference"
@@ -126,6 +127,8 @@ class AmpliconPipelineConfig(MGnifyPipelineConfig):
 
 
 class RawReadsPipelineConfig(MGnifyPipelineConfig):
+    pipeline_name: str = "rawreads"
+    pipeline_version: str = "v6"
     pipeline_repo: str = "ebi-metagenomics/raw-reads-analysis-pipeline"
     pipeline_git_revision: str = "master"
 
@@ -142,8 +145,6 @@ class RawReadsPipelineConfig(MGnifyPipelineConfig):
     failed_runs_csv: str = "qc_failed_runs.csv"
 
     # Results folders
-    pipeline_name: str = "rawreads"
-    pipeline_version: str = "v6"
     qc_folder: str = "qc"
     taxonomy_summary_folder: str = "taxonomy-summary"
     function_summary_folder: str = "function-summary"
@@ -154,6 +155,8 @@ class RawReadsPipelineConfig(MGnifyPipelineConfig):
 
 
 class AssemblyAnalysisPipelineConfig(MGnifyPipelineConfig):
+    pipeline_name: str = "asa"
+    pipeline_version: str = "v6"
     pipeline_repo: str = "ebi-metagenomics/assembly-analysis-pipeline"
     pipeline_git_revision: str = "dev"
     pipeline_time_limit_days: int = 5
@@ -175,8 +178,6 @@ class AssemblyAnalysisPipelineConfig(MGnifyPipelineConfig):
 
     # Results folders
     # TODO: there is some repetition with the Pipeline Schemas used to validate and import results
-    pipeline_name: str = "asa"
-    pipeline_version: str = "v6"
     qc_folder: str = "qc"
     cds_folder: str = "cds"
     taxonomy_folder: str = "taxonomy"
@@ -190,6 +191,8 @@ class AssemblyAnalysisPipelineConfig(MGnifyPipelineConfig):
 
 
 class VirifyPipelineConfig(MGnifyPipelineConfig):
+    pipeline_name: str = "virify"
+    pipeline_version: str = "v6"
     pipeline_repo: str = "ebi-metagenomics/emg-viral-pipeline"
     pipeline_git_revision: str = "v3.0.0"
     pipeline_time_limit_days: int = 1
@@ -202,6 +205,8 @@ class VirifyPipelineConfig(MGnifyPipelineConfig):
 
 
 class MapPipelineConfig(MGnifyPipelineConfig):
+    pipeline_name: str = "map"
+    pipeline_version: str = "v6"
     pipeline_repo: str = "ebi-metagenomics/mobilome-annotation-pipeline"
     pipeline_git_revision: str = "v4.1.0"
     pipeline_time_limit_days: int = 1
