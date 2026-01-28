@@ -270,12 +270,12 @@ def add_study_summaries_to_downloads(mgnify_study_accession: str):
             )
         logger.info(f"Added {summary_file} to downloads of {study}")
 
+    # Add ASV DwC-R summary files
     for summary_file in Path(study.results_dir).glob(
-        f"{study.first_accession}*{DWCREADY_CSV}"
+        f"{study.first_accession}_DADA2*{DWCREADY_CSV}"
     ):
-        db_or_region = (
-            summary_file.stem.split("_")[1].rstrip(f"_{DWCREADY_CSV}").rstrip("asv")
-        )
+        db = summary_file.stem.split("_")[1].lstrip("DADA2_")
+        region = summary_file.stem.split("_")[2]
         try:
             study.add_download(
                 DownloadFile(
@@ -283,8 +283,31 @@ def add_study_summaries_to_downloads(mgnify_study_accession: str):
                     download_type=DownloadType.TAXONOMIC_ANALYSIS,
                     download_group="study_summary",
                     file_type=DownloadFileType.CSV,
-                    short_description=f"Summary of {db_or_region} taxonomies",
-                    long_description=f"Summary of {db_or_region} taxonomic assignments, across all runs in the study",
+                    short_description=f"DwC-Ready summary of {region} ASV taxonomies using {db} as ref DB",
+                    long_description=f"DwC-Ready summary of {region} ASV taxonomies using {db} as ref DB, across all runs in the study",
+                    alias=summary_file.name,
+                )
+            )
+        except FileExistsError:
+            logger.warning(
+                f"File {summary_file} already exists in downloads list, skipping"
+            )
+        logger.info(f"Added {summary_file} to downloads of {study}")
+
+    # Add closed reference DwC-R summary files
+    for summary_file in Path(study.results_dir).glob(
+        f"{study.first_accession}_closedref*{DWCREADY_CSV}"
+    ):
+        db = summary_file.stem.split("_")[2]
+        try:
+            study.add_download(
+                DownloadFile(
+                    path=Path("study-summaries") / summary_file.name,
+                    download_type=DownloadType.TAXONOMIC_ANALYSIS,
+                    download_group="study_summary",
+                    file_type=DownloadFileType.CSV,
+                    short_description=f"DwC-Ready summary of closed-ref taxonomies using {db} as ref DB",
+                    long_description=f"DwC-Ready summary of closed-reference taxonomies using {db} as ref DB, across all runs in the study",
                     alias=summary_file.name,
                 )
             )
