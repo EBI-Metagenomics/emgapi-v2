@@ -713,8 +713,9 @@ def test_prefect_analyse_rawreads_flow(
     assert study.external_results_dir == f"{study_accession[:-3]}/{study_accession}"
 
     # Check summaries
-    summary_dir = Path(study.results_dir) / Path(
-        f"{EMG_CONFIG.rawreads_pipeline.pipeline_name}_{EMG_CONFIG.rawreads_pipeline.pipeline_version}"
+    summary_dir = (
+        study.results_dir_path
+        / f"{EMG_CONFIG.rawreads_pipeline.pipeline_name}_{EMG_CONFIG.rawreads_pipeline.pipeline_version}"
     )
     Directory(
         path=summary_dir,
@@ -798,7 +799,7 @@ def test_prefect_analyse_rawreads_flow(
 
     logger = logging.getLogger("simulate_copy_results")
 
-    source = Path(study.results_dir)
+    source = study.results_dir_path
     target = Path(study.external_results_dir)
 
     # test case where not everything is copied
@@ -819,10 +820,10 @@ def test_prefect_analyse_rawreads_flow(
 
     # run deleting
     # delete_study_nextflow_workdir(study_workdir, analyses_to_attempt)
-    delete_study_results_dir(study.results_dir, study)
+    delete_study_results_dir(study.results_dir_path, study)
 
     # check files
-    assert Path(study.results_dir).is_dir()
+    assert study.results_dir_path.is_dir()
 
     # test case where everything is copied
     allowed_extensions = {
@@ -842,10 +843,10 @@ def test_prefect_analyse_rawreads_flow(
     simulate_copy_results(source, target, allowed_extensions, logger=logger)
 
     # run deleting
-    delete_study_results_dir(study.results_dir, study)
+    delete_study_results_dir(study.results_dir_path, study)
 
     # check files
-    assert not Path(study.results_dir).is_dir()
+    assert not study.results_dir_path.is_dir()
 
     n = len(list(glob.glob(f"{study.external_results_dir}/**/*", recursive=True)))
     logger.info(
@@ -1287,8 +1288,9 @@ def test_prefect_analyse_rawreads_flow_private_data(
     assert study.external_results_dir == f"{study_accession[:-3]}/{study_accession}"
 
     # Check summaries
-    summary_dir = Path(study.results_dir) / Path(
-        f"{EMG_CONFIG.rawreads_pipeline.pipeline_name}_{EMG_CONFIG.rawreads_pipeline.pipeline_version}"
+    summary_dir = (
+        study.results_dir_path
+        / f"{EMG_CONFIG.rawreads_pipeline.pipeline_name}_{EMG_CONFIG.rawreads_pipeline.pipeline_version}"
     )
     Directory(
         path=summary_dir,

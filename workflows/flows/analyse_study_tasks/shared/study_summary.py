@@ -77,7 +77,6 @@ def generate_study_summary_for_pipeline_run(
 
     # Set the results_dir if it hasn't been set yet, so that it can be used in the summary generator'
     study.set_results_dir_default()
-    assert isinstance(study.results_dir, Path)
 
     pipeline_run_dir = Directory(
         path=pipeline_outdir,
@@ -85,7 +84,7 @@ def generate_study_summary_for_pipeline_run(
     )
     summary_dir = Directory(
         path=(
-            Path(study.results_dir)
+            study.results_dir_path
             / f"{pipeline_config.pipeline_name}_{pipeline_config.pipeline_version}"
             / "summaries"
         ),
@@ -157,11 +156,10 @@ def merge_study_summaries(
 
     # Set the results_dir if it hasn't been set yet, so that it can be used in the summary generator'
     study.set_results_dir_default()
-    assert isinstance(study.results_dir, Path)
 
     study_dir = Directory(
         path=(
-            Path(study.results_dir)
+            study.results_dir_path
             / f"{pipeline_config.pipeline_name}_{pipeline_config.pipeline_version}"
         ),
         rules=[DirectoryExistsRule],
@@ -249,10 +247,9 @@ def add_study_summaries_to_downloads(
 
     # Set the results_dir if it hasn't been set yet, so that it can be used in the summary generator'
     study.set_results_dir_default()
-    assert isinstance(study.results_dir, Path)
 
     summary_dir = (
-        Path(study.results_dir)
+        study.results_dir_path
         / f"{pipeline_config.pipeline_name}_{pipeline_config.pipeline_version}"
     )
 
@@ -376,11 +373,10 @@ def merge_assembly_study_summaries(
 
     # Set the results_dir if it hasn't been set yet, so that it can be used in the summary generator'
     study.set_results_dir_default()
-    assert isinstance(study.results_dir, Path)
 
     study_dir = Directory(
         path=(
-            Path(study.results_dir)
+            study.results_dir_path
             / f"{pipeline_config.pipeline_name}_{pipeline_config.pipeline_version}"
         ),
         rules=[DirectoryExistsRule],
@@ -451,10 +447,9 @@ def add_rawreads_study_summaries_to_downloads(mgnify_study_accession: str):
 
     # Set the results_dir if it hasn't been set yet, so that it can be used in the summary generator'
     study.set_results_dir_default()
-    assert isinstance(study.results_dir, Path)
 
     summary_dir = (
-        Path(study.results_dir)
+        study.results_dir_path
         / f"{pipeline_config.pipeline_name}_{pipeline_config.pipeline_version}"
     )
 

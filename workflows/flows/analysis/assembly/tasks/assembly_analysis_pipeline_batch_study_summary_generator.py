@@ -50,12 +50,11 @@ def generate_assembly_analysis_pipeline_batch_summary(
 
     # Ensure the study has a results_dir to write summaries to
     study.set_results_dir_default()
-    assert isinstance(study.results_dir, Path)
 
     pipeline_config = EMG_CONFIG.assembly_analysis_pipeline
     summary_dir = Directory(
         path=(
-            Path(study.results_dir)
+            study.results_dir_path
             / f"{pipeline_config.pipeline_name}_{pipeline_config.pipeline_version}"
             / "summaries"
         ),

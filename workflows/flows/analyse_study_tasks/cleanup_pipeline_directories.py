@@ -118,7 +118,7 @@ def delete_study_results_dir(
     }
     source_files = {
         Path(fp).name: getmd5(fp)
-        for fp in glob.glob(str(Path(results_dir) / "**/*"), recursive=True)
+        for fp in glob.glob(str(results_dir / "**/*"), recursive=True)
         if Path(fp).name.split(".")[-1] in allowed_extensions
     }
     dest_files = {

@@ -43,7 +43,6 @@ def generate_dwc_ready_summary_for_pipeline_run(
 
     # Set the results_dir if it hasn't been set yet, so that it can be used in the summary generator'
     study.set_results_dir_default()
-    assert isinstance(study.results_dir, Path)
 
     pipeline_config = EMG_CONFIG.amplicon_pipeline
     pipeline_run_dir = Directory(
@@ -52,7 +51,7 @@ def generate_dwc_ready_summary_for_pipeline_run(
     )
     summary_dir = Directory(
         path=(
-            Path(study.results_dir)
+            study.results_dir_path
             / f"{pipeline_config.pipeline_name}_{pipeline_config.pipeline_version}"
             / "summaries"
         ),
@@ -114,12 +113,11 @@ def merge_dwc_ready_summaries(
 
     # Set the results_dir if it hasn't been set yet, so that it can be used in the summary generator'
     study.set_results_dir_default()
-    assert isinstance(study.results_dir, Path)
 
     pipeline_config = EMG_CONFIG.amplicon_pipeline
     study_dir = Directory(
         path=(
-            Path(study.results_dir)
+            study.results_dir_path
             / f"{pipeline_config.pipeline_name}_{pipeline_config.pipeline_version}"
         ),
         rules=[DirectoryExistsRule],

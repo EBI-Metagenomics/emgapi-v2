@@ -1,4 +1,3 @@
-from pathlib import Path
 from unittest.mock import patch, Mock
 
 import pytest
@@ -38,7 +37,7 @@ class TestCopyV6StudySummaries:
         study.inherit_accessions_from_related_ena_object("ena_study")
 
         # Create results_dir and add study summary files (at root level)
-        results_dir = Path(study.results_dir)
+        results_dir = study.results_dir_path
         results_dir.mkdir()
         (
             results_dir / f"{study.first_accession}_taxonomy_study_summary.tsv"
