@@ -198,11 +198,11 @@ def analysis_amplicon_study(study_accession: str):
         cleanup_partials=not EMG_CONFIG.amplicon_pipeline.keep_study_summary_partials,
         analysis_type="amplicon",
     )
-    add_study_summaries_to_downloads(mgnify_study.accession)
     merge_dwc_ready_summaries(
         mgnify_study.accession,
         cleanup_partials=not EMG_CONFIG.amplicon_pipeline.keep_study_summary_partials,
     )
+    add_study_summaries_to_downloads(mgnify_study.accession)
     copy_v6_study_summaries(mgnify_study.accession)
 
     mgnify_study.refresh_from_db()

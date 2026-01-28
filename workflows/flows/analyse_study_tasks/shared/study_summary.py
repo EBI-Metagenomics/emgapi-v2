@@ -269,6 +269,31 @@ def add_study_summaries_to_downloads(mgnify_study_accession: str):
                 f"File {summary_file} already exists in downloads list, skipping"
             )
         logger.info(f"Added {summary_file} to downloads of {study}")
+
+    for summary_file in Path(study.results_dir).glob(
+        f"{study.first_accession}*{DWCREADY_CSV}"
+    ):
+        db_or_region = (
+            summary_file.stem.split("_")[1].rstrip(f"_{DWCREADY_CSV}").rstrip("asv")
+        )
+        try:
+            study.add_download(
+                DownloadFile(
+                    path=Path("study-summaries") / summary_file.name,
+                    download_type=DownloadType.TAXONOMIC_ANALYSIS,
+                    download_group="study_summary",
+                    file_type=DownloadFileType.CSV,
+                    short_description=f"Summary of {db_or_region} taxonomies",
+                    long_description=f"Summary of {db_or_region} taxonomic assignments, across all runs in the study",
+                    alias=summary_file.name,
+                )
+            )
+        except FileExistsError:
+            logger.warning(
+                f"File {summary_file} already exists in downloads list, skipping"
+            )
+        logger.info(f"Added {summary_file} to downloads of {study}")
+
     study.refresh_from_db()
     logger.info(
         f"Study download aliases are now {[d.alias for d in study.downloads_as_objects]}"

@@ -1264,7 +1264,7 @@ def test_prefect_analyse_amplicon_flow(
     )
 
     study.refresh_from_db()
-    assert len(study.downloads_as_objects) == 6
+    assert len(study.downloads_as_objects) == 12
 
     # test merging of study summaries again – expect default bludgeon should overwrite the existing ones
     logged_run = run_flow_and_capture_logs(
@@ -1294,7 +1294,7 @@ def test_prefect_analyse_amplicon_flow(
     )
 
     study.refresh_from_db()
-    assert len(study.downloads_as_objects) == 6
+    assert len(study.downloads_as_objects) == 12
     assert study.features.has_v6_analyses
 
     Directory(
@@ -1659,7 +1659,7 @@ def test_prefect_analyse_amplicon_flow_private_data(
     )
 
     study.refresh_from_db()
-    assert len(study.downloads_as_objects) == 5
+    assert len(study.downloads_as_objects) == 11
 
     # test merging of study summaries again – expect default bludgeon should overwrite the existing ones
     logged_run = run_flow_and_capture_logs(
@@ -1714,7 +1714,7 @@ def test_prefect_analyse_amplicon_flow_private_data(
     )
 
     study.refresh_from_db()
-    assert len(study.downloads_as_objects) == 5
+    assert len(study.downloads_as_objects) == 11
     assert study.features.has_v6_analyses
 
     assert study.is_private
