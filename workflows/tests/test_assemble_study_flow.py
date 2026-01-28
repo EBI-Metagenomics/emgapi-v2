@@ -494,7 +494,7 @@ def test_prefect_assemble_study_flow(
     assert mgys.results_dir is not None
     assert mgys.external_results_dir is not None
 
-    source = Path(mgys.results_dir)
+    source = mgys.results_dir_path
     target = Path(mgys.external_results_dir)
 
     # test deleting where not everything is copied
@@ -513,8 +513,8 @@ def test_prefect_assemble_study_flow(
         "deoverlapped",
     }
     simulate_copy_results(source, target, allowed_extensions, logger=logger)
-    delete_study_results_dir(mgys.results_dir, mgys)
-    assert Path(mgys.results_dir).is_dir()
+    delete_study_results_dir(mgys.results_dir_path, mgys)
+    assert mgys.results_dir_path.is_dir()
 
     # test deleting where everything is copied
     allowed_extensions = {
@@ -532,8 +532,8 @@ def test_prefect_assemble_study_flow(
         "deoverlapped",
     }
     simulate_copy_results(source, target, allowed_extensions, logger=logger)
-    delete_study_results_dir(mgys.results_dir, mgys)
-    assert not Path(mgys.results_dir).is_dir()
+    delete_study_results_dir(mgys.results_dir_path, mgys)
+    assert not mgys.results_dir_path.is_dir()
 
     # check external directory files
     n = len(list(glob.glob(f"{mgys.external_results_dir}/**/*", recursive=True)))
