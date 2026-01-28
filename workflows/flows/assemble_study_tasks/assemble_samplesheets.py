@@ -170,9 +170,24 @@ def run_assembler_for_samplesheet(
     mgnify_study: analyses.models.Study,
     samplesheet_csv: Path,
     samplesheet_hash: str,
-    workdir: Path,
-    outdir: Path,
+    workdir: Optional[Path],
+    outdir: Optional[Path],
 ):
+    if workdir is None:
+        workdir = (
+            Path(f"{EMG_CONFIG.slurm.default_nextflow_workdir}")
+            / Path(f"{mgnify_study.ena_study.accession}")
+            / f"{EMG_CONFIG.assembler.pipeline_name}_{EMG_CONFIG.assembler.pipeline_version}"
+            / samplesheet_hash
+        )
+    if outdir is None:
+        outdir = (
+            Path(f"{EMG_CONFIG.slurm.default_workdir}")
+            / Path(f"{mgnify_study.ena_study.accession}")
+            / f"{EMG_CONFIG.assembler.pipeline_name}_{EMG_CONFIG.assembler.pipeline_version}"
+            / samplesheet_hash
+        )
+
     samplesheet_df = pd.read_csv(samplesheet_csv, sep=",")
     assemblies: Iterable[analyses.models.Assembly] = (
         mgnify_study.assemblies_reads.filter(

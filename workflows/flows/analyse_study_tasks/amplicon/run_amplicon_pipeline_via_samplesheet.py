@@ -1,7 +1,7 @@
 import os
 from datetime import timedelta
 from pathlib import Path
-from typing import List, Union
+from typing import List, Union, Optional
 
 from django.conf import settings
 from django.utils.text import slugify
@@ -48,9 +48,22 @@ from workflows.nextflow_utils.samplesheets import queryset_hash
 def run_amplicon_pipeline_via_samplesheet(
     mgnify_study: analyses.models.Study,
     amplicon_analysis_ids: List[Union[str, int]],
-    workdir: Path,
-    outdir: Path,
+    workdir: Optional[Path],
+    outdir: Optional[Path],
 ):
+    if workdir is None:
+        workdir = (
+            Path(f"{EMG_CONFIG.slurm.default_nextflow_workdir}")
+            / Path(f"{mgnify_study.ena_study.accession}")
+            / f"{EMG_CONFIG.amplicon_pipeline.pipeline_name}_{EMG_CONFIG.amplicon_pipeline.pipeline_version}"
+        )
+    if outdir is None:
+        outdir = (
+            Path(f"{EMG_CONFIG.slurm.default_workdir}")
+            / Path(f"{mgnify_study.ena_study.accession}")
+            / f"{EMG_CONFIG.amplicon_pipeline.pipeline_name}_{EMG_CONFIG.amplicon_pipeline.pipeline_version}"
+        )
+
     amplicon_analyses = analyses.models.Analysis.objects.select_related("run").filter(
         id__in=amplicon_analysis_ids,
         run__metadata__fastq_ftps__isnull=False,
