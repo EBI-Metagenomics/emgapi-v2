@@ -1215,7 +1215,7 @@ class TestIdempotentImports:
         # Verify V6/assembly is in the path
         assert "/V6/assembly" in str(analysis.external_results_dir)
 
-        # Verify expected path structure
+        # Verify the expected path structure
         study_accession = raw_reads_mgnify_study.first_accession
         expected_base = (
             target_root
