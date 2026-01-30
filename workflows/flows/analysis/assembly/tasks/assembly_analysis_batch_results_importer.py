@@ -51,6 +51,7 @@ def clear_pipeline_downloads(
             "annotation_summary",
             Analysis.CODING_SEQUENCES,
             Analysis.FUNCTIONAL_ANNOTATION,
+            Analysis.PATHWAYS_AND_SYSTEMS,
         ],
         AssemblyAnalysisPipeline.VIRIFY: [Analysis.VIRIFY],
         AssemblyAnalysisPipeline.MAP: [Analysis.MAP],
