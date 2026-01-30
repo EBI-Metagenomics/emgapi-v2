@@ -657,16 +657,55 @@ class Analysis(
     PFAMS = "pfams"
     INTERPROS = "interpros"
 
+    QC = "quality_control"
+    TAXONOMY = "taxonomy"
+
+    # AMPLICON
+    PRIMER_IDENTIFICATION = "primer_identification"
     TAXONOMIES = "taxonomies"
     CLOSED_REFERENCE = "closed_reference"
     ASV = "asv"
 
-    # ASA - results categories
+    AMPLICON_DOWNLOAD_GROUPS = [
+        QC,
+        TAXONOMY,
+        PRIMER_IDENTIFICATION,
+        f"{TAXONOMIES}.closed_reference.",
+        f"{TAXONOMIES}.asv.",
+        ASV,
+    ]
+
+    # ASA
     CODING_SEQUENCES = "coding_sequences"
     FUNCTIONAL_ANNOTATION = "functional_annotation"
     PATHWAYS_AND_SYSTEMS = "pathways_and_systems"
+    ANNOTATION_SUMMARY = "annotation_summary"
     VIRIFY = "virify"
     MAP = "mobilome_annotation_pipeline"
+
+    VIRIFY_DOWNLOAD_GROUPS = [VIRIFY]
+    MAP_DOWNLOAD_GROUPS = [MAP]
+
+    ASA_DOWNLOAD_GROUPS = [
+        PFAMS,  # review this one
+        QC,
+        TAXONOMY,  # do we need this one too?
+        TAXONOMIES,
+        ANNOTATION_SUMMARY,
+        CODING_SEQUENCES,
+        FUNCTIONAL_ANNOTATION,
+        PATHWAYS_AND_SYSTEMS,
+    ]
+
+    ALLOWED_DOWNLOAD_GROUP_PREFIXES = (
+        [
+            "all",  # catch-all for legacy
+        ]
+        + AMPLICON_DOWNLOAD_GROUPS
+        + ASA_DOWNLOAD_GROUPS
+        + VIRIFY_DOWNLOAD_GROUPS
+        + MAP_DOWNLOAD_GROUPS
+    )
 
     class TaxonomySources(FutureStrEnum):
         SSU: str = "ssu"
@@ -702,23 +741,6 @@ class Analysis(
     # TODO: These fields are part of a previous and abandoned idea of storing annotations and qc in json fields
     annotations = models.JSONField(default=default_annotations.__func__)
     quality_control = models.JSONField(default=dict, blank=True)
-
-    ALLOWED_DOWNLOAD_GROUP_PREFIXES = [
-        "all",  # catch-all for legacy
-        f"{TAXONOMIES}.closed_reference.",
-        f"{TAXONOMIES}.asv.",
-        "quality_control",
-        "primer_identification",
-        "taxonomy",
-        "annotation_summary",
-        ASV,
-        PFAMS,
-        CODING_SEQUENCES,
-        FUNCTIONAL_ANNOTATION,
-        PATHWAYS_AND_SYSTEMS,
-        VIRIFY,
-        MAP,
-    ]
 
     class KnownMetadataKeys:
         MARKER_GENE_SUMMARY = "marker_gene_summary"  # for amplicon analyses
