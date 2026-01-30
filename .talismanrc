@@ -116,6 +116,9 @@ fileignoreconfig:
 - filename: workflows/data_io_utils/file_rules.py
   checksum: 18b7d98b4778cf50b81961e026ef5ce8936692b2a2db11038656aca7940b6301
 
+- filename: workflows/data_io_utils/file_rules/nodes.py
+  checksum: 5d8b55346b263a4885debb1d0e40b4477a596abe284535ef9371389d36f5a0df
+
 - filename: workflows/data_io_utils/mgnify_v6_utils/assembly.py
   allowed_patterns: [_key]
 
@@ -171,6 +174,12 @@ fileignoreconfig:
 - filename: workflows/tests/test_analysis_rawreads_study_flow.py
   checksum: 0f7255bdd7303269337a7d9be17d5246bfc32980697ba4135f54be201d13180a
 
+- filename: workflows/tests/test_analysis_rawreads_study_flow.py
+  checksum: 4026282a93009d95525cde6ef6cab4664fcbf8e85e7339df2f8add8c36db36f3
+
+- filename: workflows/tests/test_analysis_rawreads_study_flow.py
+  checksum: 0f7255bdd7303269337a7d9be17d5246bfc32980697ba4135f54be201d13180a
+
 - filename: workflows/flows/upload_assembly.py
   allowed_patterns: [key]
 
@@ -200,6 +209,9 @@ fileignoreconfig:
 
 - filename: deployment/ebi-wp-k8s-hl/start_prefect_slurm_worker.sh
   checksum: c98eedfe5ad3c85b8e623344b151d2926cd148e98c199431f41c6bc52c866e6e
+
+- filename: slurm-dev-environment/fs/nfs/public/tests/amplicon_v6_output/dwca/eml.xml
+  checksum: 3ce4a7e923c49e1a03f3193d0120aeb886fedc83d907e19af0f0560260b29337
 
 allowed_patterns:
 - cache_key_fn

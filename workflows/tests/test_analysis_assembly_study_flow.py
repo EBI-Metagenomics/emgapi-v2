@@ -380,7 +380,7 @@ def setup_study_summary_fixtures(study: Study):
 
     :param study: The Study to create summary files for
     """
-    study_dir = Path(study.results_dir)
+    study_dir = study.results_dir_path
     study_dir.mkdir(parents=True, exist_ok=True)
 
     # Create mock study summary files for different analysis types

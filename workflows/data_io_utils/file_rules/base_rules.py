@@ -19,7 +19,7 @@ class DirectoryRule(FileRule): ...
 
 
 class GlobRule(DirectoryRule):
-    glob_patten: str = Field(
+    glob_pattern: str = Field(
         default="*", description="Glob pattern to match within the dir"
     )
     test: Callable[[Iterable[Path]], bool] = Field(

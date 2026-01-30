@@ -1,4 +1,3 @@
-import pathlib
 from datetime import datetime
 from urllib.parse import urljoin
 
@@ -119,7 +118,7 @@ def convert_dwcr_to_dwca(
     #     system="http://gbif.org"
     #     xml:lang="en">
 
-    dwca_dir = pathlib.Path(study.results_dir) / "dwca"
+    dwca_dir = study.results_dir_path / "dwca"
     dwca_dir.mkdir(exist_ok=True)
 
     with dwca_dir / "eml.xml" as eml_file:
