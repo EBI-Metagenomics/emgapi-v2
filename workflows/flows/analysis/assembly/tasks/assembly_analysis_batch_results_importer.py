@@ -45,14 +45,7 @@ def clear_pipeline_downloads(
 
     # Map pipeline types to their download_group prefixes
     pipeline_download_groups = {
-        AssemblyAnalysisPipeline.ASA: [
-            "quality_control",
-            "taxonomy",
-            "annotation_summary",
-            Analysis.CODING_SEQUENCES,
-            Analysis.FUNCTIONAL_ANNOTATION,
-            Analysis.PATHWAYS_AND_SYSTEMS,
-        ],
+        AssemblyAnalysisPipeline.ASA: Analysis.ASA_DOWNLOAD_GROUPS,
         AssemblyAnalysisPipeline.VIRIFY: [Analysis.VIRIFY],
         AssemblyAnalysisPipeline.MAP: [Analysis.MAP],
     }
