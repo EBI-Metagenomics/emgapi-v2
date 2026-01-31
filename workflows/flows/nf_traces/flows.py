@@ -14,7 +14,7 @@ from workflows.flows.nf_traces.tasks import (
 
 
 @flow(
-    name="Nextflow Traces ETL Pipeline",
+    name="Nextflow Traces extraction and transformation flow",
     description="ETL pipeline for the data extraction, transformation and loading of the nextflow traces",
     persist_result=True,
 )
@@ -27,13 +27,12 @@ def nextflow_trace_etl_flow(
     exclude_failed: bool = True,
 ) -> pd.DataFrame:
     """
-    Nextflow Trace ETL pipeline as a Prefect flow (Extract and Transform only).
+    Nextflow Trace extraction and transformation flow.
 
     This flow orchestrates the extraction and transformation of Nextflow trace data
     from OrchestratedClusterJob models.
 
-    The Load phase will be handled separately when database storage is implemented.
-
+    :param sqlite_db_path: Path to the SQLite database where the transformed data will be stored
     :param batch_size: Number of database records to process at once
     :param min_created_at: Only process jobs created after this datetime
     :param max_created_at: Only process jobs created before this datetime
@@ -41,7 +40,6 @@ def nextflow_trace_etl_flow(
     :param exclude_failed: Exclude failed jobs
     """
     logger = get_run_logger()
-    logger.info("Starting Nextflow Trace ETL Pipeline")
 
     # Extract
     raw_records: pd.DataFrame = extract_traces_from_the_database(
@@ -63,7 +61,7 @@ def nextflow_trace_etl_flow(
     summary = summary_stats(transformed_data)
 
     final_summary = f"""
-## Nextflow trace ETL pipeline results
+## Nextflow trace extraction and transformation pipeline results
 
 ## SQLite database with traces
 SQLite db path: {sqlite_db_path}/nf_traces.db
@@ -76,7 +74,7 @@ SQLite db path: {sqlite_db_path}/nf_traces.db
     create_markdown_artifact(
         final_summary,
         key="etl-pipeline-summary",
-        description="Nextflow Trace ETL Pipeline Results (Ready for Database Loading)",
+        description="Nextflow Traces extraction and transformation flow.",
     )
 
     logger.info(
