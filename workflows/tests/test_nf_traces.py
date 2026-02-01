@@ -5,8 +5,6 @@ import pytest
 from datetime import datetime
 import sqlite3
 
-from prefect.testing.utilities import prefect_test_harness
-
 from workflows.flows.nf_traces.tasks import (
     extract_traces_from_the_database,
     transform_traces_task,
@@ -21,12 +19,6 @@ from workflows.flows.nf_traces.utils import (
     NEXTFLOW_FIELD_MAP,
 )
 from workflows.models import OrchestratedClusterJob
-
-
-@pytest.fixture
-def prefect_test_fixture():
-    with prefect_test_harness():
-        yield
 
 
 @pytest.fixture
@@ -197,7 +189,7 @@ def test_parse_memory_to_mb():
 
 
 @pytest.mark.django_db
-def test_extract_traces_from_database(sample_orchestrated_job, prefect_test_fixture):
+def test_extract_traces_from_database(sample_orchestrated_job, prefect_harness):
     """Test extraction of traces from database."""
     # Call the task
     result_df = extract_traces_from_the_database(batch_size=1000)
@@ -215,7 +207,7 @@ def test_extract_traces_from_database(sample_orchestrated_job, prefect_test_fixt
 
 
 @pytest.mark.django_db
-def test_transform_traces_task(sample_nextflow_trace_data, prefect_test_fixture):
+def test_transform_traces_task(sample_nextflow_trace_data, prefect_harness):
     """Test transformation of raw trace data."""
     # Create a DataFrame from the sample data
     df = pd.DataFrame.from_dict(sample_nextflow_trace_data, orient="index")
@@ -265,7 +257,7 @@ def test_transform_traces_task(sample_nextflow_trace_data, prefect_test_fixture)
     )
 
 
-def test_transform_traces_missing_task_id(prefect_test_fixture):
+def test_transform_traces_missing_task_id(prefect_harness):
     """Test transformation when task_id is missing from input."""
     df = pd.DataFrame(
         [
@@ -305,7 +297,7 @@ def test_transform_traces_missing_task_id(prefect_test_fixture):
     assert "job_created_at" in result_df.columns
 
 
-def test_transform_traces_empty_dataframe(prefect_test_fixture):
+def test_transform_traces_empty_dataframe(prefect_harness):
     """Test transformation with empty DataFrame."""
     empty_df = pd.DataFrame()
 
@@ -313,7 +305,7 @@ def test_transform_traces_empty_dataframe(prefect_test_fixture):
         transform_traces_task(empty_df)
 
 
-def test_summary_stats(sample_nextflow_trace_data, prefect_test_fixture):
+def test_summary_stats(sample_nextflow_trace_data, prefect_harness):
     """Test generation of summary statistics."""
     # Create a DataFrame from the sample data
     df = pd.DataFrame.from_dict(sample_nextflow_trace_data, orient="index")
@@ -376,9 +368,8 @@ def test_schema_validation(sample_nextflow_trace_data):
     assert validated_df["peak_vmem"].iloc[0] > 0
 
 
-def test_nextflow_trace_etl_flow(
-    sample_orchestrated_job, tmp_path, prefect_test_fixture
-):
+@pytest.mark.django_db
+def test_nextflow_trace_etl_flow(sample_orchestrated_job, prefect_harness, tmp_path):
     """Test the complete ETL flow."""
     # Call the flow
     nextflow_trace_etl_flow(
@@ -407,7 +398,7 @@ def test_nextflow_trace_etl_flow(
 
 
 @pytest.mark.django_db
-def test_extract_traces_with_failed_jobs(prefect_test_fixture):
+def test_extract_traces_with_failed_jobs(prefect_harness):
     """Test extraction with failed jobs."""
     # Create a failed job
     job = OrchestratedClusterJob(
@@ -456,7 +447,7 @@ def test_extract_traces_with_failed_jobs(prefect_test_fixture):
     assert len(result_df) == 1
 
 
-def test_transform_traces_with_missing_fields(prefect_test_fixture):
+def test_transform_traces_with_missing_fields(prefect_harness):
     """Test transformation with missing fields."""
     # Create a DataFrame with missing fields
     df = pd.DataFrame(
