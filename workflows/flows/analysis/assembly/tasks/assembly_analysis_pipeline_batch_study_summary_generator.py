@@ -59,7 +59,7 @@ def generate_assembly_analysis_pipeline_batch_summary(
             / "summaries"
         ),
     )
-    os.makedirs(summary_dir.path, exist_ok=True)
+    summary_dir.path.mkdir(exist_ok=True)
 
     logger.info(
         f"Study results_dir, where summaries will be made, is {summary_dir.path}"
