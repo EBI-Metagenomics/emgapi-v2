@@ -130,7 +130,7 @@ def preprocess_trace_dataframe(df: pd.DataFrame) -> pd.DataFrame:
         return df
 
     # Map fields to schema names
-    df = df.rename(columns=NEXTFLOW_FIELD_MAP)
+    df.rename(columns=NEXTFLOW_FIELD_MAP, inplace=True)
 
     # Clean '-' and empty strings
     df = df.replace(["-", ""], np.nan)
