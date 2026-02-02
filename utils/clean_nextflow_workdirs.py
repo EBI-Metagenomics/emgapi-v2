@@ -48,7 +48,8 @@ def parse_duration(s: str) -> pendulum.Duration:
 
 
 def print_duration(td: pendulum.Duration) -> str:
-    return f"{td.days}-{td.hours:02}:{td.minutes:02}:{td.seconds:02}"
+    seconds = td.seconds % 60
+    return f"{td.days}-{td.hours:02}:{td.minutes:02}:{seconds:02}"
 
 
 @click.group("cli")
