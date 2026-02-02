@@ -81,26 +81,30 @@ def test_print_duration(str2timedelta):
 
 def create_dir_mtime_fixtures(fp_mtimes: dict, dir_mtimes: dict, tmp_dir: Path):
     logger = logging.getLogger("create_dir_mtime_fixtures")
-    now = pendulum.now().timestamp()
+    now = pendulum.now()
 
     for fp, mtime in fp_mtimes.items():
         (tmp_dir / fp).parent.mkdir(parents=True, exist_ok=True)
         with open(tmp_dir / fp, "wt") as f:
             f.write("Made you look")
-        age = int(now - mtime.total_seconds())
-        os.utime(tmp_dir / fp, times=(age, age))
+        new_mtime = int((now - mtime).timestamp())
+        os.utime(tmp_dir / fp, times=(new_mtime, new_mtime))
         check_age = pendulum.now() - pendulum.from_timestamp(
             os.path.getmtime(tmp_dir / fp)
         )
-        logger.info(f"Created file at {tmp_dir / fp} with age {check_age}")
+        logger.info(
+            f"Created file at {tmp_dir / fp} modified {(pendulum.now() - check_age).diff_for_humans()}"
+        )
 
     for fp, mtime in dir_mtimes.items():
-        age = int(now - mtime.total_seconds())
-        os.utime(tmp_dir / fp, times=(age, age))
+        new_mtime = int((now - mtime).timestamp())
+        os.utime(tmp_dir / fp, times=(new_mtime, new_mtime))
         check_age = pendulum.now() - pendulum.from_timestamp(
             os.path.getmtime(tmp_dir / fp)
         )
-        logger.info(f"Created directory at {tmp_dir / fp} with age {check_age}")
+        logger.info(
+            f"Created directory at {tmp_dir / fp} modified {(pendulum.now() - check_age).diff_for_humans()}"
+        )
 
 
 def tidy_up(base_dir: Path):
@@ -109,7 +113,8 @@ def tidy_up(base_dir: Path):
 
 def test_get_directory_time_since_modification(base_dir, fp_mtimes, dir_mtimes):
     logger = logging.getLogger("test_get_directory_time_since_modification")
-    create_dir_mtime_fixtures(fp_mtimes, dir_mtimes, base_dir)
+    base_dir_ = base_dir / "test_get_directory_time_since_modification"
+    create_dir_mtime_fixtures(fp_mtimes, dir_mtimes, base_dir_)
 
     td = pendulum.Duration(days=2, hours=0, minutes=0, seconds=0)
     for dir_path, _ in dir_mtimes.items():
@@ -118,19 +123,20 @@ def test_get_directory_time_since_modification(base_dir, fp_mtimes, dir_mtimes):
         }
         logger.info(f"Directory {dir_path} should have files: {dir_fp_mtimes}")
         assert get_directory_time_since_modification(
-            str(base_dir / dir_path), td
+            str(base_dir_ / dir_path), td
         ).total_seconds() // 3600 in {
             v.total_seconds() // 3600 for _, v in dir_fp_mtimes.items()
         }
 
-    tidy_up(base_dir)
+    tidy_up(base_dir_)
 
 
 def test_generate_report(base_dir, fp_mtimes, dir_mtimes):
     logger = logging.getLogger("test_generate_report")
+    base_dir_ = base_dir / "test_generate_report"
     runner = CliRunner(mix_stderr=False)
-    base_dir.mkdir(parents=True, exist_ok=True)
-    with runner.isolated_filesystem(base_dir) as tmp_dir:
+    base_dir_.mkdir(parents=True, exist_ok=True)
+    with runner.isolated_filesystem(base_dir_) as tmp_dir:
         logger.info(f"Temporary directory: {tmp_dir}")
         create_dir_mtime_fixtures(fp_mtimes, dir_mtimes, Path(tmp_dir))
 
@@ -168,14 +174,15 @@ def test_generate_report(base_dir, fp_mtimes, dir_mtimes):
         assert str(results_dir / "dir2") in dirs_to_delete
         assert str(results_dir / "dir3") not in dirs_to_delete
 
-    tidy_up(base_dir)
+    tidy_up(base_dir_)
 
 
 def test_delete_dirs(base_dir, fp_mtimes, dir_mtimes):
     logger = logging.getLogger("test_delete_dirs")
+    base_dir_ = base_dir / "test_delete_dirs"
     runner = CliRunner(mix_stderr=False)
-    base_dir.mkdir(parents=True, exist_ok=True)
-    with runner.isolated_filesystem(base_dir) as tmp_dir:
+    base_dir_.mkdir(parents=True, exist_ok=True)
+    with runner.isolated_filesystem(base_dir_) as tmp_dir:
         logger.info(f"Temporary directory: {tmp_dir}")
         create_dir_mtime_fixtures(fp_mtimes, dir_mtimes, Path(tmp_dir))
 
@@ -217,4 +224,4 @@ def test_delete_dirs(base_dir, fp_mtimes, dir_mtimes):
         assert not os.path.exists(results_dir / "dir2")
         assert os.path.exists(results_dir / "dir3")
 
-    tidy_up(base_dir)
+    tidy_up(base_dir_)
