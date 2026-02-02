@@ -47,7 +47,13 @@ def _run_assembly_summary_generator(
                 outdir=study_results_dir.absolute(),
             )
 
-    generated_files = list(study_dir.path.glob(f"{output_prefix}*_{STUDY_SUMMARY_TSV}"))
+    generated_files = list(study_dir.path.glob(f"{output_prefix}*{STUDY_SUMMARY_TSV}"))
+
+    if not generated_files:
+        raise FileNotFoundError(
+            f"No study summary files were generated in {study_results_dir} "
+            f"with prefix {output_prefix}"
+        )
 
     logger.info(f"Assembly summary generator made files: {generated_files}")
 
