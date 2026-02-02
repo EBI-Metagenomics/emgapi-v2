@@ -133,7 +133,7 @@ def preprocess_trace_dataframe(df: pd.DataFrame) -> pd.DataFrame:
     df.rename(columns=NEXTFLOW_FIELD_MAP, inplace=True)
 
     # Clean '-' and empty strings
-    df = df.replace(["-", ""], np.nan)
+    df.replace(["-", ""], np.nan, inplace=True)
 
     return df
 
