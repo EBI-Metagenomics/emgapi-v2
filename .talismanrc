@@ -174,12 +174,6 @@ fileignoreconfig:
 - filename: workflows/tests/test_analysis_rawreads_study_flow.py
   checksum: 0f7255bdd7303269337a7d9be17d5246bfc32980697ba4135f54be201d13180a
 
-- filename: workflows/tests/test_analysis_rawreads_study_flow.py
-  checksum: 4026282a93009d95525cde6ef6cab4664fcbf8e85e7339df2f8add8c36db36f3
-
-- filename: workflows/tests/test_analysis_rawreads_study_flow.py
-  checksum: 0f7255bdd7303269337a7d9be17d5246bfc32980697ba4135f54be201d13180a
-
 - filename: workflows/flows/upload_assembly.py
   allowed_patterns: [key]
 
