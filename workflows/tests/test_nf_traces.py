@@ -176,16 +176,30 @@ def test_parse_time_to_seconds():
     assert parse_time_to_seconds("invalid") == 0.0
 
 
-def test_parse_memory_to_mb():
-    """Test memory parsing utility."""
-    assert parse_memory_to_mb("1.2 GB") == 1228.8  # 1.2 * 1024 = 1228.8
-    assert parse_memory_to_mb("999.7 MB") == 999.7
-    assert parse_memory_to_mb("2.5 GB") == 2560.0  # 2.5 * 1024 = 2560.0
-    assert parse_memory_to_mb("1024 KB") == 1.0  # 1024 / 1024 = 1.0
-    assert parse_memory_to_mb("1.1 TB") == 1153433.6  # 1.1 * 1024 * 1024 = 1153433.6
-    assert parse_memory_to_mb("") == 0.0
-    assert parse_memory_to_mb(None) == 0.0
-    assert parse_memory_to_mb("invalid") == 0.0
+@pytest.mark.parametrize(
+    "memory_val, expected_mb",
+    [
+        ("1.2 GB", 1228.8),
+        ("999.7 MB", 999.7),
+        ("2.5 GB", 2560.0),
+        ("1024 KB", 1.0),
+        ("1.1 TB", 1153433.6),
+        ("99.7 MB", 99.7),
+        ("1.3 GB", 1331.2),
+        ("1024 KB", 1.0),
+        ("1048576", 1.0),
+        (1048576, 1.0),
+        (None, 0.0),
+        ("", 0.0),
+        ("-", 0.0),
+        ("  500 MB  ", 500.0),
+        ("invalid", 0.0),
+        ("9999999999.9", 9536.7),
+    ],
+)
+def test_parse_memory_to_mb(memory_val, expected_mb):
+    """Test memory string parsing to MB."""
+    assert parse_memory_to_mb(memory_val) == expected_mb
 
 
 @pytest.mark.django_db
@@ -295,6 +309,61 @@ def test_transform_traces_missing_task_id(prefect_harness):
     result_df = transform_traces_task(df)
     assert "task_id" in result_df.columns
     assert "job_created_at" in result_df.columns
+
+
+def test_transform_traces_accession_extraction(prefect_harness):
+    """Test accession extraction from various task_name formats."""
+    data = [
+        {"name": "EBI:PROC (ACC1)", "task_id": 1},
+        {"name": "EBI:PROC (ACC2)", "task_id": 2},
+        {
+            "name": "EBI:PROC (ACC1)",
+            "task_id": 3,
+        },  # Repeated process for the same accession
+        {"name": "EBI:PROC_NO_ACC", "task_id": 4},
+        {"name": "EBI:PROC (ACC-3 WITH SPACES)", "task_id": 5},
+        {"name": "EBI:PROC (EXTRA) (ACC4)", "task_id": 6},
+        {"name": "EBI:PROC (ACC5) ", "task_id": 7},
+    ]
+    df = pd.DataFrame(data)
+
+    # Add required metadata
+    df["job_id"] = "test"
+    df["cluster_job_id"] = 1
+    df["flow_run_id"] = "test"
+    df["job_created_at"] = datetime.now()
+    df["job_updated_at"] = datetime.now()
+    df["job_last_known_state"] = "COMPLETED"
+    df["native_id"] = range(len(df))
+    df["status"] = "COMPLETED"
+    df["exit"] = 0
+    df["duration"] = "1s"
+    df["realtime"] = "1s"
+    df["%cpu"] = "0%"
+    df["%mem"] = "0%"
+    df["peak_rss"] = "0"
+    df["peak_vmem"] = "0"
+    df["rchar"] = 0
+    df["wchar"] = 0
+
+    df = df.rename(columns=NEXTFLOW_FIELD_MAP)
+
+    result_df = transform_trace_records(df)
+
+    assert result_df.loc[0, "accession"] == "ACC1"
+    assert result_df.loc[0, "process"] == "PROC"
+    assert result_df.loc[1, "accession"] == "ACC2"
+    assert result_df.loc[1, "process"] == "PROC"
+    assert result_df.loc[2, "accession"] == "ACC1"
+    assert result_df.loc[2, "process"] == "PROC"
+
+    assert result_df.loc[3, "accession"] == ""
+    assert result_df.loc[3, "process"] == "PROC_NO_ACC"
+
+    assert result_df.loc[4, "accession"] == "ACC-3 WITH SPACES"
+    assert result_df.loc[4, "process"] == "PROC"
+    assert result_df.loc[5, "accession"] == "ACC4"
+    assert result_df.loc[6, "accession"] == "ACC5"
 
 
 def test_transform_traces_empty_dataframe(prefect_harness):

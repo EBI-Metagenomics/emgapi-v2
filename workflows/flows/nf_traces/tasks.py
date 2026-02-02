@@ -84,10 +84,6 @@ def extract_traces_from_the_database(
             )
             continue
 
-        if df_job.empty:
-            logger.warning(f"Empty trace for job id={job.pk}, skipping")
-            continue
-
         # Filter out failed tasks if requested
         if exclude_failed and "status" in df_job.columns:
             df_job = df_job[df_job["status"] != "FAILED"]
@@ -250,6 +246,7 @@ def transform_traces_task(df: pd.DataFrame) -> pd.DataFrame:
         # Create monitoring artifact
         summary_text = f"""
 ### Transformation Summary
+
 - Records Processed: {len(df)}
 - Output Records: {len(df)}
 """

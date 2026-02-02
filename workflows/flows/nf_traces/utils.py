@@ -4,6 +4,8 @@ import pandas as pd
 import numpy as np
 import pandera.pandas as pa
 from pandera.typing import Series
+from parse import search
+
 
 # Resource metric mapping from raw Nextflow trace names to schema-friendly names
 NEXTFLOW_FIELD_MAP = {
@@ -22,6 +24,14 @@ NEXTFLOW_FIELD_MAP = {
     "task_id": "task_id",
     "native_id": "native_id",
     "name": "task_name",
+}
+
+MEMORY_UNITS = {
+    "B": 1 / (1024 * 1024),
+    "KB": 1 / 1024,
+    "MB": 1,
+    "GB": 1024,
+    "TB": 1024 * 1024,
 }
 
 
@@ -85,6 +95,7 @@ class NextflowTraceSchema(pa.DataFrameModel):
 def parse_time_to_seconds(time_str: str) -> float:
     """
     Transforms a Nextflow trace time string into its equivalent duration in seconds.
+    TODO: There is room to improve this one using the prase library.
     :param time_str: A string representing a time duration (e.g., "2h 30m 10s 250ms").
     :return: The total duration in seconds.
     """
@@ -148,18 +159,25 @@ def parse_memory_to_mb(memory_val: Any) -> float:
     if pd.isna(memory_val):
         return 0.0
     if isinstance(memory_val, (int, float)):
-        return float(memory_val)
+        return round(float(memory_val) * MEMORY_UNITS["B"], 1)
 
-    units = {"KB": 1 / 1024, "MB": 1, "GB": 1024, "TB": 1024 * 1024}
-    memory_str = str(memory_val).strip().upper()
+    # Some defensive code against _stuff_ in the field
+    memory_str = str(memory_val).strip()
+    if not memory_str or memory_str == "-":
+        return 0.0
 
-    for unit, factor in units.items():
-        if unit in memory_str:
-            try:
-                return float(memory_str.replace(unit, "").strip()) * factor
-            except ValueError:
-                break
+    # Pattern to match a number followed by an optional space and a unit
+    # {val:f} matches a float and {unit} matches the rest
+    res = search("{val:g} {unit:w}", memory_str)
+
+    if res:
+        val = res["val"]
+        unit = res["unit"].upper()
+        return val * MEMORY_UNITS.get(unit, 1.0)
+
+    # Try parsing as plain float if no unit matched
     try:
-        return float(memory_str)
+        # If it is only the value, then we assume it is in Bytes
+        return round(float(memory_val) * MEMORY_UNITS["B"], 1)
     except ValueError:
         return 0.0
