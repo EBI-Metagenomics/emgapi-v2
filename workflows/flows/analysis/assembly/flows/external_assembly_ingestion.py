@@ -413,6 +413,7 @@ def process_external_pipeline_results(
     )
 
     # Process validation results - mark failures as FAILED
+    # TODO: check with Martin if we want to mark virify/map analyses as QC_FAILED if no results found
     mark_analyses_with_failed_status(
         validation_results,
         pipeline_type,
@@ -501,7 +502,7 @@ def set_asa_analysis_states(assembly_current_outdir: Path, analyses: List[Analys
         assembly_accession = analysis.assembly.first_accession
 
         if assembly_accession in qc_failed_assemblies:
-            logger.error(f"QC failed - {analysis}")
+            logger.error(f"QC failed - {assembly_accession}")
             analysis.mark_status(
                 AnalysisStates.ANALYSIS_QC_FAILED,
                 set_status_as=True,
@@ -509,8 +510,12 @@ def set_asa_analysis_states(assembly_current_outdir: Path, analyses: List[Analys
                 save=False,
             )
             analyses_to_update.append(analysis)
+        elif assembly_accession in analysed_assemblies:
+            logger.info(
+                f"{assembly_accession} marked as analyzed in the end of run CSV."
+            )
         else:
-            logger.error(f"Assembly {analysis} missing from CSV.")
+            logger.error(f"Assembly {assembly_accession} missing from CSV.")
             analysis.mark_status(
                 AnalysisStates.ANALYSIS_QC_FAILED,
                 set_status_as=True,
