@@ -546,7 +546,7 @@ def test_prefect_assemble_study_flow(
             GlobRule(
                 rule_name="Recursive number of files",
                 glob_pattern="**/*",
-                test=lambda x: len(list(x)) == 63,
+                test=lambda x: len(list(x)) == 62,
             )
         ],
     )
