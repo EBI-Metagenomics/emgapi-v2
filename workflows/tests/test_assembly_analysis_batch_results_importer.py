@@ -1024,9 +1024,19 @@ class TestIdempotentImports:
         # Add some ASA downloads
         analysis.downloads = [
             {"alias": "qc1", "download_group": "quality_control"},
-            {"alias": "tax1", "download_group": "taxonomy"},
-            {"alias": "func1", "download_group": "functional_annotation.interpro"},
-            {"alias": "virify1", "download_group": "virify"},  # Should NOT be cleared
+            {"alias": "tax1", "download_group": Analysis.TAXONOMIES},
+            {
+                "alias": "func1",
+                "download_group": f"{Analysis.FUNCTIONAL_ANNOTATION}.interpro",
+            },
+            {
+                "alias": "path1",
+                "download_group": f"{Analysis.PATHWAYS_AND_SYSTEMS}.antismash",
+            },
+            {
+                "alias": "virify1",
+                "download_group": Analysis.VIRIFY,
+            },  # Should NOT be cleared
         ]
         analysis.save()
 
