@@ -55,7 +55,7 @@ def generate_dwc_ready_summary_for_pipeline_run(
             / "summaries"
         ),
     )
-    summary_dir.path.mkdir(exist_ok=True)
+    summary_dir.path.mkdir(parents=True, exist_ok=True)
 
     logger.info(pipeline_outdir)
     logger.info(completed_runs_filename)

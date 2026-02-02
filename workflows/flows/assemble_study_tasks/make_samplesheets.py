@@ -59,7 +59,7 @@ def make_samplesheet(
     else:
         output_dir = Path(output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
-    (output_dir / ss_hash).mkdir(exist_ok=True)
+    (output_dir / ss_hash).mkdir(parents=True, exist_ok=True)
 
     memory = get_memory_for_assembler(mgnify_study.biome, assembler)
 

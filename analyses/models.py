@@ -182,7 +182,7 @@ class Study(
                 / f"{self.ena_study.accession}"
             )
             logger.info(f"Setting {self}'s results_dir to default {self.results_dir}")
-            self.results_dir.mkdir(exist_ok=True)
+            self.results_dir.mkdir(parents=True, exist_ok=True)
             self.save()
 
     class Meta:

@@ -88,7 +88,7 @@ def generate_study_summary_for_pipeline_run(
             / "summaries"
         ),
     )
-    summary_dir.path.mkdir(exist_ok=True)
+    summary_dir.path.mkdir(parents=True, exist_ok=True)
     pipeline_run_dir.files.append(
         File(
             path=pipeline_run_dir.path / completed_runs_filename,

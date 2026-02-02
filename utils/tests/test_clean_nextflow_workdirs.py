@@ -86,7 +86,7 @@ def create_dir_mtime_fixtures(fp_mtimes: dict, dir_mtimes: dict, tmp_dir: Path):
     now = datetime.datetime.now().timestamp()
 
     for fp, mtime in fp_mtimes.items():
-        (tmp_dir / fp).parent.mkdir(exist_ok=True)
+        (tmp_dir / fp).parent.mkdir(parents=True, exist_ok=True)
         with open(tmp_dir / fp, "wt") as f:
             f.write("Made you look")
         age = int(now - mtime.total_seconds())
@@ -131,7 +131,7 @@ def test_get_directory_time_since_modification(base_dir, fp_mtimes, dir_mtimes):
 def test_generate_report(base_dir, fp_mtimes, dir_mtimes):
     logger = logging.getLogger("test_generate_report")
     runner = CliRunner(mix_stderr=False)
-    base_dir.mkdir(exist_ok=True)
+    base_dir.mkdir(parents=True, exist_ok=True)
     with runner.isolated_filesystem(base_dir) as tmp_dir:
         logger.info(f"Temporary directory: {tmp_dir}")
         create_dir_mtime_fixtures(fp_mtimes, dir_mtimes, Path(tmp_dir))
@@ -176,7 +176,7 @@ def test_generate_report(base_dir, fp_mtimes, dir_mtimes):
 def test_delete_dirs(base_dir, fp_mtimes, dir_mtimes):
     logger = logging.getLogger("test_delete_dirs")
     runner = CliRunner(mix_stderr=False)
-    base_dir.mkdir(exist_ok=True)
+    base_dir.mkdir(parents=True, exist_ok=True)
     with runner.isolated_filesystem(base_dir) as tmp_dir:
         logger.info(f"Temporary directory: {tmp_dir}")
         create_dir_mtime_fixtures(fp_mtimes, dir_mtimes, Path(tmp_dir))

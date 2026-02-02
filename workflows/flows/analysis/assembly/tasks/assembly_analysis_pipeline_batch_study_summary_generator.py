@@ -1,4 +1,3 @@
-import os
 import uuid
 from pathlib import Path
 from typing import Union, List
@@ -59,7 +58,7 @@ def generate_assembly_analysis_pipeline_batch_summary(
             / "summaries"
         ),
     )
-    summary_dir.path.mkdir(exist_ok=True)
+    summary_dir.path.mkdir(parents=True, exist_ok=True)
 
     logger.info(
         f"Study results_dir, where summaries will be made, is {summary_dir.path}"

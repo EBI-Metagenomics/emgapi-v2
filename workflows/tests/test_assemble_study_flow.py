@@ -63,7 +63,7 @@ def simulate_copy_results(
             target_ = target / fp.relative_to(source)
             if logger:
                 logger.info(f"Copying analysis results file {fp} to {target_}.")
-            target_.parent.mkdir(exist_ok=True)
+            target_.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(fp, target_)
             continue
 

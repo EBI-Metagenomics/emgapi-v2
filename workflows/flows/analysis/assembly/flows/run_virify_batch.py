@@ -141,7 +141,7 @@ def run_virify_batch(assembly_analyses_batch_id: uuid.UUID):
         / "virify"
         / f"virify-sheet-{slugify(virify_samplesheet_path)}"
     )
-    nextflow_workdir.mkdir(exist_ok=True)
+    nextflow_workdir.mkdir(parents=True, exist_ok=True)
 
     # Build the command to run the virify pipeline
     command = cli_command(

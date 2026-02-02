@@ -140,7 +140,7 @@ def run_assembly_analysis_pipeline_batch(
             Path(assembly_analysis_batch.workspace_dir)
             / f"asa-sheet-{slugify(samplesheet)}"
         )
-        nextflow_workdir.mkdir(exist_ok=True)
+        nextflow_workdir.mkdir(parents=True, exist_ok=True)
 
         command = cli_command(
             [
