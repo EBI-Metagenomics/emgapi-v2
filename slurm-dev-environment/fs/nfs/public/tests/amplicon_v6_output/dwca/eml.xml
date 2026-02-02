@@ -1,4 +1,4 @@
-<eml xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" system="" scope="GBIF-IPT" packageId="MGYS00000052/AMPLI/2026-02-02 08:27:05.096871.xml" xsi:schemaLocation="http://rs.gbif.org/schema/eml-gbif-profile/1.1/eml.xsd">
+<eml xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" system="" scope="GBIF-IPT" packageId="MGYS00000055/AMPLI/2026-02-02 08:32:54.007841.xml" xsi:schemaLocation="http://rs.gbif.org/schema/eml-gbif-profile/1.1/eml.xsd">
   <dataset>
     <title>Project 1</title>
     <party>
@@ -22,7 +22,7 @@
       <phone></phone>
       <onlineUrl></onlineUrl>
     </party>
-    <pubDate>2026-02-02T08:27:05.096551</pubDate>
+    <pubDate>2026-02-02T08:32:54.007515</pubDate>
     <language>en</language>
     <abstract>
       <para>Microbiome sampling of a vacuum cleaner on the ISS. The vacuum cleaner was in the air when it was taken.</para>
@@ -53,7 +53,7 @@
     </methods>
     <distribution>
       <online>
-        <url>https://www.ebi.ac.uk/metagenomics/studies/MGYS00000052</url>
+        <url>https://www.ebi.ac.uk/metagenomics/studies/MGYS00000055</url>
       </online>
     </distribution>
   </dataset>

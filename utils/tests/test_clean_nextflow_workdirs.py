@@ -1,14 +1,14 @@
 import pytest
 from click.testing import CliRunner
 import os
-import datetime
+import pendulum
 import shutil
 import logging
 from pathlib import Path
 from utils.clean_nextflow_workdirs import (
     get_directory_time_since_modification,
-    parse_timedelta,
-    print_timedelta,
+    parse_duration,
+    print_duration,
     generate_report,
     delete_dirs,
 )
@@ -20,70 +20,68 @@ def base_dir() -> Path:
 
 
 @pytest.fixture
-def fp_mtimes() -> dict[Path, datetime.timedelta]:
+def fp_mtimes() -> dict[Path, pendulum.Duration]:
     results_dir = Path("results")
     return {
         results_dir
         / "dir1"
-        / "file1.txt": datetime.timedelta(days=100, hours=0, minutes=0, seconds=0),
+        / "file1.txt": pendulum.Duration(days=100, hours=0, minutes=0, seconds=0),
         results_dir
         / "dir1"
-        / "file2.txt": datetime.timedelta(days=0, hours=0, minutes=0, seconds=1),
+        / "file2.txt": pendulum.Duration(days=0, hours=0, minutes=0, seconds=1),
         results_dir
         / "dir2"
-        / "file1.txt": datetime.timedelta(days=200, hours=0, minutes=0, seconds=0),
+        / "file1.txt": pendulum.Duration(days=200, hours=0, minutes=0, seconds=0),
         results_dir
         / "dir2"
-        / "file2.txt": datetime.timedelta(days=100, hours=0, minutes=0, seconds=0),
+        / "file2.txt": pendulum.Duration(days=100, hours=0, minutes=0, seconds=0),
         results_dir
         / "dir3"
-        / "file1.txt": datetime.timedelta(days=100, hours=0, minutes=0, seconds=0),
+        / "file1.txt": pendulum.Duration(days=100, hours=0, minutes=0, seconds=0),
         results_dir
         / "dir3"
-        / "file2.txt": datetime.timedelta(days=1, hours=0, minutes=0, seconds=0),
+        / "file2.txt": pendulum.Duration(days=1, hours=0, minutes=0, seconds=0),
         results_dir
         / "dir3"
-        / "file3.txt": datetime.timedelta(days=5, hours=0, minutes=0, seconds=1),
+        / "file3.txt": pendulum.Duration(days=5, hours=0, minutes=0, seconds=1),
     }
 
 
 @pytest.fixture
-def dir_mtimes() -> dict[Path, datetime.timedelta]:
+def dir_mtimes() -> dict[Path, pendulum.Duration]:
     results_dir = Path("results")
     return {
-        results_dir / "dir1": datetime.timedelta(days=0, hours=0, minutes=0, seconds=1),
+        results_dir / "dir1": pendulum.Duration(days=0, hours=0, minutes=0, seconds=1),
         results_dir
-        / "dir2": datetime.timedelta(days=100, hours=0, minutes=0, seconds=0),
-        results_dir / "dir3": datetime.timedelta(days=1, hours=0, minutes=0, seconds=0),
+        / "dir2": pendulum.Duration(days=100, hours=0, minutes=0, seconds=0),
+        results_dir / "dir3": pendulum.Duration(days=1, hours=0, minutes=0, seconds=0),
     }
 
 
 @pytest.fixture
-def str2timedelta() -> dict[str, datetime.timedelta]:
+def str2timedelta() -> dict[str, pendulum.Duration]:
     return {
-        "0-00:00:01": datetime.timedelta(days=0, hours=0, minutes=0, seconds=1),
-        "0-00:01:00": datetime.timedelta(days=0, hours=0, minutes=1, seconds=0),
-        "0-01:00:00": datetime.timedelta(days=0, hours=1, minutes=0, seconds=0),
-        "20-00:00:01": datetime.timedelta(days=20, hours=0, minutes=0, seconds=1),
-        "20000-00:00:01": datetime.timedelta(
-            days=20_000, hours=0, minutes=0, seconds=1
-        ),
+        "0-00:00:01": pendulum.Duration(days=0, hours=0, minutes=0, seconds=1),
+        "0-00:01:00": pendulum.Duration(days=0, hours=0, minutes=1, seconds=0),
+        "0-01:00:00": pendulum.Duration(days=0, hours=1, minutes=0, seconds=0),
+        "20-00:00:01": pendulum.Duration(days=20, hours=0, minutes=0, seconds=1),
+        "20000-00:00:01": pendulum.Duration(days=20_000, hours=0, minutes=0, seconds=1),
     }
 
 
-def test_parse_timedelta(str2timedelta):
+def test_parse_duration(str2timedelta):
     for q, a in str2timedelta.items():
-        assert a == parse_timedelta(q)
+        assert a == parse_duration(q)
 
 
-def test_print_timedelta(str2timedelta):
+def test_print_duration(str2timedelta):
     for a, q in str2timedelta.items():
-        assert a == print_timedelta(q)
+        assert a == print_duration(q)
 
 
 def create_dir_mtime_fixtures(fp_mtimes: dict, dir_mtimes: dict, tmp_dir: Path):
     logger = logging.getLogger("create_dir_mtime_fixtures")
-    now = datetime.datetime.now().timestamp()
+    now = pendulum.now().timestamp()
 
     for fp, mtime in fp_mtimes.items():
         (tmp_dir / fp).parent.mkdir(parents=True, exist_ok=True)
@@ -91,7 +89,7 @@ def create_dir_mtime_fixtures(fp_mtimes: dict, dir_mtimes: dict, tmp_dir: Path):
             f.write("Made you look")
         age = int(now - mtime.total_seconds())
         os.utime(tmp_dir / fp, times=(age, age))
-        check_age = datetime.datetime.now() - datetime.datetime.fromtimestamp(
+        check_age = pendulum.now() - pendulum.from_timestamp(
             os.path.getmtime(tmp_dir / fp)
         )
         logger.info(f"Created file at {tmp_dir / fp} with age {check_age}")
@@ -99,7 +97,7 @@ def create_dir_mtime_fixtures(fp_mtimes: dict, dir_mtimes: dict, tmp_dir: Path):
     for fp, mtime in dir_mtimes.items():
         age = int(now - mtime.total_seconds())
         os.utime(tmp_dir / fp, times=(age, age))
-        check_age = datetime.datetime.now() - datetime.datetime.fromtimestamp(
+        check_age = pendulum.now() - pendulum.from_timestamp(
             os.path.getmtime(tmp_dir / fp)
         )
         logger.info(f"Created directory at {tmp_dir / fp} with age {check_age}")
@@ -113,7 +111,7 @@ def test_get_directory_time_since_modification(base_dir, fp_mtimes, dir_mtimes):
     logger = logging.getLogger("test_get_directory_time_since_modification")
     create_dir_mtime_fixtures(fp_mtimes, dir_mtimes, base_dir)
 
-    td = datetime.timedelta(days=2, hours=0, minutes=0, seconds=0)
+    td = pendulum.Duration(days=2, hours=0, minutes=0, seconds=0)
     for dir_path, _ in dir_mtimes.items():
         dir_fp_mtimes = {
             k: v for k, v in fp_mtimes.items() if str(k.parent) == str(dir_path)
