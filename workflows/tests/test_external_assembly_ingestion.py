@@ -1,8 +1,6 @@
 from enum import Enum
 from typing import List
 import re
-import uuid
-import shutil
 from pathlib import Path
 
 import pytest
@@ -14,8 +12,12 @@ from workflows.prefect_utils.analyses_models_helpers import get_users_as_choices
 from workflows.prefect_utils.testing_utils import (
     run_flow_and_capture_logs,
     should_not_mock_httpx_requests_to_prefect_server,
+    generate_assembly_v6_pipeline_results,
 )
-from workflows.tests.test_analysis_assembly_study_flow import AssemblyTestScenario
+from workflows.tests.test_analysis_assembly_study_flow import (
+    setup_virify_batch_fixtures,
+    setup_map_batch_fixtures,
+)
 from workflows.flows.analysis.assembly.flows.external_assembly_ingestion import (
     _parse_and_validate_samplesheet,
     _validate_results_structure,
@@ -86,104 +88,64 @@ class TestExternalAssemblyIngestion:
 # ============================================================================
 
 
-@pytest.fixture
-def test_workspace():
-    """Create a temporary workspace directory for test execution."""
-    # Create a unique workspace under /app/data/tests/tmp/
-    base_tmp = Path("/Users/sofia/mgnify/emgapi-v2/tmp")
-    base_tmp.mkdir(parents=True, exist_ok=True)
+def setup_fixtures_of_completed_assembly_analysis(assembly_test_scenario):
+    """Create files and folders to simulate completed ASA, VIRify, and MAP analyses."""
 
-    workspace = base_tmp / f"test_workspace_{uuid.uuid4().hex[:8]}"
-    workspace.mkdir(exist_ok=True)
-
-    yield workspace
-
-    # Cleanup after test
-    if workspace.exists():
-        shutil.rmtree(workspace)
-
-
-@pytest.fixture
-def assembly_test_scenario(test_workspace):
-    """Default assembly test scenario."""
-    return AssemblyTestScenario(
-        study_accession="PRJEB24849",
-        study_secondary="ERP106708",
-        assembly_accession_success="ERZ26878882",
-        assembly_accession_failed="ERZ857108",
-        sample_accession="SAMN08514017",
-        run_accession="SRR123456",
-        fixture_source_dir=Path("/Users/sofia/mgnify/emgapi-v2/data"),
-        workspace_dir=test_workspace,
-        biome_path="root.engineered",
-        biome_name="Engineered",
+    # Find a way to define some tmp folder
+    workspace = assembly_test_scenario.workspace_dir
+    # Create input fasta files
+    fasta_dir = workspace / "assembly_fastas"
+    create_input_fasta_files(
+        fasta_dir,
+        [
+            assembly_test_scenario.assembly_accession_success,
+        ],
     )
+    # Create the ASA samplesheet
+    samplesheet_dir = workspace / "samplesheets"
+    samplesheet_dir.mkdir(parents=True, exist_ok=True)
+    samplesheet_path = samplesheet_dir / "assembly_samplesheet.csv"
+    create_samplesheet_with_assemblies(
+        samplesheet_path,
+        fasta_dir,
+        [
+            assembly_test_scenario.assembly_accession_success,
+        ],
+    )
+    # Generate ASA pipeline results
+    generate_assembly_v6_pipeline_results(
+        asa_workspace=workspace / "asa",
+        assemblies=[(assembly_test_scenario.assembly_accession_success, "success")],
+        copy_from_fixtures=assembly_test_scenario.fixture_source_dir,
+    )
+    # Generate MAP and Virify pipeline results
+    setup_virify_batch_fixtures(workspace / "virify", assembly_test_scenario)
+    setup_map_batch_fixtures(workspace / "map", assembly_test_scenario)
+
+    return workspace, samplesheet_path
 
 
-# def setup_mock_asa_results(results_path: Path, assembly_accession: str):
-#     """Create minimal mock ASA results for testing."""
-#     asa_dir = results_path / "asa" / assembly_accession
-#     asa_dir.mkdir(parents=True, exist_ok=True)
-
-#     # Create required subdirectories
-#     (asa_dir / "quality_control").mkdir()
-#     (asa_dir / "taxonomy").mkdir()
-#     (asa_dir / "annotation_summary").mkdir()
-#     (asa_dir / EMG_CONFIG.assembly_analysis_pipeline.cds_folder).mkdir()
-#     (asa_dir / EMG_CONFIG.assembly_analysis_pipeline.qc_folder).mkdir()
-
-#     # Create required files
-#     cds_gff = (
-#         asa_dir
-#         / EMG_CONFIG.assembly_analysis_pipeline.cds_folder
-#         / f"{assembly_accession}_predicted_cds.gff.gz"
-#     )
-#     with gzip.open(cds_gff, "wt") as f:
-#         f.write("##gff-version 3\n")
-
-#     qc_fasta = (
-#         asa_dir
-#         / EMG_CONFIG.assembly_analysis_pipeline.qc_folder
-#         / f"{assembly_accession}_filtered_contigs.fasta.gz"
-#     )
-#     with gzip.open(qc_fasta, "wt") as f:
-#         f.write(">contig1\nACGTACGT\n")
-
-#     # Create end-of-run CSVs
-#     (results_path / "asa" / "analysed_assemblies.csv").write_text(
-#         f"{assembly_accession},completed"
-#     )
-
-# def setup_mock_virify_results(results_path: Path, assembly_accession: str):
-#     """Create minimal mock VIRify results for testing."""
-#     virify_dir = results_path / "virify" / assembly_accession
-#     gff_dir = virify_dir / EMG_CONFIG.virify_pipeline.final_gff_folder
-#     gff_dir.mkdir(parents=True, exist_ok=True)
-
-#     # Create VIRify GFF file
-#     virify_gff = gff_dir / f"{assembly_accession}_virify.gff.gz"
-#     with gzip.open(virify_gff, "wt") as f:
-#         f.write("##gff-version 3\n")
-
-#     # Create index files
-#     virify_gff.with_suffix(".gz.gzi").touch()
-#     virify_gff.with_suffix(".gz.csi").touch()
+def create_samplesheet_with_assemblies(
+    samplesheet_path: Path, fasta_dir: Path, assembly_accessions: List[str]
+):
+    """Create a samplesheet CSV file with given assembly accessions."""
+    with samplesheet_path.open("w") as f:
+        f.write(
+            "sample,assembly_fasta,contaminant_reference,human_reference,phix_reference\n"
+        )
+        for acc in assembly_accessions:
+            fasta_path = fasta_dir / f"{acc}.fa.gz"
+            f.write(f"{acc},{fasta_path},,,\n")
 
 
-# def setup_mock_map_results(results_path: Path, assembly_accession: str):
-#     """Create minimal mock MAP results for testing."""
-#     map_dir = results_path / "map" / assembly_accession
-#     gff_dir = map_dir / EMG_CONFIG.map_pipeline.final_gff_folder
-#     gff_dir.mkdir(parents=True, exist_ok=True)
-
-#     # Create MAP GFF file
-#     map_gff = gff_dir / f"{assembly_accession}_user_mobilome_full.gff.gz"
-#     with gzip.open(map_gff, "wt") as f:
-#         f.write("##gff-version 3\n")
-
-#     # Create index files
-#     map_gff.with_suffix(".gz.gzi").touch()
-#     map_gff.with_suffix(".gz.csi").touch()
+def create_input_fasta_files(fasta_dir: Path, assembly_accessions: List[str]):
+    """Create dummy input fasta files for given assembly accessions."""
+    for acc in assembly_accessions:
+        fasta_path = fasta_dir / f"{acc}.fa.gz"
+        fasta_path.parent.mkdir(parents=True, exist_ok=True)
+        with fasta_path.open("w") as f:
+            f.write(f">Dummy contig for {acc}\n")
+            f.write("ATGC" * 10 + "\n")
 
 
 # ============================================================================
@@ -194,21 +156,6 @@ def assembly_test_scenario(test_workspace):
 @pytest.mark.django_db
 class TestExternalAssemblyIngestionRealData:
     """Integration tests using real data from data/ folder."""
-
-    @pytest.fixture
-    def data_dir(self):
-        """Get path to real data directory."""
-        return Path(settings.BASE_DIR) / "data"
-
-    @pytest.fixture
-    def samplesheet_path(self, data_dir):
-        """Get path to real samplesheet."""
-        return data_dir / "samplesheets" / "PRJEB79850_samplesheet_assembly-v6.csv"
-
-    @pytest.fixture
-    def results_dir(self, data_dir):
-        """Get path to real results directory."""
-        return data_dir
 
     @pytest.mark.django_db(transaction=True)
     @pytest.mark.httpx_mock(
@@ -222,38 +169,39 @@ class TestExternalAssemblyIngestionRealData:
     @pytest.mark.prefect_harness
     def test_external_assembly_ingestion_real_data(
         self,
-        samplesheet_path,
-        results_dir,
-        assembly_test_scenario,
         admin_user,
         httpx_mock,
         mock_suspend_flow_run,
         prefect_harness,
         mocker,
         top_level_biomes,
+        assembly_test_scenario,
     ):
         """
-        Test complete external_assembly_ingestion flow with real data.
+        Test complete external_assembly_ingestion flow.
 
-        This is a full integration test that:
-        1. Parses the real samplesheet
-        2. Validates the results directory structure
-        3. Fetches study and assembly data from ENA (mocked)
-        4. Creates Analysis objects for each assembly
+        What is tested here:
+        1. Parsing of the samplesheet
+        2. Validation of the results directory structure
+        4. Creates Study, Analysis and related objects for each assembly
         5. Processes ASA/VIRify/MAP results
         6. Creates study summaries
-        7. Copies results to production locations (mocked)
+
+        What is not tested here:
+        - Actual ENA API calls (these are mocked)
+        - Actual copying of results to production (these are mocked)
 
         Note: This test requires:
         - Database access to store results
         - Prefect context for flow execution
         - Mocked ENA API responses
         - Mock for suspending the flow to pick biome/watchers
-
-        What is not tested here:
-        - Actual ENA API calls (these are mocked)
-        - Actual copying of results to production (these are mocked)
         """
+
+        mocked_results_dir, samplesheet_path = (
+            setup_fixtures_of_completed_assembly_analysis(assembly_test_scenario)
+        )
+
         # Mock ENA response to fetch study accession
         httpx_mock.add_response(
             url=re.compile(
@@ -380,7 +328,7 @@ class TestExternalAssemblyIngestionRealData:
         try:
             result = run_flow_and_capture_logs(
                 external_assembly_ingestion,
-                results_dir=str(results_dir),
+                results_dir=str(mocked_results_dir),
                 samplesheet_path=str(samplesheet_path),
             )
             print("✓ external_assembly_ingestion flow completed successfully")
@@ -399,7 +347,7 @@ class TestExternalAssemblyIngestionRealData:
             ena_study__accession__in=[assembly_test_scenario.study_accession]
         ).first()
         assert study is not None, "Study was not created in the database"
-        assert study.results_dir == str(results_dir)
+        assert study.results_dir == str(mocked_results_dir)
         assert study.biome is not None, "Study biome was not set"
 
         analysis = study.analyses.filter(
