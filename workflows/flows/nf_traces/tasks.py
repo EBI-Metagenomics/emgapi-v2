@@ -5,9 +5,9 @@ from datetime import datetime
 from prefect import task, get_run_logger
 from prefect.artifacts import create_markdown_artifact
 
-from activate_django_first import EMG_CONFIG  # noqa
-
 from django.db.models import Q
+
+from activate_django_first import EMG_CONFIG  # noqa
 
 from workflows.flows.nf_traces.utils import (
     NextflowTraceSchema,
