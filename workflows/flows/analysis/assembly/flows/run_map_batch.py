@@ -1,4 +1,3 @@
-import os
 import uuid
 from datetime import timedelta
 from pathlib import Path
@@ -156,7 +155,7 @@ def run_map_batch(assembly_analyses_batch_id: uuid.UUID):
         / "map"
         / f"map-sheet-{slugify(map_samplesheet_path)}"
     )
-    os.makedirs(nextflow_workdir, exist_ok=True)
+    nextflow_workdir.mkdir(exist_ok=True)
 
     # TODO: we need to standardize pipelines params
     #       i.e. VIRIfy output => outdir

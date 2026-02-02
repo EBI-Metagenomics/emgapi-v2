@@ -1,4 +1,3 @@
-import os
 from datetime import timedelta
 from pathlib import Path
 from typing import List, Union, Optional
@@ -72,11 +71,11 @@ def run_rawreads_pipeline_via_samplesheet(
     nextflow_outdir = (
         outdir / ss_hash
     )  # uses samplesheet hash prefix as dir name for the chunk
-    os.makedirs(nextflow_outdir, exist_ok=True)
+    nextflow_outdir.mkdir(exist_ok=True)
     print(f"Using output dir {nextflow_outdir} for this execution")
 
     nextflow_workdir = workdir / ss_hash
-    os.makedirs(nextflow_workdir, exist_ok=True)
+    nextflow_workdir.mkdir(exist_ok=True)
     print(f"Using work dir {nextflow_workdir} for this execution")
 
     samplesheet = make_samplesheet_rawreads(runs, nextflow_outdir / "samplesheet.csv")

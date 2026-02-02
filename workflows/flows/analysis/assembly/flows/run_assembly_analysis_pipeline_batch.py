@@ -1,4 +1,3 @@
-import os
 import uuid
 from datetime import timedelta
 from pathlib import Path
@@ -141,7 +140,7 @@ def run_assembly_analysis_pipeline_batch(
             Path(assembly_analysis_batch.workspace_dir)
             / f"asa-sheet-{slugify(samplesheet)}"
         )
-        os.makedirs(nextflow_workdir, exist_ok=True)
+        nextflow_workdir.mkdir(exist_ok=True)
 
         command = cli_command(
             [

@@ -1,4 +1,3 @@
-import os
 import uuid
 from datetime import timedelta
 from pathlib import Path
@@ -142,7 +141,7 @@ def run_virify_batch(assembly_analyses_batch_id: uuid.UUID):
         / "virify"
         / f"virify-sheet-{slugify(virify_samplesheet_path)}"
     )
-    os.makedirs(nextflow_workdir, exist_ok=True)
+    nextflow_workdir.mkdir(exist_ok=True)
 
     # Build the command to run the virify pipeline
     command = cli_command(

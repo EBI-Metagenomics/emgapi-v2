@@ -1,4 +1,3 @@
-import os
 import csv
 import json
 from datetime import timedelta
@@ -210,11 +209,11 @@ def run_assembler_for_samplesheet(
         )
 
     nextflow_outdir = outdir
-    os.makedirs(nextflow_outdir, exist_ok=True)
+    nextflow_outdir.mkdir(exist_ok=True)
     assembled_runs_csv = nextflow_outdir / Path("assembled_runs.csv")
 
     nextflow_workdir = workdir
-    os.makedirs(nextflow_workdir, exist_ok=True)
+    nextflow_workdir.mkdir(exist_ok=True)
 
     command = cli_command(
         [

@@ -589,7 +589,7 @@ MockFileIsNotEmptyRule = FileRule(
 def simulate_copy_results(
     source: Path, target: Path, allowed_extensions: Union[set, list], logger=None
 ):
-    for fp in (Path(v) for v in glob.glob(str(source / "**/*"), recursive=True)):
+    for fp in source.rglob("**/*"):
         # study summaries
         if any(
             [
@@ -605,16 +605,16 @@ def simulate_copy_results(
             )
             if logger:
                 logger.info(f"Copying summary file {fp} to {target_}.")
-            os.makedirs(target_.parent, exist_ok=True)
+            target_.parent.mkdir(exist_ok=True)
             shutil.copyfile(fp, target_)
             continue
 
         # analysis results
         if fp.name.split(".")[-1] in allowed_extensions:
-            target_ = target / "/".join(fp.parts[3:])
+            target_ = target / fp.relative_to(source)
             if logger:
                 logger.info(f"Copying analysis results file {fp} to {target_}.")
-            os.makedirs(target_.parent, exist_ok=True)
+            target_.parent.mkdir(exist_ok=True)
             shutil.copyfile(fp, target_)
             continue
 
