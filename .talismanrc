@@ -204,9 +204,6 @@ fileignoreconfig:
 - filename: deployment/ebi-wp-k8s-hl/start_prefect_slurm_worker.sh
   checksum: c98eedfe5ad3c85b8e623344b151d2926cd148e98c199431f41c6bc52c866e6e
 
-- filename: slurm-dev-environment/fs/nfs/public/tests/amplicon_v6_output/dwca/eml.xml
-  checksum: 3ce4a7e923c49e1a03f3193d0120aeb886fedc83d907e19af0f0560260b29337
-  
 - filename: workflows/flows/nf_traces/flows.py
   allowed_patterns: [key]
 
