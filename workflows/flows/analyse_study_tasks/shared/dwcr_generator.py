@@ -3,7 +3,7 @@ import click
 
 from activate_django_first import EMG_CONFIG
 
-from prefect import flow, get_run_logger
+from prefect import flow, task, get_run_logger
 from analyses.models import Study
 
 from workflows.data_io_utils.file_rules.common_rules import (
@@ -19,6 +19,12 @@ from workflows.ena_utils.ena_accession_matching import (
 )
 
 from workflows.flows.analyse_study_tasks.shared.study_summary import DWCREADY_CSV
+
+from analyses.base_models.with_downloads_models import (
+    DownloadFile,
+    DownloadType,
+    DownloadFileType,
+)
 
 
 from mgnify_pipelines_toolkit.analysis.shared.dwc_summary_generator import (
@@ -181,3 +187,66 @@ def merge_dwc_ready_summaries(
                 study.first_accession
             )  # ensure we do not delete merged files
             file.unlink()
+
+
+@task
+def add_dwcr_summaries_to_downloads(mgnify_study_accession: str):
+    logger = get_run_logger()
+    study = Study.objects.get(accession=mgnify_study_accession)
+    if not study.results_dir:
+        logger.warning(
+            f"Study {study} has no results_dir, so cannot add study summaries to downloads"
+        )
+        return
+
+    # Add ASV DwC-R summary files
+    for summary_file in Path(study.results_dir).glob(
+        f"{study.first_accession}_DADA2*{DWCREADY_CSV}"
+    ):
+        db = summary_file.stem.split("_")[1].lstrip("DADA2_")
+        region = summary_file.stem.split("_")[2]
+        try:
+            study.add_download(
+                DownloadFile(
+                    path=Path("study-summaries") / summary_file.name,
+                    download_type=DownloadType.TAXONOMIC_ANALYSIS,
+                    download_group="study_summary",
+                    file_type=DownloadFileType.CSV,
+                    short_description=f"DwC-Ready summary of {region} ASV taxonomies using {db} as ref DB",
+                    long_description=f"DwC-Ready summary of {region} ASV taxonomies using {db} as ref DB, across all runs in the study",
+                    alias=summary_file.name,
+                )
+            )
+        except FileExistsError:
+            logger.warning(
+                f"File {summary_file} already exists in downloads list, skipping"
+            )
+        logger.info(f"Added {summary_file} to downloads of {study}")
+
+    # Add closed reference DwC-R summary files
+    for summary_file in Path(study.results_dir).glob(
+        f"{study.first_accession}_closedref*{DWCREADY_CSV}"
+    ):
+        db = summary_file.stem.split("_")[2]
+        try:
+            study.add_download(
+                DownloadFile(
+                    path=Path("study-summaries") / summary_file.name,
+                    download_type=DownloadType.TAXONOMIC_ANALYSIS,
+                    download_group="study_summary",
+                    file_type=DownloadFileType.CSV,
+                    short_description=f"DwC-Ready summary of closed-ref taxonomies using {db} as ref DB",
+                    long_description=f"DwC-Ready summary of closed-reference taxonomies using {db} as ref DB, across all runs in the study",
+                    alias=summary_file.name,
+                )
+            )
+        except FileExistsError:
+            logger.warning(
+                f"File {summary_file} already exists in downloads list, skipping"
+            )
+        logger.info(f"Added {summary_file} to downloads of {study}")
+
+    study.refresh_from_db()
+    logger.info(
+        f"Study download aliases are now {[d.alias for d in study.downloads_as_objects]}"
+    )

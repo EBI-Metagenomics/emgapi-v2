@@ -17,6 +17,7 @@ from workflows.flows.analyse_study_tasks.shared.copy_v6_pipeline_results import 
 
 from workflows.flows.analyse_study_tasks.shared.create_analyses import create_analyses
 from workflows.flows.analyse_study_tasks.shared.dwcr_generator import (
+    add_dwcr_summaries_to_downloads,
     merge_dwc_ready_summaries,
 )
 from workflows.flows.analyse_study_tasks.shared.get_analyses_to_attempt import (
@@ -221,6 +222,7 @@ def analysis_amplicon_study(study_accession: str):
         cleanup_partials=not EMG_CONFIG.amplicon_pipeline.keep_study_summary_partials,
     )
     add_study_summaries_to_downloads(mgnify_study.accession, analysis_type="amplicon")
+    add_dwcr_summaries_to_downloads(mgnify_study.accession)
     copy_v6_study_summaries(mgnify_study.accession)
     # delete work directory
     delete_study_nextflow_workdir(study_workdir, analyses_to_attempt)

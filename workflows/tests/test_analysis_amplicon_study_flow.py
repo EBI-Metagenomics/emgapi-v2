@@ -21,6 +21,9 @@ from workflows.data_io_utils.file_rules.base_rules import FileRule, GlobRule
 from workflows.data_io_utils.file_rules.common_rules import GlobHasFilesCountRule
 from workflows.data_io_utils.file_rules.nodes import Directory
 from workflows.ena_utils.ena_api_requests import ENALibraryStrategyPolicy
+from workflows.flows.analyse_study_tasks.shared.dwcr_generator import (
+    add_dwcr_summaries_to_downloads,
+)
 from workflows.flows.analyse_study_tasks.shared.study_summary import (
     merge_study_summaries,
     STUDY_SUMMARY_TSV,
@@ -1332,7 +1335,7 @@ def test_prefect_analyse_amplicon_flow(
     )
 
     study.refresh_from_db()
-    assert len(study.downloads_as_objects) == 6
+    assert len(study.downloads_as_objects) == 12
 
     # test merging of study summaries again – expect default bludgeon should overwrite the existing ones
     logged_run = run_flow_and_capture_logs(
@@ -1367,7 +1370,7 @@ def test_prefect_analyse_amplicon_flow(
     )
 
     study.refresh_from_db()
-    assert len(study.downloads_as_objects) == 6
+    assert len(study.downloads_as_objects) == 12
     assert study.features.has_v6_analyses
 
     # simulate copy_v6_pipeline_results and copy_v6_summaries
@@ -1472,6 +1475,9 @@ def test_prefect_analyse_amplicon_flow(
     )
     delete_study_nextflow_workdir(nextflow_workdir, analyses_to_attempt)
     assert not nextflow_workdir.is_dir()
+
+    # Test that you don't add the same downloadable DwC-R file twice
+    add_dwcr_summaries_to_downloads(study.accession)
 
 
 @pytest.mark.flaky(
@@ -1832,7 +1838,7 @@ def test_prefect_analyse_amplicon_flow_private_data(
     )
 
     study.refresh_from_db()
-    assert len(study.downloads_as_objects) == 5
+    assert len(study.downloads_as_objects) == 11
 
     # test merging of study summaries again – expect default bludgeon should overwrite the existing ones
     logged_run = run_flow_and_capture_logs(
@@ -1867,7 +1873,7 @@ def test_prefect_analyse_amplicon_flow_private_data(
     )
 
     study.refresh_from_db()
-    assert len(study.downloads_as_objects) == 5
+    assert len(study.downloads_as_objects) == 11
     assert study.features.has_v6_analyses
 
     assert study.is_private
@@ -1894,3 +1900,6 @@ def test_prefect_analyse_amplicon_flow_private_data(
     assert (
         move_to_private_found
     ), "No move operation found targeting private results directory"
+
+    # Test that you don't add the same downloadable DwC-R file twice
+    add_dwcr_summaries_to_downloads(study.accession)
