@@ -269,10 +269,6 @@ def add_study_summaries_to_downloads(mgnify_study_accession: str):
                 f"File {summary_file} already exists in downloads list, skipping"
             )
         logger.info(f"Added {summary_file} to downloads of {study}")
-    study.refresh_from_db()
-    logger.info(
-        f"Study download aliases are now {[d.alias for d in study.downloads_as_objects]}"
-    )
 
 
 def _get_analysis_source(
