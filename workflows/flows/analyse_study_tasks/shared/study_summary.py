@@ -124,7 +124,7 @@ def generate_study_summary_for_pipeline_run(
             )
 
     generated_files = list(
-        summary_dir.path.glob(f"{pipeline_outdir.name}*_{STUDY_SUMMARY_TSV}")
+        summary_dir.path.glob(f"{pipeline_outdir.name}*{STUDY_SUMMARY_TSV}")
     )
     logger.info(f"Study summary generator made files: {generated_files}")
     return generated_files
@@ -206,7 +206,7 @@ def merge_study_summaries(
             )
 
     generated_files = list(
-        study_dir.path.glob(f"{study.first_accession}*_{STUDY_SUMMARY_TSV}")
+        study_dir.path.glob(f"{study.first_accession}*{STUDY_SUMMARY_TSV}")
     )
 
     if not generated_files:
@@ -415,7 +415,7 @@ def merge_assembly_study_summaries(
             )
 
     generated_files = list(
-        study_dir.path.glob(f"{study.first_accession}*_{STUDY_SUMMARY_TSV}")
+        study_dir.path.glob(f"{study.first_accession}*{STUDY_SUMMARY_TSV}")
     )
 
     if not generated_files:

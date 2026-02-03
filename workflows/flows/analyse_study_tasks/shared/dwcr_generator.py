@@ -193,16 +193,23 @@ def merge_dwc_ready_summaries(
 def add_dwcr_summaries_to_downloads(mgnify_study_accession: str):
     logger = get_run_logger()
     study = Study.objects.get(accession=mgnify_study_accession)
-    if not study.results_dir:
-        logger.warning(
-            f"Study {study} has no results_dir, so cannot add study summaries to downloads"
-        )
-        return
+    # Set the results_dir if it hasn't been set yet, so that it can be used in the summary generator'
+    study.set_results_dir_default()
+
+    pipeline_config = EMG_CONFIG.amplicon_pipeline
+
+    summary_dir = (
+        study.results_dir_path
+        / f"{pipeline_config.pipeline_name}_{pipeline_config.pipeline_version}"
+    )
 
     # Add ASV DwC-R summary files
-    for summary_file in Path(study.results_dir).glob(
-        f"{study.first_accession}_DADA2*{DWCREADY_CSV}"
-    ):
+
+    dada2_study_summary_files = list(
+        Path(summary_dir).glob(f"{study.first_accession}_DADA2*{DWCREADY_CSV}")
+    )
+
+    for summary_file in dada2_study_summary_files:
         db = summary_file.stem.split("_")[1].lstrip("DADA2_")
         region = summary_file.stem.split("_")[2]
         try:
@@ -224,9 +231,10 @@ def add_dwcr_summaries_to_downloads(mgnify_study_accession: str):
         logger.info(f"Added {summary_file} to downloads of {study}")
 
     # Add closed reference DwC-R summary files
-    for summary_file in Path(study.results_dir).glob(
-        f"{study.first_accession}_closedref*{DWCREADY_CSV}"
-    ):
+    closedref_study_summary_files = list(
+        Path(summary_dir).glob(f"{study.first_accession}_closedref*{DWCREADY_CSV}")
+    )
+    for summary_file in closedref_study_summary_files:
         db = summary_file.stem.split("_")[2]
         try:
             study.add_download(
