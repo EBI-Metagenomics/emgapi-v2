@@ -67,6 +67,7 @@ def nextflow_trace_etl_flow(
 SQLite db path: {sqlite_db_path}/nf_traces.db
 
 ## Summary:
+
 - Total records: {summary['total_records']}
 - Pipelines: {list(summary['pipelines'].keys())}
 """
