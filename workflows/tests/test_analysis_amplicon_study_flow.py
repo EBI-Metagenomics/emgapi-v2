@@ -1329,7 +1329,7 @@ def test_prefect_analyse_amplicon_flow(
             GlobRule(
                 rule_name="All study level files are present",
                 glob_pattern=f"{study.first_accession}*{STUDY_SUMMARY_TSV}",
-                test=lambda f: len(list(f)) == 6,
+                test=lambda f: len(list(f)) == 12,
             ),
         ],
     )
@@ -1832,7 +1832,7 @@ def test_prefect_analyse_amplicon_flow_private_data(
             GlobRule(
                 rule_name="All study level files are present",
                 glob_pattern=f"{study.first_accession}*{STUDY_SUMMARY_TSV}",
-                test=lambda f: len(list(f)) == 5,
+                test=lambda f: len(list(f)) == 11,
             ),
         ],
     )
