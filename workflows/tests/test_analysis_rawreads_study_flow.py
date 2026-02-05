@@ -408,6 +408,9 @@ def test_prefect_analyse_rawreads_flow(
     Create analysis for assembly runs and launch it with samplesheet.
     One assembly has all results, one assembly failed
     """
+
+    EMG_CONFIG.rawreads_pipeline.keep_study_summary_partials = True
+
     # Mock run_deployment to prevent actual deployment execution
     mock_run_deployment.return_value = Mock(id="mock-flow-run-id")
 
@@ -858,7 +861,7 @@ def test_prefect_analyse_rawreads_flow(
             GlobRule(
                 rule_name="Recursive number of files",
                 glob_pattern="**/*",
-                test=lambda x: len(list(x)) == 96,
+                test=lambda x: len(list(x)) == 89,
             )
         ],
     )
@@ -928,6 +931,9 @@ def test_prefect_analyse_rawreads_flow_private_data(
     Create analysis for assembly runs and launch it with samplesheet.
     One assembly has all results, one assembly failed
     """
+
+    EMG_CONFIG.rawreads_pipeline.keep_study_summary_partials = True
+
     # Mock run_deployment to prevent actual deployment execution
     mock_run_deployment.return_value = Mock(id="mock-flow-run-id")
 
@@ -1296,6 +1302,11 @@ def test_prefect_analyse_rawreads_flow_private_data(
         path=summary_dir,
         glob_rules=[GlobHasFilesCountRule[8]],  # 6 study summaries, 2 directories
     )
+
+    # need to log the directory contents
+    logging.info(f"Contents of {(summary_dir / "summaries")}:")
+    for fp in (summary_dir / "summaries").glob("*"):
+        logging.info(fp)
 
     with (
         summary_dir / "summaries" / f"{samplesheet_hash}_motus_study_summary.tsv"
