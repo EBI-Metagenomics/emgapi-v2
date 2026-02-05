@@ -1,10 +1,13 @@
 import json
+import logging
 import os
+import re
 import shutil
+import glob
 from pathlib import Path
 import responses
 from textwrap import dedent
-from typing import List, Optional
+from typing import List, Optional, Union
 from unittest.mock import Mock, patch
 
 import pytest
@@ -31,6 +34,10 @@ from workflows.prefect_utils.testing_utils import (
     should_not_mock_httpx_requests_to_prefect_server,
     run_flow_and_capture_logs,
     write_empty_fasta_file,
+)
+from workflows.flows.analyse_study_tasks.cleanup_pipeline_directories import (
+    # delete_study_results_dir,
+    delete_study_nextflow_workdir,
 )
 
 EMG_CONFIG = settings.EMG_CONFIG
@@ -582,6 +589,39 @@ MockFileIsNotEmptyRule = FileRule(
 )
 
 
+def simulate_copy_results(
+    source: Path, target: Path, allowed_extensions: Union[set, list], logger=None
+):
+    for fp in source.rglob("**/*"):
+        # study summaries
+        if any(
+            [
+                re.match(f"PRJ.*{STUDY_SUMMARY_TSV}", fp.name),
+                re.match(f"[DES]RP.*{STUDY_SUMMARY_TSV}", fp.name),
+            ]
+        ):
+            target_ = (
+                target
+                / "study-summaries"
+                / f"{EMG_CONFIG.amplicon_pipeline.pipeline_name}_{EMG_CONFIG.amplicon_pipeline.pipeline_version}"
+                / fp.name
+            )
+            if logger:
+                logger.info(f"Copying summary file {fp} to {target_}.")
+            target_.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(fp, target_)
+            continue
+
+        # analysis results
+        if fp.name.split(".")[-1] in allowed_extensions:
+            target_ = target / fp.relative_to(source)
+            if logger:
+                logger.info(f"Copying analysis results file {fp} to {target_}.")
+            target_.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(fp, target_)
+            continue
+
+
 @pytest.fixture
 def analysis_study_input_mocker(biome_choices, user_choices):
     ## Pretend that a human resumed the flow with the biome picker, and then with the assembler selector.
@@ -601,7 +641,7 @@ def analysis_study_input_mocker(biome_choices, user_choices):
 @pytest.mark.httpx_mock(should_mock=should_not_mock_httpx_requests_to_prefect_server)
 @pytest.mark.django_db(transaction=True)
 @patch(
-    "workflows.flows.analyse_study_tasks.amplicon.make_samplesheet_amplicon.queryset_hash"
+    "workflows.flows.analyse_study_tasks.amplicon.run_amplicon_pipeline_via_samplesheet.queryset_hash"
 )
 @patch(
     "workflows.data_io_utils.mgnify_v6_utils.amplicon.FileIsNotEmptyRule",
@@ -641,7 +681,8 @@ def test_prefect_analyse_amplicon_flow(
 
     EMG_CONFIG.amplicon_pipeline.allow_non_insdc_run_names = True
 
-    mock_queryset_hash_for_amplicon.return_value = "abc123"
+    samplesheet_hash = "abc123"
+    mock_queryset_hash_for_amplicon.return_value = samplesheet_hash
 
     study_accession = "PRJNA398089"
     amplicon_run_all_results = "SRRALLRESULTS"
@@ -1038,8 +1079,13 @@ def test_prefect_analyse_amplicon_flow(
     )
 
     # create fake results
-    amplicon_folder = Path(
-        f"{EMG_CONFIG.slurm.default_workdir}/{study_accession}_amplicon_v6/abc123"
+    amplicon_folder = (
+        Path(EMG_CONFIG.slurm.default_workdir)
+        / Path(study_accession)
+        / Path(
+            f"{EMG_CONFIG.amplicon_pipeline.pipeline_name}_{EMG_CONFIG.amplicon_pipeline.pipeline_version}"
+        )
+        / Path(samplesheet_hash)
     )
     amplicon_folder.mkdir(exist_ok=True, parents=True)
 
@@ -1132,22 +1178,34 @@ def test_prefect_analyse_amplicon_flow(
     mock_check_cluster_job_all_completed.assert_called()
     mock_suspend_flow_run.assert_called()
 
+    # Check samplesheet
     assembly_samplesheet_table = Artifact.get("amplicon-v6-initial-sample-sheet")
     assert assembly_samplesheet_table.type == "table"
     table_data = json.loads(assembly_samplesheet_table.data)
     assert len(table_data) == len(runs)
-
-    assert (
-        analyses.models.Analysis.objects.filter(
-            run__ena_accessions__contains=[amplicon_run_all_results]
-        ).count()
-        == 1
-    )
+    assert table_data[0]["sample"] in runs
 
     # check biome and watchers were set correctly
     study = analyses.models.Study.objects.get_or_create_for_ena_study(study_accession)
     assert study.biome.biome_name == "Engineered"
     assert admin_user == study.watchers.first()
+
+    # Check that the study has v6 analyses
+    study.refresh_from_db()
+    assert study.features.has_v6_analyses
+
+    # Check all analyses were added to database
+    assert (
+        sum(
+            [
+                analyses.models.Analysis.objects.filter(
+                    run__ena_accessions__contains=[r]
+                ).count()
+                for r in runs
+            ]
+        )
+        == 5
+    )
 
     # check completed runs (all runs in completed list - might contain sanity check not passed as well)
     assert study.analyses.filter(status__analysis_completed=True).count() == 4
@@ -1212,38 +1270,48 @@ def test_prefect_analyse_amplicon_flow(
         == 1
     )
 
-    workdir = Path(f"{EMG_CONFIG.slurm.default_workdir}/{study_accession}_v6")
+    workdir = (
+        Path(EMG_CONFIG.slurm.default_workdir)
+        / Path(study_accession)
+        / Path(
+            f"{EMG_CONFIG.amplicon_pipeline.pipeline_name}_{EMG_CONFIG.amplicon_pipeline.pipeline_version}"
+        )
+    )
     assert workdir.is_dir()
 
     assert study.external_results_dir == f"{study_accession[:-3]}/{study_accession}"
 
-    samplesheet_study_summary_count = 6
+    study.set_results_dir_default()
+    summary_dir = (
+        study.results_dir_path
+        / f"{EMG_CONFIG.amplicon_pipeline.pipeline_name}_{EMG_CONFIG.amplicon_pipeline.pipeline_version}"
+    )
+
     merge_study_summary_count = 6
-    samplesheet_dwcr_summary_count = 6
     merge_dwcr_summary_count = 6
+    directory_count = 2
 
     total_expected_summary_count = (
-        samplesheet_study_summary_count
-        + merge_study_summary_count
-        + samplesheet_dwcr_summary_count
-        + merge_dwcr_summary_count
-    )  # adds up to 24
+        merge_study_summary_count + merge_dwcr_summary_count + directory_count
+    )  # adds up to 14
 
     Directory(
-        path=study.results_dir,
+        path=summary_dir,
         glob_rules=[GlobHasFilesCountRule[total_expected_summary_count]],
     )
 
-    with (workdir / "abc123_DADA2-SILVA_18S-V9_asv_study_summary.tsv").open(
-        "r"
-    ) as summary:
+    with (
+        summary_dir
+        / "summaries"
+        / f"{samplesheet_hash}_DADA2-SILVA_18S-V9_asv_study_summary.tsv"
+    ).open("r") as summary:
         lines = summary.readlines()
         assert lines[0] == "taxonomy\tSRRALLRESULTS\n"  # one run (the one with ASVs)
         assert "100" in lines[-1]
         assert "g__Aeromicrobium" in lines[-1]
 
     # manually remove the merged study summaries
-    for file in Path(study.results_dir).glob(f"{study.first_accession}*.tsv"):
+    for file in Path(summary_dir).glob(f"{study.first_accession}*.tsv"):
         file.unlink()
 
     # test merging of study summaries again, with cleanup disabled
@@ -1253,14 +1321,14 @@ def test_prefect_analyse_amplicon_flow(
         analysis_type="amplicon",
     )
     Directory(
-        path=study.results_dir,
+        path=summary_dir,
         glob_rules=[
             GlobHasFilesCountRule[
                 total_expected_summary_count
             ],  # study ones generated, and partials left in place
             GlobRule(
                 rule_name="All study level files are present",
-                glob_patten=f"{study.first_accession}*{STUDY_SUMMARY_TSV}",
+                glob_pattern=f"{study.first_accession}*{STUDY_SUMMARY_TSV}",
                 test=lambda f: len(list(f)) == 6,
             ),
         ],
@@ -1278,20 +1346,25 @@ def test_prefect_analyse_amplicon_flow(
     )
     assert (
         logged_run.logs.count(
-            f"Deleting {str(Path(study.results_dir) / study.first_accession)}"
+            f"Deleting {str(Path(summary_dir) / study.first_accession)}"
         )
         == 6
     )
     Directory(
-        path=study.results_dir,
+        path=summary_dir,
         glob_rules=[
             GlobHasFilesCountRule[
                 total_expected_summary_count
             ],  # partials deleted, just merged ones
             GlobRule(
                 rule_name="All files are study level",
-                glob_patten=f"{study.first_accession}*{STUDY_SUMMARY_TSV}",
+                glob_pattern=f"{study.first_accession}*{STUDY_SUMMARY_TSV}",
                 test=lambda f: len(list(f)) == 6,
+            ),
+            GlobRule(
+                rule_name="Samplesheet-specific DwC Ready files are present",
+                glob_pattern=f"{study.first_accession}*{DWCREADY_CSV}",
+                test=lambda f: len(list(f)) == 6,  # 6 merged DwC-R summary files
             ),
         ],
     )
@@ -1300,30 +1373,108 @@ def test_prefect_analyse_amplicon_flow(
     assert len(study.downloads_as_objects) == 12
     assert study.features.has_v6_analyses
 
+    # simulate copy_v6_pipeline_results and copy_v6_summaries
+    study.external_results_dir = (
+        f"/tmp/external/{study_accession[:-3]}/{study_accession}"
+    )
+    study.save()
+
+    logger = logging.getLogger("simulate_copy_results")
+
+    source = study.results_dir_path
+    target = Path(study.external_results_dir)
+
+    # test case where not everything is copied
+    allowed_extensions = {
+        "yml",
+        "yaml",
+        "txt",
+        "tsv",
+        "mseq",
+        "html",
+        "fa",
+        "gz",
+        "fasta",
+        "csv",
+        "deoverlapped",
+    }
+    simulate_copy_results(source, target, allowed_extensions, logger=logger)
+
+    # run deleting
+    # delete_study_nextflow_workdir(study_workdir, analyses_to_attempt)
+    # delete_study_results_dir(study.results_dir_path, study)
+
+    # check files
+    assert study.results_dir_path.is_dir()
+
+    # test case where everything is copied
+    allowed_extensions = {
+        "yml",
+        "yaml",
+        "txt",
+        "tsv",
+        "mseq",
+        "html",
+        "fa",
+        "json",
+        "gz",
+        "fasta",
+        "csv",
+        "deoverlapped",
+    }
+    simulate_copy_results(source, target, allowed_extensions, logger=logger)
+
+    # run deleting
+    # delete_study_results_dir(study.results_dir_path, study)
+
+    # check files
+    # assert not study.results_dir_path.is_dir()
+
+    n = len(list(glob.glob(f"{study.external_results_dir}/**/*", recursive=True)))
+    logger.info(
+        f"External results directory {study.external_results_dir} has {n} files."
+    )
     Directory(
-        path=study.results_dir,
+        path=Path(study.external_results_dir),
         glob_rules=[
-            GlobHasFilesCountRule[total_expected_summary_count],
             GlobRule(
-                rule_name="Samplesheet-specific DwC Ready files are present",
-                glob_patten=f"abc123*{DWCREADY_CSV}",
-                test=lambda f: len(list(f))
-                == 6,  # 6 samplesheet-specific DwC-R summary files
-            ),
+                rule_name="Recursive number of files",
+                glob_pattern="**/*",
+                test=lambda x: len(list(x)) == 155,
+            )
         ],
     )
 
-    Directory(
-        path=study.results_dir,
-        glob_rules=[
-            GlobHasFilesCountRule[total_expected_summary_count],
-            GlobRule(
-                rule_name="Samplesheet-specific DwC Ready files are present",
-                glob_patten=f"{study.first_accession}*{DWCREADY_CSV}",
-                test=lambda f: len(list(f)) == 6,  # 6 merged DwC-R summary files
-            ),
-        ],
+    # test Nextflow workdir cleanup
+    nextflow_workdir = (
+        Path(EMG_CONFIG.slurm.default_workdir)
+        / "work"
+        / Path(study_accession)
+        / Path(
+            f"{EMG_CONFIG.amplicon_pipeline.pipeline_name}_{EMG_CONFIG.amplicon_pipeline.pipeline_version}"
+        )
+        / samplesheet_hash
     )
+    # generate plausible nextflow directories
+    os.makedirs(nextflow_workdir / "h5" / "h5scdo9q3u4nefpsldkfvubqp349", exist_ok=True)
+    assert nextflow_workdir.is_dir()
+
+    analyses_to_attempt = study.analyses.order_by("id").values_list("id", flat=True)
+    # set one of the analyses to incomplete
+    analysis_obj = analyses.models.Analysis.objects.get(pk=analyses_to_attempt[0])
+    analysis_obj.mark_status(
+        analyses.models.Analysis.AnalysisStates.ANALYSIS_FAILED, True
+    )
+
+    delete_study_nextflow_workdir(nextflow_workdir, analyses_to_attempt)
+    assert nextflow_workdir.is_dir()
+
+    # # set it to complete
+    analysis_obj.mark_status(
+        analyses.models.Analysis.AnalysisStates.ANALYSIS_FAILED, False
+    )
+    delete_study_nextflow_workdir(nextflow_workdir, analyses_to_attempt)
+    assert not nextflow_workdir.is_dir()
 
     # Test that you don't add the same downloadable DwC-R file twice
     add_dwcr_summaries_to_downloads(study.accession)
@@ -1335,7 +1486,7 @@ def test_prefect_analyse_amplicon_flow(
 @pytest.mark.httpx_mock(should_mock=should_not_mock_httpx_requests_to_prefect_server)
 @pytest.mark.django_db(transaction=True)
 @patch(
-    "workflows.flows.analyse_study_tasks.amplicon.make_samplesheet_amplicon.queryset_hash"
+    "workflows.flows.analyse_study_tasks.amplicon.run_amplicon_pipeline_via_samplesheet.queryset_hash"
 )
 @patch(
     "workflows.data_io_utils.mgnify_v6_utils.amplicon.FileIsNotEmptyRule",
@@ -1420,7 +1571,8 @@ def test_prefect_analyse_amplicon_flow_private_data(
         ],
     )
 
-    mock_queryset_hash_for_amplicon.return_value = "xyz789"
+    samplesheet_hash = "xyz789"
+    mock_queryset_hash_for_amplicon.return_value = samplesheet_hash
 
     amplicon_run_all_results = "SRRALLRESULTS"
     runs = [
@@ -1519,8 +1671,13 @@ def test_prefect_analyse_amplicon_flow_private_data(
     )
 
     # create fake results
-    amplicon_folder = Path(
-        f"{EMG_CONFIG.slurm.default_workdir}/{study_accession}_amplicon_v6/xyz789"
+    amplicon_folder = (
+        Path(EMG_CONFIG.slurm.default_workdir)
+        / Path(study_accession)
+        / Path(
+            f"{EMG_CONFIG.amplicon_pipeline.pipeline_name}_{EMG_CONFIG.amplicon_pipeline.pipeline_version}"
+        )
+        / Path(samplesheet_hash)
     )
     amplicon_folder.mkdir(exist_ok=True, parents=True)
 
@@ -1558,10 +1715,16 @@ def test_prefect_analyse_amplicon_flow_private_data(
     table_data = json.loads(assembly_samplesheet_table.data)
     assert len(table_data) == len(runs)
 
+    # Check all analyses were added to database
     assert (
-        analyses.models.Analysis.objects.filter(
-            run__ena_accessions__contains=[amplicon_run_all_results]
-        ).count()
+        sum(
+            [
+                analyses.models.Analysis.objects.filter(
+                    run__ena_accessions__contains=[r]
+                ).count()
+                for r in runs
+            ]
+        )
         == 1
     )
 
@@ -1610,38 +1773,48 @@ def test_prefect_analyse_amplicon_flow_private_data(
         == 1
     )
 
-    workdir = Path(f"{EMG_CONFIG.slurm.default_workdir}/{study_accession}_v6")
+    workdir = (
+        Path(EMG_CONFIG.slurm.default_workdir)
+        / Path(study_accession)
+        / Path(
+            f"{EMG_CONFIG.amplicon_pipeline.pipeline_name}_{EMG_CONFIG.amplicon_pipeline.pipeline_version}"
+        )
+    )
     assert workdir.is_dir()
 
     assert study.external_results_dir == "SRP123/SRP123456"
 
-    samplesheet_study_summary_count = 5
-    merge_study_summary_count = 5
-    samplesheet_dwcr_summary_count = 6
-    merge_dwcr_summary_count = 6
+    study.set_results_dir_default()
+    summary_dir = (
+        study.results_dir_path
+        / f"{EMG_CONFIG.amplicon_pipeline.pipeline_name}_{EMG_CONFIG.amplicon_pipeline.pipeline_version}"
+    )
+
+    merge_study_summary_count = 6
+    merge_dwcr_summary_count = 5
+    directory_count = 2
 
     total_expected_summary_count = (
-        samplesheet_study_summary_count
-        + merge_study_summary_count
-        + samplesheet_dwcr_summary_count
-        + merge_dwcr_summary_count
-    )  # adds up to 22
+        merge_study_summary_count + merge_dwcr_summary_count + directory_count
+    )  # adds up to 13
 
     Directory(
-        path=study.results_dir,
+        path=summary_dir,
         glob_rules=[GlobHasFilesCountRule[total_expected_summary_count]],
     )
 
-    with (workdir / "xyz789_DADA2-SILVA_18S-V9_asv_study_summary.tsv").open(
-        "r"
-    ) as summary:
+    with (
+        summary_dir
+        / "summaries"
+        / f"{samplesheet_hash}_DADA2-SILVA_18S-V9_asv_study_summary.tsv"
+    ).open("r") as summary:
         lines = summary.readlines()
         assert lines[0] == "taxonomy\tSRRALLRESULTS\n"  # one run (the one with ASVs)
         assert "100" in lines[-1]
         assert "g__Aeromicrobium" in lines[-1]
 
     # manually remove the merged study summaries
-    for file in Path(study.results_dir).glob(f"{study.first_accession}*.tsv"):
+    for file in Path(summary_dir).glob(f"{study.first_accession}*.tsv"):
         file.unlink()
 
     # test merging of study summaries again, with cleanup disabled
@@ -1651,14 +1824,14 @@ def test_prefect_analyse_amplicon_flow_private_data(
         analysis_type="amplicon",
     )
     Directory(
-        path=study.results_dir,
+        path=summary_dir,
         glob_rules=[
             GlobHasFilesCountRule[
                 total_expected_summary_count
             ],  # study ones generated, and partials left in place
             GlobRule(
                 rule_name="All study level files are present",
-                glob_patten=f"{study.first_accession}*{STUDY_SUMMARY_TSV}",
+                glob_pattern=f"{study.first_accession}*{STUDY_SUMMARY_TSV}",
                 test=lambda f: len(list(f)) == 5,
             ),
         ],
@@ -1676,44 +1849,24 @@ def test_prefect_analyse_amplicon_flow_private_data(
     )
     assert (
         logged_run.logs.count(
-            f"Deleting {str(Path(study.results_dir) / study.first_accession)}"
+            f"Deleting {str(Path(summary_dir) / study.first_accession)}"
         )
         == 5
     )
     Directory(
-        path=study.results_dir,
+        path=summary_dir,
         glob_rules=[
             GlobHasFilesCountRule[
                 total_expected_summary_count
             ],  # partials deleted, just merged ones
             GlobRule(
                 rule_name="All files are study level",
-                glob_patten=f"{study.first_accession}*{STUDY_SUMMARY_TSV}",
+                glob_pattern=f"{study.first_accession}*{STUDY_SUMMARY_TSV}",
                 test=lambda f: len(list(f)) == 5,
             ),
-        ],
-    )
-
-    Directory(
-        path=study.results_dir,
-        glob_rules=[
-            GlobHasFilesCountRule[total_expected_summary_count],
             GlobRule(
                 rule_name="Samplesheet-specific DwC Ready files are present",
-                glob_patten=f"xyz789*{DWCREADY_CSV}",
-                test=lambda f: len(list(f))
-                == 6,  # 6 samplesheet-specific DwC-R summary files
-            ),
-        ],
-    )
-
-    Directory(
-        path=study.results_dir,
-        glob_rules=[
-            GlobHasFilesCountRule[total_expected_summary_count],
-            GlobRule(
-                rule_name="Samplesheet-specific DwC Ready files are present",
-                glob_patten=f"{study.first_accession}*{DWCREADY_CSV}",
+                glob_pattern=f"{study.first_accession}*{DWCREADY_CSV}",
                 test=lambda f: len(list(f)) == 6,  # 6 merged DwC-R summary files
             ),
         ],

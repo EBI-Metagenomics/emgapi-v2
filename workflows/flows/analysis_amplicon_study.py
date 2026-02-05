@@ -1,3 +1,4 @@
+from pathlib import Path
 from textwrap import dedent as _
 from typing import Optional, List
 
@@ -44,6 +45,10 @@ from workflows.prefect_utils.analyses_models_helpers import (
     chunk_list,
     get_users_as_choices,
     add_study_watchers,
+)
+from workflows.flows.analyse_study_tasks.cleanup_pipeline_directories import (
+    delete_study_nextflow_workdir,
+    # delete_study_results_dir,
 )
 
 _AMPLICON = "AMPLICON"
@@ -187,12 +192,25 @@ def analysis_amplicon_study(study_accession: str):
     chunked_runs = chunk_list(
         analyses_to_attempt, EMG_CONFIG.amplicon_pipeline.samplesheet_chunk_size
     )
+    study_workdir = (
+        Path(f"{EMG_CONFIG.slurm.default_nextflow_workdir}")
+        / Path(f"{mgnify_study.ena_study.accession}")
+        / f"{EMG_CONFIG.amplicon_pipeline.pipeline_name}_{EMG_CONFIG.amplicon_pipeline.pipeline_version}"
+    )
+    study_outdir = (
+        Path(f"{EMG_CONFIG.slurm.default_workdir}")
+        / Path(f"{mgnify_study.ena_study.accession}")
+        / f"{EMG_CONFIG.amplicon_pipeline.pipeline_name}_{EMG_CONFIG.amplicon_pipeline.pipeline_version}"
+    )
+
     for analyses_chunk in chunked_runs:
         # launch jobs for all analyses in this chunk in a single flow
         logger.info(
             f"Working on amplicon analyses: {analyses_chunk[0]}-{analyses_chunk[-1]}"
         )
-        run_amplicon_pipeline_via_samplesheet(mgnify_study, analyses_chunk)
+        run_amplicon_pipeline_via_samplesheet(
+            mgnify_study, analyses_chunk, study_workdir, study_outdir
+        )
 
     merge_study_summaries(
         mgnify_study.accession,
@@ -203,9 +221,12 @@ def analysis_amplicon_study(study_accession: str):
         mgnify_study.accession,
         cleanup_partials=not EMG_CONFIG.amplicon_pipeline.keep_study_summary_partials,
     )
-    add_study_summaries_to_downloads(mgnify_study.accession)
+    add_study_summaries_to_downloads(mgnify_study.accession, analysis_type="amplicon")
     add_dwcr_summaries_to_downloads(mgnify_study.accession)
     copy_v6_study_summaries(mgnify_study.accession)
+    # delete work directory
+    delete_study_nextflow_workdir(study_workdir, analyses_to_attempt)
+    # delete_study_results_dir(study_outdir, mgnify_study)
 
     mgnify_study.refresh_from_db()
     mgnify_study.features.has_v6_analyses = mgnify_study.analyses.filter(

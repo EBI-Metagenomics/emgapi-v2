@@ -155,7 +155,7 @@ def test_dwcr_merge(
     prj_accession = "PRJNA398089"
 
     amplicon_folder = pathlib.Path(
-        f"{EMG_CONFIG.slurm.default_workdir}/{prj_accession}_v6"
+        f"{EMG_CONFIG.slurm.default_workdir}/{prj_accession}/amplicon_v6"
     )
     amplicon_folder.mkdir(exist_ok=True, parents=True)
     logging.info(amplicon_folder)

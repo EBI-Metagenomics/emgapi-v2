@@ -136,6 +136,11 @@ def run_assembly_analysis_pipeline_batch(
         logger.info(
             f"Using {assembly_analyses_workspace_dir} as the batch nextflow outdir for ASA pipeline"
         )
+        nextflow_workdir = (
+            Path(assembly_analysis_batch.workspace_dir)
+            / f"asa-sheet-{slugify(samplesheet)}"
+        )
+        nextflow_workdir.mkdir(parents=True, exist_ok=True)
 
         command = cli_command(
             [
@@ -168,6 +173,7 @@ def run_assembly_analysis_pipeline_batch(
                 and "--use_fire_download",
                 ("--input", samplesheet),
                 ("--outdir", assembly_analyses_workspace_dir),
+                ("-work-dir", nextflow_workdir),
                 EMG_CONFIG.slurm.use_nextflow_tower and "-with-tower",
                 ("-ansi-log", "false"),
             ]
@@ -223,9 +229,7 @@ def run_assembly_analysis_pipeline_batch(
     # === VIRify === #
     ##################
     logger.info("Starting VIRify pipeline")
-    run_virify_batch(
-        assembly_analyses_batch_id=assembly_analysis_batch.id,
-    )
+    run_virify_batch(assembly_analyses_batch_id=assembly_analysis_batch.id)
     close_old_connections()
 
     ###############

@@ -161,6 +161,10 @@ class Study(
     def __str__(self):
         return self.accession
 
+    @property
+    def results_dir_path(self) -> Path:
+        return Path(self.results_dir)
+
     def set_results_dir_default(self):
         """
         This method checks if the `results_dir` attribute is not set. If so, it will
@@ -173,13 +177,12 @@ class Study(
         # we're trying to catch? Should it be a migration? Or a management command we run after
         # certain bad things happen? Or somewhere in the flows?
         if not self.results_dir:
-            # TODO: there is a v6 hardcoded here.
             self.results_dir = (
                 Path(settings.EMG_CONFIG.slurm.default_workdir)
-                / f"{self.ena_study.accession}_v6"
+                / f"{self.ena_study.accession}"
             )
             logger.info(f"Setting {self}'s results_dir to default {self.results_dir}")
-            self.results_dir.mkdir(exist_ok=True)
+            self.results_dir.mkdir(parents=True, exist_ok=True)
             self.save()
 
     class Meta:

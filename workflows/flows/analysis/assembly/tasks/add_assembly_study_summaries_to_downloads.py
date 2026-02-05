@@ -37,7 +37,7 @@ def add_assembly_study_summaries_to_downloads(
 
     # Find all study summary files matching the study accession
     summary_files = list(
-        Path(study.results_dir).glob(f"{study.first_accession}*_study_summary.tsv")
+        study.results_dir_path.glob(f"{study.first_accession}*_study_summary.tsv")
     )
 
     if not summary_files:

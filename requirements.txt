@@ -5,6 +5,7 @@ cython<3.0
 Pillow~=11.3.0  # imagefield requirement
 typing_extensions~=4.14.1
 tzdata
+pendulum
 
 # Django and plugins
 django==5.2.7

@@ -17,7 +17,7 @@ def test_dwca_generator(
     study = amplicon_analysis_with_downloads.study
 
     # dwcr_file = (
-    #     pathlib.Path(study.results_dir) / "PRJNA398089_closedref_SILVA-SSU_dwcready.csv"
+    #     study.results_dir_path / "PRJNA398089_closedref_SILVA-SSU_dwcready.csv"
     # )
 
     # amplicon_analysis_with_downloads
@@ -26,7 +26,7 @@ def test_dwca_generator(
         study.accession, Analysis.ExperimentTypes.AMPLICON, Analysis.PipelineVersions.v6
     )
 
-    # dwca_eml_path = pathlib.Path(study.results_dir) / "dwca" / "eml.xml"
+    # dwca_eml_path = study.results_dir_path / "dwca" / "eml.xml"
 
     # assert dwca_eml_path.exists()
     # assert dwca_eml_path.read_text().startswith("<eml:eml")

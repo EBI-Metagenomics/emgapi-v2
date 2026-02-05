@@ -3,9 +3,12 @@ import json
 import gzip
 import logging
 import os
+import re
+import shutil
+import glob
 from enum import Enum
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Union
 from unittest.mock import Mock, patch
 
 import pytest
@@ -13,8 +16,11 @@ from django.conf import settings
 from prefect.artifacts import Artifact
 from pydantic import BaseModel
 
+from workflows.data_io_utils.file_rules.base_rules import GlobRule
+
 import analyses.models
-from workflows.data_io_utils.file_rules.base_rules import FileRule, GlobRule
+import analyses.base_models.with_experiment_type_models
+from workflows.data_io_utils.file_rules.base_rules import FileRule
 from workflows.data_io_utils.file_rules.common_rules import GlobHasFilesCountRule
 from workflows.data_io_utils.file_rules.nodes import Directory
 from workflows.ena_utils.ena_api_requests import ENALibraryStrategyPolicy
@@ -27,6 +33,10 @@ from workflows.prefect_utils.analyses_models_helpers import get_users_as_choices
 from workflows.prefect_utils.testing_utils import (
     should_not_mock_httpx_requests_to_prefect_server,
     run_flow_and_capture_logs,
+)
+from workflows.flows.analyse_study_tasks.cleanup_pipeline_directories import (
+    # delete_study_results_dir,
+    delete_study_nextflow_workdir,
 )
 
 EMG_CONFIG = settings.EMG_CONFIG
@@ -45,6 +55,22 @@ def generate_fake_rawreads_pipeline_results(results_dir, sample_accession):
     logger = logging.getLogger("generate_dummy_data_debug")
     # Create the main directory
     os.makedirs(results_dir, exist_ok=True)
+
+    # Create multiqc directory and subdirectories
+    logger.info(f"Creating dummy study multiqc results at {results_dir}")
+    with open(f"{results_dir}/study_multiqc_report.html", "wt") as f:
+        f.write(
+            dedent(
+                """\
+                <html>
+                <body>
+                <h1>MultiQC report</h1>
+                Looks good to me!
+                </body>
+                </html>
+                """
+            )
+        )
 
     # Create function-summary directory and subdirectories
     func_dir = f"{results_dir}/{sample_accession}/function-summary"
@@ -309,34 +335,37 @@ def generate_fake_rawreads_pipeline_results(results_dir, sample_accession):
         )
 
 
-def generate_fake_rawreads_pipeline_summary_results(results_dir):
-    """
-    Generate fake raw-reads pipeline results for testing.
-
-    Based on the directory structure provided in the issue description.
-
-    :param results_dir: Directory to create the fake results in
-    """
-
-    logger = logging.getLogger("generate_dummy_summary_data_debug")
-
-    os.makedirs(results_dir, exist_ok=True)
-
-    # Create multiqc directory and subdirectories
-    logger.info(f"Creating dummy study multiqc results at {results_dir}")
-    with open(f"{results_dir}/study_multiqc_report.html", "wt") as f:
-        f.write(
-            dedent(
-                """\
-                <html>
-                <body>
-                <h1>MultiQC report</h1>
-                Looks good to me!
-                </body>
-                </html>
-                """
+def simulate_copy_results(
+    source: Path, target: Path, allowed_extensions: Union[set, list], logger=None
+):
+    for fp in source.rglob("**/*"):
+        # study summaries
+        if any(
+            [
+                re.match(f"PRJ.*{STUDY_SUMMARY_TSV}", fp.name),
+                re.match(f"[DES]RP.*{STUDY_SUMMARY_TSV}", fp.name),
+            ]
+        ):
+            target_ = (
+                target
+                / "study-summaries"
+                / f"{EMG_CONFIG.rawreads_pipeline.pipeline_name}_{EMG_CONFIG.rawreads_pipeline.pipeline_version}"
+                / fp.name
             )
-        )
+            if logger:
+                logger.info(f"Copying summary file {fp} to {target_}.")
+            target_.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(fp, target_)
+            continue
+
+        # analysis results
+        if fp.name.split(".")[-1] in allowed_extensions:
+            target_ = target / fp.relative_to(source)
+            if logger:
+                logger.info(f"Copying analysis results file {fp} to {target_}.")
+            target_.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(fp, target_)
+            continue
 
 
 MockFileIsNotEmptyRule = FileRule(
@@ -348,7 +377,7 @@ MockFileIsNotEmptyRule = FileRule(
 @pytest.mark.httpx_mock(should_mock=should_not_mock_httpx_requests_to_prefect_server)
 @pytest.mark.django_db(transaction=True)
 @patch(
-    "workflows.flows.analyse_study_tasks.raw_reads.make_samplesheet_rawreads.queryset_hash"
+    "workflows.flows.analyse_study_tasks.raw_reads.run_rawreads_pipeline_via_samplesheet.queryset_hash"
 )
 @patch(
     "workflows.data_io_utils.mgnify_v6_utils.rawreads.FileIsNotEmptyRule",
@@ -379,10 +408,14 @@ def test_prefect_analyse_rawreads_flow(
     Create analysis for assembly runs and launch it with samplesheet.
     One assembly has all results, one assembly failed
     """
+
+    EMG_CONFIG.rawreads_pipeline.keep_study_summary_partials = True
+
     # Mock run_deployment to prevent actual deployment execution
     mock_run_deployment.return_value = Mock(id="mock-flow-run-id")
 
-    mock_queryset_hash_for_rawreads.return_value = "xyz789"
+    samplesheet_hash = "xyz789"
+    mock_queryset_hash_for_rawreads.return_value = samplesheet_hash
 
     study_accession = "ERP136384"
     all_results = ["ERR10889189", "ERR10889198", "ERR10889215", "ERR10889222"]
@@ -510,12 +543,13 @@ def test_prefect_analyse_rawreads_flow(
     )
 
     # create fake results
-    summary_folder = Path(f"{EMG_CONFIG.slurm.default_workdir}/{study_accession}_v6")
-    summary_folder.mkdir(exist_ok=True, parents=True)
-    generate_fake_rawreads_pipeline_summary_results(summary_folder)
-
-    rawreads_folder = Path(
-        f"{EMG_CONFIG.slurm.default_workdir}/{study_accession}_rawreads/xyz789"
+    rawreads_folder = (
+        Path(EMG_CONFIG.slurm.default_workdir)
+        / Path(study_accession)
+        / Path(
+            f"{EMG_CONFIG.rawreads_pipeline.pipeline_name}_{EMG_CONFIG.rawreads_pipeline.pipeline_version}"
+        )
+        / Path(samplesheet_hash)
     )
     rawreads_folder.mkdir(exist_ok=True, parents=True)
 
@@ -671,19 +705,29 @@ def test_prefect_analyse_rawreads_flow(
     )
 
     # Check files
-    workdir = Path(f"{EMG_CONFIG.slurm.default_workdir}/{study_accession}_v6")
+    workdir = (
+        Path(EMG_CONFIG.slurm.default_workdir)
+        / Path(study_accession)
+        / Path(
+            f"{EMG_CONFIG.rawreads_pipeline.pipeline_name}_{EMG_CONFIG.rawreads_pipeline.pipeline_version}"
+        )
+    )
     assert workdir.is_dir()
     assert study.external_results_dir == f"{study_accession[:-3]}/{study_accession}"
 
     # Check summaries
+    summary_dir = (
+        study.results_dir_path
+        / f"{EMG_CONFIG.rawreads_pipeline.pipeline_name}_{EMG_CONFIG.rawreads_pipeline.pipeline_version}"
+    )
     Directory(
-        path=study.results_dir,
-        glob_rules=[
-            GlobHasFilesCountRule[13]
-        ],  # 6 for the samplesheet, same 6 for the "merge", and 1 for the study multiqc
+        path=summary_dir,
+        glob_rules=[GlobHasFilesCountRule[8]],  # 6 study summaries, 2 directories
     )
 
-    with (workdir / "xyz789_motus_study_summary.tsv").open("r") as summary:
+    with (
+        summary_dir / "summaries" / f"{samplesheet_hash}_motus_study_summary.tsv"
+    ).open("r") as summary:
         lines = summary.readlines()
         assert (
             lines[0] == "taxonomy\tERR10889189\tERR10889198\tERR10889215\tERR10889222\n"
@@ -695,7 +739,7 @@ def test_prefect_analyse_rawreads_flow(
         assert "g__Lactobacillus" in lines[-2]
 
     # manually remove the merged study summaries
-    for file in Path(study.results_dir).glob(f"{study.first_accession}*"):
+    for file in Path(summary_dir).glob(f"{study.first_accession}*"):
         file.unlink()
 
     # test merging of study summaries again, with cleanup disabled
@@ -705,14 +749,14 @@ def test_prefect_analyse_rawreads_flow(
         analysis_type="rawreads",
     )
     Directory(
-        path=study.results_dir,
+        path=summary_dir,
         glob_rules=[
             GlobHasFilesCountRule[
-                13
+                8
             ],  # study ones generated, and partials left in place
             GlobRule(
                 rule_name="All study level files are present",
-                glob_patten=f"{study.first_accession}*{STUDY_SUMMARY_TSV}",
+                glob_pattern=f"{study.first_accession}*{STUDY_SUMMARY_TSV}",
                 test=lambda f: len(list(f)) == 6,
             ),
         ],
@@ -730,17 +774,17 @@ def test_prefect_analyse_rawreads_flow(
     )
     assert (
         logged_run.logs.count(
-            f"Deleting {str(Path(study.results_dir) / study.first_accession)}"
+            f"Deleting {str(Path(summary_dir) / study.first_accession)}"
         )
         == 6
     )
     Directory(
-        path=study.results_dir,
+        path=summary_dir,
         glob_rules=[
-            GlobHasFilesCountRule[13],  # partials deleted, just merged ones
+            GlobHasFilesCountRule[8],  # partials deleted, just merged ones
             GlobRule(
                 rule_name="All files are study level",
-                glob_patten=f"{study.first_accession}*{STUDY_SUMMARY_TSV}",
+                glob_pattern=f"{study.first_accession}*{STUDY_SUMMARY_TSV}",
                 test=lambda f: len(list(f)) == 6,
             ),
         ],
@@ -750,11 +794,113 @@ def test_prefect_analyse_rawreads_flow(
     assert len(study.downloads_as_objects) == 6
     assert study.features.has_v6_analyses
 
+    # simulate copy_v6_pipeline_results and copy_v6_summaries
+    study.external_results_dir = (
+        f"/tmp/external/{study_accession[:-3]}/{study_accession}"
+    )
+    study.save()
+
+    logger = logging.getLogger("simulate_copy_results")
+
+    source = study.results_dir_path
+    target = Path(study.external_results_dir)
+
+    # test case where not everything is copied
+    allowed_extensions = {
+        "yml",
+        "yaml",
+        "txt",
+        "tsv",
+        "mseq",
+        "html",
+        "fa",
+        "gz",
+        "fasta",
+        "csv",
+        "deoverlapped",
+    }
+    simulate_copy_results(source, target, allowed_extensions, logger=logger)
+
+    # run deleting
+    # delete_study_nextflow_workdir(study_workdir, analyses_to_attempt)
+    # delete_study_results_dir(study.results_dir_path, study)
+
+    # check files
+    assert study.results_dir_path.is_dir()
+
+    # test case where everything is copied
+    allowed_extensions = {
+        "yml",
+        "yaml",
+        "txt",
+        "tsv",
+        "mseq",
+        "html",
+        "fa",
+        "json",
+        "gz",
+        "fasta",
+        "csv",
+        "deoverlapped",
+    }
+    simulate_copy_results(source, target, allowed_extensions, logger=logger)
+
+    # run deleting
+    # delete_study_results_dir(study.results_dir_path, study)
+
+    # check files
+    # assert not study.results_dir_path.is_dir()
+
+    n = len(list(glob.glob(f"{study.external_results_dir}/**/*", recursive=True)))
+    logger.info(
+        f"External results directory {study.external_results_dir} has {n} files."
+    )
+    Directory(
+        path=Path(study.external_results_dir),
+        glob_rules=[
+            GlobRule(
+                rule_name="Recursive number of files",
+                glob_pattern="**/*",
+                test=lambda x: len(list(x)) == 89,
+            )
+        ],
+    )
+
+    # test Nextflow workdir cleanup
+    nextflow_workdir = (
+        Path("/tmp/work")
+        / Path(study_accession)
+        / Path(
+            f"{EMG_CONFIG.rawreads_pipeline.pipeline_name}_{EMG_CONFIG.rawreads_pipeline.pipeline_version}"
+        )
+        / samplesheet_hash
+    )
+    # generate plausible nextflow directories
+    os.makedirs(nextflow_workdir / "h5" / "h5scdo9q3u4nefpsldkfvubqp349", exist_ok=True)
+    assert nextflow_workdir.is_dir()
+
+    analyses_to_attempt = study.analyses.order_by("id").values_list("id", flat=True)
+    # set one of the analyses to incomplete
+    analysis_obj = analyses.models.Analysis.objects.get(pk=analyses_to_attempt[0])
+    analysis_obj.mark_status(
+        analyses.models.Analysis.AnalysisStates.ANALYSIS_FAILED, True
+    )
+
+    delete_study_nextflow_workdir(nextflow_workdir, analyses_to_attempt)
+    assert nextflow_workdir.is_dir()
+
+    # # set it to complete
+    analysis_obj.mark_status(
+        analyses.models.Analysis.AnalysisStates.ANALYSIS_FAILED, False
+    )
+    delete_study_nextflow_workdir(nextflow_workdir, analyses_to_attempt)
+    assert not nextflow_workdir.is_dir()
+
 
 @pytest.mark.httpx_mock(should_mock=should_not_mock_httpx_requests_to_prefect_server)
 @pytest.mark.django_db(transaction=True)
 @patch(
-    "workflows.flows.analyse_study_tasks.raw_reads.make_samplesheet_rawreads.queryset_hash"
+    "workflows.flows.analyse_study_tasks.raw_reads.run_rawreads_pipeline_via_samplesheet.queryset_hash"
 )
 @patch(
     "workflows.data_io_utils.mgnify_v6_utils.rawreads.FileIsNotEmptyRule",
@@ -785,10 +931,14 @@ def test_prefect_analyse_rawreads_flow_private_data(
     Create analysis for assembly runs and launch it with samplesheet.
     One assembly has all results, one assembly failed
     """
+
+    EMG_CONFIG.rawreads_pipeline.keep_study_summary_partials = True
+
     # Mock run_deployment to prevent actual deployment execution
     mock_run_deployment.return_value = Mock(id="mock-flow-run-id")
 
-    mock_queryset_hash_for_rawreads.return_value = "abc123"
+    samplesheet_hash = "abc123"
+    mock_queryset_hash_for_rawreads.return_value = samplesheet_hash
 
     study_accession = "ERP136383"
     all_results = ["ERR10889188", "ERR10889197", "ERR10889214", "ERR10889221"]
@@ -833,6 +983,20 @@ def test_prefect_analyse_rawreads_flow_private_data(
         url=f"{EMG_CONFIG.ena.portal_search_api}?"
         f"result=study"
         f"&query=%22%28study_accession%3D{study_accession}+OR+secondary_study_accession%3D{study_accession}%29%22"
+        f"&fields=study_title%2Cstudy_description%2Ccenter_name%2Csecondary_study_accession%2Cstudy_name"
+        f"&limit=10"
+        f"&format=json"
+        f"&dataPortal=metagenome",
+        match_headers={},  # public call should not find private study
+        json=[],
+        is_reusable=True,
+        is_optional=True,
+    )
+
+    httpx_mock.add_response(
+        url=f"{EMG_CONFIG.ena.portal_search_api}?"
+        f"result=study"
+        f"&query=%22%28study_accession%3D{study_accession}+OR+secondary_study_accession%3D{study_accession}%29%22"
         f"&fields=study_accession"
         f"&limit="
         f"&format=json"
@@ -841,6 +1005,19 @@ def test_prefect_analyse_rawreads_flow_private_data(
             "Authorization": "Basic ZGNjX2Zha2U6bm90LWEtZGNjLXB3"
         },  # dcc_fake:not-a-dcc-pw
         json=[{"study_accession": study_accession}],
+        is_reusable=True,
+        is_optional=True,
+    )
+    httpx_mock.add_response(
+        url=f"{EMG_CONFIG.ena.portal_search_api}?"
+        f"result=study"
+        f"&query=%22%28study_accession%3D{study_accession}+OR+secondary_study_accession%3D{study_accession}%29%22"
+        f"&fields=study_accession"
+        f"&limit="
+        f"&format=json"
+        f"&dataPortal=metagenome",
+        match_headers={},  # public call should not find private study
+        json=[],
         is_reusable=True,
         is_optional=True,
     )
@@ -952,12 +1129,13 @@ def test_prefect_analyse_rawreads_flow_private_data(
     )
 
     # create fake results
-    summary_folder = Path(f"{EMG_CONFIG.slurm.default_workdir}/{study_accession}_v6")
-    summary_folder.mkdir(exist_ok=True, parents=True)
-    generate_fake_rawreads_pipeline_summary_results(summary_folder)
-
-    rawreads_folder = Path(
-        f"{EMG_CONFIG.slurm.default_workdir}/{study_accession}_rawreads/abc123"
+    rawreads_folder = (
+        Path(EMG_CONFIG.slurm.default_workdir)
+        / Path(study_accession)
+        / Path(
+            f"{EMG_CONFIG.rawreads_pipeline.pipeline_name}_{EMG_CONFIG.rawreads_pipeline.pipeline_version}"
+        )
+        / Path(samplesheet_hash)
     )
     rawreads_folder.mkdir(exist_ok=True, parents=True)
 
@@ -1105,19 +1283,34 @@ def test_prefect_analyse_rawreads_flow_private_data(
     )
 
     # Check files
-    workdir = Path(f"{EMG_CONFIG.slurm.default_workdir}/{study_accession}_v6")
+    workdir = (
+        Path(EMG_CONFIG.slurm.default_workdir)
+        / Path(study_accession)
+        / Path(
+            f"{EMG_CONFIG.rawreads_pipeline.pipeline_name}_{EMG_CONFIG.rawreads_pipeline.pipeline_version}"
+        )
+    )
     assert workdir.is_dir()
     assert study.external_results_dir == f"{study_accession[:-3]}/{study_accession}"
 
     # Check summaries
+    summary_dir = (
+        study.results_dir_path
+        / f"{EMG_CONFIG.rawreads_pipeline.pipeline_name}_{EMG_CONFIG.rawreads_pipeline.pipeline_version}"
+    )
     Directory(
-        path=study.results_dir,
-        glob_rules=[
-            GlobHasFilesCountRule[13]
-        ],  # 6 for the samplesheet, same 6 for the "merge", and 1 for the study multiqc
+        path=summary_dir,
+        glob_rules=[GlobHasFilesCountRule[8]],  # 6 study summaries, 2 directories
     )
 
-    with (workdir / "abc123_motus_study_summary.tsv").open("r") as summary:
+    # need to log the directory contents
+    logging.info(f"Contents of {(summary_dir / "summaries")}:")
+    for fp in (summary_dir / "summaries").glob("*"):
+        logging.info(fp)
+
+    with (
+        summary_dir / "summaries" / f"{samplesheet_hash}_motus_study_summary.tsv"
+    ).open("r") as summary:
         lines = summary.readlines()
         assert (
             lines[0] == "taxonomy\tERR10889188\tERR10889197\tERR10889214\tERR10889221\n"
@@ -1129,7 +1322,7 @@ def test_prefect_analyse_rawreads_flow_private_data(
         assert "g__Lactobacillus" in lines[-2]
 
     # manually remove the merged study summaries
-    for file in Path(study.results_dir).glob(f"{study.first_accession}*"):
+    for file in Path(summary_dir).glob(f"{study.first_accession}*"):
         file.unlink()
 
     # test merging of study summaries again, with cleanup disabled
@@ -1139,14 +1332,14 @@ def test_prefect_analyse_rawreads_flow_private_data(
         analysis_type="rawreads",
     )
     Directory(
-        path=study.results_dir,
+        path=summary_dir,
         glob_rules=[
             GlobHasFilesCountRule[
-                13
+                8
             ],  # study ones generated, and partials left in place
             GlobRule(
                 rule_name="All study level files are present",
-                glob_patten=f"{study.first_accession}*{STUDY_SUMMARY_TSV}",
+                glob_pattern=f"{study.first_accession}*{STUDY_SUMMARY_TSV}",
                 test=lambda f: len(list(f)) == 6,
             ),
         ],
@@ -1164,17 +1357,17 @@ def test_prefect_analyse_rawreads_flow_private_data(
     )
     assert (
         logged_run.logs.count(
-            f"Deleting {str(Path(study.results_dir) / study.first_accession)}"
+            f"Deleting {str(Path(summary_dir) / study.first_accession)}"
         )
         == 6
     )
     Directory(
-        path=study.results_dir,
+        path=summary_dir,
         glob_rules=[
-            GlobHasFilesCountRule[13],  # partials deleted, just merged ones
+            GlobHasFilesCountRule[8],  # partials deleted, just merged ones
             GlobRule(
                 rule_name="All files are study level",
-                glob_patten=f"{study.first_accession}*{STUDY_SUMMARY_TSV}",
+                glob_pattern=f"{study.first_accession}*{STUDY_SUMMARY_TSV}",
                 test=lambda f: len(list(f)) == 6,
             ),
         ],

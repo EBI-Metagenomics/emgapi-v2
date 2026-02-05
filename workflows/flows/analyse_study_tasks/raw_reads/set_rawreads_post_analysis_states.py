@@ -17,7 +17,6 @@ from workflows.prefect_utils.analyses_models_helpers import mark_analysis_status
 def set_post_analysis_states(current_outdir: Path, rawreads_analyses: List):
     # The pipeline produces top level end of execution reports, which contain
     # the list of the runs that were completed, and those that were not.
-    # For more information: https://github.com/EBI-Metagenomics/amplicon-pipeline?tab=readme-ov-file#top-level-reports
 
     def parse_pipeline_report(fp: Path):
         runs = {}

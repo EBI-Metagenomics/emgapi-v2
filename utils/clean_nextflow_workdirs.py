@@ -1,5 +1,5 @@
 import os
-import datetime
+import pendulum
 import click
 import shutil
 import logging
@@ -8,29 +8,48 @@ import glob
 logging.getLogger().setLevel(logging.INFO)
 
 
-def get_directory_time_since_modification(dir_path: str) -> datetime.timedelta:
+def get_directory_time_since_modification(
+    dir_path: str, min_age: pendulum.Duration
+) -> pendulum.Duration:
+    """
+    :param dir_path: directory path to be searched
+    :param min_age: minimum age for the condition upon which the search is terminated early
+    :returns: youngest age of file/subdirectory found in the directory
+
+    Find the youngest file/subdirectory in the directory specified by `dir_path`.
+    If any file is found to be younger than the `min_age` then the search is ended early.
+    This found minimum age of the directory is returned.
+
+    Implemented with a recursive walk (`os.walk`) of the directory.
+    The modification time of each file/subdirectory is found and the maximum modification time (ie. the minimum age) is tracked and updated.
+    If a new maximum modification time is found then an age is calculated and checked against the minimum age condition.
+    The recursive walk is terminated early if this minimum age condition is met.
+    The youngest file/subdirectory age found is returned.
+    """
     max_mtime = 0.0
+    dir_age = pendulum.now() - pendulum.now()
     for fp, _, _ in os.walk(dir_path):
         mtime = os.path.getmtime(fp)
         if mtime > max_mtime:
             max_mtime = float(mtime)
-    return datetime.datetime.now() - datetime.datetime.fromtimestamp(max_mtime)
+            dir_age = pendulum.now() - pendulum.from_timestamp(max_mtime)
+            if dir_age <= min_age:
+                return dir_age
+    return dir_age
 
 
-def parse_timedelta(s: str) -> datetime.timedelta:
+def parse_duration(s: str) -> pendulum.Duration:
     days, remainder = s.split("-")
     hours, minutes, seconds = remainder.split(":")
-    td = datetime.timedelta(
+    td = pendulum.Duration(
         days=int(days), hours=int(hours), minutes=int(minutes), seconds=int(seconds)
     )
     return td
 
 
-def print_timedelta(td: datetime.timedelta) -> str:
-    hours = td.seconds // 3600
-    minutes = (td.seconds % 3600) // 60
-    seconds = td.seconds & 60
-    return f"{td.days}-{hours}:{minutes}:{seconds}"
+def print_duration(td: pendulum.Duration) -> str:
+    seconds = td.seconds % 60
+    return f"{td.days}-{td.hours:02}:{td.minutes:02}:{seconds:02}"
 
 
 @click.group("cli")
@@ -62,20 +81,27 @@ def generate_report(base_dir: str, n_level: int, min_age: str, manifest_fp: str)
     logging.info(
         f"Looking for subdirectories of {base_dir} ({n_level} level depth) older than {min_age}"
     )
-    min_age_td = parse_timedelta(min_age)
+    try:
+        min_age_td = parse_duration(min_age)
+    except ValueError as e:
+        logging.error(
+            'Error parsing age "{min_age}", must be of format <days>-<hours>:<minutes>:<seconds> e.g. 1-00:00:00, 365-00:00:00'
+        )
+        raise e
+
     dir_ages = {}
     for dir_path in glob.glob(f"{base_dir}/{'/'.join(['*' for _ in range(n_level)])}"):
-        age = get_directory_time_since_modification(dir_path)
+        age = get_directory_time_since_modification(dir_path, min_age_td)
         if age > min_age_td:
             dir_ages[dir_path] = age
-            logging.info(f"Found {dir_path} with age of {print_timedelta(age)}")
+            logging.info(f"Found {dir_path} with age of {print_duration(age)}")
 
     logging.info(f"{len(dir_ages)} directories found")
 
     with open(manifest_fp, "wt") as f:
         f.write("# Directory path\tAge (%d-%H:%M:%S)\n")
         for dir_path, age in dir_ages.items():
-            age_str = print_timedelta(age)
+            age_str = print_duration(age)
             f.write(f"{dir_path}\t{age_str}\n")
         f.write(
             "\n# Deletion manifest. Every row in this file is a directory flagged for deletion.\n"
