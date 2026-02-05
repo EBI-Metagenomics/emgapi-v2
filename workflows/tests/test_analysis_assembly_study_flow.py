@@ -2,7 +2,6 @@ import csv
 import gzip
 import re
 import shutil
-import uuid
 from enum import Enum
 from pathlib import Path
 from typing import List
@@ -57,24 +56,6 @@ class AssemblyTestScenario(BaseModel):
 
     class Config:
         frozen = True
-
-
-@pytest.fixture
-def test_workspace():
-    """Create a temporary workspace directory for test execution."""
-
-    # Create a unique workspace under /app/data/tests/tmp/
-    base_tmp = Path("/app/data/tests/tmp")
-    base_tmp.mkdir(parents=True, exist_ok=True)
-
-    workspace = base_tmp / f"test_workspace_{uuid.uuid4().hex[:8]}"
-    workspace.mkdir(exist_ok=True)
-
-    yield workspace
-
-    # Cleanup after test
-    if workspace.exists():
-        shutil.rmtree(workspace)
 
 
 @pytest.fixture

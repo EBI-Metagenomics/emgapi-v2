@@ -1,4 +1,7 @@
 import os
+import shutil
+import uuid
+from pathlib import Path
 from unittest.mock import patch, Mock
 
 import django
@@ -81,3 +84,20 @@ def user(django_user_model):
     return django_user_model.objects.create_user(
         username="testuser", password="password123"
     )
+
+
+@pytest.fixture
+def test_workspace():
+    """Create a temporary workspace directory for test execution."""
+    # Create a unique workspace under /app/data/tests/tmp/
+    base_tmp = Path("/app/data/tests/tmp")
+    base_tmp.mkdir(parents=True, exist_ok=True)
+
+    workspace = base_tmp / f"test_workspace_{uuid.uuid4().hex[:8]}"
+    workspace.mkdir(exist_ok=True)
+
+    yield workspace
+
+    # Cleanup after test
+    if workspace.exists():
+        shutil.rmtree(workspace)
