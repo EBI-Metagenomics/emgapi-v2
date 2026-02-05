@@ -1018,3 +1018,11 @@ def test_get_study_accession_for_assembly_secondary(httpx_mock, prefect_harness)
 
     study_accession = get_study_accession_for_assembly(assembly_accession)
     assert study_accession == secondary_study_accession
+
+
+def test_get_study_accession_for_assembly_real(prefect_harness):
+    assembly_accession = "ERZ26878882"
+    real_study_accession = "PRJEB43947"
+
+    study_accession = get_study_accession_for_assembly(assembly_accession)
+    assert study_accession == real_study_accession

@@ -10,7 +10,6 @@ from activate_django_first import EMG_CONFIG
 
 import analyses.models
 from workflows.nextflow_utils.samplesheets import (
-    queryset_hash,
     queryset_to_samplesheet,
     SamplesheetColumnSource,
 )
@@ -25,10 +24,7 @@ METADATA__FASTQ_FTPS = f"{analyses.models.Run.metadata.field.name}__{FASTQ_FTPS}
     cache_key_fn=context_agnostic_task_input_hash,
     log_prints=True,
 )
-def make_samplesheet_rawreads(
-    mgnify_study: analyses.models.Study,
-    rawreads_analyses: QuerySet,
-) -> tuple[Path, str]:
+def make_samplesheet_rawreads(runs: QuerySet, samplesheet_path: Path) -> Path:
     """
     Makes a samplesheet CSV file for a set of WGS raw-reads analyses, suitable for raw-reads pipeline.
     :param mgnify_study: MGYS study
@@ -36,18 +32,9 @@ def make_samplesheet_rawreads(
     :return: Tuple of the Path to the samplesheet file, and a hash of the run IDs which is used in the SS filename.
     """
 
-    runs_ids = rawreads_analyses.values_list("run_id", flat=True)
-    runs = analyses.models.Run.objects.filter(id__in=runs_ids)
-    print(f"Making raw-reads samplesheet for runs {runs_ids}")
-
-    ss_hash = queryset_hash(runs, "id")
-
     sample_sheet_csv = queryset_to_samplesheet(
         queryset=runs,
-        filename=Path(EMG_CONFIG.slurm.default_workdir)
-        / Path(
-            f"{mgnify_study.ena_study.accession}_samplesheet_rawreads-v6_{ss_hash}.csv"
-        ),
+        filename=samplesheet_path,
         column_map={
             "sample": SamplesheetColumnSource(
                 lookup_string="ena_accessions",
@@ -95,4 +82,4 @@ def make_samplesheet_rawreads(
             """
         ),
     )
-    return sample_sheet_csv, ss_hash
+    return sample_sheet_csv

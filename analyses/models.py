@@ -161,6 +161,10 @@ class Study(
     def __str__(self):
         return self.accession
 
+    @property
+    def results_dir_path(self) -> Path:
+        return Path(self.results_dir)
+
     def set_results_dir_default(self):
         """
         This method checks if the `results_dir` attribute is not set. If so, it will
@@ -173,13 +177,12 @@ class Study(
         # we're trying to catch? Should it be a migration? Or a management command we run after
         # certain bad things happen? Or somewhere in the flows?
         if not self.results_dir:
-            # TODO: there is a v6 hardcoded here.
             self.results_dir = (
                 Path(settings.EMG_CONFIG.slurm.default_workdir)
-                / f"{self.ena_study.accession}_v6"
+                / f"{self.ena_study.accession}"
             )
             logger.info(f"Setting {self}'s results_dir to default {self.results_dir}")
-            self.results_dir.mkdir(exist_ok=True)
+            self.results_dir.mkdir(parents=True, exist_ok=True)
             self.save()
 
     class Meta:
@@ -657,16 +660,55 @@ class Analysis(
     PFAMS = "pfams"
     INTERPROS = "interpros"
 
+    QC = "quality_control"
+    TAXONOMY = "taxonomy"
+
+    # AMPLICON
+    PRIMER_IDENTIFICATION = "primer_identification"
     TAXONOMIES = "taxonomies"
     CLOSED_REFERENCE = "closed_reference"
     ASV = "asv"
 
-    # ASA - results categories
+    AMPLICON_DOWNLOAD_GROUPS = [
+        QC,
+        TAXONOMY,
+        PRIMER_IDENTIFICATION,
+        f"{TAXONOMIES}.closed_reference.",
+        f"{TAXONOMIES}.asv.",
+        ASV,
+    ]
+
+    # ASA
     CODING_SEQUENCES = "coding_sequences"
     FUNCTIONAL_ANNOTATION = "functional_annotation"
     PATHWAYS_AND_SYSTEMS = "pathways_and_systems"
+    ANNOTATION_SUMMARY = "annotation_summary"
     VIRIFY = "virify"
     MAP = "mobilome_annotation_pipeline"
+
+    VIRIFY_DOWNLOAD_GROUPS = [VIRIFY]
+    MAP_DOWNLOAD_GROUPS = [MAP]
+
+    ASA_DOWNLOAD_GROUPS = [
+        PFAMS,  # review this one
+        QC,
+        TAXONOMY,  # do we need this one too?
+        TAXONOMIES,
+        ANNOTATION_SUMMARY,
+        CODING_SEQUENCES,
+        FUNCTIONAL_ANNOTATION,
+        PATHWAYS_AND_SYSTEMS,
+    ]
+
+    ALLOWED_DOWNLOAD_GROUP_PREFIXES = (
+        [
+            "all",  # catch-all for legacy
+        ]
+        + AMPLICON_DOWNLOAD_GROUPS
+        + ASA_DOWNLOAD_GROUPS
+        + VIRIFY_DOWNLOAD_GROUPS
+        + MAP_DOWNLOAD_GROUPS
+    )
 
     class TaxonomySources(FutureStrEnum):
         SSU: str = "ssu"
@@ -702,23 +744,6 @@ class Analysis(
     # TODO: These fields are part of a previous and abandoned idea of storing annotations and qc in json fields
     annotations = models.JSONField(default=default_annotations.__func__)
     quality_control = models.JSONField(default=dict, blank=True)
-
-    ALLOWED_DOWNLOAD_GROUP_PREFIXES = [
-        "all",  # catch-all for legacy
-        f"{TAXONOMIES}.closed_reference.",
-        f"{TAXONOMIES}.asv.",
-        "quality_control",
-        "primer_identification",
-        "taxonomy",
-        "annotation_summary",
-        ASV,
-        PFAMS,
-        CODING_SEQUENCES,
-        FUNCTIONAL_ANNOTATION,
-        PATHWAYS_AND_SYSTEMS,
-        VIRIFY,
-        MAP,
-    ]
 
     class KnownMetadataKeys:
         MARKER_GENE_SUMMARY = "marker_gene_summary"  # for amplicon analyses

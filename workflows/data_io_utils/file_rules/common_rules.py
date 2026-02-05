@@ -26,7 +26,7 @@ DirectoryExistsRule = DirectoryRule(
 )
 GlobHasFilesRule = GlobRule(
     rule_name="Dir should have at least one file",
-    glob_patten="*",
+    glob_pattern="*",
     test=lambda matches: len(list(matches)) > 0,
 )
 
@@ -53,7 +53,7 @@ class __GlobHasFilesCountMetaclass(type):
 
         return GlobRule(
             rule_name=f"Glob should have {repr(expected_count)} file(s)",
-            glob_patten="*",
+            glob_pattern="*",
             test=test,
         )
 

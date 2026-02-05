@@ -7,10 +7,8 @@ from ena.models import Study
 from prefect import get_run_logger, task
 
 from mgnify_pipelines_toolkit.analysis.assembly import study_summary_generator
+from activate_django_first import EMG_CONFIG
 
-from workflows.data_io_utils.file_rules.common_rules import (
-    DirectoryExistsRule,
-)
 from workflows.data_io_utils.file_rules.nodes import Directory
 from workflows.flows.analyse_study_tasks.shared.study_summary import STUDY_SUMMARY_TSV
 from workflows.models import AssemblyAnalysisBatch, AssemblyAnalysisPipeline
@@ -18,24 +16,17 @@ from workflows.prefect_utils.dir_context import chdir
 
 
 def _run_assembly_summary_generator(
-    *,
-    study_results_dir: Path,
+    output_dir: Path,
     asa_workspace: Path,
     assemblies_csv: Path,
     output_prefix: str,
 ) -> List[Path]:
+
     logger = get_run_logger()
 
-    study_dir = Directory(
-        path=study_results_dir,
-        rules=[DirectoryExistsRule],
-    )
+    logger.info(f"Study results_dir, where summaries will be made, is {output_dir}")
 
-    logger.info(
-        f"Study results_dir, where summaries will be made, is {study_results_dir}"
-    )
-
-    with chdir(study_results_dir):
+    with chdir(output_dir):
         # TODO: we need to expose the summary as a lib component we can just import instead of having to use
         #       click to bootstrap the environment
         with click.Context(study_summary_generator.summarise_analyses) as ctx:
@@ -44,14 +35,14 @@ def _run_assembly_summary_generator(
                 output_prefix=output_prefix,
                 assemblies=assemblies_csv.absolute(),
                 study_dir=asa_workspace.absolute(),
-                outdir=study_results_dir.absolute(),
+                outdir=output_dir.absolute(),
             )
 
-    generated_files = list(study_dir.path.glob(f"{output_prefix}*{STUDY_SUMMARY_TSV}"))
+    generated_files = list(output_dir.glob(f"{output_prefix}*{STUDY_SUMMARY_TSV}"))
 
     if not generated_files:
         raise FileNotFoundError(
-            f"No study summary files were generated in {study_results_dir} "
+            f"No study summary files were generated in {output_dir} "
             f"with prefix {output_prefix}"
         )
 
@@ -96,8 +87,18 @@ def generate_assembly_analysis_pipeline_batch_summary(
     assemblies_csv = asa_workspace / "analysed_assemblies.csv"
     logger.info(f"Expecting to find analysis results in {asa_workspace}")
 
+    pipeline_config = EMG_CONFIG.assembly_analysis_pipeline
+    summary_dir = Directory(
+        path=(
+            study.results_dir_path
+            / f"{pipeline_config.pipeline_name}_{pipeline_config.pipeline_version}"
+            / "summaries"
+        ),
+    )
+    summary_dir.path.mkdir(parents=True, exist_ok=True)
+
     return _run_assembly_summary_generator(
-        study_results_dir=Path(study.results_dir),
+        output_dir=summary_dir.path,
         asa_workspace=Path(asa_workspace),
         assemblies_csv=assemblies_csv,
         output_prefix=str(assembly_batch.id),
@@ -123,19 +124,29 @@ def generate_assembly_analysis_pipeline_summary(
 
     logger.info(f"Generating assembly summary for {study.id}")
 
-    if not study.results_dir:
+    if not study.results_dir_path:
         raise ValueError(
             f"Study {study.accession} does not have results_dir set, "
             "cannot generate assembly analysis summary."
         )
 
-    asa_workspace = Path(study.results_dir) / "asa"
+    asa_workspace = study.results_dir_path / "asa"
     assemblies_csv = asa_workspace / "analysed_assemblies.csv"
 
     logger.info(f"Expecting to find analysis results in {asa_workspace}")
 
+    pipeline_config = EMG_CONFIG.assembly_analysis_pipeline
+    summary_dir = Directory(
+        path=(
+            study.results_dir_path
+            / f"{pipeline_config.pipeline_name}_{pipeline_config.pipeline_version}"
+            / "summaries"
+        ),
+    )
+    summary_dir.path.mkdir(parents=True, exist_ok=True)
+
     return _run_assembly_summary_generator(
-        study_results_dir=Path(study.results_dir),
+        output_dir=summary_dir.path,
         asa_workspace=asa_workspace,
         assemblies_csv=assemblies_csv,
         output_prefix=study.first_accession,

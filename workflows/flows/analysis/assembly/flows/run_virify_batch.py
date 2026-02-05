@@ -2,6 +2,7 @@ import uuid
 from datetime import timedelta
 from pathlib import Path
 
+from django.utils.text import slugify
 from django.db import close_old_connections
 from prefect import flow, get_run_logger
 from prefect.runtime import flow_run
@@ -24,6 +25,9 @@ from workflows.prefect_utils.slurm_flow import (
 from workflows.prefect_utils.slurm_policies import ResubmitAlwaysPolicy
 from workflows.flows.analysis.assembly.utils.status_update_hooks import (
     update_batch_status_counts,
+)
+from workflows.flows.analyse_study_tasks.cleanup_pipeline_directories import (
+    remove_dir,
 )
 
 
@@ -132,6 +136,13 @@ def run_virify_batch(assembly_analyses_batch_id: uuid.UUID):
 
     logger.info(f"Using output dir {virify_outdir} for VIRify pipeline")
 
+    nextflow_workdir = (
+        Path(assembly_analysis_batch.workspace_dir)
+        / "virify"
+        / f"virify-sheet-{slugify(virify_samplesheet_path)}"
+    )
+    nextflow_workdir.mkdir(parents=True, exist_ok=True)
+
     # Build the command to run the virify pipeline
     command = cli_command(
         [
@@ -151,13 +162,9 @@ def run_virify_batch(assembly_analyses_batch_id: uuid.UUID):
             ),
             ("-config", EMG_CONFIG.virify_pipeline.pipeline_config_file),
             "-resume",
-            (
-                "-work-dir",
-                Path(EMG_CONFIG.assembly_analysis_pipeline.workdir_root)
-                / mgnify_study.first_accession
-                / "virify",
-            ),
+            ("-work-dir", nextflow_workdir),
             ("--samplesheet", virify_samplesheet_path),
+            "--use_proteins",
             ("--output", virify_outdir),
             EMG_CONFIG.slurm.use_nextflow_tower and "-with-tower",
             ("-ansi-log", "false"),
@@ -200,6 +207,8 @@ def run_virify_batch(assembly_analyses_batch_id: uuid.UUID):
             virify_status=AssemblyAnalysisPipelineStatus.RUNNING
         ).update(virify_status=AssemblyAnalysisPipelineStatus.FAILED)
     else:
+        remove_dir(nextflow_workdir)  # will also delete past "abandoned" nextflow files
+
         logger.info("VIRify pipeline completed successfully")
 
         # Mark only RUNNING analyses as VIRify completed (don't overwrite already-COMPLETED ones)

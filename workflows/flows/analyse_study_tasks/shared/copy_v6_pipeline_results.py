@@ -11,7 +11,10 @@ from workflows.data_io_utils.filenames import (
     accession_prefix_separated_dir_path,
     trailing_slash_ensured_dir,
 )
-from workflows.flows.analyse_study_tasks.shared.study_summary import STUDY_SUMMARY_TSV
+from workflows.flows.analyse_study_tasks.shared.study_summary import (
+    STUDY_SUMMARY_TSV,
+    DWCREADY_CSV,
+)
 from workflows.models import (
     AssemblyAnalysisBatch,
     AssemblyAnalysisPipelineStatus,
@@ -81,6 +84,7 @@ def copy_v6_pipeline_results(analysis_accession: str, timeout: int = 14400):
         [
             "rsync",
             "-av",
+            "--prune-empty-dirs",
             "--include=*/",
         ]
         + [f"--include=*.{ext}" for ext in allowed_extensions]
@@ -132,6 +136,8 @@ def copy_v6_study_summaries(study_accession: str, timeout: int = 14400):
             "-av",
             f"--include=PRJ*{STUDY_SUMMARY_TSV}",
             f"--include=[DES]RP*{STUDY_SUMMARY_TSV}",
+            f"--include=PRJ*{DWCREADY_CSV}",
+            f"--include=[DES]RP*{DWCREADY_CSV}",
             "--exclude=*",
         ]
     )
@@ -248,14 +254,14 @@ def copy_assembly_batch_results(batch_id: uuid.UUID, timeout: int = 14400):
 
     # TODO: this is repeated... I know.
     if copy_failed_analysis_ids:
-        analyses_to_update = Analysis.objects.filter(id__in=copied_analysis_ids)
+        analyses_to_update = Analysis.objects.filter(id__in=copy_failed_analysis_ids)
         # Update status flags in bulk
         for analysis in analyses_to_update:
             analysis.status[Analysis.AnalysisStates.ANALYSIS_ANNOTATIONS_IMPORTED] = (
                 False
             )
         Analysis.objects.bulk_update(analyses_to_update, ["status"])
-        logger.info(f"Bulk updated status for {len(copied_analysis_ids)} analyses")
+        logger.info(f"Bulk updated status for {len(copy_failed_analysis_ids)} analyses")
 
     logger.info(f"Completed copying results for batch {batch_id}")
 
@@ -270,6 +276,8 @@ def _copy_single_analysis_results(
 ):
     """
     Copy results for a single analysis from the batch workspace to external results.
+
+    FIXME: this method and copy_v6_pipeline_results are _very_ similar. This duplication is a problem
 
     :param analysis: The analysis to copy results for
     :param batch_analysis_relation: The batch-analysis relation containing pipeline statuses
@@ -296,11 +304,30 @@ def _copy_single_analysis_results(
     )
 
     # rsync command for copying all files
+    allowed_extensions = [
+        "yml",
+        "yaml",
+        "txt",
+        "html",
+        "json",
+        "fa",
+        "fasta",
+        "tsv",
+        "csv",
+        "gz",
+        "csi",
+        "gzi",
+    ]
+
     command = cli_command(
         [
             "rsync",
             "-av",
+            "--prune-empty-dirs",
+            "--include=*/",
         ]
+        + [f"--include=*.{ext}" for ext in allowed_extensions]
+        + ["--exclude=*"]
     )
 
     # Copy ASA results to root (ASA is always completed since we filter for it)

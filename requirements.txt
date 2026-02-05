@@ -5,6 +5,7 @@ cython<3.0
 Pillow~=11.3.0  # imagefield requirement
 typing_extensions~=4.14.1
 tzdata
+pendulum
 
 # Django and plugins
 django==5.2.7
@@ -31,11 +32,14 @@ prefect==3.4.19
 fastapi==0.123.6
 prefect-shell==0.3.1
 prefect-slack==0.3.1
-prefect-slurm==0.1.4
+prefect-slurm==0.1.5
 
 # Pydantic
 pydantic<2.12.0  # TODO upgrade once https://github.com/eadwinCode/django-ninja-jwt/pull/151 is released
 pydantic-settings~=2.11.0
+pydantic-xml[lxml]~=2.18.0
+email-validator==2.3.0
+lxml==6.0.2
 
 # Legacy DB connectors (remove at some point)
 pymongo==4.13.2
@@ -45,3 +49,4 @@ SQLAlchemy
 # Outbound network
 requests~=2.32.4
 httpx~=0.28.1
+parse==1.20.2

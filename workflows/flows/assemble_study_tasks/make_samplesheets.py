@@ -36,6 +36,7 @@ def make_samplesheet(
     mgnify_study: analyses.models.Study,
     assembly_ids: List[Union[str, int]],
     assembler: analyses.models.Assembler,
+    output_dir: Union[Path, None] = None,
 ) -> (Path, str):
     """Generate a samplesheet for assemblies in a study.
 
@@ -53,6 +54,13 @@ def make_samplesheet(
 
     ss_hash = queryset_hash(assemblies, "id")
 
+    if output_dir is None:
+        output_dir = Path(EMG_CONFIG.slurm.default_workdir)
+    else:
+        output_dir = Path(output_dir)
+        output_dir.mkdir(parents=True, exist_ok=True)
+    (output_dir / ss_hash).mkdir(parents=True, exist_ok=True)
+
     memory = get_memory_for_assembler(mgnify_study.biome, assembler)
 
     # Get contaminant reference genome if biome is found
@@ -60,10 +68,7 @@ def make_samplesheet(
 
     sample_sheet_tsv = queryset_to_samplesheet(
         queryset=assemblies,
-        filename=Path(EMG_CONFIG.slurm.default_workdir)
-        / Path(
-            f"{mgnify_study.ena_study.accession}_samplesheet_miassembler_{ss_hash}.csv"
-        ),
+        filename=(output_dir / ss_hash / Path("samplesheet.csv")),
         column_map={
             "study_accession": SamplesheetColumnSource(
                 lookup_string="ena_study__accession"
@@ -176,6 +181,7 @@ def make_samplesheets_for_runs_to_assemble(
     mgnify_study_accession: str,
     assembler: analyses.models.Assembler,
     chunk_size: int = 10,
+    output_dir: Union[Path, None] = None,
 ) -> list[tuple[Path, str]]:
     """Generate samplesheets for assemblies in a study for processing by the specified assembler.
 
@@ -205,7 +211,7 @@ def make_samplesheets_for_runs_to_assemble(
     chunked_assemblies = chunk_list(assemblies_to_attempt, chunk_size)
 
     sheets = [
-        make_samplesheet(mgnify_study, assembly_chunk, assembler)
+        make_samplesheet(mgnify_study, assembly_chunk, assembler, output_dir)
         for assembly_chunk in chunked_assemblies
     ]
     return sheets

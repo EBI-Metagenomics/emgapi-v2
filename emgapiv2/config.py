@@ -11,7 +11,8 @@ from workflows.ena_utils.abstract import ENAPortalDataPortal
 
 class SlurmConfig(BaseModel):
     default_job_status_checks_limit: int = 10
-    default_workdir: str = "/nfs/production/dev-slurm-work-dir"
+    default_workdir: str = "/path/to/pipeline-results-dir"
+    default_nextflow_workdir: str = "/path/to/pipeline-workdir"
     pipelines_root_dir: str = "/app/workflows/pipelines"
     ftp_results_dir: str = "/nfs/ftp/public/databases/metagenomics/mgnify_results"
     private_results_dir: str = "/nfs/public/services/private-data"
@@ -63,6 +64,8 @@ class MGnifyPipelineConfig(BaseModel):
     Subclasses must override pipeline_repo and pipeline_git_revision.
     """
 
+    pipeline_name: str = ...  # Required
+    pipeline_version: str = ...  # Required
     pipeline_repo: str = ...  # Required
     pipeline_git_revision: str = ...  # Required
     pipeline_config_file: str = "/nfs/public/donco.config"
@@ -76,6 +79,8 @@ class MGnifyPipelineConfig(BaseModel):
 
 
 class AssemblerConfig(MGnifyPipelineConfig):
+    pipeline_name: str = "miassembler"
+    pipeline_version: str = "v6"
     pipeline_repo: str = "ebi-metagenomics/miassembler"
     pipeline_git_revision: str = "v3.0.3"
 
@@ -91,6 +96,8 @@ class AssemblerConfig(MGnifyPipelineConfig):
 
 
 class AmpliconPipelineConfig(MGnifyPipelineConfig):
+    pipeline_name: str = "amplicon"
+    pipeline_version: str = "v6"
     pipeline_repo: str = "ebi-metagenomics/amplicon-analysis-pipeline"
     pipeline_git_revision: str = "v6.0.6"
 
@@ -107,6 +114,9 @@ class AmpliconPipelineConfig(MGnifyPipelineConfig):
     completed_runs_csv: str = "qc_passed_runs.csv"
     failed_runs_csv: str = "qc_failed_runs.csv"
 
+    # test reference DB OTU path
+    refdb_otus_dir: str = "/app/data/tests/refdb_otus"
+
     # Results folders
     qc_folder: str = "qc"
     sequence_categorisation_folder: str = "sequence-categorisation"
@@ -117,16 +127,14 @@ class AmpliconPipelineConfig(MGnifyPipelineConfig):
 
 
 class RawReadsPipelineConfig(MGnifyPipelineConfig):
+    pipeline_name: str = "rawreads"
+    pipeline_version: str = "v6"
     pipeline_repo: str = "ebi-metagenomics/raw-reads-analysis-pipeline"
     pipeline_git_revision: str = "master"
 
     # Resources
     pipeline_time_limit_days: int = 5
     samplesheet_chunk_size: int = 50
-    # TODO: remove this one, it is part of the default pipelines config
-    base_workdir: str = (
-        "/hps/nobackup/rdf/metagenomics/service-team/nextflow-workdir/rawreads-pipeline"
-    )
 
     # Settings
     allow_non_insdc_run_names: bool = False
@@ -147,6 +155,8 @@ class RawReadsPipelineConfig(MGnifyPipelineConfig):
 
 
 class AssemblyAnalysisPipelineConfig(MGnifyPipelineConfig):
+    pipeline_name: str = "asa"
+    pipeline_version: str = "v6"
     pipeline_repo: str = "ebi-metagenomics/assembly-analysis-pipeline"
     pipeline_git_revision: str = "dev"
     pipeline_time_limit_days: int = 5
@@ -181,6 +191,8 @@ class AssemblyAnalysisPipelineConfig(MGnifyPipelineConfig):
 
 
 class VirifyPipelineConfig(MGnifyPipelineConfig):
+    pipeline_name: str = "virify"
+    pipeline_version: str = "v6"
     pipeline_repo: str = "ebi-metagenomics/emg-viral-pipeline"
     pipeline_git_revision: str = "v3.0.0"
     pipeline_time_limit_days: int = 1
@@ -193,6 +205,8 @@ class VirifyPipelineConfig(MGnifyPipelineConfig):
 
 
 class MapPipelineConfig(MGnifyPipelineConfig):
+    pipeline_name: str = "map"
+    pipeline_version: str = "v6"
     pipeline_repo: str = "ebi-metagenomics/mobilome-annotation-pipeline"
     pipeline_git_revision: str = "v4.1.0"
     pipeline_time_limit_days: int = 1
@@ -299,6 +313,19 @@ class EuropePMCConfig(BaseModel):
     annotations_provider: str = Field("Metagenomics")
 
 
+class DarwinCoreArchiveConfig(BaseModel):
+    language: str = Field("en")
+    license_url: str = Field("https://www.ebi.ac.uk/licencing/")
+    license_name: str = Field("EMBL-EBI Terms Of Use")
+    license_text: str = Field(
+        "EMBL-EBI's MGnify imposes no additional restriction on the use of the contributed data than those provided by the data owner."
+    )
+    keywords: list[str] = Field(["metagenomics", "environmental genomics"])
+    studies_url_root_for_distribution: str = Field(
+        "https://www.ebi.ac.uk/metagenomics/studies/"
+    )
+
+
 class EMGConfig(BaseSettings):
     amplicon_pipeline: AmpliconPipelineConfig = AmpliconPipelineConfig()
     rawreads_pipeline: RawReadsPipelineConfig = RawReadsPipelineConfig()
@@ -317,6 +344,7 @@ class EMGConfig(BaseSettings):
     log_masking: LogMaskingConfig = LogMaskingConfig()
     europe_pmc: EuropePMCConfig = EuropePMCConfig()
     genomes: GenomeConfig = GenomeConfig()
+    darwin_core_archive: DarwinCoreArchiveConfig = DarwinCoreArchiveConfig()
 
     model_config = {
         "env_prefix": "emg_",

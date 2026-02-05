@@ -1,8 +1,10 @@
+import glob
 import json
 import os
 import shutil
+import logging
 from pathlib import Path
-from typing import Optional, List
+from typing import Optional, List, Union
 from unittest.mock import patch
 
 import pandas as pd
@@ -14,6 +16,8 @@ from pydantic import BaseModel
 import analyses.models
 import ena.models
 from workflows.ena_utils.ena_api_requests import ENALibraryStrategyPolicy
+from workflows.data_io_utils.file_rules.base_rules import GlobRule
+from workflows.data_io_utils.file_rules.nodes import Directory
 from workflows.flows.assemble_study import AssemblerChoices, assemble_study
 from workflows.flows.assemble_study_tasks.assemble_samplesheets import (
     get_reference_genome,
@@ -27,6 +31,10 @@ from workflows.prefect_utils.analyses_models_helpers import mark_assembly_status
 from workflows.prefect_utils.testing_utils import (
     should_not_mock_httpx_requests_to_prefect_server,
     combine_caplog_records,
+)
+from workflows.flows.analyse_study_tasks.cleanup_pipeline_directories import (
+    # delete_study_results_dir,
+    delete_assemble_study_nextflow_workdir,
 )
 
 EMG_CONFIG = settings.EMG_CONFIG
@@ -45,6 +53,19 @@ def assembly_study_input_mocker(biome_choices, user_choices):
         library_strategy_policy: ENALibraryStrategyPolicy
 
     return MockAssembleStudyInput
+
+
+def simulate_copy_results(
+    source: Path, target: Path, allowed_extensions: Union[set, list], logger=None
+):
+    for fp in source.rglob("**/*"):
+        if fp.name.split(".")[-1] in allowed_extensions:
+            target_ = target / fp.relative_to(source)
+            if logger:
+                logger.info(f"Copying analysis results file {fp} to {target_}.")
+            target_.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(fp, target_)
+            continue
 
 
 @pytest.mark.flaky(
@@ -72,8 +93,11 @@ def test_prefect_assemble_study_flow(
     user_choices,
     assembly_study_input_mocker,
 ):
+    logger = logging.getLogger("assemble_study_flow_test")
+
     ### ENA MOCKING ###
     accession = "SRP1"
+    study_accession = "PRJNA1"
     number_of_runs = 9
     number_not_assembled_runs = 1
 
@@ -100,7 +124,7 @@ def test_prefect_assemble_study_flow(
             {
                 "study_title": "Metagenome of a wookie",
                 "secondary_study_accession": "SRP1",
-                "study_accession": "PRJNA1",
+                "study_accession": f"{study_accession}",
             }
         ],
     )
@@ -120,7 +144,7 @@ def test_prefect_assemble_study_flow(
     httpx_mock.add_response(
         url=f"{EMG_CONFIG.ena.portal_search_api}?"
         f"result=read_run"
-        f"&query=%22%28study_accession=PRJNA1%20OR%20secondary_study_accession=PRJNA1%29%22"
+        f"&query=%22%28study_accession={study_accession}%20OR%20secondary_study_accession={study_accession}%29%22"
         f"&limit=5000"
         f"&format=json"
         f"&fields=run_accession%2Csample_accession%2Csample_title%2Csecondary_sample_accession%2Cfastq_md5%2Cfastq_ftp%2Clibrary_layout%2Clibrary_strategy%2Clibrary_source%2Cscientific_name%2Chost_tax_id%2Chost_scientific_name%2Cinstrument_platform%2Cinstrument_model%2Clocation%2Clat%2Clon"
@@ -313,10 +337,16 @@ def test_prefect_assemble_study_flow(
 
     mock_suspend_flow_run.side_effect = suspend_side_effect
 
-    mock_queryset_hash_for_assemblies.return_value = "abc123"
+    samplesheet_hash = "abc123"
+    mock_queryset_hash_for_assemblies.return_value = samplesheet_hash
 
-    assembly_folder = Path(
-        f"{EMG_CONFIG.slurm.default_workdir}/PRJNA1_miassembler/abc123"
+    assembly_folder = (
+        Path(f"{EMG_CONFIG.slurm.default_workdir}")
+        / Path(study_accession)
+        / Path(
+            f"{EMG_CONFIG.assembler.pipeline_name}_{EMG_CONFIG.assembler.pipeline_version}"
+        )
+        / Path(samplesheet_hash)
     )
     assembly_folder.mkdir(exist_ok=True, parents=True)
 
@@ -452,6 +482,112 @@ def test_prefect_assemble_study_flow(
         == "filter_ratio_threshold_exceeded"
     )
 
+    # simulate copy_v6_pipeline_results and copy_v6_summaries
+    mgys = analyses.models.Study.objects.select_related("ena_study").first()
+    logger.info(f"Got MGnify study {mgys}")
+    assert mgys is not None
+    mgys.results_dir = str(Path(*Path(assembly_folder).parts[:-1]))
+    mgys.external_results_dir = (
+        f"/tmp/external/{study_accession[:-3]}/{study_accession}"
+    )
+    mgys.save()
+    assert mgys.results_dir is not None
+    assert mgys.external_results_dir is not None
+
+    source = mgys.results_dir_path
+    target = Path(mgys.external_results_dir)
+
+    # test deleting where not everything is copied
+    allowed_extensions = {
+        "yml",
+        "yaml",
+        "txt",
+        "tsv",
+        "mseq",
+        "html",
+        "fa",
+        "json",
+        "gz",
+        "fasta",
+        # "csv",
+        "deoverlapped",
+    }
+    simulate_copy_results(source, target, allowed_extensions, logger=logger)
+    # delete_study_results_dir(mgys.results_dir_path, mgys)
+    assert mgys.results_dir_path.is_dir()
+
+    # test deleting where everything is copied
+    allowed_extensions = {
+        "yml",
+        "yaml",
+        "txt",
+        "tsv",
+        "mseq",
+        "html",
+        "fa",
+        "json",
+        "gz",
+        "fasta",
+        "csv",
+        "deoverlapped",
+    }
+    simulate_copy_results(source, target, allowed_extensions, logger=logger)
+    # delete_study_results_dir(mgys.results_dir_path, mgys)
+    # assert not mgys.results_dir_path.is_dir()
+
+    # check external directory files
+    n = len(list(glob.glob(f"{mgys.external_results_dir}/**/*", recursive=True)))
+    logger.info(
+        f"External results directory {mgys.external_results_dir} has {n} files."
+    )
+    Directory(
+        path=Path(mgys.external_results_dir),
+        glob_rules=[
+            GlobRule(
+                rule_name="Recursive number of files",
+                glob_pattern="**/*",
+                test=lambda x: len(list(x)) == 62,
+            )
+        ],
+    )
+
+    # test Nextflow workdir cleanup
+    nextflow_workdir = (
+        Path("/tmp/work")
+        / Path(study_accession)
+        / Path(
+            f"{EMG_CONFIG.rawreads_pipeline.pipeline_name}_{EMG_CONFIG.rawreads_pipeline.pipeline_version}"
+        )
+        / samplesheet_hash
+    )
+    # generate plausible nextflow directories
+    os.makedirs(nextflow_workdir / "h5" / "h5scdo9q3u4nefpsldkfvubqp349", exist_ok=True)
+    assert nextflow_workdir.is_dir()
+
+    assemblies_to_attempt = (
+        analyses.models.Assembly.objects.filter(
+            reads_study__accession__exact=mgys.accession,
+        )
+        .order_by("id")
+        .values_list("id", flat=True)
+    )
+    logger.info(f"Assemblies to attempt: {assemblies_to_attempt}.")
+
+    # set one of the analyses to incomplete
+    analysis_obj = analyses.models.Assembly.objects.get(pk=assemblies_to_attempt[0])
+    analysis_obj.mark_status(
+        analyses.models.Assembly.AssemblyStates.ASSEMBLY_FAILED, True
+    )
+    delete_assemble_study_nextflow_workdir(nextflow_workdir, assemblies_to_attempt)
+    assert nextflow_workdir.is_dir()
+
+    # set it to complete
+    analysis_obj.mark_status(
+        analyses.models.Assembly.AssemblyStates.ASSEMBLY_FAILED, False
+    )
+    delete_assemble_study_nextflow_workdir(nextflow_workdir, assemblies_to_attempt)
+    assert not nextflow_workdir.is_dir()
+
     shutil.rmtree(assembly_folder, ignore_errors=True)
 
 
@@ -482,6 +618,7 @@ def test_prefect_assemble_private_study_flow(
 ):
     ### ENA MOCKING ###
     accession = "SRP1"
+    study_accession = "PRJNA1"
 
     httpx_mock.add_response(
         url=f"{EMG_CONFIG.ena.portal_search_api}?"
@@ -524,7 +661,7 @@ def test_prefect_assemble_private_study_flow(
             {
                 "study_title": "Metagenome of a wookie",
                 "secondary_study_accession": "SRP1",
-                "study_accession": "PRJNA1",
+                "study_accession": f"{study_accession}",
             }
         ],
     )
@@ -532,7 +669,7 @@ def test_prefect_assemble_private_study_flow(
     httpx_mock.add_response(
         url=f"{EMG_CONFIG.ena.portal_search_api}?"
         f"result=read_run"
-        f"&query=%22%28study_accession=PRJNA1%20OR%20secondary_study_accession=PRJNA1%29%22"
+        f"&query=%22%28study_accession={study_accession}%20OR%20secondary_study_accession={study_accession}%29%22"
         f"&limit=5000"
         f"&format=json"
         f"&fields=run_accession%2Csample_accession%2Csample_title%2Csecondary_sample_accession%2Cfastq_md5%2Cfastq_ftp%2Clibrary_layout%2Clibrary_strategy%2Clibrary_source%2Cscientific_name%2Chost_tax_id%2Chost_scientific_name%2Cinstrument_platform%2Cinstrument_model%2Clocation%2Clat%2Clon"
@@ -596,10 +733,16 @@ def test_prefect_assemble_private_study_flow(
 
     mock_suspend_flow_run.side_effect = suspend_side_effect
 
-    mock_queryset_hash_for_assemblies.return_value = "xyz789"
+    samplesheet_hash = "xyz789"
+    mock_queryset_hash_for_assemblies.return_value = samplesheet_hash
 
-    assembly_folder = Path(
-        f"{EMG_CONFIG.slurm.default_workdir}/PRJNA1_miassembler/xyz789"
+    assembly_folder = (
+        Path(f"{EMG_CONFIG.slurm.default_workdir}")
+        / Path(study_accession)
+        / Path(
+            f"{EMG_CONFIG.assembler.pipeline_name}_{EMG_CONFIG.assembler.pipeline_version}"
+        )
+        / Path(samplesheet_hash)
     )
     assembly_folder.mkdir(exist_ok=True, parents=True)
 
@@ -702,7 +845,9 @@ def test_assembler_changed_in_samplesheet(
     study.save()
 
     samplesheets = make_samplesheets_for_runs_to_assemble(
-        mgnify_study_accession=study.accession, assembler=mgnify_assemblies[0].assembler
+        mgnify_study_accession=study.accession,
+        assembler=mgnify_assemblies[0].assembler,
+        output_dir=Path(EMG_CONFIG.slurm.default_workdir),
     )
     samplesheet: Path = samplesheets[0][
         0

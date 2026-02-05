@@ -1,6 +1,7 @@
 from enum import Enum
 from textwrap import dedent
 from typing import Optional, List
+from pathlib import Path
 
 from django.urls import reverse_lazy
 from prefect import flow, get_run_logger, suspend_flow_run
@@ -37,6 +38,10 @@ from workflows.flows.assemble_study_tasks.upload_assemblies import upload_assemb
 from workflows.prefect_utils.analyses_models_helpers import (
     get_users_as_choices,
     add_study_watchers,
+)
+from workflows.flows.analyse_study_tasks.cleanup_pipeline_directories import (
+    delete_assemble_study_nextflow_workdir,
+    # delete_study_results_dir,
 )
 
 
@@ -183,13 +188,24 @@ def assemble_study(
     )
     # assumes latest version...
 
-    get_or_create_assemblies_for_runs(
+    study_workdir = (
+        Path(f"{EMG_CONFIG.slurm.default_nextflow_workdir}")
+        / Path(f"{mgnify_study.ena_study.accession}")
+        / f"{EMG_CONFIG.assembler.pipeline_name}_{EMG_CONFIG.assembler.pipeline_version}"
+    )
+    study_outdir = (
+        Path(f"{EMG_CONFIG.slurm.default_workdir}")
+        / Path(f"{mgnify_study.ena_study.accession}")
+        / f"{EMG_CONFIG.assembler.pipeline_name}_{EMG_CONFIG.assembler.pipeline_version}"
+    )
+
+    assemblies_to_attempt = get_or_create_assemblies_for_runs(
         mgnify_study.accession,
         read_runs,
         library_strategy_policy=assemble_study_input.library_strategy_policy,
     )
     samplesheets = make_samplesheets_for_runs_to_assemble(
-        mgnify_study.accession, assembler
+        mgnify_study.accession, assembler, output_dir=study_outdir
     )
 
     # If allow_samplesheet_editing is True, suspend the flow to allow editing
@@ -227,14 +243,20 @@ def assemble_study(
 
     for samplesheet_path, samplesheet_hash in samplesheets:
         logger.info(f"Will run assembler for samplesheet {samplesheet_path.name}")
+
         run_assembler_for_samplesheet(
             mgnify_study,
             samplesheet_path,
             samplesheet_hash,
+            study_workdir / samplesheet_hash,
+            study_outdir / samplesheet_hash,
         )
 
     if upload:
         upload_assemblies(mgnify_study, dry_run=use_ena_dropbox_dev)
+
+    delete_assemble_study_nextflow_workdir(study_workdir, assemblies_to_attempt)
+    # delete_study_results_dir(study_outdir, mgnify_study)
 
     emit_event(
         event="flow.assembly.finished",
