@@ -36,7 +36,7 @@ deployments:
   entrypoint: workflows/flows/analysis/assembly/flows/analysis_assembly_study.py:analysis_assembly_study
   schedule: null
   work_pool:
-    name: slurm_2
+    name: slurm
 
 - name: run_assembly_analysis_pipeline_batch_deployment
   description: |-
@@ -60,7 +60,7 @@ deployments:
   entrypoint: workflows/flows/analysis/assembly/flows/run_assembly_analysis_pipeline_batch.py:run_assembly_analysis_pipeline_batch
   schedule: null
   work_pool:
-    name: slurm_2
+    name: slurm
 
 - name: run_virify_batch_deployment
   description: |-
@@ -82,7 +82,7 @@ deployments:
   entrypoint: workflows/flows/analysis/assembly/flows/run_virify_batch.py:run_virify_batch
   schedule: null
   work_pool:
-    name: slurm_2
+    name: slurm
 
 - name: run_map_batch_deployment
   description: |-
@@ -104,7 +104,7 @@ deployments:
   entrypoint: workflows/flows/analysis/assembly/flows/run_map_batch.py:run_map_batch
   schedule: null
   work_pool:
-    name: slurm_2
+    name: slurm
 
 - name: import_asa_batch_deployment
   description: |-
@@ -117,7 +117,7 @@ deployments:
   entrypoint: workflows/flows/analysis/assembly/flows/import_asa_batch.py:import_asa_batch
   schedule: null
   work_pool:
-    name: slurm_2
+    name: slurm
 
 - name: import_virify_batch_deployment
   description: |-
@@ -127,7 +127,7 @@ deployments:
   entrypoint: workflows/flows/analysis/assembly/flows/import_virify_batch.py:import_virify_batch
   schedule: null
   work_pool:
-    name: slurm_2
+    name: slurm
 
 - name: import_map_batch_deployment
   description: |-
@@ -137,7 +137,7 @@ deployments:
   entrypoint: workflows/flows/analysis/assembly/flows/import_map_batch.py:import_map_batch
   schedule: null
   work_pool:
-    name: slurm_2
+    name: slurm
 
 - name: finalize_assembly_study_deployment
   description: |-
@@ -159,4 +159,21 @@ deployments:
     :type study_accession: str
   entrypoint: workflows/flows/analysis/assembly/flows/finalize_assembly_study.py:finalize_assembly_study
   work_pool:
-    name: slurm_2
+    name: slurm
+
+- name: nextflow_trace_etl_flow
+  description: |-
+    Nextflow Trace extraction and transformation flow.
+
+    This flow orchestrates the extraction and transformation of Nextflow trace data
+    from OrchestratedClusterJob models.
+
+    :param sqlite_db_path: Path to the SQLite database where the transformed data will be stored
+    :param batch_size: Number of database records to process at once
+    :param min_created_at: Only process jobs created after this datetime
+    :param max_created_at: Only process jobs created before this datetime
+    :param only_completed: Only process completed jobs
+    :param exclude_failed: Exclude failed jobs
+  entrypoint: workflows/flows/nf_traces/flows.py:nextflow_trace_etl_flow
+  work_pool:
+    name: slurm

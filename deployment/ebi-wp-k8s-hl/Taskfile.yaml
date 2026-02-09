@@ -26,7 +26,7 @@ tasks:
     cmds:
       - kubectl --context=emgapiv2-hl-exp exec -it $(task get-api-pod-name) -- python manage.py prefectcli deploy {{ .FILE | default (list "workflows/flows/" .FLOW ".py" | join "") }}:{{.FLOW}} --name {{.FLOW}}_deployment -p {{.POOL}} --prefect-file workflows/prefect_deployments/prefect-ebi-codon.yaml
     vars:
-      POOL: "slurm_2"
+      POOL: "slurm"
     requires:
       vars: [FLOW]
 
