@@ -656,8 +656,6 @@ def get_study_accession_for_assembly(
     assembly_accession: str,
 ) -> str:
     """
-    Derive the study accession from a single assembly accession using ENA API.
-
     Queries the ENA Portal API with the assembly accession (ERZ format) to fetch
     the associated study accession. An assembly in ENA is represented as an "analysis"
     record, which contains the study_accession field.
@@ -666,7 +664,7 @@ def get_study_accession_for_assembly(
         Input: "ERZ18440741" (assembly accession)
         Output: "ERP123456" (study accession)
 
-    :param assembly_accession: Assembly accession (e.g., ERZ format)
+    :param assembly_accession: Assembly accession
     :return: Study accession (e.g., ERP/SRP/DRP/PRJ format)
     :raises: ValueError if accession cannot be determined or not found in ENA
     """
@@ -680,8 +678,6 @@ def get_study_accession_for_assembly(
     )
 
     try:
-        # Query ENA Portal API for analysis records matching the assembly accession
-        # In ENA, assemblies are represented as "analysis" results
         _ = ENAAnalysisFields
         portal_analyses = ENAAPIRequest(
             result=ENAPortalResultType.ANALYSIS,
@@ -723,4 +719,68 @@ def get_study_accession_for_assembly(
         logger.exception(f"Error querying ENA API for assembly {assembly_accession}")
         raise ValueError(
             f"Failed to derive study accession for assembly {assembly_accession}: {e}"
+        )
+
+
+@task(
+    retries=RETRIES,
+    retry_delay_seconds=RETRY_DELAY,
+    cache_key_fn=task_input_hash,
+    task_run_name="Get FASTA MD5 for assembly {assembly_accession} from ENA",
+)
+def get_fasta_md5_for_assembly(
+    assembly_accession: str,
+) -> str:
+    """
+    Queries the ENA Portal API with the assembly accession (ERZ format) to fetch
+    the FASTA MD5 checksum for further validation. An assembly in ENA is represented as an "analysis"
+    record, which contains the generated_md5 field.
+
+    Example:
+        Input: "ERZ18440741" (assembly accession)
+        Output: "1234abcd" (FASTA MD5 checksum)
+
+    :param assembly_accession: Assembly accession
+    :return: FASTA MD5 checksum
+    :raises: ValueError if submitted_md5 and generated_md5 cannot be determined or not found in ENA
+    """
+    logger = get_run_logger()
+
+    if not assembly_accession:
+        raise ValueError("No assembly accession provided to derive FASTA MD5.")
+
+    logger.info(f"Querying ENA API for FASTA MD5 of assembly {assembly_accession}")
+
+    try:
+        _ = ENAAnalysisFields
+        portal_analyses = ENAAPIRequest(
+            result=ENAPortalResultType.ANALYSIS,
+            fields=[
+                _.ANALYSIS_ACCESSION,
+                _.GENERATED_MD5,
+            ],
+            limit=1,
+            query=ENAAnalysisQuery(analysis_accession=assembly_accession),
+            data_portals=[ENAPortalDataPortal.METAGENOME, ENAPortalDataPortal.ENA],
+        ).get()
+
+        if not portal_analyses:
+            raise ValueError(
+                f"Assembly accession {assembly_accession} not found in ENA Portal API"
+            )
+
+        analysis_record = portal_analyses[0]
+        generated_md5 = analysis_record.get(_.GENERATED_MD5)
+
+        if not generated_md5:
+            raise ValueError(
+                f"Missing FASTA MD5 for assembly {assembly_accession} in ENA"
+            )
+
+        return generated_md5
+
+    except Exception as e:
+        logger.exception(f"Error querying ENA API for assembly {assembly_accession}")
+        raise ValueError(
+            f"Failed to derive FASTA MD5 for assembly {assembly_accession}: {e}"
         )
