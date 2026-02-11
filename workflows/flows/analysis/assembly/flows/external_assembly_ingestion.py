@@ -1,4 +1,5 @@
 import csv
+import hashlib
 from pathlib import Path
 from textwrap import dedent as _
 from typing import Optional, List
@@ -20,6 +21,7 @@ from workflows.ena_utils.ena_api_requests import (
     get_study_from_ena,
     get_study_assemblies_from_ena,
     get_study_accession_for_assembly,
+    get_fasta_md5_for_assembly,
 )
 from workflows.flows.analysis.assembly.tasks.assembly_analysis_batch_results_importer import (
     validate_and_import_analysis_results,
@@ -275,6 +277,7 @@ def external_assembly_ingestion(
 # ============================================================================
 
 
+@task
 def _parse_and_validate_samplesheet(samplesheet_path: Path) -> list[str]:
     """
     Parse the samplesheet CSV to extract assembly accessions.
@@ -285,6 +288,7 @@ def _parse_and_validate_samplesheet(samplesheet_path: Path) -> list[str]:
         ERZ18545484,/path/to/ERZ18545484.fa.gz,<contaminant_ref>,<human_ref>,<phix_ref>
 
     The "sample" column contains the assembly accession (e.g., ERZ format).
+    "sample" and "assembly_fasta" columns are required, others are optional.
 
     :param samplesheet_path: Path to the samplesheet file
     :return: List of assembly accessions extracted from the samplesheet
@@ -293,8 +297,7 @@ def _parse_and_validate_samplesheet(samplesheet_path: Path) -> list[str]:
     logger = get_run_logger()
     assembly_accessions = []
 
-    # TODO add validation with pandera model
-    # TODO add validation of the fasta file using md5 checksums from ENA website
+    # TODO maybe add validation with pandera model?
     try:
         with open(samplesheet_path, "r") as f:
             reader = csv.DictReader(f)
@@ -302,22 +305,40 @@ def _parse_and_validate_samplesheet(samplesheet_path: Path) -> list[str]:
             if reader.fieldnames is None:
                 raise ValueError("Samplesheet appears to be empty")
 
-            expected_columns = {
-                "sample",
-                "assembly_fasta",
+            actual_columns = set(reader.fieldnames)
+
+            optional_columns = {
                 "contaminant_reference",
                 "human_reference",
                 "phix_reference",
             }
-            if not set(reader.fieldnames).issubset(expected_columns):
-                logger.warning(
-                    f"Samplesheet columns {set(reader.fieldnames)} may not match expected "
-                    f"columns {expected_columns}"
+
+            required_columns = {"sample", "assembly_fasta"}
+
+            if not required_columns.issubset(actual_columns):
+                raise ValueError(
+                    f"Samplesheet is missing required columns: {required_columns - actual_columns}"
+                )
+
+            if not actual_columns.issubset(optional_columns | required_columns):
+                raise ValueError(
+                    f"Samplesheet contains unexpected columns: {actual_columns - (optional_columns | required_columns)}. "
                 )
 
             for row in reader:
                 assembly_acc = row.get("sample", "").strip()
                 if assembly_acc:
+                    fasta_file = Path(row.get("assembly_fasta", "").strip())
+                    actual_fasta_md5 = _compute_md5(fasta_file)
+                    expected_fasta_md5 = get_fasta_md5_for_assembly(assembly_acc)
+
+                    if actual_fasta_md5 != expected_fasta_md5:
+                        raise ValueError(
+                            f"FASTA MD5 mismatch for assembly {assembly_acc}: "
+                            f"expected {expected_fasta_md5} (ENA generated_md5 field), got {actual_fasta_md5}. "
+                            f"Check that the correct FASTA file is provided in the samplesheet."
+                        )
+
                     assembly_accessions.append(assembly_acc)
                     logger.debug(f"Parsed assembly accession: {assembly_acc}")
 
@@ -332,7 +353,18 @@ def _parse_and_validate_samplesheet(samplesheet_path: Path) -> list[str]:
     return assembly_accessions
 
 
+def _compute_md5(path: Path, chunk_size: int = 8192) -> str:
+    md5 = hashlib.md5()
+
+    with path.open("rb") as f:
+        for chunk in iter(lambda: f.read(chunk_size), b""):
+            md5.update(chunk)
+
+    return md5.hexdigest()
+
+
 # TODO: expand validation checks
+@task
 def _validate_results_structure(
     results_path: Path,
     assemblies_accessions: list[str],
@@ -528,6 +560,7 @@ def set_asa_analysis_states(assembly_current_outdir: Path, analyses: List[Analys
     Analysis.objects.bulk_update(analyses_to_update, ["status"])
 
 
+@task
 def copy_external_assembly_analysis_results(
     study: Study, results_dir: Path, analyses: Analysis, timeout: int = 14400
 ):
