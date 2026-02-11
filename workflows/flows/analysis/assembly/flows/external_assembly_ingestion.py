@@ -55,7 +55,7 @@ from workflows.models import AssemblyAnalysisPipeline, Analysis, Study
     name="Ingest external assembly analysis results",
     flow_run_name="Ingest assembly results: {results_dir}",
 )
-def external_assembly_ingestion(
+def external_assembly_analysis_ingestion(
     results_dir: str,
     samplesheet_path: str,
 ):

@@ -18,10 +18,10 @@ from workflows.tests.test_analysis_assembly_study_flow import (
     setup_virify_batch_fixtures,
     setup_map_batch_fixtures,
 )
-from workflows.flows.analysis.assembly.flows.external_assembly_ingestion import (
+from workflows.flows.analysis.assembly.flows.external_assembly_analysis_ingestion import (
     _parse_and_validate_samplesheet,
     _validate_results_structure,
-    external_assembly_ingestion,
+    external_assembly_analysis_ingestion,
 )
 
 EMG_CONFIG = settings.EMG_CONFIG
@@ -163,11 +163,13 @@ class TestExternalAssemblyIngestionRealData:
     )
     @pytest.mark.parametrize(
         "mock_suspend_flow_run",
-        ["workflows.flows.analysis.assembly.flows.external_assembly_ingestion"],
+        [
+            "workflows.flows.analysis.assembly.flows.external_assembly_analysis_ingestion"
+        ],
         indirect=True,
     )
     @pytest.mark.prefect_harness
-    def test_external_assembly_ingestion_real_data(
+    def test_external_assembly_analysis_ingestion_real_data(
         self,
         admin_user,
         httpx_mock,
@@ -178,7 +180,7 @@ class TestExternalAssemblyIngestionRealData:
         assembly_test_scenario,
     ):
         """
-        Test complete external_assembly_ingestion flow.
+        Test complete external_assembly_analysis_ingestion flow.
 
         What is tested here:
         1. Parsing of the samplesheet
@@ -318,20 +320,20 @@ class TestExternalAssemblyIngestionRealData:
         mock_suspend_flow_run.side_effect = suspend_side_effect
 
         mock_copy_external = mocker.patch(
-            "workflows.flows.analysis.assembly.flows.external_assembly_ingestion.copy_external_assembly_analysis_results"
+            "workflows.flows.analysis.assembly.flows.external_assembly_analysis_ingestion.copy_external_assembly_analysis_results"
         )
         mock_copy_summaries = mocker.patch(
-            "workflows.flows.analysis.assembly.flows.external_assembly_ingestion.copy_v6_study_summaries"
+            "workflows.flows.analysis.assembly.flows.external_assembly_analysis_ingestion.copy_v6_study_summaries"
         )
 
         # Wish me luck...
         try:
             result = run_flow_and_capture_logs(
-                external_assembly_ingestion,
+                external_assembly_analysis_ingestion,
                 results_dir=str(mocked_results_dir),
                 samplesheet_path=str(samplesheet_path),
             )
-            print("✓ external_assembly_ingestion flow completed successfully")
+            print("✓ external_assembly_analysis_ingestion flow completed successfully")
         except Exception as e:
             print(f"✗ Flow failed with error: {e}")
             raise
@@ -359,14 +361,14 @@ class TestExternalAssemblyIngestionRealData:
 
 
 # @pytest.mark.django_db
-# @patch("workflows.flows.analysis.assembly.flows.external_assembly_ingestion.get_study_accession_for_assembly")
-# @patch("workflows.flows.analysis.assembly.flows.external_assembly_ingestion.get_study_from_ena")
-# @patch("workflows.flows.analysis.assembly.flows.external_assembly_ingestion.get_study_assemblies_from_ena")
-# @patch("workflows.flows.analysis.assembly.flows.external_assembly_ingestion.process_external_pipeline_results")
-# @patch("workflows.flows.analysis.assembly.flows.external_assembly_ingestion.generate_assembly_analysis_pipeline_summary")
-# @patch("workflows.flows.analysis.assembly.flows.external_assembly_ingestion.add_assembly_study_summaries_to_downloads")
-# @patch("workflows.flows.analysis.assembly.flows.external_assembly_ingestion.copy_v6_study_summaries")
-# @patch("workflows.flows.analysis.assembly.flows.external_assembly_ingestion.copy_external_assembly_analysis_results")
+# @patch("workflows.flows.analysis.assembly.flows.external_assembly_analysis_ingestion.get_study_accession_for_assembly")
+# @patch("workflows.flows.analysis.assembly.flows.external_assembly_analysis_ingestion.get_study_from_ena")
+# @patch("workflows.flows.analysis.assembly.flows.external_assembly_analysis_ingestion.get_study_assemblies_from_ena")
+# @patch("workflows.flows.analysis.assembly.flows.external_assembly_analysis_ingestion.process_external_pipeline_results")
+# @patch("workflows.flows.analysis.assembly.flows.external_assembly_analysis_ingestion.generate_assembly_analysis_pipeline_summary")
+# @patch("workflows.flows.analysis.assembly.flows.external_assembly_analysis_ingestion.add_assembly_study_summaries_to_downloads")
+# @patch("workflows.flows.analysis.assembly.flows.external_assembly_analysis_ingestion.copy_v6_study_summaries")
+# @patch("workflows.flows.analysis.assembly.flows.external_assembly_analysis_ingestion.copy_external_assembly_analysis_results")
 # def test_ingestion_flow_with_existing_biome(
 #     mock_copy_results,
 #     mock_copy_v6_summaries,
@@ -409,7 +411,7 @@ class TestExternalAssemblyIngestionRealData:
 #     mock_get_study_ena.return_value = assembly_analysis_ena_study
 
 #     # Run flow
-#     external_assembly_ingestion(
+#     external_assembly_analysis_ingestion(
 #         results_dir=str(results_dir),
 #         samplesheet_path=str(samplesheet),
 #     )
@@ -423,15 +425,15 @@ class TestExternalAssemblyIngestionRealData:
 
 
 # @pytest.mark.django_db
-# @patch("workflows.flows.analysis.assembly.flows.external_assembly_ingestion.get_study_accession_for_assembly")
-# @patch("workflows.flows.analysis.assembly.flows.external_assembly_ingestion.get_study_from_ena")
-# @patch("workflows.flows.analysis.assembly.flows.external_assembly_ingestion.get_study_assemblies_from_ena")
-# @patch("workflows.flows.analysis.assembly.flows.external_assembly_ingestion.process_external_pipeline_results")
-# @patch("workflows.flows.analysis.assembly.flows.external_assembly_ingestion.generate_assembly_analysis_pipeline_summary")
-# @patch("workflows.flows.analysis.assembly.flows.external_assembly_ingestion.add_assembly_study_summaries_to_downloads")
-# @patch("workflows.flows.analysis.assembly.flows.external_assembly_ingestion.copy_v6_study_summaries")
-# @patch("workflows.flows.analysis.assembly.flows.external_assembly_ingestion.copy_external_assembly_analysis_results")
-# @patch("workflows.flows.analysis.assembly.flows.external_assembly_ingestion.suspend_flow_run")
+# @patch("workflows.flows.analysis.assembly.flows.external_assembly_analysis_ingestion.get_study_accession_for_assembly")
+# @patch("workflows.flows.analysis.assembly.flows.external_assembly_analysis_ingestion.get_study_from_ena")
+# @patch("workflows.flows.analysis.assembly.flows.external_assembly_analysis_ingestion.get_study_assemblies_from_ena")
+# @patch("workflows.flows.analysis.assembly.flows.external_assembly_analysis_ingestion.process_external_pipeline_results")
+# @patch("workflows.flows.analysis.assembly.flows.external_assembly_analysis_ingestion.generate_assembly_analysis_pipeline_summary")
+# @patch("workflows.flows.analysis.assembly.flows.external_assembly_analysis_ingestion.add_assembly_study_summaries_to_downloads")
+# @patch("workflows.flows.analysis.assembly.flows.external_assembly_analysis_ingestion.copy_v6_study_summaries")
+# @patch("workflows.flows.analysis.assembly.flows.external_assembly_analysis_ingestion.copy_external_assembly_analysis_results")
+# @patch("workflows.flows.analysis.assembly.flows.external_assembly_analysis_ingestion.suspend_flow_run")
 # def test_ingestion_flow_biome_picker_required(
 #     mock_suspend_flow_run,
 #     mock_copy_results,
@@ -486,7 +488,7 @@ class TestExternalAssemblyIngestionRealData:
 #     mock_suspend_flow_run.side_effect = suspend_side_effect
 
 #     # Run flow
-#     external_assembly_ingestion(
+#     external_assembly_analysis_ingestion(
 #         results_dir=str(results_dir),
 #         samplesheet_path=str(samplesheet),
 #     )
@@ -506,7 +508,7 @@ class TestExternalAssemblyIngestionRealData:
 #     samplesheet.write_text("sample,assembly_fasta,contaminant_reference,human_reference,phix_reference\nERZ1,/path,ref1,ref2,ref3\n")
 
 #     with pytest.raises(FileNotFoundError, match="Results directory does not exist"):
-#         external_assembly_ingestion(
+#         external_assembly_analysis_ingestion(
 #             results_dir="/nonexistent/path",
 #             samplesheet_path=str(samplesheet),
 #         )
@@ -519,7 +521,7 @@ class TestExternalAssemblyIngestionRealData:
 #     results_dir.mkdir()
 
 #     with pytest.raises(FileNotFoundError):
-#         external_assembly_ingestion(
+#         external_assembly_analysis_ingestion(
 #             results_dir=str(results_dir),
 #             samplesheet_path="/nonexistent/samplesheet.csv",
 #         )
