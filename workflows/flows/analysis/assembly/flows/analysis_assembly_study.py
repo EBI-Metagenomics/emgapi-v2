@@ -39,7 +39,7 @@ def analysis_assembly_study(
     Get a study from ENA (or MGnify), and run assembly analysis the assemblies of the study.
 
     This then chains the Assembly Analysis Pipeline, VIRIfy and the Mobilome Annotation Pipeline using
-    batches of assemblies to analise.
+    batches of assemblies to analyse.
 
     It keeps track of the batches and their statuses.
 
