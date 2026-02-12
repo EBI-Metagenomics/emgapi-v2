@@ -151,9 +151,10 @@ def run_map_batch(assembly_analyses_batch_id: uuid.UUID):
     logger.info(f"Using output dir {map_outdir} for MAP pipeline")
 
     nextflow_workdir = (
-        Path(assembly_analysis_batch.workspace_dir)
-        / "map"
-        / f"map-sheet-{slugify(map_samplesheet_path)}"
+        Path(f"{EMG_CONFIG.slurm.default_nextflow_workdir}")
+        / Path(f"{mgnify_study.ena_study.accession}")
+        / f"{EMG_CONFIG.map_pipeline.pipeline_name}_{EMG_CONFIG.map_pipeline.pipeline_version}"
+        / f"{assembly_analysis_batch.id}"
     )
     nextflow_workdir.mkdir(parents=True, exist_ok=True)
 

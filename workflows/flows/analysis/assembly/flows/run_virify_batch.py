@@ -137,9 +137,10 @@ def run_virify_batch(assembly_analyses_batch_id: uuid.UUID):
     logger.info(f"Using output dir {virify_outdir} for VIRify pipeline")
 
     nextflow_workdir = (
-        Path(assembly_analysis_batch.workspace_dir)
-        / "virify"
-        / f"virify-sheet-{slugify(virify_samplesheet_path)}"
+        Path(f"{EMG_CONFIG.slurm.default_nextflow_workdir}")
+        / Path(f"{mgnify_study.ena_study.accession}")
+        / f"{EMG_CONFIG.virify_pipeline.pipeline_name}_{EMG_CONFIG.virify_pipeline.pipeline_version}"
+        / f"{assembly_analysis_batch.id}"
     )
     nextflow_workdir.mkdir(parents=True, exist_ok=True)
 

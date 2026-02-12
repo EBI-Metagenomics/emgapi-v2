@@ -49,13 +49,13 @@ def run_rawreads_pipeline_via_samplesheet(
         workdir = (
             Path(f"{EMG_CONFIG.slurm.default_nextflow_workdir}")
             / Path(f"{mgnify_study.ena_study.accession}")
-            / f"{EMG_CONFIG.rawreads_pipeline.pipeline_name}_{EMG_CONFIG.amplicon_pipeline.pipeline_version}"
+            / f"{EMG_CONFIG.rawreads_pipeline.pipeline_name}_{EMG_CONFIG.rawreads_pipeline.pipeline_version}"
         )
     if outdir is None:
         outdir = (
             Path(f"{EMG_CONFIG.slurm.default_workdir}")
             / Path(f"{mgnify_study.ena_study.accession}")
-            / f"{EMG_CONFIG.rawreads_pipeline.pipeline_name}_{EMG_CONFIG.amplicon_pipeline.pipeline_version}"
+            / f"{EMG_CONFIG.rawreads_pipeline.pipeline_name}_{EMG_CONFIG.rawreads_pipeline.pipeline_version}"
         )
 
     rawreads_analyses = analyses.models.Analysis.objects.select_related("run").filter(
