@@ -47,13 +47,13 @@ def run_rawreads_pipeline_via_samplesheet(
 ):
     if workdir is None:
         workdir = (
-            Path(f"{EMG_CONFIG.slurm.default_nextflow_workdir}")
+            Path(EMG_CONFIG.slurm.default_nextflow_workdir)
             / mgnify_study.ena_study.accession
             / f"{EMG_CONFIG.rawreads_pipeline.pipeline_name}_{EMG_CONFIG.rawreads_pipeline.pipeline_version}"
         )
     if outdir is None:
         outdir = (
-            Path(f"{EMG_CONFIG.slurm.default_workdir}")
+            Path(EMG_CONFIG.slurm.default_workdir)
             / mgnify_study.ena_study.accession
             / f"{EMG_CONFIG.rawreads_pipeline.pipeline_name}_{EMG_CONFIG.rawreads_pipeline.pipeline_version}"
         )
