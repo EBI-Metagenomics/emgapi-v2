@@ -151,7 +151,7 @@ def run_map_batch(assembly_analyses_batch_id: uuid.UUID):
 
     nextflow_workdir = (
         Path(f"{EMG_CONFIG.slurm.default_nextflow_workdir}")
-        / Path(f"{mgnify_study.ena_study.accession}")
+        / mgnify_study.ena_study.accession
         / f"{EMG_CONFIG.map_pipeline.pipeline_name}_{EMG_CONFIG.map_pipeline.pipeline_version}"
         / f"{assembly_analysis_batch.id}"
     )
