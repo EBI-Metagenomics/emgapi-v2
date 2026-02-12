@@ -2,7 +2,6 @@ import uuid
 from datetime import timedelta
 from pathlib import Path
 
-from django.utils.text import slugify
 from django.db import close_old_connections
 from django.db.models import Q
 from prefect import flow, get_run_logger
