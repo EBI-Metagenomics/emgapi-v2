@@ -230,8 +230,8 @@ def test_find_objects(prefect_harness):
     )
 
     # Create assembly
-    assembly1 = Assembly.objects.create(
-        run=run,
+    assembly1 = Assembly.objects.create_for_runs_and_sample(
+        runs=[run],
         sample=sample,
         reads_study=study,
         ena_study=ena_study,
@@ -389,15 +389,15 @@ def test_create_links(prefect_harness):
     )
 
     # Create assemblies
-    assembly1 = Assembly.objects.create(
-        run=run,
+    assembly1 = Assembly.objects.create_for_runs_and_sample(
+        runs=[run],
         sample=sample,
         reads_study=study,
         ena_study=ena_study,
     )
 
-    assembly2 = Assembly.objects.create(
-        run=run,
+    assembly2 = Assembly.objects.create_for_runs_and_sample(
+        runs=[run],
         sample=sample,
         reads_study=study,
         ena_study=ena_study,
@@ -571,8 +571,8 @@ def test_import_genome_assembly_links_flow(mock_tsv_file, prefect_harness):
     )
 
     # Create assemblies
-    assembly1 = Assembly.objects.create(
-        run=run,
+    assembly1 = Assembly.objects.create_for_runs_and_sample(
+        runs=[run],
         sample=sample,
         reads_study=study,
         ena_study=ena_study,
@@ -580,8 +580,8 @@ def test_import_genome_assembly_links_flow(mock_tsv_file, prefect_harness):
     assembly1.ena_accessions = ["ERZ123456"]
     assembly1.save()
 
-    assembly2 = Assembly.objects.create(
-        run=run,
+    assembly2 = Assembly.objects.create_for_runs_and_sample(
+        runs=[run],
         sample=sample,
         reads_study=study,
         ena_study=ena_study,

@@ -49,11 +49,14 @@ def get_or_create_assemblies_for_runs(
                 )
                 continue
 
-        assembly, created = analyses.models.Assembly.objects.get_or_create(
-            run=run,
-            ena_study=study.ena_study,
-            reads_study=study,
-            defaults={"is_private": run.is_private, "sample": run.sample},
+        assembly, created = (
+            analyses.models.Assembly.objects.get_or_create_for_run_and_sample(
+                run=run,
+                sample=run.sample,
+                ena_study=study.ena_study,
+                reads_study=study,
+                defaults={"is_private": run.is_private},
+            )
         )
         if created:
             logger.info(f"Created assembly {assembly}")

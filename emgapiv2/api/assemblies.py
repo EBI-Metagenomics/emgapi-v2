@@ -73,8 +73,8 @@ class AssemblyController(UnauthorisedIsUnfoundController):
     def get_assembly(self, accession: str):
         assembly = get_object_or_404(
             analyses.models.Assembly.public_objects.select_related(
-                "run", "sample", "reads_study", "assembly_study", "assembler"
-            ),
+                "reads_study", "assembly_study", "assembler", "sample"
+            ).prefetch_related("runs"),
             ena_accessions__contains=[accession],
         )
         return assembly

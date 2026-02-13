@@ -436,7 +436,7 @@ def test_prefect_assemble_study_flow(
     assert analyses.models.Assembly.objects.count() == number_of_runs
 
     assembly = analyses.models.Assembly.objects.filter(
-        run__ena_accessions__contains=["SRR1"]
+        runs__ena_accessions__contains=["SRR1"]
     ).first()
     assert 0.0475 < assembly.metadata.get("coverage") < 0.0477
 
