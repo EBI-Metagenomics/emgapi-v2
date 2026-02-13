@@ -67,43 +67,6 @@ services:
     profiles: ["prefect", "all"]
     networks: [emg]
 
-  prefect-agent:
-    # A prefect agent deployed in a separate node to the app
-    build:
-      context: .
-      target: agent
-    restart: always
-    container_name: prefect-agent
-    hostname: prefect_agent
-    command: "prefectcli worker start --pool \"slurm\""
-    environment:
-      - PREFECT_API_URL=http://prefect-server:4200/api
-      - PREFECT_LOCAL_STORAGE_PATH=/root/.prefect/storage
-      - DATABASE_URL=postgres://postgres:postgres@app-database:5432/emg
-      - HTTP_PROXY=http://localhost:8080
-      - http_proxy=http://localhost:8080
-      - DJANGO_DEBUG=1
-    profiles: ["prefect", "all"]
-    env_file:
-      - path: ./secrets-local.env
-        required: false
-    depends_on:
-      prefect-server:
-        condition: service_healthy
-      app-database:
-        condition: service_started
-    networks: [emg, slurm]
-    volumes:
-      - ".:/app"
-      - munge:/etc/munge
-      - logs:/var/log/slurm
-      - jobdir:/opt/jobs
-      - ./prefectserver:/root/.prefect
-      - ./slurm-dev-environment/entrypoints/submitter-entrypoint.sh:/usr/local/bin/submitter-entrypoint.sh
-      - "./slurm-dev-environment/fs/nfs/production:/nfs/production"
-      - "./slurm-dev-environment/fs/nfs/ftp:/nfs/ftp"
-      - "./slurm-dev-environment/fs/hps:/hps"
-
   prefect-slurm-worker:
     # A prefect-slurm worker deployed in a separate node to the app
     build:
@@ -112,7 +75,7 @@ services:
     restart: always
     container_name: prefect-slurm-worker
     hostname: prefect_slurm_worker
-    command: prefect worker start --pool new-slurm --type slurm
+    command: prefect worker start --pool slurm --type slurm
     entrypoint: /usr/local/bin/prefect-slurm-entrypoint.sh
     environment:
       - PREFECT_SLURM_API_URL=http://slurm_node:6820

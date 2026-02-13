@@ -144,3 +144,14 @@ deployments:
   entrypoint: workflows/flows/analysis/assembly/flows/finalize_assembly_study.py:finalize_assembly_study
   work_pool:
     name: slurm
+
+- name: realistic_example_deployment
+  description: |-
+    Example flow for Prefect, doing some "realistic" work.
+    Downloads read-runs from ENA using a minimal nextflow pipeline, and integrated with the Django DB.
+  entrypoint: workflows/flows/realistic_example.py:realistic_example
+  work_pool:
+    name: slurm
+    job_variables:
+      working_dir: /nfs/production/dev-slurm-work-dir
+      memory: 1
