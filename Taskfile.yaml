@@ -82,7 +82,7 @@ tasks:
     interactive: true
 
   test:
-    desc: "Run pytest tests. E.g. `task test` or `task test -- -k study`"
+    desc: "Run pytest tests. E.g. `task test` or `task test -- -k study` (for test selection), or `task test -- --lf` (for last failures only)"
     cmds:
       - docker compose run --entrypoint /bin/bash app -c "pytest {{.CLI_ARGS}}"
 
