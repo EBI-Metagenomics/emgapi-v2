@@ -274,3 +274,19 @@ deployments:
   entrypoint: workflows/flows/upload_assembly.py:upload_assembly
   work_pool:
     name: slurm
+
+- name: move_data_deployment
+  description: |-
+    Move files on the cluster filesystem.
+
+    This flow uses a slurm job running on the datamover partition to move files
+    between locations on the cluster filesystem.
+
+    :param source: fully qualified path of the source location (file or folder)
+    :param target: fully qualified path of the target location (file or folder)
+    :param move_command: tool command for the move. Default is `cp`, but could be `mv` or `rsync` etc.
+    :param make_target: mkdir the target location path before copying.
+    :param kwargs: Other keywords to pass to run_cluster_job
+  entrypoint: workflows.prefect_utils.datamovers:move_data
+  work_pool:
+    name: slurm
