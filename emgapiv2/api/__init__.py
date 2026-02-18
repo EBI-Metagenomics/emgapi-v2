@@ -85,6 +85,15 @@ api = NinjaExtraAPI(
                 ),
             },
             {
+                OpenApiKeywords.NAME: ApiSections.ASSEMBLIES,
+                OpenApiKeywords.DESCRIPTION: dedent(
+                    """
+                    MGnify assemblies are equivalent to metagenome assemblies in ENA: the (meta)genome assembly of
+                    one or more sequencing runs.
+                    """
+                ),
+            },
+            {
                 OpenApiKeywords.NAME: ApiSections.ANALYSES,
                 OpenApiKeywords.DESCRIPTION: dedent(
                     """

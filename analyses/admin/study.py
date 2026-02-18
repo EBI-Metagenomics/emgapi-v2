@@ -61,8 +61,8 @@ class StudyAssembliesInline(TabularInlinePaginatedWithTabSupport):
     verbose_name = "Assembly in this study"
     verbose_name_plural = "Assemblies in this study"
     show_change_link = True
-    fields = ["run", "status", "dir"]
-    readonly_fields = ["run"]
+    fields = ["runs", "status", "dir"]
+    readonly_fields = ["runs"]
     max_num = 0
     fk_name = "assembly_study"
     formfield_overrides = {
@@ -87,8 +87,8 @@ class StudyReadsInline(TabularInlinePaginatedWithTabSupport):
     verbose_name = "Assembly of this studies' read"
     verbose_name_plural = "Assemblies of this studies' reads"
     show_change_link = True
-    fields = ["run", "status", "dir"]
-    readonly_fields = ["run"]
+    fields = ["runs", "status", "dir"]
+    readonly_fields = ["runs"]
     max_num = 0
     fk_name = "reads_study"
     formfield_overrides = {

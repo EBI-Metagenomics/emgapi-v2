@@ -64,7 +64,7 @@ def delete_assemble_study_nextflow_workdir(
     failed_assemblies = (
         analyses.models.Assembly.objects.filter(
             id__in=assemblies,
-            run__metadata__fastq_ftps__isnull=False,
+            runs__metadata__fastq_ftps__isnull=False,
             status__contains={AssemblyStates.ASSEMBLY_FAILED: True},
         )
         .order_by("id")

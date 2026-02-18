@@ -98,6 +98,35 @@ class LegacyRun(LegacyEMGBase):
     experiment_type_id: Mapped[int] = mapped_column("EXPERIMENT_TYPE_ID", Integer)
 
 
+class LegacyAssembly(LegacyEMGBase):
+    __tablename__ = "ASSEMBLY"
+    assembly_id: Mapped[int] = mapped_column("ASSEMBLY_ID", Integer, primary_key=True)
+    accession: Mapped[str] = mapped_column("ACCESSION", String)
+
+    study_id: Mapped[int] = mapped_column("STUDY_ID", ForeignKey("STUDY.STUDY_ID"))
+    study: Mapped["LegacyStudy"] = relationship("LegacyStudy")
+
+    experiment_type_id: Mapped[int] = mapped_column("EXPERIMENT_TYPE_ID", Integer)
+
+
+class LegacyAssemblyRun(LegacyEMGBase):
+    __tablename__ = "ASSEMBLY_RUN"
+    assembly_run_id: Mapped[int] = mapped_column("ID", Integer, primary_key=True)
+    assembly_id: Mapped[int] = mapped_column(
+        "ASSEMBLY_ID", ForeignKey("ASSEMBLY.ASSEMBLY_ID")
+    )
+    run_id: Mapped[int] = mapped_column("RUN_ID", ForeignKey("RUN.RUN_ID"))
+
+
+class LegacyAssemblySample(LegacyEMGBase):
+    __tablename__ = "ASSEMBLY_SAMPLE"
+    assembly_sample_id: Mapped[int] = mapped_column("ID", Integer, primary_key=True)
+    assembly_id: Mapped[int] = mapped_column(
+        "ASSEMBLY_ID", ForeignKey("ASSEMBLY.ASSEMBLY_ID")
+    )
+    sample_id: Mapped[int] = mapped_column("SAMPLE_ID", ForeignKey("SAMPLE.SAMPLE_ID"))
+
+
 class LegacySuperStudy(LegacyEMGBase):
     __tablename__ = "SUPER_STUDY"
 
