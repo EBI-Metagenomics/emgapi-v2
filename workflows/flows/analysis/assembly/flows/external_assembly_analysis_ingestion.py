@@ -7,8 +7,7 @@ from typing import Optional, List
 from prefect import flow, get_run_logger, suspend_flow_run, task
 from prefect.input import RunInput
 from pydantic import Field
-
-from activate_django_first import EMG_CONFIG
+from django.conf import settings
 
 import analyses.models
 import ena.models
@@ -339,6 +338,9 @@ def _parse_and_validate_samplesheet(samplesheet_path: Path) -> list[str]:
                             f"expected {expected_fasta_md5} (ENA generated_md5 field), got {actual_fasta_md5}. "
                             f"Check that the correct FASTA file is provided in the samplesheet."
                         )
+                    logger.debug(
+                        f"FASTA MD5 for assembly {assembly_acc} matches expected value"
+                    )
 
                     assembly_accessions.append(assembly_acc)
                     logger.debug(f"Parsed assembly accession: {assembly_acc}")
@@ -592,9 +594,9 @@ def copy_external_assembly_analysis_results(
 
     # Determine target root based on privacy
     target_root = (
-        EMG_CONFIG.slurm.private_results_dir
+        settings.EMG_CONFIG.slurm.private_results_dir
         if study.is_private
-        else EMG_CONFIG.slurm.ftp_results_dir
+        else settings.EMG_CONFIG.slurm.ftp_results_dir
     )
 
     # Only copy results for analyses where ASA completed successfully
