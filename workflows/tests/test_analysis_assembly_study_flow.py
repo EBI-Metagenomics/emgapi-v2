@@ -36,43 +36,9 @@ from workflows.prefect_utils.testing_utils import (
     should_not_mock_httpx_requests_to_prefect_server,
     generate_assembly_v6_pipeline_results,
 )
+from workflows.fixtures.assembly_analysis.conftest import AssemblyTestScenario
 
 EMG_CONFIG = settings.EMG_CONFIG
-
-
-class AssemblyTestScenario(BaseModel):
-    """Assembly test scenario configuration."""
-
-    study_accession: str
-    study_secondary: str
-    assembly_accession_success: str
-    assembly_accession_failed: str
-    sample_accession: str
-    run_accession: str
-    fixture_source_dir: Path  # Where the permanent fixture files are stored
-    workspace_dir: Path  # Temporary workspace for the test
-    biome_path: str
-    biome_name: str
-
-    class Config:
-        frozen = True
-
-
-@pytest.fixture
-def assembly_test_scenario(test_workspace):
-    """Default assembly test scenario."""
-    return AssemblyTestScenario(
-        study_accession="PRJEB24849",
-        study_secondary="ERP106708",
-        assembly_accession_success="ERZ857107",
-        assembly_accession_failed="ERZ857108",
-        sample_accession="SAMN08514017",
-        run_accession="SRR123456",
-        fixture_source_dir=Path("/app/data/tests/assembly_v6_output/ERP106708"),
-        workspace_dir=test_workspace,
-        biome_path="root.engineered",
-        biome_name="Engineered",
-    )
 
 
 def setup_assembly_batch_fixtures(scenario: AssemblyTestScenario):

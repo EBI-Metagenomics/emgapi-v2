@@ -19,7 +19,6 @@ from workflows.tests.test_analysis_assembly_study_flow import (
     setup_map_batch_fixtures,
 )
 from workflows.flows.analysis.assembly.flows.external_assembly_analysis_ingestion import (
-    _parse_and_validate_samplesheet,
     _validate_results_structure,
     _compute_md5,
     external_assembly_analysis_ingestion,
@@ -34,54 +33,23 @@ EMG_CONFIG = settings.EMG_CONFIG
 
 
 @pytest.mark.django_db
-class TestExternalAssemblyIngestion:
+class TestExternalAssemblyAnalysisIngestion:
 
-    def test_parse_samplesheet_valid(self, tmp_path, prefect_harness):
-        """Test parsing a valid samplesheet."""
-        samplesheet = tmp_path / "samplesheet.csv"
-        samplesheet.write_text(
-            "sample,assembly_fasta,contaminant_reference,human_reference,phix_reference\n"
-            "ERZ18440741,/path/to/ERZ18440741.fa.gz,ref1,ref2,ref3\n"
-            "ERZ18545484,/path/to/ERZ18545484.fa.gz,ref1,ref2,ref3\n"
-        )
-
-        result = _parse_and_validate_samplesheet(samplesheet)
-        assert result == ["ERZ18440741", "ERZ18545484"]
-
-    def test_parse_samplesheet_empty_raises_error(self, tmp_path, prefect_harness):
-        """Test that empty samplesheet raises ValueError."""
-        samplesheet = tmp_path / "samplesheet.csv"
-        samplesheet.write_text(
-            "sample,assembly_fasta,contaminant_reference,human_reference,phix_reference\n"
-        )
-
-        with pytest.raises(ValueError, match="No assembly accessions"):
-            _parse_and_validate_samplesheet(samplesheet)
-
-    def test_parse_samplesheet_missing_columns_warns(
-        self, tmp_path, caplog, prefect_harness
-    ):
-        """Test warning when expected columns are missing."""
-        samplesheet = tmp_path / "samplesheet.csv"
-        samplesheet.write_text(
-            "sample,assembly_fasta\n"  # Missing required columns
-            "ERZ18440741,/path/to/file.fa.gz\n"
-        )
-
-        result = _parse_and_validate_samplesheet(samplesheet)
-        assert "ERZ18440741" in result
-        assert "may not match expected" in caplog.text
-
-    def test_validate_results_structure_missing_pipeline_warns(
-        self, tmp_path, caplog, prefect_harness
+    def test_validate_results_structure_missing_pipeline_dir_error(
+        self, tmp_path, prefect_harness
     ):
         """Test warning when pipeline directories are missing."""
+        accession = "ERZ18440741"
         results_path = tmp_path / "results"
         results_path.mkdir()
+        for pipeline in ["asa", "virify"]:  # MAP directory is missing
+            pipeline_path = results_path / pipeline / accession
+            pipeline_path.mkdir(parents=True, exist_ok=True)
 
-        _validate_results_structure(results_path, ["ERZ18440741"])
-
-        assert "not found" in caplog.text.lower()
+        with pytest.raises(
+            FileNotFoundError, match="Pipeline directory map not found "
+        ):
+            _validate_results_structure(results_path, [accession])
 
 
 # ============================================================================
@@ -160,7 +128,7 @@ def create_input_fasta_files(fasta_dir: Path, assembly_accessions: List[str]):
 
 
 @pytest.mark.django_db
-class TestExternalAssemblyIngestionRealData:
+class TestExternalAssemblyAnalysisIngestionRealData:
     """Integration tests using real data from data/ folder."""
 
     @pytest.mark.django_db(transaction=True)
@@ -191,19 +159,17 @@ class TestExternalAssemblyIngestionRealData:
         What is tested here:
         1. Parsing of the samplesheet
         2. Validation of the results directory structure
-        4. Creates Study, Analysis and related objects for each assembly
-        5. Processes ASA/VIRify/MAP results
-        6. Creates study summaries
+        3. Creates Study, Analysis and related objects for each assembly
+        4. Processes ASA/VIRify/MAP results
+        5. Creates study summaries
 
         What is not tested here:
         - Actual ENA API calls (these are mocked)
-        - Actual copying of results to production (these are mocked)
+        - Actual copying of results to production (it is mocked)
 
         Note: This test requires:
         - Database access to store results
         - Prefect context for flow execution
-        - Mocked ENA API responses
-        - Mock for suspending the flow to pick biome/watchers
         """
 
         mocked_results_dir, samplesheet_path, fasta_md5s = (
@@ -380,170 +346,3 @@ class TestExternalAssemblyIngestionRealData:
             ]
         ).first()
         assert analysis is not None, "Analysis for assembly was not created"
-
-
-# @pytest.mark.django_db
-# @patch("workflows.flows.analysis.assembly.flows.external_assembly_analysis_ingestion.get_study_accession_for_assembly")
-# @patch("workflows.flows.analysis.assembly.flows.external_assembly_analysis_ingestion.get_study_from_ena")
-# @patch("workflows.flows.analysis.assembly.flows.external_assembly_analysis_ingestion.get_study_assemblies_from_ena")
-# @patch("workflows.flows.analysis.assembly.flows.external_assembly_analysis_ingestion.process_external_pipeline_results")
-# @patch("workflows.flows.analysis.assembly.flows.external_assembly_analysis_ingestion.generate_assembly_analysis_pipeline_summary")
-# @patch("workflows.flows.analysis.assembly.flows.external_assembly_analysis_ingestion.add_assembly_study_summaries_to_downloads")
-# @patch("workflows.flows.analysis.assembly.flows.external_assembly_analysis_ingestion.copy_v6_study_summaries")
-# @patch("workflows.flows.analysis.assembly.flows.external_assembly_analysis_ingestion.copy_external_assembly_analysis_results")
-# def test_ingestion_flow_with_existing_biome(
-#     mock_copy_results,
-#     mock_copy_v6_summaries,
-#     mock_add_summaries,
-#     mock_gen_summary,
-#     mock_process_results,
-#     mock_get_assemblies_ena,
-#     mock_get_study_ena,
-#     mock_get_study_accession,
-#     tmp_path,
-#     raw_reads_mgnify_study,
-#     mgnify_assemblies,
-#     prefect_harness,
-#     assembly_analysis_ena_study,
-# ):
-#     """Test flow completes successfully when biome already set."""
-#     # Setup
-#     study_acc = "PRJEB24849"
-#     assembly_acc = "ERZ857107"
-#     biome, _ = Biome.objects.get_or_create(path="root.engineered", defaults={"biome_name": "Engineered"})
-#     raw_reads_mgnify_study.biome = biome
-#     raw_reads_mgnify_study.save()
-
-#     # Create samplesheet
-#     samplesheet = tmp_path / "samplesheet.csv"
-#     samplesheet.write_text(
-#         f"sample,assembly_fasta,contaminant_reference,human_reference,phix_reference\n"
-#         f"{assembly_acc},/path/to/file.fa.gz,ref1,ref2,ref3\n"
-#     )
-
-#     # Create results directory
-#     results_dir = tmp_path / "results"
-#     for pipeline in ["asa", "virify", "map"]:
-#         (results_dir / pipeline).mkdir(parents=True)
-
-#     setup_mock_asa_results(results_dir, assembly_acc)
-
-#     # Mock return values
-#     mock_get_study_accession.return_value = study_acc
-#     mock_get_study_ena.return_value = assembly_analysis_ena_study
-
-#     # Run flow
-#     external_assembly_analysis_ingestion(
-#         results_dir=str(results_dir),
-#         samplesheet_path=str(samplesheet),
-#     )
-
-#     # Verify key functions were called
-#     mock_process_results.assert_called()
-#     mock_gen_summary.assert_called_once()
-#     mock_add_summaries.assert_called_once()
-#     mock_copy_v6_summaries.assert_called_once()
-#     mock_copy_results.assert_called_once()
-
-
-# @pytest.mark.django_db
-# @patch("workflows.flows.analysis.assembly.flows.external_assembly_analysis_ingestion.get_study_accession_for_assembly")
-# @patch("workflows.flows.analysis.assembly.flows.external_assembly_analysis_ingestion.get_study_from_ena")
-# @patch("workflows.flows.analysis.assembly.flows.external_assembly_analysis_ingestion.get_study_assemblies_from_ena")
-# @patch("workflows.flows.analysis.assembly.flows.external_assembly_analysis_ingestion.process_external_pipeline_results")
-# @patch("workflows.flows.analysis.assembly.flows.external_assembly_analysis_ingestion.generate_assembly_analysis_pipeline_summary")
-# @patch("workflows.flows.analysis.assembly.flows.external_assembly_analysis_ingestion.add_assembly_study_summaries_to_downloads")
-# @patch("workflows.flows.analysis.assembly.flows.external_assembly_analysis_ingestion.copy_v6_study_summaries")
-# @patch("workflows.flows.analysis.assembly.flows.external_assembly_analysis_ingestion.copy_external_assembly_analysis_results")
-# @patch("workflows.flows.analysis.assembly.flows.external_assembly_analysis_ingestion.suspend_flow_run")
-# def test_ingestion_flow_biome_picker_required(
-#     mock_suspend_flow_run,
-#     mock_copy_results,
-#     mock_copy_v6_summaries,
-#     mock_add_summaries,
-#     mock_gen_summary,
-#     mock_process_results,
-#     mock_get_assemblies_ena,
-#     mock_get_study_ena,
-#     mock_get_study_accession,
-#     tmp_path,
-#     raw_reads_mgnify_study,
-#     mgnify_assemblies,
-#     prefect_harness,
-#     assembly_analysis_ena_study,
-# ):
-#     """Test flow requests biome when not set."""
-#     study_acc = "PRJEB24849"
-#     assembly_acc = "ERZ857107"
-
-#     # Create samplesheet and results
-#     samplesheet = tmp_path / "samplesheet.csv"
-#     samplesheet.write_text(
-#         f"sample,assembly_fasta,contaminant_reference,human_reference,phix_reference\n"
-#         f"{assembly_acc},/path/to/file.fa.gz,ref1,ref2,ref3\n"
-#     )
-
-#     results_dir = tmp_path / "results"
-#     for pipeline in ["asa", "virify", "map"]:
-#         (results_dir / pipeline).mkdir(parents=True)
-
-#     setup_mock_asa_results(results_dir, assembly_acc)
-
-#     # Mock return values
-#     mock_get_study_accession.return_value = study_acc
-#     mock_get_study_ena.return_value = assembly_analysis_ena_study
-
-#     BiomeChoices = Enum("BiomeChoices", {"root.engineered": f"Root:Engineered"})
-#     UserChoices = get_users_as_choices()
-
-#     class AnalyseStudyInput(BaseModel):
-#         biome: BiomeChoices
-#         watchers: List[UserChoices]
-
-#     def suspend_side_effect(wait_for_input=None):
-#         if wait_for_input.__name__ == "AnalyseStudyInput":
-#             return AnalyseStudyInput(
-#                 biome=BiomeChoices["root.engineered"],
-#                 watchers=[UserChoices["admin"]],
-#             )
-
-#     mock_suspend_flow_run.side_effect = suspend_side_effect
-
-#     # Run flow
-#     external_assembly_analysis_ingestion(
-#         results_dir=str(results_dir),
-#         samplesheet_path=str(samplesheet),
-#     )
-
-#     # Verify suspend was called (biome picker)
-#     mock_suspend_flow_run.assert_called_once()
-
-#     # Verify study biome was set
-#     raw_reads_mgnify_study.refresh_from_db()
-#     assert raw_reads_mgnify_study.biome.path == "root.engineered"
-
-
-# @pytest.mark.django_db
-# def test_ingestion_missing_results_directory_raises_error(tmp_path):
-#     """Test that missing results directory raises FileNotFoundError."""
-#     samplesheet = tmp_path / "samplesheet.csv"
-#     samplesheet.write_text("sample,assembly_fasta,contaminant_reference,human_reference,phix_reference\nERZ1,/path,ref1,ref2,ref3\n")
-
-#     with pytest.raises(FileNotFoundError, match="Results directory does not exist"):
-#         external_assembly_analysis_ingestion(
-#             results_dir="/nonexistent/path",
-#             samplesheet_path=str(samplesheet),
-#         )
-
-
-# @pytest.mark.django_db
-# def test_ingestion_missing_samplesheet_raises_error(tmp_path):
-#     """Test that missing samplesheet raises error."""
-#     results_dir = tmp_path / "results"
-#     results_dir.mkdir()
-
-#     with pytest.raises(FileNotFoundError):
-#         external_assembly_analysis_ingestion(
-#             results_dir=str(results_dir),
-#             samplesheet_path="/nonexistent/samplesheet.csv",
-#         )
