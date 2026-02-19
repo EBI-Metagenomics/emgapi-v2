@@ -405,7 +405,6 @@ def is_study_available(accession: str, auth: Optional[Type[Auth]] = None) -> boo
             ),
             format="json",
             fields=[ENAStudyFields.STUDY_ACCESSION],
-            data_portals=[ENAPortalDataPortal.METAGENOME, ENAPortalDataPortal.ENA],
         ).get(auth=auth)
     except ENAAvailabilityException as e:
         logger.info(f"Looks like an error-free empty response from ENA: {e}")
