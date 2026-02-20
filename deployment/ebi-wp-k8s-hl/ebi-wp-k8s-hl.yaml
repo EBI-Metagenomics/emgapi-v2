@@ -441,7 +441,8 @@ items:
                 claimName: npm-cache-pvc
           containers:
             - name: webclient-app
-              image: quay.io/microbiome-informatics/nginx:1.26
+#              image: quay.io/microbiome-informatics/nginx:1.26
+              image: quay.io/microbiome-informatics/ebi-metagenomics-client@sha256:3219c806f92dd0d5a791648a1fc95abe5bb7784660c2a7c042cbc6916a8c05ff
               imagePullPolicy: IfNotPresent
               ports:
                 - containerPort: 80
