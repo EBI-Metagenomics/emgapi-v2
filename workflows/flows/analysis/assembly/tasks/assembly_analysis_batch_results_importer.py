@@ -76,83 +76,42 @@ def clear_pipeline_downloads(
         analysis.save()
 
 
-@task
-def assembly_analysis_batch_results_importer(
-    assembly_analyses_batch_id: uuid.UUID,
+def validate_and_import_analysis_results(
+    analyses: List[Analysis],
+    schema,
+    base_path: str,
     pipeline_type: AssemblyAnalysisPipeline,
     validation_only: bool = False,
 ) -> List[ImportResult]:
     """
-    Handles the import of mapping batch results into the database by processing
-    and validating data for each analysis in the specified assembly batch.
+    Processes validation and/or import for a list of analyses.
 
-    :param assembly_batch_id: The unique identifier of the assembly batch to process.
-    :type assembly_batch_id: UUID
+    This can be reused in different contexts for processing of analyses.
+
+    :param analyses: List of Analysis objects to process
+    :param schema: The validation schema to use
+    :param base_path: The base path to pipeline results
     :param pipeline_type: The pipeline type (ASA, VIRify, or MAP)
-    :type pipeline_type: AssemblyAnalysisPipeline
-    :param validation_only: If True, only validate schemas without importing (default: False)
-    :type validation_only: bool
-    :return: List of import results for each analysis
-    :rtype: List[ImportResult]
-    :raises DoesNotExist: If the specified AssemblyAnalysisBatch does not exist.
+    :param validation_only: If True, only validate without importing
+    :return: List of ImportResult objects with success status and details
     """
     logger = get_run_logger()
-
-    batch: AssemblyAnalysisBatch = AssemblyAnalysisBatch.objects.get(
-        id=assembly_analyses_batch_id
-    )
-
-    schema = None
-    base_path = None
-
-    # This is a bit ugly, but it is done like this to avoid having Prefect to serialize a complex schema as input
-    if pipeline_type == AssemblyAnalysisPipeline.ASA:
-        schema = AssemblyResultSchema()
-        base_path = batch.get_pipeline_workspace(AssemblyAnalysisPipeline.ASA)
-    if pipeline_type == AssemblyAnalysisPipeline.VIRIFY:
-        schema = VirifyResultSchema()
-        base_path = batch.get_pipeline_workspace(AssemblyAnalysisPipeline.VIRIFY)
-    if pipeline_type == AssemblyAnalysisPipeline.MAP:
-        schema = MapResultSchema()
-        base_path = batch.get_pipeline_workspace(AssemblyAnalysisPipeline.MAP)
-
-    if schema is None or base_path is None:
-        raise ValueError(f"Unsupported pipeline type: {pipeline_type}")
-
-    status_field = f"{pipeline_type.value}_status"
-    completed_analysis_ids = batch.batch_analyses.filter(
-        **{status_field: AssemblyAnalysisPipelineStatus.COMPLETED}
-    ).values_list("analysis_id", flat=True)
-
-    analyses = batch.analyses.filter(id__in=completed_analysis_ids).select_related(
-        "assembly"
-    )
-
     results = []
-    for analysis in analyses:
-        if validation_only:
-            logger.info(
-                f"Validating (without import) results for {analysis} using schema {schema}"
-            )
-        else:
-            logger.info(
-                f"Validating and importing results into the DB the downloads for {analysis} using schema {schema}"
-            )
 
+    for analysis in analyses:
         try:
-            # TODO: I think this needs a bit of thought, it just doesn't feel right. I smell repetition and things
-            #       that just don't feel "natural"
             if validation_only:
-                # Only validate, don't import
+                logger.info(
+                    f"Validating (without import) results for {analysis} using schema {schema}"
+                )
                 schema.validate_results(base_path, analysis.assembly.first_accession)
                 logger.info(f"Validation successful for {analysis}")
                 results.append(ImportResult(analysis_id=analysis.id, success=True))
             else:
-                # Validate and import
+                logger.info(
+                    f"Validating and importing results into the DB the downloads for {analysis} using schema {schema}"
+                )
                 importer = AssemblyResultImporter(analysis)
-
-                # Clear existing downloads for this pipeline to ensure idempotency
-                # This prevents duplicate download errors on retry
                 clear_pipeline_downloads(analysis, pipeline_type)
 
                 downloads_count = importer.import_results(
@@ -190,5 +149,62 @@ def assembly_analysis_batch_results_importer(
                     error=f"Unexpected error: {str(e)}",
                 )
             )
+
+    return results
+
+
+@task
+def assembly_analysis_batch_results_importer(
+    assembly_analyses_batch_id: uuid.UUID,
+    pipeline_type: AssemblyAnalysisPipeline,
+    validation_only: bool = False,
+) -> List[ImportResult]:
+    """
+    Handles the import of mapping batch results into the database by processing
+    and validating data for each analysis in the specified assembly batch.
+
+    :param assembly_batch_id: The unique identifier of the assembly batch to process.
+    :type assembly_batch_id: UUID
+    :param pipeline_type: The pipeline type (ASA, VIRify, or MAP)
+    :type pipeline_type: AssemblyAnalysisPipeline
+    :param validation_only: If True, only validate schemas without importing (default: False)
+    :type validation_only: bool
+    :return: List of import results for each analysis
+    :rtype: List[ImportResult]
+    :raises DoesNotExist: If the specified AssemblyAnalysisBatch does not exist.
+    """
+    batch: AssemblyAnalysisBatch = AssemblyAnalysisBatch.objects.get(
+        id=assembly_analyses_batch_id
+    )
+
+    schema = None
+    base_path = None
+
+    # This is a bit ugly, but it is done like this to avoid having Prefect to serialize a complex schema as input
+    if pipeline_type == AssemblyAnalysisPipeline.ASA:
+        schema = AssemblyResultSchema()
+        base_path = batch.get_pipeline_workspace(AssemblyAnalysisPipeline.ASA)
+    if pipeline_type == AssemblyAnalysisPipeline.VIRIFY:
+        schema = VirifyResultSchema()
+        base_path = batch.get_pipeline_workspace(AssemblyAnalysisPipeline.VIRIFY)
+    if pipeline_type == AssemblyAnalysisPipeline.MAP:
+        schema = MapResultSchema()
+        base_path = batch.get_pipeline_workspace(AssemblyAnalysisPipeline.MAP)
+
+    if schema is None or base_path is None:
+        raise ValueError(f"Unsupported pipeline type: {pipeline_type}")
+
+    status_field = f"{pipeline_type.value}_status"
+    completed_analysis_ids = batch.batch_analyses.filter(
+        **{status_field: AssemblyAnalysisPipelineStatus.COMPLETED}
+    ).values_list("analysis_id", flat=True)
+
+    analyses = batch.analyses.filter(id__in=completed_analysis_ids).select_related(
+        "assembly"
+    )
+
+    results = validate_and_import_analysis_results(
+        analyses, schema, base_path, pipeline_type, validation_only
+    )
 
     return results
