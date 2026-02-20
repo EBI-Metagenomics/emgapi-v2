@@ -119,7 +119,7 @@ def create_input_fasta_files(fasta_dir: Path, assembly_accessions: List[str]):
 
         md5s[acc] = _compute_md5(fasta_path)
 
-        return md5s
+    return md5s
 
 
 # ============================================================================

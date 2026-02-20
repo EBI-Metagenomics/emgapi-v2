@@ -183,7 +183,7 @@ def external_assembly_analysis_ingestion(
             add_study_watchers(mgnify_study, ingest_input.watchers)
     else:
         logger.info(
-            f"Biome {mgnify_study.biome} was already set for this study. If an change is needed, do so in the DB Admin Panel."
+            f"Biome {mgnify_study.biome} was already set for this study. If a change is needed, do so in the DB Admin Panel."
         )
         logger.info(
             f"MGnify study has watchers: {mgnify_study.watchers.values_list('username', flat=True)}. Add more in the DB Admin Panel if needed."
@@ -570,7 +570,7 @@ def set_asa_analysis_states(assembly_current_outdir: Path, analyses: List[Analys
 
 @task
 def copy_external_assembly_analysis_results(
-    study: Study, results_dir: Path, analyses: Analysis, timeout: int = 14400
+    study: Study, results_dir: Path, analyses: List[Analysis], timeout: int = 14400
 ):
     """
     TODO: this function is a copy-paste of copy_assembly_batch_results with some changes,
