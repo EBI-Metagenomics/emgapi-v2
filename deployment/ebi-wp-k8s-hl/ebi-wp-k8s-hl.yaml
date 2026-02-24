@@ -470,7 +470,7 @@ items:
                 periodSeconds: 600
           initContainers:
             - name: webclient-build
-              image: quay.io/microbiome-informatics/node:23
+              image: quay.io/microbiome-informatics/node:22
               imagePullPolicy: IfNotPresent
               resources:
                 requests:
