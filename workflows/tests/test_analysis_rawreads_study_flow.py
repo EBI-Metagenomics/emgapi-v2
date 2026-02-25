@@ -573,6 +573,7 @@ def test_prefect_analyse_rawreads_flow(
         biome: BiomeChoices
         watchers: List[UserChoices]
         library_strategy_policy: Optional[ENALibraryStrategyPolicy]
+        functional_analysis: bool
         webin_owner: Optional[str]
 
     def suspend_side_effect(wait_for_input=None):
@@ -581,6 +582,7 @@ def test_prefect_analyse_rawreads_flow(
                 biome=BiomeChoices["root.engineered"],
                 watchers=[UserChoices[admin_user.username]],
                 library_strategy_policy=ENALibraryStrategyPolicy.ONLY_IF_CORRECT_IN_ENA,
+                functional_analysis=True,
                 webin_owner=None,
             )
 
@@ -1159,6 +1161,7 @@ def test_prefect_analyse_rawreads_flow_private_data(
         biome: BiomeChoices
         watchers: List[UserChoices]
         library_strategy_policy: Optional[ENALibraryStrategyPolicy]
+        functional_analysis: bool
         webin_owner: Optional[str]
 
     def suspend_side_effect(wait_for_input=None):
@@ -1167,6 +1170,7 @@ def test_prefect_analyse_rawreads_flow_private_data(
                 biome=BiomeChoices["root.engineered"],
                 watchers=[UserChoices[admin_user.username]],
                 library_strategy_policy=ENALibraryStrategyPolicy.ONLY_IF_CORRECT_IN_ENA,
+                functional_analysis=True,
                 webin_owner="webin-1",
             )
 

@@ -44,6 +44,7 @@ def run_rawreads_pipeline_via_samplesheet(
     rawreads_analysis_ids: List[Union[str, int]],
     workdir: Optional[Path],
     outdir: Optional[Path],
+    functional_analysis: bool = False,
 ):
     if workdir is None:
         workdir = (
@@ -94,6 +95,7 @@ def run_rawreads_pipeline_via_samplesheet(
             ("--outdir", nextflow_outdir),
             EMG_CONFIG.slurm.use_nextflow_tower and "-with-tower",
             EMG_CONFIG.rawreads_pipeline.has_fire_access and "--use_fire_download",
+            ("--skip_functional", not functional_analysis),
             ("-work-dir", nextflow_workdir),
             ("-ansi-log", "false"),
         ]
