@@ -95,7 +95,7 @@ def run_rawreads_pipeline_via_samplesheet(
             ("--outdir", nextflow_outdir),
             EMG_CONFIG.slurm.use_nextflow_tower and "-with-tower",
             EMG_CONFIG.rawreads_pipeline.has_fire_access and "--use_fire_download",
-            ("--skip_functional", not functional_analysis),
+            ("--skip_functional", "false" if functional_analysis else "true"),
             ("-work-dir", nextflow_workdir),
             ("-ansi-log", "false"),
         ]
