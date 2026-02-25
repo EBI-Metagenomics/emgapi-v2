@@ -441,7 +441,7 @@ def test_prefect_analyse_rawreads_flow(
             },
         ],
         is_reusable=True,
-        is_optional=True,
+        is_optional=False,
     )
     httpx_mock.add_response(
         url=f"{EMG_CONFIG.ena.portal_search_api}?"
@@ -453,7 +453,7 @@ def test_prefect_analyse_rawreads_flow(
         f"&dataPortal=metagenome",
         json=[{"study_accession": study_accession}],
         is_reusable=True,
-        is_optional=True,
+        is_optional=False,
     )
 
     httpx_mock.add_response(
@@ -543,7 +543,7 @@ def test_prefect_analyse_rawreads_flow(
             },
         ],
         is_reusable=True,
-        is_optional=True,
+        is_optional=False,
     )
 
     # create fake results
@@ -969,36 +969,8 @@ def test_prefect_analyse_rawreads_flow_private_data(
             },
         ],
         is_reusable=True,
-        is_optional=True,
+        is_optional=False,
     )
-    httpx_mock.add_response(
-        url=f"{EMG_CONFIG.ena.portal_search_api}?"
-        f"result=study"
-        f"&query=%22%28study_accession%3D{study_accession}+OR+secondary_study_accession%3D{study_accession}%29%22"
-        f"&fields=study_title%2Cstudy_description%2Ccenter_name%2Csecondary_study_accession%2Cstudy_name"
-        f"&limit=10"
-        f"&format=json"
-        f"&dataPortal=metagenome",
-        match_headers={},  # public call should not find private study
-        json=[],
-        is_reusable=True,
-        is_optional=True,
-    )
-
-    httpx_mock.add_response(
-        url=f"{EMG_CONFIG.ena.portal_search_api}?"
-        f"result=study"
-        f"&query=%22%28study_accession%3D{study_accession}+OR+secondary_study_accession%3D{study_accession}%29%22"
-        f"&fields=study_title%2Cstudy_description%2Ccenter_name%2Csecondary_study_accession%2Cstudy_name"
-        f"&limit=10"
-        f"&format=json"
-        f"&dataPortal=metagenome",
-        match_headers={},  # public call should not find private study
-        json=[],
-        is_reusable=True,
-        is_optional=True,
-    )
-
     httpx_mock.add_response(
         url=f"{EMG_CONFIG.ena.portal_search_api}?"
         f"result=study"
@@ -1012,7 +984,7 @@ def test_prefect_analyse_rawreads_flow_private_data(
         },  # dcc_fake:not-a-dcc-pw
         json=[{"study_accession": study_accession}],
         is_reusable=True,
-        is_optional=True,
+        is_optional=False,
     )
     httpx_mock.add_response(
         url=f"{EMG_CONFIG.ena.portal_search_api}?"
@@ -1025,22 +997,8 @@ def test_prefect_analyse_rawreads_flow_private_data(
         match_headers={},  # public call should not find private study
         json=[],
         is_reusable=True,
-        is_optional=True,
+        is_optional=False,
     )
-    httpx_mock.add_response(
-        url=f"{EMG_CONFIG.ena.portal_search_api}?"
-        f"result=study"
-        f"&query=%22%28study_accession%3D{study_accession}+OR+secondary_study_accession%3D{study_accession}%29%22"
-        f"&fields=study_accession"
-        f"&limit="
-        f"&format=json"
-        f"&dataPortal=metagenome",
-        match_headers={},  # public call should not find private study
-        json=[],
-        is_reusable=True,
-        is_optional=True,
-    )
-
     httpx_mock.add_response(
         url=f"{EMG_CONFIG.ena.portal_search_api}?"
         f"result=read_run"
@@ -1131,7 +1089,7 @@ def test_prefect_analyse_rawreads_flow_private_data(
             },
         ],
         is_reusable=True,
-        is_optional=True,
+        is_optional=False,
     )
 
     # create fake results
@@ -1468,7 +1426,7 @@ def test_prefect_analyse_rawreads_flow_no_functional(
             },
         ],
         is_reusable=True,
-        is_optional=True,
+        is_optional=False,
     )
     httpx_mock.add_response(
         url=f"{EMG_CONFIG.ena.portal_search_api}?"
@@ -1480,7 +1438,7 @@ def test_prefect_analyse_rawreads_flow_no_functional(
         f"&dataPortal=metagenome",
         json=[{"study_accession": study_accession}],
         is_reusable=True,
-        is_optional=True,
+        is_optional=False,
     )
     httpx_mock.add_response(
         url=f"{EMG_CONFIG.ena.portal_search_api}?"
@@ -1513,7 +1471,7 @@ def test_prefect_analyse_rawreads_flow_no_functional(
             for i, run_acc in enumerate(all_results)
         ],
         is_reusable=True,
-        is_optional=True,
+        is_optional=False,
     )
 
     # Create fake results WITHOUT functional analysis
