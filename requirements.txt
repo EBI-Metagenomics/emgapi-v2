@@ -35,7 +35,7 @@ prefect-slack==0.3.1
 prefect-slurm==0.1.5
 
 # Pydantic
-pydantic<2.12.0  # TODO upgrade once https://github.com/eadwinCode/django-ninja-jwt/pull/151 is released
+pydantic<2.13.0  # TODO upgrade once https://github.com/eadwinCode/django-ninja-jwt/pull/151 is released
 pydantic-settings~=2.11.0
 pydantic-xml[lxml]~=2.18.0
 email-validator==2.3.0
