@@ -142,6 +142,14 @@ def run_assembly_analysis_pipeline_batch(
         )
         nextflow_workdir.mkdir(parents=True, exist_ok=True)
 
+        nextflow_workdir = (
+            Path(EMG_CONFIG.slurm.default_nextflow_workdir)
+            / mgnify_study.ena_study.accession
+            / f"{EMG_CONFIG.assembly_analysis_pipeline.pipeline_name}_{EMG_CONFIG.assembly_analysis_pipeline.pipeline_version}"
+            / f"{assembly_analysis_batch.id}"
+        )
+        nextflow_workdir.mkdir(parents=True, exist_ok=True)
+
         command = cli_command(
             [
                 (
@@ -163,12 +171,6 @@ def run_assembly_analysis_pipeline_batch(
                     EMG_CONFIG.assembly_analysis_pipeline.pipeline_nf_profile,
                 ),
                 "-resume",
-                (
-                    "-work-dir",
-                    Path(EMG_CONFIG.assembly_analysis_pipeline.workdir_root)
-                    / mgnify_study.first_accession
-                    / "asa",
-                ),
                 EMG_CONFIG.assembly_analysis_pipeline.has_fire_access
                 and "--use_fire_download",
                 ("--input", samplesheet),
