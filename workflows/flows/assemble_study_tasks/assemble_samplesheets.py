@@ -78,7 +78,7 @@ def update_assembly_metadata(
     Update assembly with post-assembly metadata like assembler and coverage.
     """
     logger = get_run_logger()
-    run_accession = assembly.run.first_accession
+    run_accession = assembly.runs_label
     study_accession = assembly.reads_study.ena_study.accession
 
     assembly.dir = (
@@ -125,7 +125,7 @@ def update_assemblers_and_contaminant_ref_of_assemblies_from_samplesheet(
     for _, assembly_row in samplesheet_df.iterrows():
         latest_assembly: analyses.models.Assembly = (
             analyses.models.Assembly.objects.filter(
-                run__ena_accessions__0=assembly_row["reads_accession"]
+                runs__ena_accessions__0=assembly_row["reads_accession"]
             )
             .order_by("-created_at")
             .first()
@@ -190,7 +190,7 @@ def run_assembler_for_samplesheet(
     samplesheet_df = pd.read_csv(samplesheet_csv, sep=",")
     assemblies: Iterable[analyses.models.Assembly] = (
         mgnify_study.assemblies_reads.filter(
-            run__ena_accessions__0__in=samplesheet_df["reads_accession"]
+            runs__ena_accessions__0__in=samplesheet_df["reads_accession"]
         )
     )
     logger = get_run_logger()
@@ -284,13 +284,13 @@ def run_assembler_for_samplesheet(
                 assembled_runs.add(run_accession)
 
         for assembly in assemblies:
-            if assembly.run.first_accession in qc_failed_runs:
+            if assembly.runs_label in qc_failed_runs:
                 mark_assembly_status(
                     assembly,
                     status=analyses.models.Assembly.AssemblyStates.PRE_ASSEMBLY_QC_FAILED,
-                    reason=qc_failed_runs[assembly.run.first_accession],
+                    reason=qc_failed_runs[assembly.runs_label],
                 )
-            elif assembly.run.first_accession in assembled_runs:
+            elif assembly.runs_label in assembled_runs:
                 mark_assembly_status(
                     assembly,
                     status=analyses.models.Assembly.AssemblyStates.ASSEMBLY_COMPLETED,

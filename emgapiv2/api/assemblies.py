@@ -20,7 +20,7 @@ from emgapiv2.api.schema_utils import (
 from genomes.models import GenomeAssemblyLink, AdditionalContainedGenomes
 
 
-@api_controller("assemblies", tags=[ApiSections.ANALYSES])
+@api_controller("assemblies", tags=[ApiSections.ASSEMBLIES])
 class AssemblyController(UnauthorisedIsUnfoundController):
     @http_get(
         "/",
@@ -73,8 +73,8 @@ class AssemblyController(UnauthorisedIsUnfoundController):
     def get_assembly(self, accession: str):
         assembly = get_object_or_404(
             analyses.models.Assembly.public_objects.select_related(
-                "run", "sample", "reads_study", "assembly_study", "assembler"
-            ),
+                "reads_study", "assembly_study", "assembler", "sample"
+            ).prefetch_related("runs"),
             ena_accessions__contains=[accession],
         )
         return assembly
@@ -88,6 +88,7 @@ class AssemblyController(UnauthorisedIsUnfoundController):
             "Accessible at `/assemblies/{accession}/genome-links`."
         ),
         operation_id="list_genome_links_for_assembly",
+        tags=[ApiSections.ASSEMBLIES, ApiSections.GENOMES],
     )
     @paginate()
     def list_genome_links_for_assembly(self, accession: str):
@@ -112,6 +113,7 @@ class AssemblyController(UnauthorisedIsUnfoundController):
             "Accessible at `/assemblies/{accession}/additional-contained-genomes`."
         ),
         operation_id="list_additional_contained_genomes_for_assembly",
+        tags=[ApiSections.ASSEMBLIES, ApiSections.GENOMES],
     )
     @paginate()
     def list_additional_contained_genomes_for_assembly(self, accession: str):
@@ -135,6 +137,7 @@ class AssemblyController(UnauthorisedIsUnfoundController):
             "Accessible at `/assemblies/{accession}/analyses`."
         ),
         operation_id="list_analyses_for_assembly",
+        tags=[ApiSections.ASSEMBLIES, ApiSections.ANALYSES],
     )
     @paginate()
     def list_analyses_for_assembly(self, accession: str):

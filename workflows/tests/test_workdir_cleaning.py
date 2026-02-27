@@ -48,7 +48,7 @@ def test_clean_assembly_workdirs(prefect_harness, mgnify_assemblies_completed, c
                 / f"{study.ena_study.accession}_miassembler"
                 / "samplesheet"
                 / f"{study.first_accession}"
-                / f"{assembly.run.first_accession}"
+                / f"{assembly.runs_label}"
             ).mkdir(exist_ok=True, parents=True)
             samplesheet_workdir_for_study.mkdir(exist_ok=True, parents=True)
             (samplesheet_workdir_for_study / "file.tsv").touch()
@@ -57,7 +57,7 @@ def test_clean_assembly_workdirs(prefect_harness, mgnify_assemblies_completed, c
                 / f"{study.ena_study.accession}_miassembler"
                 / "samplesheet"
                 / f"{study.first_accession}"
-                / f"{assembly.run.first_accession}"
+                / f"{assembly.runs_label}"
             )
             assembly.save()
 

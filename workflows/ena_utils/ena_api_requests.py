@@ -554,7 +554,7 @@ def get_study_assemblies_from_ena(accession: str, limit: int = 10) -> list[str]:
             ena_reads_study = get_study_from_ena(reads_study_accession)
             ena_reads_study.refresh_from_db()
 
-        reads_study: analyses.models.Study = (
+        reads_study: analyses.models.Study | None = (
             analyses.models.Study.objects.get_or_create_for_ena_study(
                 reads_study_accession
             )
@@ -587,14 +587,13 @@ def get_study_assemblies_from_ena(accession: str, limit: int = 10) -> list[str]:
             logger.info(f"Creating sample for {assembly_data[_.SAMPLE_ACCESSION]}")
             __, mgnify_sample, run = _make_samples_and_run(assembly_data, study)
         else:
-            run = mgnify_sample.runs.first()
+            run = mgnify_sample.runs.first()  # TODO: coassemblies? replicates?
 
         assembly, __ = analyses.models.Assembly.objects.update_or_create_by_accession(
             known_accessions=[assembly_data[_.ANALYSIS_ACCESSION]],
             defaults={
                 "sample": mgnify_sample,
                 "is_private": study.is_private,
-                "run": run,
             },
             create_defaults={
                 "assembly_study": study,
@@ -604,6 +603,7 @@ def get_study_assemblies_from_ena(accession: str, limit: int = 10) -> list[str]:
             include_update_defaults_in_create_defaults=True,
         )
         assembly.metadata[_.GENERATED_FTP] = assembly_data[_.GENERATED_FTP]
+        assembly.runs.add(run)
         assembly.save()
         assemblies.append(assembly.first_accession)
     return assemblies

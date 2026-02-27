@@ -48,7 +48,7 @@ def make_samplesheet(
     :param assembler: The assembler to be used for processing
     :return: A tuple containing the path to the generated samplesheet CSV file and a hash string generated from the assembly IDs
     """
-    assemblies = analyses.models.Assembly.objects.select_related("run").filter(
+    assemblies = analyses.models.Assembly.objects.prefetch_related("runs").filter(
         id__in=assembly_ids
     )
 
@@ -74,23 +74,23 @@ def make_samplesheet(
                 lookup_string="ena_study__accession"
             ),
             "reads_accession": SamplesheetColumnSource(
-                lookup_string="run__ena_accessions",
+                lookup_string="runs__ena_accessions",
                 renderer=lambda accessions: accessions[0],
             ),
             "fastq_1": SamplesheetColumnSource(
-                lookup_string=f"run__metadata__{analyses.models.Run.CommonMetadataKeys.FASTQ_FTPS}",
+                lookup_string=f"runs__metadata__{analyses.models.Run.CommonMetadataKeys.FASTQ_FTPS}",
                 renderer=lambda ftps: ftps[0],
             ),
             "fastq_2": SamplesheetColumnSource(
-                lookup_string=f"run__metadata__{analyses.models.Run.CommonMetadataKeys.FASTQ_FTPS}",
+                lookup_string=f"runs__metadata__{analyses.models.Run.CommonMetadataKeys.FASTQ_FTPS}",
                 renderer=lambda ftps: (ftps[1] if len(ftps) > 1 else ""),
             ),
             "library_strategy": SamplesheetColumnSource(
-                lookup_string="run__experiment_type",
+                lookup_string="runs__experiment_type",
                 renderer=EXPERIMENT_TYPES_TO_MIASSEMBLER_LIBRARY_STRATEGY.get,
             ),
             "library_layout": SamplesheetColumnSource(
-                lookup_string="run__metadata",
+                lookup_string="runs__metadata",
                 renderer=lambda metadata: str(
                     metadata.get(
                         analyses.models.Run.CommonMetadataKeys.INFERRED_LIBRARY_LAYOUT,
@@ -101,7 +101,7 @@ def make_samplesheet(
                 ).lower(),
             ),
             "platform": SamplesheetColumnSource(
-                lookup_string=f"run__metadata__{analyses.models.Run.CommonMetadataKeys.INSTRUMENT_PLATFORM}",
+                lookup_string=f"runs__metadata__{analyses.models.Run.CommonMetadataKeys.INSTRUMENT_PLATFORM}",
                 renderer=lambda platform: {
                     analyses.models.Run.InstrumentPlatformKeys.PACBIO_SMRT: "pb",
                     analyses.models.Run.InstrumentPlatformKeys.OXFORD_NANOPORE: "ont",
@@ -116,7 +116,7 @@ def make_samplesheet(
                 pass_whole_object=True,
                 renderer=lambda assembly: (
                     analyses.models.Assembler.FLYE
-                    if assembly.run.metadata_preferring_inferred.get(
+                    if assembly.runs.first().metadata_preferring_inferred.get(
                         analyses.models.Run.CommonMetadataKeys.INSTRUMENT_PLATFORM
                     )
                     in {
@@ -125,17 +125,17 @@ def make_samplesheet(
                     }
                     else (
                         analyses.models.Assembler.SPADES
-                        if assembly.run.metadata_preferring_inferred.get(
+                        if assembly.runs.first().metadata_preferring_inferred.get(
                             analyses.models.Run.CommonMetadataKeys.LIBRARY_LAYOUT
                         )
                         == SINGLE_END_LIBRARY_LAYOUT
-                        and assembly.run.metadata_preferring_inferred.get(
+                        and assembly.runs.first().metadata_preferring_inferred.get(
                             analyses.models.Run.CommonMetadataKeys.INSTRUMENT_PLATFORM
                         )
                         == analyses.models.Run.InstrumentPlatformKeys.ION_TORRENT
                         else (
                             analyses.models.Assembler.MEGAHIT
-                            if assembly.run.metadata_preferring_inferred.get(
+                            if assembly.runs.first().metadata_preferring_inferred.get(
                                 analyses.models.Run.CommonMetadataKeys.LIBRARY_LAYOUT
                             )
                             == SINGLE_END_LIBRARY_LAYOUT

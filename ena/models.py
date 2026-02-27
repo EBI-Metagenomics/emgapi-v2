@@ -153,10 +153,37 @@ def on_ena_study_saved_update_mgnify_study_metadata(
     analyses_study.save()
 
 
+class SampleManager(models.Manager):
+    def get_ena_sample(self, ena_sample_accession) -> "Sample | None":
+        ena_sample = None
+        try:
+            ena_sample = (
+                self.get_queryset()
+                .filter(
+                    models.Q(accession=ena_sample_accession)
+                    | models.Q(additional_accessions__icontains=ena_sample_accession)
+                )
+                .first()
+            )
+            logger.debug(f"Got {ena_sample}")
+        except (MultipleObjectsReturned, ObjectDoesNotExist):
+            logger.warning(
+                f"Problem getting ENA sample {ena_sample_accession} from ENA models DB"
+            )
+        return ena_sample
+
+
 class Sample(ENAModel):
+    objects: SampleManager = SampleManager()
+
     # TODO: refactor this model away. It causes more complexity than benefit.
     metadata = models.JSONField(default=dict)
-    study = models.ForeignKey(Study, on_delete=models.CASCADE, related_name="samples")
+    study = models.ForeignKey(
+        Study, on_delete=models.CASCADE, related_name="samples", null=True, blank=True
+    )
+    # null fk is allowed, to cater for samples that are only here as constituents of a virtual sample
+    # where we have not otherwise represented this sample's study in MGnify
+    # There should not actually be study-less samples in ENA.
 
     def __str__(self):
         return self.accession
