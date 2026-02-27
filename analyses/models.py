@@ -213,9 +213,15 @@ class Study(
 
 
 class PublicSampleManager(PrivacyFilterManagerMixin, ENADerivedManager):
+    """
+    Manager for public samples, i.e. those not marked as private / pre-publication in ENA.
+    This manager's queryset prefetches the self-referential related_samples (e.g. virtual samples, derived samples etc)
+    since ENA's /links endpoint (the source of truth for related_samples) does not support auth.
+    Consequently, private samples never have related_samples.
+    Source: https://www.ebi.ac.uk/ena/portal/api/v2.0/doc checked on 2026-02-24
+    """
+
     def get_queryset(self, *args, **kwargs):
-        # related samples should only exist for public samples,
-        # because ENA's /links endpoint does not support auth
         return super().get_queryset(*args, **kwargs).prefetch_related("related_samples")
 
 

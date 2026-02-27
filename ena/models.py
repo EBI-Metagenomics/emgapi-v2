@@ -154,8 +154,8 @@ def on_ena_study_saved_update_mgnify_study_metadata(
 
 
 class SampleManager(models.Manager):
-    def get_ena_sample(self, ena_sample_accession):
-        ena_sample = False
+    def get_ena_sample(self, ena_sample_accession) -> "Sample | None":
+        ena_sample = None
         try:
             ena_sample = (
                 self.get_queryset()

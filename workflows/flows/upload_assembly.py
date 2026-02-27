@@ -197,11 +197,16 @@ def handle_tpa_study(
         logger.info(
             f"Need to register an ENA (assembly) study for the assemblies of {assembly.reads_study.first_accession}"
         )
+        if not assembly.runs.distinct("experiment_type").count() == 1:
+            # It is undefined behaviour to have coassembled runs with mixed experiment types...
+            # If mixed types, fail and await manual intervention.
+            raise Exception(
+                f"Cannot register an ENA study for {assembly.reads_study.first_accession} because it has multiple experiment types: {assembly.runs.distinct('experiment_type')}"
+            )
+            # Otherwise, we can safely later use the .first() of the runs.
         study_reg_dir, assembly_study_title = create_study_xml(
             study_accession=assembly.reads_study.first_accession,
-            library=define_library(
-                assembly.runs.first().experiment_type
-            ),  # safe to assume all coassembled runs would have the same experiment type
+            library=define_library(assembly.runs.first().experiment_type),
             output_dir=upload_folder,
             is_third_party_assembly=True,
             is_private=False,
