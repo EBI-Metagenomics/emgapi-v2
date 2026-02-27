@@ -30,3 +30,5 @@ genomes/temp/*
 slurm-dev-environment/fs/nfs/public/tests/assembly_v6_output/ERP106708/MGYS*
 slurm-dev-environment/fs/nfs/public/tests/amplicon_v6_output/dwca/*
 .pytest-cache/
+.claude/*
+CLAUDE.md

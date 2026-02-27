@@ -470,7 +470,7 @@ items:
                 periodSeconds: 600
           initContainers:
             - name: webclient-build
-              image: quay.io/microbiome-informatics/node:22
+              image: quay.io/microbiome-informatics/ebi-metagenomics-client@sha256:3219c806f92dd0d5a791648a1fc95abe5bb7784660c2a7c042cbc6916a8c05ff
               imagePullPolicy: IfNotPresent
               resources:
                 requests:

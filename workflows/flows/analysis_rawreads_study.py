@@ -103,6 +103,10 @@ def analysis_rawreads_study(study_accession: str):
             ENALibraryStrategyPolicy.ONLY_IF_CORRECT_IN_ENA,
             description="Optionally treat read-runs with incorrect library strategy metadata as raw-reads.",
         )
+        functional_analysis: bool = Field(
+            False,
+            description="Enable functional analysis in the raw-reads pipeline.",
+        )
         webin_owner: Optional[str] = Field(
             None,
             description="Webin ID of study owner, if data is private. Can be left as None, if public.",
@@ -208,7 +212,11 @@ def analysis_rawreads_study(study_accession: str):
             f"Working on raw-reads analyses: {analyses_chunk[0]}-{analyses_chunk[-1]}"
         )
         run_rawreads_pipeline_via_samplesheet(
-            mgnify_study, analyses_chunk, study_workdir, study_outdir
+            mgnify_study,
+            analyses_chunk,
+            study_workdir,
+            study_outdir,
+            functional_analysis=analyse_study_input.functional_analysis,
         )
 
     merge_study_summaries(

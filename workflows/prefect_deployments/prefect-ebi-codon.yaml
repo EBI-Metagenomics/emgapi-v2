@@ -22,6 +22,15 @@ deployments:
     job_variables: {}
   schedules: []
 
+- name: analysis_amplicon_study_deployment
+  description: |-
+    Get a study from ENA, and input it to MGnify.
+    Kick off amplicon-v6 pipeline.
+    :param study_accession: Study accession e.g. PRJxxxxxx
+  entrypoint: workflows/flows/analysis_amplicon_study.py:analysis_amplicon_study
+  work_pool:
+    name: slurm
+
 - name: analysis_assembly_study_deployment
   description: |-
     Get a study from ENA (or MGnify), and run assembly analysis the assemblies of the study.
@@ -175,5 +184,109 @@ deployments:
     :param only_completed: Only process completed jobs
     :param exclude_failed: Exclude failed jobs
   entrypoint: workflows/flows/nf_traces/flows.py:nextflow_trace_etl_flow
+  work_pool:
+    name: slurm
+
+- name: analysis_rawreads_study_deployment
+  description: |-
+    Get a study from ENA, and input it to MGnify.
+    Kick off raw-reads-v6 pipeline.
+    :param study_accession: Study accession e.g. PRJxxxxxx
+  entrypoint: workflows/flows/analysis_rawreads_study.py:analysis_rawreads_study
+  work_pool:
+    name: slurm
+
+- name: import_genomes_flow_deployment
+  description: |-
+    Imports genomes from a catalogue directory into the database.
+
+    This flow processes genome results from a catalogue directory, performs sanity checks,
+    and imports genome data including annotations, files, and metadata.
+
+    :param results_directory: Path to the catalogue directory containing genome results
+    :param catalogue_name: Name of the genome catalogue
+    :param catalogue_version: Version of the genome catalogue
+    :param gold_biome: Biome classification for the catalogue
+    :param pipeline_version: Version of the pipeline used to generate the genomes
+    :param catalogue_type: Type of catalogue (e.g., prokaryotes, eukaryotes)
+    :param catalogue_biome_label: Optional label for the catalogue biome
+  entrypoint: workflows/flows/import_genomes_flow.py:import_genomes_flow
+  work_pool:
+    name: slurm
+
+- name: import_genome_assembly_links_flow_deployment
+  description: |-
+    Imports data from a TSV file into the GenomeAssemblyLink model.
+
+    This flow processes a TSV file containing genome assembly link information and
+    imports it into the database, creating relationships between MAGs, genomes, and species representatives.
+
+    :param tsv_path: Path to the TSV file containing genome assembly link data
+  entrypoint: workflows/flows/import_genome_assembly_links_flow.py:import_genome_assembly_links_flow
+  work_pool:
+    name: slurm
+
+- name: import_additional_contained_genomes_flow_deployment
+  description: |-
+    Imports data from a large TSV file into the AdditionalContainedGenomes model.
+
+    The TSV must contain the following columns:
+      - Run
+      - Genome_Mgnify_accession
+      - Containment
+      - cANI
+
+    The flow reads the file in streaming chunks and performs batched DB operations.
+
+    :param csv_path: Path to the TSV file containing additional contained genomes data
+    :param chunk_size: Size of chunks to read from the file (default: 50000)
+    :param insert_batch_size: Size of batches for database insertion (default: 10000)
+  entrypoint: workflows/flows/import_additional_contained_genomes_flow.py:import_additional_contained_genomes_flow
+  work_pool:
+    name: slurm
+
+- name: update_ena_accession_from_json_flow_deployment
+  description: |-
+    Traverse per-genome JSON files to update Genome.ena_genome_accession from the
+    'ncbi_genome_accession' value found in each file.
+
+    :param base_dir: Directory containing one subdirectory per genome accession, each with
+                     a JSON file named <accession>.json
+    :param read_chunk_size: Django iterator chunk size when scanning genomes (default: 5000)
+    :param update_batch_size: Number of rows to bulk update at once (default: 2000)
+    :param catalogue_name: Optional; if provided, restrict processing to genomes whose
+                         catalogue has this exact name
+  entrypoint: workflows/flows/update_ena_accession_from_json_flow.py:update_ena_accession_from_json_flow
+  work_pool:
+    name: slurm
+
+- name: upload_assembly_deployment
+  description: |-
+    This flow performs a sanity check and uploads an assembly for a specific run to ENA.
+
+    It is intended to be executed *per run* after the assembly flow. The assembly uploader
+    is a separate python library to prepare the upload files. The assembly submission
+    via `webin-cli` is launched as a SLURM cluster job.
+
+    :param assembly_id: ID of the assembly to upload
+    :param dry_run: If True, perform a dry run without actual upload (default: True)
+    :param custom_upload_folder: Optional custom path for upload folder
+  entrypoint: workflows/flows/upload_assembly.py:upload_assembly
+  work_pool:
+    name: slurm
+
+- name: move_data_deployment
+  description: |-
+    Move files on the cluster filesystem.
+
+    This flow uses a slurm job running on the datamover partition to move files
+    between locations on the cluster filesystem.
+
+    :param source: fully qualified path of the source location (file or folder)
+    :param target: fully qualified path of the target location (file or folder)
+    :param move_command: tool command for the move. Default is `cp`, but could be `mv` or `rsync` etc.
+    :param make_target: mkdir the target location path before copying.
+    :param kwargs: Other keywords to pass to run_cluster_job
+  entrypoint: workflows.prefect_utils.datamovers:move_data
   work_pool:
     name: slurm
