@@ -120,14 +120,15 @@ def test_import_additional_contained_genomes_flow_success(prefect_harness, tmp_p
     assembly_fk.save()
 
     assembly_overlap = Assembly.objects.create_for_runs_and_sample(
-        runs=[],
+        runs=[run],
         sample=sample,
         reads_study=study,
         ena_study=ena_study,
     )
-    # Ensure this assembly matches by overlapping the run accession
-    assembly_overlap.ena_accessions = [run_acc]
     assembly_overlap.save()
+
+    # should be two diff assemblies of same run
+    assert assembly_fk.pk != assembly_overlap.pk
 
     # Prepare TSV with a single valid row
     csv_path = tmp_path / "acg.tsv"
@@ -193,9 +194,8 @@ def test_bom_header_is_accepted(prefect_harness, tmp_path):
     )
     a1.save()
     a2 = Assembly.objects.create_for_runs_and_sample(
-        runs=[], sample=sample, reads_study=study, ena_study=ena_study
+        runs=[run], sample=sample, reads_study=study, ena_study=ena_study
     )
-    a2.ena_accessions = [run_acc]
     a2.save()
 
     # Write TSV with BOM in the header for the first field name
