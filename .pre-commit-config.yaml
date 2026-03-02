@@ -24,3 +24,7 @@ repos:
     hooks:
       - id: talisman-commit
         entry: cmd --githook pre-commit
+  - repo: https://github.com/ebi-metagenomics/no_talisman_dupes
+    rev: 'v0.1.0'
+    hooks:
+      - id: talisman-no-duplicate-filenames

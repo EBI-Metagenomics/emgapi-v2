@@ -45,7 +45,7 @@ SPADES_PARAMS = "params.txt"
 )
 def check_assembly(assembly: analyses.models.Assembly, assembly_path: Path):
     logger = get_run_logger()
-    accession = assembly.run.first_accession
+    accession = assembly.runs_label
     logger.info(f"Check assembly {assembly}")
     # check filesize
     if not assembly_path.is_file():
@@ -197,9 +197,16 @@ def handle_tpa_study(
         logger.info(
             f"Need to register an ENA (assembly) study for the assemblies of {assembly.reads_study.first_accession}"
         )
+        if not assembly.runs.distinct("experiment_type").count() == 1:
+            # It is undefined behaviour to have coassembled runs with mixed experiment types...
+            # If mixed types, fail and await manual intervention.
+            raise Exception(
+                f"Cannot register an ENA study for {assembly.reads_study.first_accession} because it has multiple experiment types: {assembly.runs.distinct('experiment_type')}"
+            )
+            # Otherwise, we can safely later use the .first() of the runs.
         study_reg_dir, assembly_study_title = create_study_xml(
             study_accession=assembly.reads_study.first_accession,
-            library=define_library(assembly.run.experiment_type),
+            library=define_library(assembly.runs.first().experiment_type),
             output_dir=upload_folder,
             is_third_party_assembly=True,
             is_private=False,
@@ -244,7 +251,7 @@ def update_assembly_metadata(
     Update assembly with post-assembly coverage field if that is missing in DB.
     """
     logger = get_run_logger()
-    run_accession = assembly.run.first_accession
+    run_accession = assembly.runs_label
 
     coverage_report_path = Path(assembly.dir) / Path(
         f"assembly/{assembly.assembler.name.lower()}/{assembly.assembler.version}/coverage/{run_accession}_coverage.json"
@@ -280,14 +287,14 @@ def generate_assembly_csv(
     if not assembly.metadata.get(assembly.CommonMetadataKeys.COVERAGE_DEPTH):
         update_assembly_metadata(assembly)
 
-    assembly_csv = metadata_dir / Path(f"{assembly.run.first_accession}.csv")
+    assembly_csv = metadata_dir / Path(f"{assembly.runs.first().first_accession}.csv")
     with open(assembly_csv, "w") as file_out:
         file_out.write(
             ",".join(["Run", "Coverage", "Assembler", "Version", "Filepath"]) + "\n"
         )
         line = ",".join(
             [
-                assembly.run.first_accession,
+                " ".join([run.first_accession for run in assembly.runs.all()]),
                 str(assembly.metadata.get(assembly.CommonMetadataKeys.COVERAGE_DEPTH)),
                 assembly.assembler.name,
                 str(assembly.assembler.version),
@@ -344,7 +351,7 @@ def prepare_assembly(
         assembly_manifest_writer.write()
 
     manifest = assembly_manifest_writer.upload_dir / Path(
-        mgnify_assembly.run.first_accession + ".manifest"
+        mgnify_assembly.runs_label + ".manifest"
     )
     return manifest
 
@@ -509,7 +516,7 @@ def upload_assembly(
         raise e
 
     assembly_path = Path(mgnify_assembly.dir_with_miassembler_suffix) / Path(
-        f"{mgnify_assembly.run.first_accession}_cleaned.contigs.fa.gz"
+        f"{mgnify_assembly.runs_label}_cleaned.contigs.fa.gz"
     )
 
     upload_folder = custom_upload_folder or assembly_path.parent / Path("upload")
@@ -519,7 +526,7 @@ def upload_assembly(
     logger.info(f"Using {upload_folder = }")
 
     # Sanity check
-    logger.info(f"Processing assembly for: {mgnify_assembly.run.first_accession}")
+    logger.info(f"Processing assembly for: {mgnify_assembly.runs_label}")
     if check_assembly(mgnify_assembly, assembly_path):
         logger.info(f"Assembly {mgnify_assembly} passed sanity check")
     else:

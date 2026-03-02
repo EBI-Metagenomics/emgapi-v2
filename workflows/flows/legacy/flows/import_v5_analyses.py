@@ -9,6 +9,9 @@ from workflows.ena_utils.ena_api_requests import (
     sync_study_metadata_from_ena,
     sync_sample_metadata_from_ena,
 )
+from workflows.flows.legacy.tasks.make_assembly_from_legacy_emg_db import (
+    make_assembly_from_legacy_emg_db,
+)
 from workflows.flows.legacy.tasks.make_run_from_legacy_emg_db import (
     make_run_from_legacy_emg_db,
 )
@@ -71,6 +74,15 @@ def import_v5_analyses(mgys: str):
             sync_sample_metadata_from_ena(sample.ena_sample)
             run = make_run_from_legacy_emg_db(legacy_analysis.run, study)
 
+            assembly = None
+            if legacy_analysis.experiment_type_id in (4, 7, 8):  # Assembly types
+                assembly = make_assembly_from_legacy_emg_db(
+                    legacy_analysis.secondary_accession,
+                    legacy_analysis.result_directory,
+                    study,
+                    sample,
+                )
+
             analysis, created = Analysis.objects.update_or_create(
                 id=legacy_analysis.job_id,
                 defaults={
@@ -80,6 +92,7 @@ def import_v5_analyses(mgys: str):
                     "ena_study": study.ena_study,
                     "pipeline_version": Analysis.PipelineVersions.v5,
                     "run": run,
+                    "assembly": assembly,
                 },
             )
             analysis.inherit_experiment_type()

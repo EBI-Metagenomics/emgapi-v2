@@ -17,7 +17,7 @@ tasks:
     cmds:
       - docker compose exec -e PREFECT_CLIENT_RETRY_EXTRA_CODES=0 app python manage.py prefectcli work-pool create --type {{.TYPE}} {{.CLI_ARGS}} {{.NAME}}
     vars:
-      TYPE: '{{.TYPE | default "process"}}'
+      TYPE: '{{.TYPE | default "slurm"}}'
       NAME: '{{.NAME | default "slurm"}}'
 
   deploy-flow:
@@ -82,7 +82,7 @@ tasks:
     interactive: true
 
   test:
-    desc: "Run pytest tests. E.g. `task test` or `task test -- -k study`"
+    desc: "Run pytest tests. E.g. `task test` or `task test -- -k study` (for test selection), or `task test -- --lf` (for last failures only)"
     cmds:
       - docker compose run --entrypoint /bin/bash app -c "pytest {{.CLI_ARGS}}"
 
