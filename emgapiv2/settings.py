@@ -12,8 +12,17 @@ https://docs.djangoproject.com/en/4.1/ref/settings/
 
 import logging
 import os
+import warnings
 from datetime import timedelta
 from pathlib import Path
+
+# Suppress pydantic-settings warnings that are raised because the sources for toml and pyproject.toml
+# are not explicitly configured, but they are included in pydantic-settings' default model_config.
+warnings.filterwarnings(
+    "ignore",
+    message="Config key `(pyproject_toml_table_header|toml_file)` is set in model_config but will be ignored",
+    category=UserWarning,
+)
 
 import dj_database_url
 from django.templatetags.static import static

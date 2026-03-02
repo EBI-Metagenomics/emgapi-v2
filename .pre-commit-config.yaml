@@ -24,3 +24,20 @@ repos:
     hooks:
       - id: talisman-commit
         entry: cmd --githook pre-commit
+  - repo: local
+    hooks:
+      - id: talismanrc-no-duplicate-filenames
+        name: Fail on duplicate filenames in .talismanrc
+        entry: >-
+          bash -c '
+          dupes=$(grep -E "^[[:space:]]*- filename:" .talismanrc \
+            | sed -E "s/^[[:space:]]*- filename:[[:space:]]*//" \
+            | sort | uniq -d);
+          if [ -n "$dupes" ]; then
+            echo "Duplicate filename entries in .talismanrc:";
+            echo "$dupes";
+            exit 1;
+          fi'
+        language: system
+        files: ^\.talismanrc$
+        pass_filenames: false
