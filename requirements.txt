@@ -2,7 +2,7 @@
 aenum~=3.1.16  # extendable enums
 case-converter~=1.2.0
 cython<3.0
-Pillow~=11.3.0  # imagefield requirement
+Pillow~=12.1.0  # imagefield requirement
 typing_extensions~=4.14.1
 tzdata
 pendulum
