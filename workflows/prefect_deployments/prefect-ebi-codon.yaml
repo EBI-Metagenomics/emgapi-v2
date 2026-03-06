@@ -290,3 +290,15 @@ deployments:
   entrypoint: workflows.prefect_utils.datamovers:move_data
   work_pool:
     name: slurm
+
+- name: import_v5_analyses_deployment
+  description: |-
+    This flow will iteratively import analyses (made with MGnify V5 pipeline)
+    into the EMG DB.
+
+    It connects to the legacy EMG MySQL and Mongo DBs, but not through Django.
+
+    :param mgys: accession of the study to import (with its analyses)
+  entrypoint: workflows/flows/legacy/flows/import_v5_analyses.py:import_v5_analyses
+  work_pool:
+    name: slurm
