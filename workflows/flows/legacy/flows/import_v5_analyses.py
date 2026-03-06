@@ -1,8 +1,9 @@
 from pathlib import Path
 
-import django
 from prefect import flow, get_run_logger
 from sqlalchemy import select
+
+import activate_django_first  # noqa
 
 from workflows.ena_utils.ena_api_requests import (
     sync_privacy_state_of_ena_study_and_derived_objects,
@@ -21,8 +22,6 @@ from workflows.flows.legacy.tasks.make_sample_from_legacy_emg_db import (
 from workflows.flows.legacy.tasks.make_study_from_legacy_emg_db import (
     make_study_from_legacy_emg_db,
 )
-
-django.setup()
 
 from analyses.base_models.with_downloads_models import (
     DownloadFile,
