@@ -2,7 +2,6 @@ import csv
 import gzip
 import re
 import shutil
-import uuid
 from enum import Enum
 from pathlib import Path
 from typing import List
@@ -37,61 +36,9 @@ from workflows.prefect_utils.testing_utils import (
     should_not_mock_httpx_requests_to_prefect_server,
     generate_assembly_v6_pipeline_results,
 )
+from workflows.fixtures.assembly_analysis.conftest import AssemblyTestScenario
 
 EMG_CONFIG = settings.EMG_CONFIG
-
-
-class AssemblyTestScenario(BaseModel):
-    """Assembly test scenario configuration."""
-
-    study_accession: str
-    study_secondary: str
-    assembly_accession_success: str
-    assembly_accession_failed: str
-    sample_accession: str
-    run_accession: str
-    fixture_source_dir: Path  # Where the permanent fixture files are stored
-    workspace_dir: Path  # Temporary workspace for the test
-    biome_path: str
-    biome_name: str
-
-    class Config:
-        frozen = True
-
-
-@pytest.fixture
-def test_workspace():
-    """Create a temporary workspace directory for test execution."""
-
-    # Create a unique workspace under /app/data/tests/tmp/
-    base_tmp = Path("/app/data/tests/tmp")
-    base_tmp.mkdir(parents=True, exist_ok=True)
-
-    workspace = base_tmp / f"test_workspace_{uuid.uuid4().hex[:8]}"
-    workspace.mkdir(exist_ok=True)
-
-    yield workspace
-
-    # Cleanup after test
-    if workspace.exists():
-        shutil.rmtree(workspace)
-
-
-@pytest.fixture
-def assembly_test_scenario(test_workspace):
-    """Default assembly test scenario."""
-    return AssemblyTestScenario(
-        study_accession="PRJEB24849",
-        study_secondary="ERP106708",
-        assembly_accession_success="ERZ857107",
-        assembly_accession_failed="ERZ857108",
-        sample_accession="SAMN08514017",
-        run_accession="SRR123456",
-        fixture_source_dir=Path("/app/data/tests/assembly_v6_output/ERP106708"),
-        workspace_dir=test_workspace,
-        biome_path="root.engineered",
-        biome_name="Engineered",
-    )
 
 
 def setup_assembly_batch_fixtures(scenario: AssemblyTestScenario):
@@ -278,21 +225,16 @@ def fix_virify_samplesheet_paths(batch: AssemblyAnalysisBatch):
     print(f"Fixed VIRify samplesheet paths at {virify_samplesheet}")
 
 
-def setup_virify_batch_fixtures(
-    batch: AssemblyAnalysisBatch, scenario: AssemblyTestScenario
-):
+def setup_virify_batch_fixtures(virify_workspace: Path, scenario: AssemblyTestScenario):
     """
     Helper to copy VIRify test fixtures into the batch workspace.
     This mimics what the actual VIRify pipeline would produce.
 
     VIRify structure: {virify_workspace}/{assembly_accession}/08-final/gff/*.gff (decompressed)
 
-    :param batch: The AssemblyAnalysisBatch to set up fixtures for
+    :param virify_workspace: The VIRify workspace path where results should be created
     :param scenario: Test scenario with study and assembly details
     """
-
-    # Get VIRify workspace
-    virify_workspace = batch.get_pipeline_workspace(AssemblyAnalysisPipeline.VIRIFY)
 
     # Create the final GFF directory structure (includes assembly accession directory)
     assembly_dir = virify_workspace / scenario.assembly_accession_success
@@ -332,21 +274,16 @@ def setup_virify_batch_fixtures(
     print(f"Set up VIRify fixtures in batch workspace: {virify_workspace}")
 
 
-def setup_map_batch_fixtures(
-    batch: AssemblyAnalysisBatch, scenario: AssemblyTestScenario
-):
+def setup_map_batch_fixtures(map_workspace: Path, scenario: AssemblyTestScenario):
     """
     Helper to copy MAP test fixtures into the batch workspace.
     This mimics what the actual MAP pipeline would produce.
 
     MAP structure: {map_workspace}/{assembly_accession}/gff/mobilome_prokka.gff
 
-    :param batch: The AssemblyAnalysisBatch to set up fixtures for
+    :param map_workspace: The MAP workspace path where results should be created
     :param scenario: Test scenario with study and assembly details
     """
-
-    # Get MAP workspace
-    map_workspace = batch.get_pipeline_workspace(AssemblyAnalysisPipeline.MAP)
 
     # Create MAP output directory (includes assembly accession directory and gff subdirectory)
     assembly_dir = map_workspace / scenario.assembly_accession_success
@@ -486,8 +423,10 @@ def test_prefect_analyse_assembly_flow(
             assembly_test_scenario.study_accession
         )
         batch = AssemblyAnalysisBatch.objects.filter(study=study).latest("created_at")
-        setup_virify_batch_fixtures(batch, assembly_test_scenario)
-        setup_map_batch_fixtures(batch, assembly_test_scenario)
+        virify_workspace = batch.get_pipeline_workspace(AssemblyAnalysisPipeline.VIRIFY)
+        setup_virify_batch_fixtures(virify_workspace, assembly_test_scenario)
+        map_workspace = batch.get_pipeline_workspace(AssemblyAnalysisPipeline.MAP)
+        setup_map_batch_fixtures(map_workspace, assembly_test_scenario)
 
         return SlurmStatus.completed.value
 
