@@ -256,6 +256,32 @@ class AnalysedRun(ModelSchema):
         fields = ["instrument_model", "instrument_platform"]
 
 
+class AnalysedRunDetail(AnalysedRun):
+    sample_accession: Optional[str] = Field(
+        None,
+        description="ENA accession of the sample associated with this run",
+        examples=["ERS000001", "SAMEA000000001"],
+    )
+    study_accession: Optional[str] = Field(
+        None,
+        description="ENA accession of the study associated with this run",
+        examples=["SRP135937", "PRJNA438545"],
+    )
+
+    @staticmethod
+    def resolve_sample_accession(obj) -> Optional[str]:
+        return getattr(getattr(obj, "sample", None), "first_accession", None)
+
+    @staticmethod
+    def resolve_study_accession(obj) -> Optional[str]:
+        return getattr(getattr(obj, "study", None), "accession", None)
+
+    class Meta:
+        pass
+        # model = analyses.models.Run
+        # fields = ["instrument_model", "instrument_platform"]
+
+
 class Assembly(ModelSchema):
     accession: Optional[str] = Field(
         None, alias="first_accession", examples=["ERZ000001"]
