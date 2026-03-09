@@ -14,6 +14,7 @@ from emgapiv2.enum_utils import FutureStrEnum
 class ApiSections(FutureStrEnum):
     STUDIES = "Studies"
     SAMPLES = "Samples"
+    RUNS = "Runs"
     ANALYSES = "Analyses"
     PUBLICATIONS = "Publications"
     REQUESTS = "Requests"

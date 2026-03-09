@@ -86,6 +86,14 @@ api = NinjaExtraAPI(
                 ),
             },
             {
+                OpenApiKeywords.NAME: ApiSections.RUNS,
+                OpenApiKeywords.DESCRIPTION: dedent(
+                    """
+                    Sequencing runs are based on ENA run accessions, and represent individual sequencing runs of a sample.
+                    """
+                ),
+            },
+            {
                 OpenApiKeywords.NAME: ApiSections.ASSEMBLIES,
                 OpenApiKeywords.DESCRIPTION: dedent(
                     """

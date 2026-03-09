@@ -7,7 +7,7 @@ from analyses.schemas import AnalysedRun, AnalysedRunDetail
 from emgapiv2.api import ApiSections
 
 
-@api_controller("runs", tags=[ApiSections.MISC])
+@api_controller("runs", tags=[ApiSections.RUNS])
 class AnalysedRunController:
     @http_get(
         "/",
