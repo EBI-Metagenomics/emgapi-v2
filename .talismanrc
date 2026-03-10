@@ -1,7 +1,4 @@
 fileignoreconfig:
-- filename: slurm-dev-environment/configs/jwt_hs256.key
-  checksum: cf9887754600f97f20b4afb223bcd666c3b0aa47dab9b067669c24997f398c26
-
 - filename: .github/workflows/release_k8s.yml
   checksum: 0e93196d244417801fd40ad6bfa01f53a6bf04257371378a1dc3e14cbc7a04d8
 
@@ -54,7 +51,7 @@ fileignoreconfig:
   checksum: 3afe465b36e4e141124bd84c8459c5aa81332eedf49b691eff22c74df63a0f18
 
 - filename: emgapiv2/settings.py
-  checksum: ab0fa7cdb6cd720aedd0a4f6bb9e2940187f9de91a39967e93ed4b91ca5050c5
+  checksum: 4113e9045da277c139530cbf71de334dc83b49a4f93a570b559e694bdd5cb0c8
 
 - filename: emgapiv2/settings_test.py
   checksum: ded898400b4eda7e3cf75694af1b66235975a85eb5b8f49f3a2c708163a7aad4
@@ -64,6 +61,12 @@ fileignoreconfig:
 
 - filename: emgapiv2/widgets.py
   allowed_patterns: [key]
+
+- filename: pyproject.toml
+  allowed_patterns: [Config key]
+
+- filename: slurm-dev-environment/configs/jwt_hs256.key
+  checksum: cf9887754600f97f20b4afb223bcd666c3b0aa47dab9b067669c24997f398c26
 
 - filename: slurm-dev-environment/configs/private-data-nginx.conf
   checksum: e3bb31e2a0f97c62ee684dd7124e5b72db364c52088ddd98331310909c6a0493
@@ -155,9 +158,6 @@ fileignoreconfig:
 - filename: workflows/flows/update_ena_accession_from_json_flow.py
   allowed_patterns: [total_missing_key_or_parse_error]
 
-- filename: workflows/flows/upload_assembly.py
-  checksum: f82f92058dabd50b9b6caf557d4eadae227ec4f6a0233135653251c20cf3c64b
-
 - filename: workflows/prefect_utils/env_context.py
   checksum: 8f5e11c7e0038bc4a648dc61ec657a679356857f77e557f744e2dd769ad88def
   ignore_detectors: [filename]
@@ -172,7 +172,7 @@ fileignoreconfig:
   checksum: ac644b851d31913ca9328d5a83516146c4c76874201df0a2d7086df6b60435c8
 
 - filename: workflows/tests/test_analysis_rawreads_study_flow.py
-  checksum: 0f7255bdd7303269337a7d9be17d5246bfc32980697ba4135f54be201d13180a
+  checksum: 211d4cfcd3e1b0dbe6e8b92683f6160661c50a17429d470ea0651daa41f5c3f8
 
 - filename: workflows/flows/upload_assembly.py
   allowed_patterns: [key]
@@ -185,9 +185,6 @@ fileignoreconfig:
 
 - filename: workflows/data_io_utils/schemas/base.py
   checksum: 27b03a470da785c58f8294d2aa0aa3ef5f4e5ec5cffd97984ab446a5b8a9f337
-
-- filename: Taskfile.yaml
-  checksum: 592e19dbbafe04c136aa73a4921ac04b2d0473e654416b08d09e81d7544b8b09
 
 - filename: workflows/data_io_utils/schemas/assembly.py
   checksum: 12b45869a636431bb6e1bfe193f02f301a6b484a0c4503bc793f5450c36c932a

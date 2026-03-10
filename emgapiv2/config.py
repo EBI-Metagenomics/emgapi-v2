@@ -4,7 +4,10 @@ from typing import List, Pattern
 
 from pydantic import AnyHttpUrl, BaseModel, Field
 from pydantic.networks import MongoDsn, MySQLDsn
-from pydantic_settings import BaseSettings
+from pydantic_settings import (
+    BaseSettings,
+    SettingsConfigDict,
+)
 
 from workflows.ena_utils.abstract import ENAPortalDataPortal
 
@@ -346,7 +349,7 @@ class EMGConfig(BaseSettings):
     genomes: GenomeConfig = GenomeConfig()
     darwin_core_archive: DarwinCoreArchiveConfig = DarwinCoreArchiveConfig()
 
-    model_config = {
-        "env_prefix": "emg_",
-        "env_nested_delimiter": "__",
-    }
+    model_config = SettingsConfigDict(
+        env_prefix="emg_",
+        env_nested_delimiter="__",
+    )

@@ -392,7 +392,7 @@ def test_api_assembly_detail(mgnify_assemblies_with_ena, ninja_api_client):
         getter=_whole_object,
     )
     assert assembly_detail["accession"] == assembly.first_accession
-    assert assembly_detail["run_accession"] == assembly.run.first_accession
+    assert assembly_detail["run_accession"] == assembly.runs.first().first_accession
     assert assembly_detail["sample_accession"] == assembly.sample.ena_sample.accession
     assert assembly_detail["reads_study_accession"] == assembly.reads_study.accession
     assert assembly_detail["assembler_name"] == assembly.assembler.name
@@ -470,9 +470,10 @@ def test_api_assembly_additional_contained_genomes_with_data(
     assembly.save()
 
     genome = genomes[0]
+    run = assembly.runs.first()
 
     AdditionalContainedGenomes.objects.create(
-        run=assembly.run,
+        run=run,
         genome=genome,
         assembly=assembly,
         containment=0.65,
@@ -496,4 +497,4 @@ def test_api_assembly_additional_contained_genomes_with_data(
     # Linked objects
     assert item["genome"]["accession"] == genome.accession
     assert item["genome"]["catalogue_version"] == genome.catalogue.version
-    assert item["run_accession"] == assembly.run.first_accession
+    assert item["run_accession"] == assembly.runs.first().first_accession

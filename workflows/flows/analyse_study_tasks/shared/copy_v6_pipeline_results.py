@@ -312,6 +312,7 @@ def _copy_single_analysis_results(
         "json",
         "fa",
         "fasta",
+        "fai",
         "tsv",
         "csv",
         "gz",

@@ -12,6 +12,7 @@ from analyses.models import (
     ComputeResourceHeuristic,
     Run,
     Study,
+    Assembly,
 )
 from ena.models import Study as ENAStudy
 
@@ -467,3 +468,18 @@ def test_inferred_metadata_mixin(raw_read_run):
     assert run.metadata_preferring_inferred["kessel_run"] == "20 parsecs"
     assert run.metadata["kessel_run"] == 20
     assert run.metadata_preferring_inferred["falcon"] == "millenium"
+
+
+@pytest.mark.django_db
+def test_assembly_runs_labels(raw_read_run):
+    run: Run = Run.objects.first()
+    assembly, _ = Assembly.objects.get_or_create_for_run_and_sample(
+        run=run, sample=run.sample, ena_study_id=run.ena_study_id, reads_study=run.study
+    )
+    assert assembly.runs_label == run.first_accession
+
+    # coassembly
+    other_run: Run = Run.objects.exclude(pk=run.pk).first()
+    assembly.runs.add(other_run)
+    assembly.refresh_from_db()
+    assert assembly.runs_label == f"{run.first_accession},{other_run.first_accession}"

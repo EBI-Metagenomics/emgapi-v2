@@ -1,13 +1,17 @@
 from pathlib import Path
 
-import django
 from prefect import flow, get_run_logger
 from sqlalchemy import select
+
+import activate_django_first  # noqa
 
 from workflows.ena_utils.ena_api_requests import (
     sync_privacy_state_of_ena_study_and_derived_objects,
     sync_study_metadata_from_ena,
     sync_sample_metadata_from_ena,
+)
+from workflows.flows.legacy.tasks.make_assembly_from_legacy_emg_db import (
+    make_assembly_from_legacy_emg_db,
 )
 from workflows.flows.legacy.tasks.make_run_from_legacy_emg_db import (
     make_run_from_legacy_emg_db,
@@ -18,8 +22,6 @@ from workflows.flows.legacy.tasks.make_sample_from_legacy_emg_db import (
 from workflows.flows.legacy.tasks.make_study_from_legacy_emg_db import (
     make_study_from_legacy_emg_db,
 )
-
-django.setup()
 
 from analyses.base_models.with_downloads_models import (
     DownloadFile,
@@ -71,6 +73,15 @@ def import_v5_analyses(mgys: str):
             sync_sample_metadata_from_ena(sample.ena_sample)
             run = make_run_from_legacy_emg_db(legacy_analysis.run, study)
 
+            assembly = None
+            if legacy_analysis.experiment_type_id in (4, 7, 8):  # Assembly types
+                assembly = make_assembly_from_legacy_emg_db(
+                    legacy_analysis.secondary_accession,
+                    legacy_analysis.result_directory,
+                    study,
+                    sample,
+                )
+
             analysis, created = Analysis.objects.update_or_create(
                 id=legacy_analysis.job_id,
                 defaults={
@@ -80,6 +91,7 @@ def import_v5_analyses(mgys: str):
                     "ena_study": study.ena_study,
                     "pipeline_version": Analysis.PipelineVersions.v5,
                     "run": run,
+                    "assembly": assembly,
                 },
             )
             analysis.inherit_experiment_type()

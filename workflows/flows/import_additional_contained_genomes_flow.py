@@ -1,8 +1,7 @@
 from pathlib import Path
-from typing import Dict, Iterable, List, Optional, Tuple
+from typing import Dict, Iterable, List, Optional, Tuple, Set
 
 from django.db import transaction
-from django.db.models import Q
 from prefect import flow, task, get_run_logger
 
 from activate_django_first import EMG_CONFIG
@@ -28,6 +27,7 @@ def validate_csv_file(csv_path: str) -> str:
     """
     Validates that the TSV file exists and is readable.
     """
+    # TODO: dedupe
     logger = get_run_logger()
     path = Path(csv_path)
 
@@ -195,22 +195,20 @@ def process_csv_chunk(
                     continue
                 run_acc_to_ids.setdefault(acc, []).append(run.id)
 
-    # Find assemblies linked to any of these runs either by FK or overlapping ena_accessions
-    assemblies_qs = Assembly.objects.filter(
-        Q(run_id__in=run_ids) | Q(ena_accessions__overlap=list(run_acc_to_ids.keys()))
-    ).only("id", "run_id", "ena_accessions")
+    assembly_runs_model = Assembly.runs.through
 
-    # Map run_id -> list of Assembly ids
-    assemblies_by_run_id: Dict[int, List[int]] = {rid: [] for rid in run_ids}
-    for assembly in assemblies_qs:
-        candidate_run_ids = set()
-        if assembly.run_id in assemblies_by_run_id:
-            candidate_run_ids.add(assembly.run_id)
-        for acc in getattr(assembly, "ena_accessions", []) or []:
-            for rid in run_acc_to_ids.get(acc, []):
-                candidate_run_ids.add(rid)
-        for rid in candidate_run_ids:
-            assemblies_by_run_id.setdefault(rid, []).append(assembly.id)
+    # TODO fix me
+    assemblies_by_run_id: Dict[int, Set[int]] = {rid: set() for rid in run_ids}
+    for run_accession, _, _, _ in normalised:
+        run_id = run_acc_to_ids.get(run_accession)[
+            0
+        ]  # runs should be unique... #TODO: check code above
+        if run_id:
+            assemblies_by_run_id[run_id].update(
+                assembly_runs_model.objects.filter(
+                    run__ena_accessions__contains=[run_accession]
+                ).values_list("assembly_id", flat=True)
+            )
 
     # Prepare rows to insert
     to_create: List[AdditionalContainedGenomes] = []

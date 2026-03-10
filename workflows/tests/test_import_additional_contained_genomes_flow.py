@@ -110,8 +110,8 @@ def test_import_additional_contained_genomes_flow_success(prefect_harness, tmp_p
     run_acc = "SRR6180434"
     ena_study, study, ena_sample, sample, run = _make_ena_study_sample_run(run_acc)
 
-    assembly_fk = Assembly.objects.create(
-        run=run,
+    assembly_fk = Assembly.objects.create_for_runs_and_sample(
+        runs=[run],
         sample=sample,
         reads_study=study,
         ena_study=ena_study,
@@ -119,15 +119,16 @@ def test_import_additional_contained_genomes_flow_success(prefect_harness, tmp_p
     assembly_fk.ena_accessions = ["ERZ123456"]
     assembly_fk.save()
 
-    assembly_overlap = Assembly.objects.create(
-        run=None,
+    assembly_overlap = Assembly.objects.create_for_runs_and_sample(
+        runs=[run],
         sample=sample,
         reads_study=study,
         ena_study=ena_study,
     )
-    # Ensure this assembly matches by overlapping the run accession
-    assembly_overlap.ena_accessions = [run_acc]
     assembly_overlap.save()
+
+    # should be two diff assemblies of same run
+    assert assembly_fk.pk != assembly_overlap.pk
 
     # Prepare TSV with a single valid row
     csv_path = tmp_path / "acg.tsv"
@@ -188,14 +189,13 @@ def test_bom_header_is_accepted(prefect_harness, tmp_path):
     run_acc = "ERR11846481"
     ena_study, study, ena_sample, sample, run = _make_ena_study_sample_run(run_acc)
 
-    a1 = Assembly.objects.create(
-        run=run, sample=sample, reads_study=study, ena_study=ena_study
+    a1 = Assembly.objects.create_for_runs_and_sample(
+        runs=[run], sample=sample, reads_study=study, ena_study=ena_study
     )
     a1.save()
-    a2 = Assembly.objects.create(
-        run=None, sample=sample, reads_study=study, ena_study=ena_study
+    a2 = Assembly.objects.create_for_runs_and_sample(
+        runs=[run], sample=sample, reads_study=study, ena_study=ena_study
     )
-    a2.ena_accessions = [run_acc]
     a2.save()
 
     # Write TSV with BOM in the header for the first field name

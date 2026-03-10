@@ -350,7 +350,8 @@ class AssemblyDetail(Assembly):
 
     @staticmethod
     def resolve_run_accession(obj: analyses.models.Assembly) -> Optional[str]:
-        return obj.run.first_accession if obj.run else None
+        run = obj.runs.first()
+        return run.first_accession if run else None
 
     @staticmethod
     def resolve_sample_accession(obj: analyses.models.Assembly) -> Optional[str]:
@@ -409,10 +410,10 @@ class MGnifyAnalysisDetail(MGnifyAnalysis):
     downloads: List[MGnifyAnalysisDownloadFile] = Field(
         ..., alias="downloads_as_objects"
     )
-    read_run: Optional[AnalysedRun] = Field(
+    read_run: Optional[list[AnalysedRun]] = Field(
         ...,
-        alias="raw_run",
-        description="Metadata associated with the original read run this analysis is based on, whether or not those reads were assembled.",
+        alias="raw_runs",
+        description="Metadata associated with the original read run(s) this analysis is based on, whether or not those reads were assembled.",
     )
     quality_control_summary: Optional[dict] = Field(
         ...,
