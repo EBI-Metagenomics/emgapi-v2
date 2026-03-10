@@ -96,7 +96,7 @@ def coassembly_legacy_db(in_memory_legacy_emg_db):
         analysis = LegacyAnalysisJob(
             job_id=66666,
             sample_id=6001,
-            run_id=6001,
+            assembly_id=6001,
             study_id=6000,
             pipeline_id=6,
             result_directory="coassembly/results",

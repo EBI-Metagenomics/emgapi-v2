@@ -71,15 +71,18 @@ def import_v5_analyses(mgys: str):
             legacy_sample = legacy_analysis.sample
             sample = make_sample_from_legacy_emg_db(legacy_sample, study)
             sync_sample_metadata_from_ena(sample.ena_sample)
-            run = make_run_from_legacy_emg_db(legacy_analysis.run, study)
-
-            assembly = None
-            if legacy_analysis.experiment_type_id in (4, 7, 8):  # Assembly types
+            run, assembly = None, None
+            if legacy_analysis.run:
+                run = make_run_from_legacy_emg_db(legacy_analysis.run, study)
+            elif legacy_analysis.assembly:
                 assembly = make_assembly_from_legacy_emg_db(
-                    legacy_analysis.secondary_accession,
-                    legacy_analysis.result_directory,
+                    legacy_analysis.assembly,
                     study,
                     sample,
+                )
+            else:
+                logger.warning(
+                    f"Analysis {legacy_analysis.job_id} has no linked run or assembly to import"
                 )
 
             analysis, created = Analysis.objects.update_or_create(
