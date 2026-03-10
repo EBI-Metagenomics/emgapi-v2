@@ -20,8 +20,7 @@ from workflows.flows.legacy.tasks.make_sample_from_legacy_emg_db import (
 
 @task
 def make_assembly_from_legacy_emg_db(
-    legacy_analysis_secondary_accession: str,
-    legacy_analysis_result_directory: str,
+    legacy_assembly: LegacyAssembly,
     study: Study,
     sample: Sample,
 ) -> Assembly | None:
@@ -30,25 +29,15 @@ def make_assembly_from_legacy_emg_db(
     logger = get_run_logger()
 
     with legacy_emg_db_session() as session:
-        # Try to find a co-assembly/assembly in the legacy DB
-        legacy_assembly_stmt = select(LegacyAssembly).where(
-            LegacyAssembly.accession == legacy_analysis_secondary_accession
-        )
-        legacy_assembly: LegacyAssembly = session.scalar(legacy_assembly_stmt)
-
-        if not legacy_assembly:
-            return None
-
         # In this new schema, Assembly has a sample field and runs ManyToMany.
         # A co-assembly might have multiple runs and samples.
         # For now we use the analysis job's primary sample for the assembly.
         assembly, created = Assembly.objects.get_or_create(
             ena_study=study.ena_study,
-            dir=legacy_analysis_result_directory,
+            assembly_study=study,  # could also be reads study, but unclear from information present for legacy cases
             sample=sample,
             defaults={
                 "ena_accessions": [legacy_assembly.accession],
-                "reads_study": study,
             },
         )
         if created:
