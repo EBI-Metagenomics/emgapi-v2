@@ -8,7 +8,11 @@ from analyses.base_models.with_downloads_models import (
     DownloadType,
     DownloadFileType,
 )
-from analyses.schemas import MGnifyStudyDownloadFile, MGnifyAnalysisDownloadFile
+from analyses.schemas import (
+    MGnifyStudyDownloadFile,
+    MGnifyAnalysisDownloadFile,
+    MGnifyAnalysisDetail,
+)
 
 
 @pytest.mark.django_db
@@ -114,3 +118,28 @@ def test_public_vs_private_study_urls(
     query_params = parse_qs(parsed_url.query)
     assert "token" in query_params
     assert "expires" in query_params
+
+
+@pytest.mark.django_db
+def test_private_analysis_results_dir(private_analysis_with_download):
+    """Test that a private analysis results_dir uses a secure private URL."""
+    url = MGnifyAnalysisDetail.resolve_results_dir(private_analysis_with_download)
+
+    assert url is not None
+    assert settings.EMG_CONFIG.service_urls.private_data_url_root in url
+    assert settings.EMG_CONFIG.service_urls.transfer_services_url_root not in url
+
+    parsed_url = urlparse(url)
+    query_params = parse_qs(parsed_url.query)
+    assert "token" in query_params
+    assert "expires" in query_params
+
+
+@pytest.mark.django_db
+def test_public_analysis_results_dir(amplicon_analysis_with_downloads):
+    """Test that a public analysis results_dir uses the public transfer services URL."""
+    url = MGnifyAnalysisDetail.resolve_results_dir(amplicon_analysis_with_downloads)
+
+    assert url is not None
+    assert settings.EMG_CONFIG.service_urls.transfer_services_url_root in url
+    assert settings.EMG_CONFIG.service_urls.private_data_url_root not in url
