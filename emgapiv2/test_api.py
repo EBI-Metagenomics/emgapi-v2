@@ -503,12 +503,14 @@ def test_api_assembly_additional_contained_genomes_with_data(
 @pytest.mark.django_db
 def test_runs_list_endpoint(ninja_api_client, raw_read_run):
     # raw_read_run creates 3 run objects
-    response = ninja_api_client.get("/runs/")
-    assert response.status_code == 200
-    data = response.json()
-    assert "items" in data
-    assert data["count"] == len(raw_read_run)
-    for run in data["items"]:
+
+    items = call_endpoint_and_get_data(
+        ninja_api_client,
+        "/runs/",
+        count=len(raw_read_run),
+    )
+
+    for run in items:
         assert "accession" in run
         assert "instrument_model" in run
         assert "instrument_platform" in run
@@ -520,17 +522,21 @@ def test_runs_list_endpoint(ninja_api_client, raw_read_run):
 @pytest.mark.django_db
 def test_runs_detail_endpoint(ninja_api_client, raw_read_run):
     run = raw_read_run[0]
-    response = ninja_api_client.get(f"/runs/{run.first_accession}")
-    assert response.status_code == 200
-    data = response.json()
-    assert data["accession"] == run.first_accession
-    assert data["instrument_model"] == run.instrument_model
-    assert data["instrument_platform"] == run.instrument_platform
-    assert data["experiment_type"] == run.get_experiment_type_display()
-    assert data["sample_accession"] == run.sample.first_accession
-    assert data["study_accession"] == run.study.accession
-    assert isinstance(data["sample"], dict)
-    assert isinstance(data["study"], dict)
+
+    run_detail = call_endpoint_and_get_data(
+        ninja_api_client,
+        f"/runs/{run.first_accession}",
+        getter=_whole_object,
+    )
+
+    assert run_detail["accession"] == run.first_accession
+    assert run_detail["instrument_model"] == run.instrument_model
+    assert run_detail["instrument_platform"] == run.instrument_platform
+    assert run_detail["experiment_type"] == run.get_experiment_type_display()
+    assert run_detail["sample_accession"] == run.sample.first_accession
+    assert run_detail["study_accession"] == run.study.accession
+    assert isinstance(run_detail["sample"], dict)
+    assert isinstance(run_detail["study"], dict)
 
 
 @pytest.mark.django_db
