@@ -498,3 +498,43 @@ def test_api_assembly_additional_contained_genomes_with_data(
     assert item["genome"]["accession"] == genome.accession
     assert item["genome"]["catalogue_version"] == genome.catalogue.version
     assert item["run_accession"] == assembly.runs.first().first_accession
+
+
+@pytest.mark.django_db
+def test_runs_list_endpoint(ninja_api_client, raw_read_run):
+    # raw_read_run creates 3 run objects
+    response = ninja_api_client.get("/runs/")
+    assert response.status_code == 200
+    data = response.json()
+    assert "items" in data
+    assert data["count"] == len(raw_read_run)
+    for run in data["items"]:
+        assert "accession" in run
+        assert "instrument_model" in run
+        assert "instrument_platform" in run
+        assert "experiment_type" in run
+        assert "sample_accession" in run
+        assert "study_accession" in run
+
+
+@pytest.mark.django_db
+def test_runs_detail_endpoint(ninja_api_client, raw_read_run):
+    run = raw_read_run[0]
+    response = ninja_api_client.get(f"/runs/{run.first_accession}")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["accession"] == run.first_accession
+    assert data["instrument_model"] == run.instrument_model
+    assert data["instrument_platform"] == run.instrument_platform
+    assert data["experiment_type"] == run.get_experiment_type_display()
+    assert data["sample_accession"] == run.sample.first_accession
+    assert data["study_accession"] == run.study.accession
+    assert isinstance(data["sample"], dict)
+    assert isinstance(data["study"], dict)
+
+
+@pytest.mark.django_db
+def test_runs_detail_not_found(ninja_api_client):
+    response = ninja_api_client.get("/runs/DOESNOTEXIST")
+    assert response.status_code == 404
+    assert "not found" in response.json()["detail"].lower()
