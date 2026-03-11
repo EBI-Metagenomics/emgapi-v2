@@ -25,6 +25,7 @@ from workflows.flows.assemble_study_tasks.assemble_samplesheets import (
 )
 from workflows.flows.assemble_study_tasks.make_samplesheets import (
     make_samplesheets_for_runs_to_assemble,
+    make_samplesheet,
 )
 from workflows.prefect_utils.analyses_models_helpers import mark_assembly_status
 
@@ -873,6 +874,98 @@ def test_assembler_changed_in_samplesheet(
         ).count()
         > 1
     )
+
+
+@pytest.mark.django_db(transaction=True)
+def test_assembler_is_changed_to_flye_for_longread(
+    prefect_harness,
+    raw_reads_mgnify_study,
+    long_read_run,
+    tmp_path,
+    top_level_biomes,
+    assemblers,
+):
+    assembly, _ = analyses.models.Assembly.objects.get_or_create_for_run_and_sample(
+        run=long_read_run,
+        sample=long_read_run.sample,
+        reads_study=raw_reads_mgnify_study,
+        ena_study=raw_reads_mgnify_study.ena_study,
+        assembler=analyses.models.Assembler.get_latest(
+            analyses.models.Assembler.METASPADES
+        ),
+        ena_accessions=[
+            "ERZ_longreads",
+        ],
+    )
+
+    human = analyses.models.Biome.objects.get(biome_name="Human")
+    raw_reads_mgnify_study.biome = human
+    raw_reads_mgnify_study.save()
+
+    # flye memory
+    analyses.models.ComputeResourceHeuristic.objects.create(
+        assembler=analyses.models.Assembler.get_latest(analyses.models.Assembler.FLYE),
+        biome=human,
+        process=analyses.models.ComputeResourceHeuristic.ProcessTypes.ASSEMBLY,
+        memory_gb=12.345,
+    )
+
+    # metaspades memory
+    analyses.models.ComputeResourceHeuristic.objects.create(
+        assembler=analyses.models.Assembler.get_latest(
+            analyses.models.Assembler.METASPADES
+        ),
+        biome=human,
+        process=analyses.models.ComputeResourceHeuristic.ProcessTypes.ASSEMBLY,
+        memory_gb=5.678,
+    )
+
+    # megahit memory
+    analyses.models.ComputeResourceHeuristic.objects.create(
+        assembler=analyses.models.Assembler.get_latest(
+            analyses.models.Assembler.MEGAHIT
+        ),
+        biome=human,
+        process=analyses.models.ComputeResourceHeuristic.ProcessTypes.ASSEMBLY,
+        memory_gb=3.456,
+    )
+
+    default_assembler = analyses.models.Assembler.get_latest(
+        analyses.models.Assembler.assembler_default
+    )
+    megahit = analyses.models.Assembler.get_latest(analyses.models.Assembler.MEGAHIT)
+    flye = analyses.models.Assembler.get_latest(analyses.models.Assembler.FLYE)
+
+    # default assembler would be metaspades
+    assert assembly.assembler == default_assembler
+
+    # make samplesheet should change default to flye for this run
+    ss, _ = make_samplesheet(
+        raw_reads_mgnify_study, [assembly.pk], default_assembler, tmp_path
+    )
+    assembly.refresh_from_db()
+    assert assembly.assembler == flye
+
+    # flye should also be in the ss
+    ss_content = ss.read_text()
+    assert "flye" in ss_content
+    # should now be using flye's memory heuristic
+    assert "12.345" in ss_content
+
+    # if we specified a non-default assembler (megahit) it should NOT be overwritten though
+    ss, _ = make_samplesheet(
+        raw_reads_mgnify_study,
+        [assembly.pk],
+        megahit,
+        tmp_path,
+        determine_suitable_assemblers=False,
+    )
+    assembly.refresh_from_db()
+    # assembler should now be megahit too as it was overwritten
+    assert assembly.assembler == megahit
+    ss_content = ss.read_text()
+    assert "megahit" in ss_content
+    assert "3.456" in ss_content
 
 
 @pytest.mark.django_db(transaction=True)

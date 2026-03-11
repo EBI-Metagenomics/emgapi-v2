@@ -4,7 +4,7 @@ import logging
 import os
 import re
 from pathlib import Path
-from typing import ClassVar, Union, Optional, Iterable
+from typing import ClassVar, Union, Optional, Iterable, Literal
 
 from aenum import extend_enum
 from db_file_storage.model_utils import delete_file, delete_file_if_needed
@@ -433,6 +433,14 @@ class Assembler(TimeStampedModel):
         self.clean()
         super().save(*args, **kwargs)
 
+    _AssemblerName = Literal["metaspades", "megahit", "spades", "flye"]
+
+    @classmethod
+    def get_latest(cls, assembler_name: _AssemblerName):
+        return (
+            cls.objects.filter(name__iexact=assembler_name).order_by("-version").first()
+        )
+
     def __str__(self):
         return f"{self.name} {self.version}" if self.version is not None else self.name
 
@@ -582,6 +590,54 @@ class Assembly(InferredMetadataMixin, TimeStampedModel, ENADerivedModel):
             / Path(assembler.name.lower())
             / Path(assembler.version)
         )
+
+    def determine_suitable_assembler(self, save: bool = True) -> Assembler:
+        """
+        Pick an Assembler for this assembly based on its Run metadata.
+        Always returns the latest version of chosen assembler.
+
+        # PACBIO_SMRT and OXFORD_NANOPORE - flye
+        # SE platform ION_TORRENT         - spades
+        # other SE                        - megahit
+        # all the rest (mostly illumina)  - metaspades
+        :param save: Whether to set the Assembler as self.assembler
+        :return: The Assembler object determined for this assembly.
+        """
+        first_run = self.runs.first()
+        first_run_metadata = first_run.metadata_preferring_inferred
+        SINGLE_END_LIBRARY_LAYOUT = "SINGLE"
+
+        # Default is metaspades
+        assembler = Assembler.get_latest(Assembler.METASPADES)
+
+        if first_run_metadata.get(Run.CommonMetadataKeys.INSTRUMENT_PLATFORM) in {
+            Run.InstrumentPlatformKeys.PACBIO_SMRT,
+            Run.InstrumentPlatformKeys.OXFORD_NANOPORE,
+        }:
+            # Long read platforms
+            assembler = Assembler.get_latest(Assembler.FLYE)
+        else:
+            # Short read platforms
+            if (
+                first_run_metadata.get(Run.CommonMetadataKeys.LIBRARY_LAYOUT)
+                == SINGLE_END_LIBRARY_LAYOUT
+                and first_run_metadata.get(Run.CommonMetadataKeys.INSTRUMENT_PLATFORM)
+                == Run.InstrumentPlatformKeys.ION_TORRENT
+            ):
+                # Single end ION Torrent
+                assembler = Assembler.get_latest(Assembler.SPADES)
+            elif (
+                first_run_metadata.get(Run.CommonMetadataKeys.LIBRARY_LAYOUT)
+                == SINGLE_END_LIBRARY_LAYOUT
+            ):
+                # Single end non-ion-torrent
+                assembler = Assembler.get_latest(Assembler.MEGAHIT)
+
+        if save:
+            self.assembler = assembler
+            self.save()
+        logger.info(f"Determined assembler for assembly {self} to be {assembler}")
+        return assembler
 
     class Meta:
         verbose_name_plural = "Assemblies"

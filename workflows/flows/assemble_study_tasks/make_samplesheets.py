@@ -4,7 +4,7 @@ from pathlib import Path
 from textwrap import dedent as _
 from typing import List, Union
 
-from prefect import task
+from prefect import task, get_run_logger
 from prefect.artifacts import create_table_artifact
 from prefect.cache_policies import DEFAULT
 from prefect.tasks import task_input_hash
@@ -16,7 +16,6 @@ from workflows.flows.assemble_study_tasks.get_assemblies_to_attempt import (
 )
 
 import analyses.models
-from workflows.ena_utils.ena_api_requests import SINGLE_END_LIBRARY_LAYOUT
 from workflows.nextflow_utils.samplesheets import (
     SamplesheetColumnSource,
     queryset_hash,
@@ -37,6 +36,7 @@ def make_samplesheet(
     assembly_ids: List[Union[str, int]],
     assembler: analyses.models.Assembler,
     output_dir: Union[Path, None] = None,
+    determine_suitable_assemblers: bool = True,
 ) -> (Path, str):
     """Generate a samplesheet for assemblies in a study.
 
@@ -46,13 +46,18 @@ def make_samplesheet(
     :param mgnify_study: The MGnify study containing the assemblies
     :param assembly_ids: List of assembly IDs to include in the samplesheet
     :param assembler: The assembler to be used for processing
+    :param output_dir: The directory where the samplesheet will be saved, defaults to the default workdir
+    :param determine_suitable_assemblers: Whether to determine suitable assemblers for each assembly, defaults to True
     :return: A tuple containing the path to the generated samplesheet CSV file and a hash string generated from the assembly IDs
     """
+    logger = get_run_logger()
     assemblies = analyses.models.Assembly.objects.prefetch_related("runs").filter(
         id__in=assembly_ids
     )
+    logger.info(f"Making samplesheet for {assemblies.count()} assemblies")
 
     ss_hash = queryset_hash(assemblies, "id")
+    logger.info(f"Samplesheet hash: {ss_hash}")
 
     if output_dir is None:
         output_dir = Path(EMG_CONFIG.slurm.default_workdir)
@@ -61,10 +66,17 @@ def make_samplesheet(
         output_dir.mkdir(parents=True, exist_ok=True)
     (output_dir / ss_hash).mkdir(parents=True, exist_ok=True)
 
-    memory = get_memory_for_assembler(mgnify_study.biome, assembler)
-
     # Get contaminant reference genome if biome is found
     contaminant_reference = get_reference_genome(mgnify_study)
+
+    for _assembly in assemblies:
+        if determine_suitable_assemblers:
+            _assembler = _assembly.determine_suitable_assembler(save=True)
+            logger.info(f"Assembly {_assembly.id} will use assembler {_assembler.name}")
+        else:
+            _assembly.assembler = assembler
+            _assembly.save()
+    assemblies = assemblies.all()  # refresh
 
     sample_sheet_tsv = queryset_to_samplesheet(
         queryset=assemblies,
@@ -109,42 +121,15 @@ def make_samplesheet(
                 }.get(platform, str(platform).lower()),
             ),
             "assembler": SamplesheetColumnSource(
-                # PACBIO_SMRT and OXFORD_NANOPORE - flye
-                # SE platform ION_TORRENT         - spades
-                # other SE                        - megahit
-                # all the rest (mostly illumina)  - metaspades
+                lookup_string="assembler__name",
+                renderer=str.lower,
+            ),
+            "assembly_memory": SamplesheetColumnSource(
                 pass_whole_object=True,
-                renderer=lambda assembly: (
-                    analyses.models.Assembler.FLYE
-                    if assembly.runs.first().metadata_preferring_inferred.get(
-                        analyses.models.Run.CommonMetadataKeys.INSTRUMENT_PLATFORM
-                    )
-                    in {
-                        analyses.models.Run.InstrumentPlatformKeys.PACBIO_SMRT,
-                        analyses.models.Run.InstrumentPlatformKeys.OXFORD_NANOPORE,
-                    }
-                    else (
-                        analyses.models.Assembler.SPADES
-                        if assembly.runs.first().metadata_preferring_inferred.get(
-                            analyses.models.Run.CommonMetadataKeys.LIBRARY_LAYOUT
-                        )
-                        == SINGLE_END_LIBRARY_LAYOUT
-                        and assembly.runs.first().metadata_preferring_inferred.get(
-                            analyses.models.Run.CommonMetadataKeys.INSTRUMENT_PLATFORM
-                        )
-                        == analyses.models.Run.InstrumentPlatformKeys.ION_TORRENT
-                        else (
-                            analyses.models.Assembler.MEGAHIT
-                            if assembly.runs.first().metadata_preferring_inferred.get(
-                                analyses.models.Run.CommonMetadataKeys.LIBRARY_LAYOUT
-                            )
-                            == SINGLE_END_LIBRARY_LAYOUT
-                            else assembler.name.lower()
-                        )
-                    )
+                renderer=lambda assembly: get_memory_for_assembler(
+                    mgnify_study.biome, assembly.assembler
                 ),
             ),
-            "assembly_memory": str(memory),
             "contaminant_reference": contaminant_reference or "",
             # The following 2 fields are needed in the sampleshseet, but the production setup of the pipeline
             # sets these for the whole samplesheet. Also, if the human_reference global parameter and human_reference
@@ -182,6 +167,7 @@ def make_samplesheets_for_runs_to_assemble(
     assembler: analyses.models.Assembler,
     chunk_size: int = 10,
     output_dir: Union[Path, None] = None,
+    determine_suitable_assemblers: bool = True,
 ) -> list[tuple[Path, str]]:
     """Generate samplesheets for assemblies in a study for processing by the specified assembler.
 
@@ -194,6 +180,8 @@ def make_samplesheets_for_runs_to_assemble(
     :param mgnify_study: The study containing assemblies to be processed
     :param assembler: The assembler software or framework used for processing
     :param chunk_size: The number of assemblies to include in each chunk, defaults to 10
+    :param output_dir: The directory where the samplesheets will be saved, defaults to the default workdir
+    :param determine_suitable_assemblers: Whether to determine suitable assemblers for each assembly, defaults to True
     :return: A list of tuples, each containing the file path to a samplesheet and its associated identifier
     :raises ValueError: If any assemblies within the study have a conflicting privacy state compared to the study itself
     """
@@ -211,7 +199,13 @@ def make_samplesheets_for_runs_to_assemble(
     chunked_assemblies = chunk_list(assemblies_to_attempt, chunk_size)
 
     sheets = [
-        make_samplesheet(mgnify_study, assembly_chunk, assembler, output_dir)
+        make_samplesheet(
+            mgnify_study,
+            assembly_chunk,
+            assembler,
+            output_dir,
+            determine_suitable_assemblers=determine_suitable_assemblers,
+        )
         for assembly_chunk in chunked_assemblies
     ]
     return sheets

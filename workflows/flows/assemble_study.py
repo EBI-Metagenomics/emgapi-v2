@@ -181,11 +181,7 @@ def assemble_study(
     if assembler_name == AssemblerChoices.pipeline_default:
         assembler_name = analyses.models.Assembler.assembler_default
 
-    assembler = (
-        analyses.models.Assembler.objects.filter(name__iexact=assembler_name)
-        .order_by("-version")
-        .first()
-    )
+    assembler = analyses.models.Assembler.get_latest(assembler_name)
     # assumes latest version...
 
     study_workdir = (
@@ -205,7 +201,11 @@ def assemble_study(
         library_strategy_policy=assemble_study_input.library_strategy_policy,
     )
     samplesheets = make_samplesheets_for_runs_to_assemble(
-        mgnify_study.accession, assembler, output_dir=study_outdir
+        mgnify_study.accession,
+        assembler,
+        output_dir=study_outdir,
+        determine_suitable_assemblers=assemble_study_input.assembler
+        == AssemblerChoices.pipeline_default,
     )
 
     # If allow_samplesheet_editing is True, suspend the flow to allow editing
