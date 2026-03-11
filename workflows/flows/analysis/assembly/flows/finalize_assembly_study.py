@@ -27,8 +27,6 @@ def finalize_assembly_study(study_accession: str):
     batch 3 flows (aca, virify and map) are not running anymore. This is not ideal, and I'm
     working to improve it.
     TODO: Improve as is_running() is not enough, flows may have failed or haven't even started!
-    TODO: Add unit tests
-    TODO: Use events or automations to improve this
 
     This includes:
     - Merging assembly study summaries
@@ -36,12 +34,15 @@ def finalize_assembly_study(study_accession: str):
     - Copying v6 study summaries
     - Updating study features
 
-    :param study_accession: Study accession (e.g., MGYS00001234)
+    :param study_accession: Study accession (MGYS e.g. MGYS00001234, or ENA e.g. ERP000001)
     :type study_accession: str
     """
     logger = get_run_logger()
 
-    mgnify_study = analyses.models.Study.objects.get(accession=study_accession)
+    try:
+        mgnify_study = analyses.models.Study.objects.get(accession=study_accession)
+    except analyses.models.Study.DoesNotExist:
+        mgnify_study = analyses.models.Study.objects.get_by_accession(study_accession)
 
     # Check if all batches are complete
     batches = workflows.models.AssemblyAnalysisBatch.objects.filter(
