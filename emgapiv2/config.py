@@ -46,7 +46,7 @@ class SlurmConfig(BaseModel):
     nextflow_tower_org: str = "EMBL-EBI"
     nextflow_tower_workspace: str = "ebi-spws-dev-microbiome-info"
 
-    datamover_paritition: str = "datamover"
+    datamover_partition: str = "datamover"
 
     shared_filesystem_root_on_slurm: str = "/nfs/public"
     shared_filesystem_root_on_server: str = "/app/data"

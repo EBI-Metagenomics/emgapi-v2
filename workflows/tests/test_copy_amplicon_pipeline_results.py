@@ -82,7 +82,7 @@ def test_copy_amplicon_pipeline_results(raw_read_analyses, prefect_harness):
         # Verify job_variables for partition
         job_variables = call_kwargs["job_variables"]
         assert "partition" in job_variables
-        assert job_variables["partition"] == EMG_CONFIG.slurm.datamover_paritition
+        assert job_variables["partition"] == EMG_CONFIG.slurm.datamover_partition
 
 
 @pytest.mark.django_db(transaction=True)
