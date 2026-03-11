@@ -83,9 +83,10 @@ def amplicon_analysis_with_downloads(
 )
 def assembly_analysis_with_downloads(mock_run_deployment, mgnify_assemblies_completed):
     assem = mgnify_assemblies_completed[0]
-    assem.add_erz_accession(
+    assem.ena_accessions = [
         "ERZ857107"
-    )  # n.b. does not correspond to this run in real ena
+    ]  # n.b. does not correspond to this run in real ena
+    assem.save()
 
     study = assem.reads_study
     sample = assem.sample
