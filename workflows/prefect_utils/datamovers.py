@@ -7,7 +7,7 @@ from prefect.runtime import flow_run
 import activate_django_first  # noqa
 
 from workflows.data_io_utils.filenames import file_path_shortener
-from workflows.prefect_utils.slurm_flow import EMG_CONFIG, run_cluster_job
+from workflows.prefect_utils.slurm_flow import run_cluster_job
 from workflows.prefect_utils.slurm_policies import ResubmitAlwaysPolicy
 
 
@@ -57,6 +57,5 @@ def move_data(
         expected_time=expected_time,
         memory=memory,
         resubmit_policy=ResubmitAlwaysPolicy,
-        partitions=[EMG_CONFIG.slurm.datamover_paritition],
         **kwargs,
     )
