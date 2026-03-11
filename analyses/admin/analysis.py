@@ -38,7 +38,7 @@ class AnalysisAdmin(JSONFieldWidgetOverridesMixin, ModelAdmin):
         "accession",
         "run__ena_accessions",
         "assembly__ena_accessions",
-        "assembly__run__ena_accessions",
+        "assembly__runs__ena_accessions",
         "ena_study__title",
         "ena_study__accession",
         "ena_study__additional_accessions",
