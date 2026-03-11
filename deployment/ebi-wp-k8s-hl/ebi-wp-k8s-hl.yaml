@@ -613,11 +613,12 @@ items:
         	server {
           		listen 80;
 
-          		location /private-data/ {
+          		location /metagenomics/api/v2/private-data/ {
 
                     access_by_lua_block {
                         local uri = ngx.var.uri
-        				local unsigned_uri = string.sub(uri, string.len("/private-data/") + 1)
+        				local location_prefix = "/metagenomics/api/v2/private-data/"
+        				local unsigned_uri = string.sub(uri, string.len(location_prefix) + 1)
 
                         local args = ngx.req.get_uri_args()
                         local expires = args.expires
@@ -642,7 +643,7 @@ items:
                         end
                     }
 
-            		alias /var/www/private-data/;
+            		alias /var/www/private-data/private-data/mgnify_results/;
             	}
 
                 # Health check endpoint
