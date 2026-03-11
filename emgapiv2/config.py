@@ -172,9 +172,6 @@ class AssemblyAnalysisPipelineConfig(MGnifyPipelineConfig):
     # Workdir
     workdir_root: str = "/nfs/public/wd"
 
-    # TODO: this is temporary, until we re-deploy the run batch flow
-    batch_runner_deployment_id: str = ""
-
     # End-of-run reports
     completed_assemblies_csv: str = "analysed_assemblies.csv"
     qc_failed_assemblies: str = "qc_failed_assemblies.csv"

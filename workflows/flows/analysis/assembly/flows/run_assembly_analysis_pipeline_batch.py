@@ -41,7 +41,6 @@ from workflows.flows.analysis.assembly.utils.status_update_hooks import (
 
 
 @flow(
-    name="Run assembly analysis pipeline-v6 for an assembly analysis batch (ASA, VIRIfy and MAP)",
     flow_run_name="Run Assembly Analysis Batch: {assembly_analyses_batch_id}",
     on_completion=[update_batch_status_counts],
     on_failure=[update_batch_status_counts],
@@ -50,7 +49,7 @@ from workflows.flows.analysis.assembly.utils.status_update_hooks import (
     retries=2,
     retry_delay_seconds=60,
 )
-def run_assembly_analysis_pipeline_batch(
+def run_assembly_batch(
     assembly_analyses_batch_id: uuid.UUID,
 ):
     """

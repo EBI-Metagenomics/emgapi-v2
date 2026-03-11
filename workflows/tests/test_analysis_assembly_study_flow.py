@@ -5,13 +5,15 @@ import shutil
 import uuid
 from enum import Enum
 from pathlib import Path
-from typing import List
+from typing import List, Optional
 from unittest.mock import Mock, patch
 
 import pytest
 from django.conf import settings
 from pydantic import BaseModel
 
+import analyses.models
+import ena.models
 from analyses.base_models.with_downloads_models import DownloadType
 from analyses.models import Study, Analysis
 from workflows.flows.analysis.assembly.flows.analysis_assembly_study import (
@@ -21,7 +23,7 @@ from workflows.flows.analysis.assembly.flows.finalize_assembly_study import (
     finalize_assembly_study,
 )
 from workflows.flows.analysis.assembly.flows.run_assembly_analysis_pipeline_batch import (
-    run_assembly_analysis_pipeline_batch,
+    run_assembly_batch,
 )
 from workflows.flows.analysis.assembly.tasks.add_assembly_study_summaries_to_downloads import (
     add_assembly_study_summaries_to_downloads,
@@ -464,10 +466,8 @@ def test_prefect_analyse_assembly_flow(
     # This allows the test to verify batch processing while preventing actual deployment
     def run_batch_deployment(name, parameters, timeout):
         """Call the actual batch flow instead of deploying."""
-        if EMG_CONFIG.assembly_analysis_pipeline.batch_runner_deployment_id in name:
-            run_assembly_analysis_pipeline_batch(
-                parameters["assembly_analyses_batch_id"]
-            )
+        if "run_assembly_batch_deployment" in name:
+            run_assembly_batch(parameters["assembly_analyses_batch_id"])
         return Mock(id="mock-batch-flow-run-id")
 
     mock_run_deployment_analysis_assembly_study.side_effect = run_batch_deployment
@@ -848,10 +848,8 @@ def test_prefect_analyse_assembly_flow_missing_directory(
     # Mock run_deployment for batch submission to actually call the batch flow
     def run_batch_deployment(name, parameters, timeout):
         """Call the actual batch flow instead of deploying."""
-        if EMG_CONFIG.assembly_analysis_pipeline.batch_runner_deployment_id in name:
-            run_assembly_analysis_pipeline_batch(
-                parameters["assembly_analyses_batch_id"]
-            )
+        if "run_assembly_batch_deployment" in name:
+            run_assembly_batch(parameters["assembly_analyses_batch_id"])
         return Mock(id="mock-batch-flow-run-id")
 
     mock_run_deployment_analysis_assembly_study.side_effect = run_batch_deployment
@@ -1036,10 +1034,8 @@ def test_prefect_analyse_assembly_flow_invalid_schema(
     # Mock run_deployment for batch submission to actually call the batch flow
     def run_batch_deployment(name, parameters, timeout):
         """Call the actual batch flow instead of deploying."""
-        if EMG_CONFIG.assembly_analysis_pipeline.batch_runner_deployment_id in name:
-            run_assembly_analysis_pipeline_batch(
-                parameters["assembly_analyses_batch_id"]
-            )
+        if "run_assembly_batch_deployment" in name:
+            run_assembly_batch(parameters["assembly_analyses_batch_id"])
         return Mock(id="mock-batch-flow-run-id")
 
     mock_run_deployment_analysis_assembly_study.side_effect = run_batch_deployment
@@ -1162,3 +1158,87 @@ def test_prefect_analyse_assembly_flow_invalid_schema(
     # Verify batch progressed to READY (even though analysis failed QC)
     batch = AssemblyAnalysisBatch.objects.get(study=study)
     assert batch.pipeline_status_counts.asa.failed == batch.total_analyses
+
+
+@pytest.mark.httpx_mock(should_mock=should_not_mock_httpx_requests_to_prefect_server)
+@pytest.mark.django_db(transaction=True)
+@patch("workflows.flows.analysis.assembly.flows.analysis_assembly_study.run_deployment")
+@pytest.mark.parametrize(
+    "mock_suspend_flow_run",
+    ["workflows.flows.analysis.assembly.flows.analysis_assembly_study"],
+    indirect=True,
+)
+def test_private_assembly_study_requests_webin(
+    mock_run_deployment,
+    httpx_mock,
+    prefect_harness,
+    mock_suspend_flow_run,
+    top_level_biomes,
+    test_workspace,
+):
+    """
+    Test that a private study without a webin_submitter triggers a suspend
+    to collect webin_owner, and that the webin_owner is set on the ENA study
+    after the flow resumes.
+
+    The study already has a biome set so the only reason for the suspend is
+    the missing webin_owner.
+    """
+    # Create a private ENA study with no webin_submitter set yet
+    private_ena_study = ena.models.Study.objects.create(
+        accession="PRJEB88888",
+        title="Private Assembly Study",
+        is_private=True,
+    )
+
+    # Pre-create the mgnify study with a biome already set so that the flow
+    # only suspends because of the missing webin_owner, not for biome selection
+    biome = analyses.models.Biome.objects.first()
+    mgnify_study = analyses.models.Study.objects.create(
+        ena_study=private_ena_study,
+        title=private_ena_study.title,
+        is_private=True,
+        biome=biome,
+    )
+    mgnify_study.inherit_accessions_from_related_ena_object("ena_study")
+    mgnify_study.save()
+
+    # Mock ENA portal API for assemblies — return empty list for simplicity
+    httpx_mock.add_response(
+        url=re.compile(
+            f"{re.escape(EMG_CONFIG.ena.portal_search_api)}\\?result=analysis&query=.*PRJEB88888.*"
+        ),
+        json=[],
+    )
+
+    mock_run_deployment.return_value = Mock(id="mock-flow-run-id")
+
+    # Simulate a human resuming the flow and providing the webin_owner
+    class MockSuspendInput(BaseModel):
+        """Mock input returned by the suspended flow."""
+
+        biome: Optional[str] = None
+        watchers: Optional[List] = None
+        webin_owner: Optional[str] = None
+
+    def suspend_side_effect(wait_for_input=None):
+        """Return webin_owner when the flow suspends."""
+        return MockSuspendInput(webin_owner="Webin-12345")
+
+    mock_suspend_flow_run.side_effect = suspend_side_effect
+
+    analysis_assembly_study(
+        study_accession="PRJEB88888",
+        workspace_dir=str(test_workspace),
+    )
+
+    mock_suspend_flow_run.assert_called_once()
+
+    # Verify webin_owner was set on the ENA study after the flow resumed
+    private_ena_study.refresh_from_db()
+    assert private_ena_study.webin_submitter == "Webin-12345"
+
+    # Verify the mgnify study also reflects the private status and has the webin set
+    mgnify_study.refresh_from_db()
+    assert mgnify_study.is_private
+    assert mgnify_study.webin_submitter == "Webin-12345"
