@@ -9,7 +9,7 @@ from analyses.models import (
     Analysis,
 )
 from workflows.flows.analysis.assembly.flows.run_assembly_analysis_pipeline_batch import (
-    run_assembly_analysis_pipeline_batch,
+    run_assembly_batch,
 )
 from workflows.models import (
     AssemblyAnalysisBatch,
@@ -223,7 +223,7 @@ def test_full_chain_success(
     setup_map_output_helpers(map_outdir, assembly_accession)
 
     # Run the full chain
-    run_assembly_analysis_pipeline_batch(assembly_analyses_batch_id=batch.id)
+    run_assembly_batch(assembly_analyses_batch_id=batch.id)
 
     # Verify ASA execution
     batch.refresh_from_db()
@@ -309,7 +309,7 @@ def test_asa_failure_stops_chain(
     batch = batches[0]
 
     # Run the flow - should raise an exception
-    run_assembly_analysis_pipeline_batch(assembly_analyses_batch_id=batch.id)
+    run_assembly_batch(assembly_analyses_batch_id=batch.id)
 
     # Verify ASA failed (status counts already updated by the hook)
     batch.refresh_from_db()
@@ -414,7 +414,7 @@ def test_virify_failure_partial_results(
     setup_asa_output_helpers(asa_outdir, assembly_accession)
 
     # Run the flow
-    run_assembly_analysis_pipeline_batch(assembly_analyses_batch_id=batch.id)
+    run_assembly_batch(assembly_analyses_batch_id=batch.id)
 
     assert mocked_set_post_states.called
 
@@ -517,7 +517,7 @@ def test_asa_not_ready_for_virify(
     batch = batches[0]
 
     # Run the flow
-    run_assembly_analysis_pipeline_batch(assembly_analyses_batch_id=batch.id)
+    run_assembly_batch(assembly_analyses_batch_id=batch.id)
 
     assert mock_import_analyses.called
 

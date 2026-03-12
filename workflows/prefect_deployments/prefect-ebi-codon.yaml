@@ -47,9 +47,9 @@ deployments:
   work_pool:
     name: slurm
 
-- name: run_assembly_analysis_pipeline_batch_deployment
+- name: run_assembly_batch_deployment
   description: |-
-    Run the assembly analysis pipeline-v6 for a given batch, including ASA, VIRify, and MAP.
+    Run the assembly analysis batch (ASA, VIRify, and MAP) for a given batch.
 
     This function orchestrates the execution of the ASA pipeline, VIRify, and MAP. It handles tasks such as generating
     samplesheets, managing pipeline states, and storing relevant metadata into the database for further processing.
@@ -66,7 +66,7 @@ deployments:
     :type assembly_analyses_batch_id: uuid.UUID
     :raises ClusterJobFailedException: If the cluster job fails during the ASA pipeline execution.
     :raises Exception: For any unexpected errors encountered during the pipeline execution.
-  entrypoint: workflows/flows/analysis/assembly/flows/run_assembly_analysis_pipeline_batch.py:run_assembly_analysis_pipeline_batch
+  entrypoint: workflows/flows/analysis/assembly/flows/run_assembly_analysis_pipeline_batch.py:run_assembly_batch
   schedule: null
   work_pool:
     name: slurm
