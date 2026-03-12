@@ -248,12 +248,55 @@ class MGnifyStudyDownloadFile(MGnifyAnalysisDownloadFile):
 
 class AnalysedRun(ModelSchema):
     accession: str = Field(..., alias="first_accession", examples=["ERR0000001"])
+    sample_accession: Optional[str] = Field(
+        None,
+        description="ENA accession of the sample associated with this run",
+        examples=["ERS000001", "SAMEA000000001"],
+    )
+    study_accession: Optional[str] = Field(
+        None,
+        description="ENA accession of the study associated with this run",
+        examples=["SRP135937", "PRJNA438545"],
+    )
+    experiment_type: str = Field(
+        ...,
+        examples=[label for _, label in analyses.models.Run.ExperimentTypes.choices],
+        description="Experiment type refers to the type of sequencing data that was analysed, e.g. amplicon reads or a metagenome assembly",
+        alias="get_experiment_type_display",
+    )
     instrument_model: Optional[str] = Field(..., examples=["Illumina HiSeq 2000"])
     instrument_platform: Optional[str] = Field(..., examples=["Illumina"])
 
     class Meta:
         model = analyses.models.Run
-        fields = ["instrument_model", "instrument_platform"]
+        fields = [
+            "instrument_model",
+            "instrument_platform",
+            "experiment_type",
+        ]
+
+    @staticmethod
+    def resolve_sample_accession(obj: analyses.models.Run) -> Optional[str]:
+        return getattr(getattr(obj, "sample", None), "first_accession", None)
+        # return (
+        #     obj.sample.ena_sample.accession
+        #     if obj.sample and obj.sample.ena_sample
+        #     else None
+        # )
+
+    @staticmethod
+    def resolve_study_accession(obj: analyses.models.Run) -> Optional[str]:
+        return getattr(getattr(obj, "study", None), "accession", None)
+
+
+class AnalysedRunDetail(AnalysedRun):
+    sample: Optional[MGnifySample]
+    study: Optional[MGnifyStudy]
+
+    class Meta:
+        pass
+        # model = analyses.models.Run
+        # fields = ["instrument_model", "instrument_platform"]
 
 
 class Assembly(ModelSchema):
