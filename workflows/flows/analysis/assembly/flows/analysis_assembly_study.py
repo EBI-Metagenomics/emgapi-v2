@@ -43,7 +43,7 @@ def analysis_assembly_study(
 
     It keeps track of the batches and their statuses.
 
-    :param study_accession: e.g. PRJ or ERP accession
+    :param study_accession: e.g. PRJ or ERP study accession
     :param workspace_dir: Path for the workspace dir. Defaults to the configured SLURM default workdir.
     """
     logger = get_run_logger()
