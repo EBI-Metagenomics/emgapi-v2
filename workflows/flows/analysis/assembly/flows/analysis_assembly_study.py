@@ -36,7 +36,7 @@ def analysis_assembly_study(
     workspace_dir: str = EMG_CONFIG.slurm.default_workdir,
 ):
     """
-    Get a study from ENA (or MGnify), and run assembly analysis the assemblies of the study.
+    Get a study from ENA (or MGnify), and run assembly analysis the assemblies of the study (public or private).
 
     This then chains the Assembly Analysis Pipeline, VIRIfy and the Mobilome Annotation Pipeline using
     batches of assemblies to analise.
