@@ -207,6 +207,9 @@ fileignoreconfig:
 - filename: workflows/flows/nf_traces/tasks.py
   allowed_patterns: [key]
 
+- filename: workflows/flows/housekeeping/clean_nextflow_workdirs.py
+  allowed_patterns: [key]
+
 allowed_patterns:
 - cache_key_fn
 - CommonMetadataKeys

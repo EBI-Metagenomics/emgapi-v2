@@ -302,3 +302,16 @@ deployments:
   entrypoint: workflows/flows/legacy/flows/import_v5_analyses.py:import_v5_analyses
   work_pool:
     name: slurm
+
+- name: clean_old_nextflow_workdirs_deployment
+  description: |-
+    Scan a directory for old Nextflow work directories and delete them after human confirmation.
+    :param path: Root path to scan
+    :param min_age_days: Minimum age in days for a directory to be a candidate (default 30)
+    :param scan_depth: How many subdirectory levels to scan (default 1)
+    :param max_candidates: Cap on directories collected per run (default 10 000)
+  entrypoint: workflows/flows/housekeeping/clean_nextflow_workdirs.py:clean_old_nextflow_workdirs
+  parameters: {}
+  work_pool:
+    name: slurm
+  schedules: []
