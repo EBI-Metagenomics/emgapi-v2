@@ -1,3 +1,4 @@
+import logging
 import os
 from pathlib import Path
 from unittest.mock import patch
@@ -33,9 +34,7 @@ class TestYoungestMtimeInDir:
         """A directory with no young subdirs should return an age >= its mtime age."""
         old_dir = make_dir_with_mtime(tmp_path / "old", age_days=100)
         now = pendulum.now()
-        age = youngest_mtime_in_dir(
-            str(old_dir), min_age=pendulum.duration(days=2), now=now
-        )
+        age = youngest_mtime_in_dir(old_dir, min_age=pendulum.duration(days=2), now=now)
         assert age.in_days() >= 99
 
     def test_young_dir_triggers_early_exit(self, tmp_path: Path):
@@ -43,7 +42,7 @@ class TestYoungestMtimeInDir:
         young_dir = make_dir_with_mtime(tmp_path / "young", age_days=0.0001)
         now = pendulum.now()
         min_age = pendulum.duration(days=2)
-        age = youngest_mtime_in_dir(str(young_dir), min_age=min_age, now=now)
+        age = youngest_mtime_in_dir(young_dir, min_age=min_age, now=now)
         assert age < min_age
 
     def test_young_subdir_triggers_early_exit(self, tmp_path: Path):
@@ -52,7 +51,7 @@ class TestYoungestMtimeInDir:
         make_dir_with_mtime(root / "recent_subdir", age_days=0.0001)
         now = pendulum.now()
         min_age = pendulum.duration(days=2)
-        age = youngest_mtime_in_dir(str(root), min_age=min_age, now=now)
+        age = youngest_mtime_in_dir(root, min_age=min_age, now=now)
         assert age < min_age
 
     def test_all_old_subdirs_return_old_age(self, tmp_path: Path):
@@ -75,8 +74,14 @@ class TestYoungestMtimeInDir:
 @pytest.fixture()
 def mock_prefect():
     """Patch Prefect-specific calls so tasks can be invoked outside a Prefect context."""
-    with patch(
-        "workflows.flows.housekeeping.clean_nextflow_workdirs.create_table_artifact"
+    with (
+        patch(
+            "workflows.flows.housekeeping.clean_nextflow_workdirs.get_run_logger",
+            return_value=logging.getLogger("test"),
+        ),
+        patch(
+            "workflows.flows.housekeeping.clean_nextflow_workdirs.create_table_artifact"
+        ),
     ):
         yield
 
@@ -166,7 +171,7 @@ class TestCollectOldWorkdirCandidates:
 class TestDeleteWorkdirs:
     """Tests for delete_workdirs task logic."""
 
-    def test_deletes_directory(self, tmp_path: Path):
+    def test_deletes_directory(self, tmp_path: Path, mock_prefect):
         """A listed directory should be removed from the filesystem."""
         target = tmp_path / "to_delete"
         target.mkdir()
@@ -177,7 +182,7 @@ class TestDeleteWorkdirs:
         assert count == 1
         assert not target.exists()
 
-    def test_returns_count_of_successful_deletions(self, tmp_path: Path):
+    def test_returns_count_of_successful_deletions(self, tmp_path: Path, mock_prefect):
         """Deleted count should reflect only successful deletions."""
         d1 = tmp_path / "d1"
         d1.mkdir()
@@ -188,7 +193,7 @@ class TestDeleteWorkdirs:
 
         assert count == 2
 
-    def test_continues_after_failed_deletion(self, tmp_path: Path):
+    def test_continues_after_failed_deletion(self, tmp_path: Path, mock_prefect):
         """A missing directory should be logged but should not prevent subsequent deletions."""
         missing = tmp_path / "does_not_exist"
         real = tmp_path / "real"

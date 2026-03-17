@@ -1,22 +1,29 @@
 import fnmatch
-import glob as glob_module
-import logging
 import os
 import shutil
+from pathlib import Path
 from textwrap import dedent
+from typing import TypedDict
 
 import pendulum
 
-from prefect import flow, suspend_flow_run, task
+from prefect import flow, get_run_logger, suspend_flow_run, task
 from prefect.artifacts import create_table_artifact
 from prefect.input import RunInput
 from pydantic import Field
 
-logger = logging.getLogger(__name__)
+
+class Workdir(TypedDict):
+    """Shape of a candidate Nextflow work directory entry."""
+
+    path: str
+    created: str
+    last_modified: str
+    age_days: int
 
 
 def youngest_mtime_in_dir(
-    dir_path: str, min_age: pendulum.Duration, now: pendulum.DateTime
+    dir_path: Path, min_age: pendulum.Duration, now: pendulum.DateTime
 ) -> pendulum.Duration:
     """Walk all subdirectories of dir_path; return age of the most recently modified entry.
 
@@ -33,7 +40,7 @@ def youngest_mtime_in_dir(
     youngest_age: pendulum.Duration | None = None
     for subdir_path, _, _ in os.walk(dir_path):
         try:
-            mtime = pendulum.from_timestamp(os.path.getmtime(subdir_path))
+            mtime = pendulum.from_timestamp(Path(subdir_path).stat().st_mtime)
         except OSError:
             continue
         age = now - mtime
@@ -41,9 +48,9 @@ def youngest_mtime_in_dir(
             youngest_age = age
             if youngest_age <= min_age:
                 return youngest_age
-    # youngest_age is None only if every getmtime call raised OSError;
-    # treat unreadable directories as age zero (i.e. do not flag for deletion).
-    return youngest_age if youngest_age is not None else pendulum.duration()
+    if youngest_age is None:
+        raise OSError(f"Could not read mtime of any entry in {dir_path}")
+    return youngest_age
 
 
 @task(name="Collect old workdir candidates")
@@ -53,7 +60,7 @@ def collect_old_workdir_candidates(
     scan_depth: int,
     max_candidates: int = 10_000,
     ignore_patterns: list[str] | None = None,
-) -> list[dict]:
+) -> list[Workdir]:
     """Walk subdirectories of path at exactly scan_depth levels and return those older than min_age_days.
 
     A folder "age" is determined by the youngest subdirectory mtime found anywhere within each candidate
@@ -71,16 +78,17 @@ def collect_old_workdir_candidates(
         Matching directories are skipped entirely (e.g. ``["tmp_*", "keep_*"]``).
     :return: List of dicts with path, created, last_modified, and age_days.
     """
+    logger = get_run_logger()
     now = pendulum.now()
     min_age = pendulum.duration(days=min_age_days)
     patterns = ignore_patterns or []
 
-    glob_pattern = os.path.join(path, *(["*"] * scan_depth))
+    glob_pattern = "/".join(["*"] * scan_depth)
     candidates = []
-    for dir_path in glob_module.iglob(glob_pattern):
-        if not os.path.isdir(dir_path):
+    for dir_path in Path(path).glob(glob_pattern):
+        if not dir_path.is_dir():
             continue
-        if any(fnmatch.fnmatch(os.path.basename(dir_path), p) for p in patterns):
+        if any(fnmatch.fnmatch(dir_path.name, p) for p in patterns):
             logger.debug(f"Skipping {dir_path} (matches ignore pattern)")
             continue
         if len(candidates) >= max_candidates:
@@ -89,19 +97,24 @@ def collect_old_workdir_candidates(
                 f"Re-run to process remaining directories."
             )
             break
-        age = youngest_mtime_in_dir(dir_path, min_age, now)
+        try:
+            age = youngest_mtime_in_dir(dir_path, min_age, now)
+        except OSError as e:
+            logger.warning(f"Skipping {dir_path}: {e}")
+            continue
         if age < min_age:
             continue
 
         try:
-            stat = os.stat(dir_path)
-            created = pendulum.from_timestamp(stat.st_ctime).to_datetime_string()
+            created = pendulum.from_timestamp(
+                dir_path.stat().st_ctime
+            ).to_datetime_string()
         except OSError:
             created = "unknown"
 
         candidates.append(
             {
-                "path": dir_path,
+                "path": str(dir_path),
                 "created": created,
                 "last_modified": (now - age).to_datetime_string(),
                 "age_days": age.in_days(),
@@ -125,7 +138,7 @@ def collect_old_workdir_candidates(
 
 
 @task(name="Delete workdirs")
-def delete_workdirs(candidates: list[dict]) -> int:
+def delete_workdirs(candidates: list[Workdir]) -> int:
     """Delete each directory in candidates using shutil.rmtree.
 
     Logs failures without raising so that a single bad deletion does not abort the rest.
@@ -133,6 +146,7 @@ def delete_workdirs(candidates: list[dict]) -> int:
     :param candidates: List of candidate dicts as returned by collect_old_workdir_candidates.
     :return: Count of successfully deleted directories.
     """
+    logger = get_run_logger()
     deleted = 0
     for candidate in candidates:
         dir_path = candidate["path"]
@@ -170,6 +184,8 @@ def clean_old_nextflow_workdirs(
     candidates = collect_old_workdir_candidates(
         path, min_age_days, scan_depth, max_candidates, ignore_patterns
     )
+
+    logger = get_run_logger()
 
     if not candidates:
         logger.info("No candidate directories found. Nothing to do.")
