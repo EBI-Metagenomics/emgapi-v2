@@ -8,7 +8,7 @@ This PR:
 - The tests are passing on Github Actions (checked automatically)
 - The test coverage is at least as good as before (checked automatically)
 - Any model changes are reflected by migrations (checked automatically)
-- [ ] If `.talismanrc` was changed, it does not contain any duplicates (each file appears at most once)
+- [ ] `pre-commit` was installed on my dev machine (`pre-commit install`) and I didn't "push anyway"
 - [ ] The command `task make-dev-data` still works
 - [ ] The local docker-compose dev environment still works (`task run`)
 - [ ] Any new prefect flows activate Django before importing any models (`from activate_django_first import EMG_CONFIG`)
