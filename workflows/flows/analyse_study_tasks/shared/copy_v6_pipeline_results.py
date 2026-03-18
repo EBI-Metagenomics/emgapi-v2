@@ -11,11 +11,11 @@ from workflows.data_io_utils.filenames import (
     accession_prefix_separated_dir_path,
     trailing_slash_ensured_dir,
 )
+from workflows.flows.analysis import AnalysisType
 from workflows.flows.analyse_study_tasks.shared.study_summary import (
     STUDY_SUMMARY_TSV,
     DWCREADY_CSV,
     PIPELINE_CONFIGS,
-    AnalysisType,
 )
 from workflows.models import (
     AssemblyAnalysisBatch,

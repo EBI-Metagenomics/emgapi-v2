@@ -14,7 +14,6 @@ from mgnify_pipelines_toolkit.analysis.rawreads import (
 from prefect import flow, get_run_logger, task
 
 from activate_django_first import EMG_CONFIG
-from emgapiv2.enum_utils import FutureStrEnum
 from analyses.base_models.with_downloads_models import (
     DownloadFile,
     DownloadType,
@@ -31,21 +30,13 @@ from workflows.ena_utils.ena_accession_matching import (
     INSDC_PROJECT_ACCESSION_GLOB,
     INSDC_STUDY_ACCESSION_GLOB,
 )
+from workflows.flows.analysis import AnalysisType
 from workflows.prefect_utils.dir_context import chdir
 
 STUDY_SUMMARY = "_study_summary"
 STUDY_SUMMARY_TSV = STUDY_SUMMARY + ".tsv"
 DWCREADY_SUMMARY = "_dwcready"
 DWCREADY_CSV = DWCREADY_SUMMARY + ".csv"
-
-
-class AnalysisType(FutureStrEnum):
-    """Analysis pipeline types that produce study summaries."""
-
-    AMPLICON = "amplicon"
-    RAWREADS = "rawreads"
-    ASSEMBLY = "assembly"
-
 
 STUDY_SUMMARY_GENERATORS = {
     AnalysisType.AMPLICON: amplicon_study_summary_generator,
