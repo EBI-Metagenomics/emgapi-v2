@@ -136,7 +136,7 @@ def test_private_analysis_results_dir(private_analysis_with_download):
 
 
 @pytest.mark.django_db
-def test_public_analysis_results_dir(amplicon_analysis_with_downloads):
+def test_public_analysis_results_dir(amplicon_analysis_with_downloads, prefect_harness):
     """Test that a public analysis results_dir uses the public transfer services URL."""
     url = MGnifyAnalysisDetail.resolve_results_dir(amplicon_analysis_with_downloads)
 
