@@ -135,11 +135,6 @@ def run_assembly_batch(
         logger.info(
             f"Using {assembly_analyses_workspace_dir} as the batch nextflow outdir for ASA pipeline"
         )
-        nextflow_workdir = (
-            Path(assembly_analysis_batch.workspace_dir)
-            / f"asa-sheet-{slugify(samplesheet)}"
-        )
-        nextflow_workdir.mkdir(parents=True, exist_ok=True)
 
         nextflow_workdir = (
             Path(EMG_CONFIG.slurm.default_nextflow_workdir)
