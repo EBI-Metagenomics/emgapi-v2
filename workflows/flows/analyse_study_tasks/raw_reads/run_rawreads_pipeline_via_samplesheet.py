@@ -24,6 +24,7 @@ from workflows.flows.analyse_study_tasks.raw_reads.set_rawreads_post_analysis_st
     set_post_analysis_states,
 )
 from workflows.flows.analyse_study_tasks.shared.study_summary import (
+    AnalysisType,
     generate_study_summary_for_pipeline_run,
 )
 from workflows.prefect_utils.build_cli_command import cli_command
@@ -130,7 +131,7 @@ def run_rawreads_pipeline_via_samplesheet(
         generate_study_summary_for_pipeline_run(
             pipeline_outdir=nextflow_outdir,
             mgnify_study_accession=mgnify_study.accession,
-            analysis_type="rawreads",
+            analysis_type=AnalysisType.RAWREADS,
             completed_runs_filename=EMG_CONFIG.rawreads_pipeline.completed_runs_csv,
         )
         remove_dir(nextflow_workdir)  # will also delete past "abandoned" nextflow files

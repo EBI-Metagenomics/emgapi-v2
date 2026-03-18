@@ -1,6 +1,7 @@
 import pytest
 from unittest.mock import MagicMock, patch
 from analyses.models import Analysis
+from workflows.flows.analyse_study_tasks.shared.study_summary import AnalysisType
 from workflows.models import AssemblyAnalysisBatch
 from workflows.flows.analysis.assembly.flows.finalize_assembly_study import (
     finalize_assembly_study,
@@ -45,7 +46,9 @@ def test_finalize_assembly_study_all_complete(
         raw_reads_mgnify_study.accession, cleanup_partials=True
     )
     mock_add.assert_called_once_with(raw_reads_mgnify_study.accession)
-    mock_copy.assert_called_once_with(raw_reads_mgnify_study.accession)
+    mock_copy.assert_called_once_with(
+        raw_reads_mgnify_study.accession, analysis_type=AnalysisType.ASSEMBLY
+    )
 
 
 @pytest.mark.django_db

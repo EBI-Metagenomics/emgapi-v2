@@ -37,6 +37,7 @@ from workflows.ena_utils.ena_api_requests import (
 )
 from workflows.ena_utils.webin_owner_utils import validate_and_set_webin_owner
 from workflows.flows.analyse_study_tasks.shared.study_summary import (
+    AnalysisType,
     merge_study_summaries,
     add_study_summaries_to_downloads,
 )
@@ -215,15 +216,17 @@ def analysis_amplicon_study(study_accession: str):
     merge_study_summaries(
         mgnify_study.accession,
         cleanup_partials=not EMG_CONFIG.amplicon_pipeline.keep_study_summary_partials,
-        analysis_type="amplicon",
+        analysis_type=AnalysisType.AMPLICON,
     )
     merge_dwc_ready_summaries(
         mgnify_study.accession,
         cleanup_partials=not EMG_CONFIG.amplicon_pipeline.keep_study_summary_partials,
     )
-    add_study_summaries_to_downloads(mgnify_study.accession, analysis_type="amplicon")
+    add_study_summaries_to_downloads(
+        mgnify_study.accession, analysis_type=AnalysisType.AMPLICON
+    )
     add_dwcr_summaries_to_downloads(mgnify_study.accession)
-    copy_v6_study_summaries(mgnify_study.accession)
+    copy_v6_study_summaries(mgnify_study.accession, analysis_type=AnalysisType.AMPLICON)
     # delete work directory
     delete_study_nextflow_workdir(study_workdir, analyses_to_attempt)
     # delete_study_results_dir(study_outdir, mgnify_study)

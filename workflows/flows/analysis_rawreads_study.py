@@ -32,6 +32,7 @@ from workflows.ena_utils.ena_api_requests import (
 )
 from workflows.ena_utils.webin_owner_utils import validate_and_set_webin_owner
 from workflows.flows.analyse_study_tasks.shared.study_summary import (
+    AnalysisType,
     merge_study_summaries,
     add_study_summaries_to_downloads,
 )
@@ -222,10 +223,12 @@ def analysis_rawreads_study(study_accession: str):
     merge_study_summaries(
         mgnify_study.accession,
         cleanup_partials=not EMG_CONFIG.rawreads_pipeline.keep_study_summary_partials,
-        analysis_type="rawreads",
+        analysis_type=AnalysisType.RAWREADS,
     )
-    add_study_summaries_to_downloads(mgnify_study.accession, analysis_type="rawreads")
-    copy_v6_study_summaries(mgnify_study.accession)
+    add_study_summaries_to_downloads(
+        mgnify_study.accession, analysis_type=AnalysisType.RAWREADS
+    )
+    copy_v6_study_summaries(mgnify_study.accession, analysis_type=AnalysisType.RAWREADS)
     # delete work directory
     delete_study_nextflow_workdir(study_workdir, analyses_to_attempt)
     # delete_study_results_dir(study_outdir, mgnify_study)

@@ -14,6 +14,8 @@ from workflows.data_io_utils.filenames import (
 from workflows.flows.analyse_study_tasks.shared.study_summary import (
     STUDY_SUMMARY_TSV,
     DWCREADY_CSV,
+    PIPELINE_CONFIGS,
+    AnalysisType,
 )
 from workflows.models import (
     AssemblyAnalysisBatch,
@@ -115,12 +117,21 @@ def copy_v6_pipeline_results(analysis_accession: str, timeout: int = 14400):
 
 
 @task(name="Copy V6 Study Summaries")
-def copy_v6_study_summaries(study_accession: str, timeout: int = 14400):
+def copy_v6_study_summaries(
+    study_accession: str,
+    analysis_type: AnalysisType = AnalysisType.AMPLICON,
+    timeout: int = 14400,
+):
     """
-    Copy study summaries from v6 pipeline results to external results dir
+    Copy study summaries from a pipeline's results subdirectory to external results dir.
 
-    :param study_accession: The accession of the study to copy summaries for
-    :param timeout: Timeout in seconds for the move operation (default: 4 hours)
+    The source directory is computed from ``study.results_dir`` and the pipeline config
+    for the given ``analysis_type``, e.g. ``{results_dir}/amplicon_v6/``.
+    This matches the directory layout produced by :func:`merge_study_summaries`.
+
+    :param study_accession: The accession of the study to copy summaries for.
+    :param analysis_type: Pipeline type whose summaries should be copied.
+    :param timeout: Timeout in seconds for the move operation (default: 4 hours).
     """
     logger = get_run_logger()
 
@@ -129,6 +140,12 @@ def copy_v6_study_summaries(study_accession: str, timeout: int = 14400):
     if not study.results_dir:
         logger.warning(f"Study {study} has no results dir, skipping")
         return
+
+    pipeline_config = PIPELINE_CONFIGS[analysis_type]
+    pipeline_subdir = (
+        f"{pipeline_config.pipeline_name}_{pipeline_config.pipeline_version}"
+    )
+    source_dir = study.results_dir_path / pipeline_subdir
 
     command = cli_command(
         [
@@ -141,7 +158,7 @@ def copy_v6_study_summaries(study_accession: str, timeout: int = 14400):
             "--exclude=*",
         ]
     )
-    source = trailing_slash_ensured_dir(study.results_dir)
+    source = trailing_slash_ensured_dir(str(source_dir))
 
     target_root = (
         EMG_CONFIG.slurm.private_results_dir
