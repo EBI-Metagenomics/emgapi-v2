@@ -275,19 +275,6 @@ class AnalysedRun(ModelSchema):
             "experiment_type",
         ]
 
-    @staticmethod
-    def resolve_sample_accession(obj: analyses.models.Run) -> Optional[str]:
-        return getattr(getattr(obj, "sample", None), "first_accession", None)
-        # return (
-        #     obj.sample.ena_sample.accession
-        #     if obj.sample and obj.sample.ena_sample
-        #     else None
-        # )
-
-    @staticmethod
-    def resolve_study_accession(obj: analyses.models.Run) -> Optional[str]:
-        return getattr(getattr(obj, "study", None), "accession", None)
-
 
 class AnalysedRunDetail(AnalysedRun):
     sample: Optional[MGnifySample]
