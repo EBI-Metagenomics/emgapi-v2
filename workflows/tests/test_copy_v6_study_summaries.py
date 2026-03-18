@@ -7,25 +7,38 @@ from ena.models import Study as ENAStudy
 from workflows.flows.analyse_study_tasks.shared.copy_v6_pipeline_results import (
     copy_v6_study_summaries,
 )
+from workflows.flows.analyse_study_tasks.shared.study_summary import AnalysisType
 
 
 @pytest.mark.django_db
 class TestCopyV6StudySummaries:
-    """Test that study summaries are copied to the correct subdirectory."""
+    """Test that study summaries are copied from the correct pipeline subdirectory."""
 
+    @pytest.mark.parametrize(
+        "analysis_type,expected_subdir",
+        [
+            (AnalysisType.AMPLICON, "amplicon_v6"),
+            (AnalysisType.RAWREADS, "rawreads_v6"),
+            (AnalysisType.ASSEMBLY, "asa_v6"),
+        ],
+    )
     @patch(
         "workflows.flows.analyse_study_tasks.shared.copy_v6_pipeline_results.run_deployment"
     )
-    def test_copies_files_to_study_summaries_subdirectory(
-        self, mock_run_deployment, prefect_harness, tmp_path
+    def test_copies_from_pipeline_subdir_to_study_summaries(
+        self,
+        mock_run_deployment,
+        analysis_type,
+        expected_subdir,
+        prefect_harness,
+        tmp_path,
     ):
         """
-        Test that copy_v6_study_summaries copies files from results_dir root
-        to external_results/study-summaries/ subdirectory.
+        Test that copy_v6_study_summaries sources files from the pipeline-specific
+        subdirectory (e.g. amplicon_v6/) rather than the study results_dir root.
 
-        This is to prevent regressions in this behavior as the code is a bit fragile (scatter in different places)
+        This matches the directory layout produced by merge_study_summaries.
         """
-        # Mock run_deployment to prevent actual deployment execution
         mock_run_deployment.return_value = Mock(id="mock-flow-run-id")
 
         ena_study = ENAStudy.objects.create(accession="PRJEB12345", title="Test Study")
@@ -36,34 +49,36 @@ class TestCopyV6StudySummaries:
         )
         study.inherit_accessions_from_related_ena_object("ena_study")
 
-        # Create results_dir and add study summary files (at root level)
-        results_dir = study.results_dir_path
-        results_dir.mkdir()
+        # Create the pipeline subdir with summary files,
+        # matching the structure produced by merge_study_summaries
+        pipeline_dir = study.results_dir_path / expected_subdir
+        pipeline_dir.mkdir(parents=True)
         (
-            results_dir / f"{study.first_accession}_taxonomy_study_summary.tsv"
+            pipeline_dir / f"{study.first_accession}_taxonomy_study_summary.tsv"
         ).write_text("data\n")
-        (results_dir / f"{study.first_accession}_ko_study_summary.tsv").write_text(
-            "data\n"
-        )
 
-        # Go Go Task
-        copy_v6_study_summaries(study.accession)
+        copy_v6_study_summaries(study.accession, analysis_type=analysis_type)
 
         assert mock_run_deployment.call_count == 1
 
-        # Verify the deployment was called with correct parameters
         call_kwargs = mock_run_deployment.call_args.kwargs
         assert call_kwargs["name"] == "move-data/move_data_deployment"
 
-        # Verify the target path ends with /study-summaries/
         parameters = call_kwargs["parameters"]
+
+        # Verify the source points to the pipeline subdir, not the results_dir root
+        source_path = parameters["source"]
+        assert source_path.rstrip("/") == str(
+            pipeline_dir
+        ), f"Expected source to be {pipeline_dir} but got {source_path}"
+
+        # Verify the target path ends with /study-summaries/
         target_path = parameters["target"]
         assert target_path.endswith(
             "/study-summaries/"
         ), f"Expected target to end with /study-summaries/ but got {target_path}"
 
-        # Verify timeout was passed
-        assert call_kwargs["timeout"] == 14400  # 4 hours default
+        assert call_kwargs["timeout"] == 14400
 
         study.refresh_from_db()
         assert study.external_results_dir is not None
@@ -80,7 +95,6 @@ class TestCopyV6StudySummaries:
         # I'm not sure if this whole thing is a good idea, as not having a results_dir would be a problem
         # TODO: maybe we should just crash the thing instead of gracefully this
 
-        # Mock run_deployment (even though it shouldn't be called)
         mock_run_deployment.return_value = Mock(id="mock-flow-run-id")
 
         ena_study = ENAStudy.objects.create(accession="PRJEB99999", title="No Results")
@@ -89,12 +103,9 @@ class TestCopyV6StudySummaries:
         )
         study.inherit_accessions_from_related_ena_object("ena_study")
 
-        # Should not raise an exception
-        copy_v6_study_summaries(study.accession)
+        copy_v6_study_summaries(study.accession, analysis_type=AnalysisType.ASSEMBLY)
 
-        # Verify run_deployment was NOT called (since there's no results_dir)
         mock_run_deployment.assert_not_called()
 
-        # Verify external_results_dir was not set
         study.refresh_from_db()
         assert study.external_results_dir is None
