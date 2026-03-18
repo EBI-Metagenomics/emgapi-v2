@@ -99,7 +99,7 @@ def copy_v6_pipeline_results(analysis_accession: str, timeout: int = 14400):
             "target": target,
         },
         job_variables={
-            "partition": EMG_CONFIG.slurm.datamover_paritition,
+            "partition": EMG_CONFIG.slurm.datamover_partition,
         },
         timeout=timeout,
     )
@@ -159,7 +159,7 @@ def copy_v6_study_summaries(study_accession: str, timeout: int = 14400):
             "make_target": True,
         },
         job_variables={
-            "partition": EMG_CONFIG.slurm.datamover_paritition,
+            "partition": EMG_CONFIG.slurm.datamover_partition,
         },
         timeout=timeout,
     )
@@ -312,6 +312,7 @@ def _copy_single_analysis_results(
         "json",
         "fa",
         "fasta",
+        "fai",
         "tsv",
         "csv",
         "gz",
@@ -345,7 +346,7 @@ def _copy_single_analysis_results(
                 "make_target": True,
             },
             job_variables={
-                "partition": EMG_CONFIG.slurm.datamover_paritition,
+                "partition": EMG_CONFIG.slurm.datamover_partition,
             },
             timeout=timeout,
         )
@@ -375,7 +376,7 @@ def _copy_single_analysis_results(
                 "make_target": True,
             },
             job_variables={
-                "partition": EMG_CONFIG.slurm.datamover_paritition,
+                "partition": EMG_CONFIG.slurm.datamover_partition,
             },
             timeout=timeout,
         )
@@ -403,7 +404,7 @@ def _copy_single_analysis_results(
                 "make_target": True,
             },
             job_variables={
-                "partition": EMG_CONFIG.slurm.datamover_paritition,
+                "partition": EMG_CONFIG.slurm.datamover_partition,
             },
             timeout=timeout,
         )

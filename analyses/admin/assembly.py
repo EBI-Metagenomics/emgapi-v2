@@ -56,7 +56,13 @@ class AssemblyAdmin(ENABrowserLinkMixin, JSONFieldWidgetOverridesMixin, ModelAdm
         "reads_study__ena_study__additional_accessions",
         "ena_accessions",
     ]
-    autocomplete_fields = ["ena_study", "reads_study", "assembly_study", "runs"]
+    autocomplete_fields = [
+        "ena_study",
+        "reads_study",
+        "assembly_study",
+        "runs",
+        "sample",
+    ]
     readonly_fields = ["created_at", "updated_at"]
 
     def status_summary(self, obj):

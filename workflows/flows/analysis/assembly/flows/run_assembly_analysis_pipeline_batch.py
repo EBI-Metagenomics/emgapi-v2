@@ -41,7 +41,6 @@ from workflows.flows.analysis.assembly.utils.status_update_hooks import (
 
 
 @flow(
-    name="Run assembly analysis pipeline-v6 for an assembly analysis batch (ASA, VIRIfy and MAP)",
     flow_run_name="Run Assembly Analysis Batch: {assembly_analyses_batch_id}",
     on_completion=[update_batch_status_counts],
     on_failure=[update_batch_status_counts],
@@ -50,7 +49,7 @@ from workflows.flows.analysis.assembly.utils.status_update_hooks import (
     retries=2,
     retry_delay_seconds=60,
 )
-def run_assembly_analysis_pipeline_batch(
+def run_assembly_batch(
     assembly_analyses_batch_id: uuid.UUID,
 ):
     """
@@ -136,11 +135,6 @@ def run_assembly_analysis_pipeline_batch(
         logger.info(
             f"Using {assembly_analyses_workspace_dir} as the batch nextflow outdir for ASA pipeline"
         )
-        nextflow_workdir = (
-            Path(assembly_analysis_batch.workspace_dir)
-            / f"asa-sheet-{slugify(samplesheet)}"
-        )
-        nextflow_workdir.mkdir(parents=True, exist_ok=True)
 
         nextflow_workdir = (
             Path(EMG_CONFIG.slurm.default_nextflow_workdir)

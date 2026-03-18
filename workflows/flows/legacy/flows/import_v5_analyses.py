@@ -1,8 +1,9 @@
 from pathlib import Path
 
-import django
 from prefect import flow, get_run_logger
 from sqlalchemy import select
+
+import activate_django_first  # noqa
 
 from workflows.ena_utils.ena_api_requests import (
     sync_privacy_state_of_ena_study_and_derived_objects,
@@ -21,8 +22,6 @@ from workflows.flows.legacy.tasks.make_sample_from_legacy_emg_db import (
 from workflows.flows.legacy.tasks.make_study_from_legacy_emg_db import (
     make_study_from_legacy_emg_db,
 )
-
-django.setup()
 
 from analyses.base_models.with_downloads_models import (
     DownloadFile,
@@ -72,15 +71,18 @@ def import_v5_analyses(mgys: str):
             legacy_sample = legacy_analysis.sample
             sample = make_sample_from_legacy_emg_db(legacy_sample, study)
             sync_sample_metadata_from_ena(sample.ena_sample)
-            run = make_run_from_legacy_emg_db(legacy_analysis.run, study)
-
-            assembly = None
-            if legacy_analysis.experiment_type_id in (4, 7, 8):  # Assembly types
+            run, assembly = None, None
+            if legacy_analysis.run:
+                run = make_run_from_legacy_emg_db(legacy_analysis.run, study)
+            elif legacy_analysis.assembly:
                 assembly = make_assembly_from_legacy_emg_db(
-                    legacy_analysis.secondary_accession,
-                    legacy_analysis.result_directory,
+                    legacy_analysis.assembly,
                     study,
                     sample,
+                )
+            else:
+                logger.warning(
+                    f"Analysis {legacy_analysis.job_id} has no linked run or assembly to import"
                 )
 
             analysis, created = Analysis.objects.update_or_create(

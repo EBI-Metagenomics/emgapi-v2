@@ -3,15 +3,16 @@ import gzip
 import re
 import shutil
 import uuid
-from enum import Enum
 from pathlib import Path
-from typing import List
+from typing import List, Optional
 from unittest.mock import Mock, patch
 
 import pytest
 from django.conf import settings
 from pydantic import BaseModel
 
+import analyses.models
+import ena.models
 from analyses.base_models.with_downloads_models import DownloadType
 from analyses.models import Study, Analysis
 from workflows.flows.analysis.assembly.flows.analysis_assembly_study import (
@@ -21,7 +22,7 @@ from workflows.flows.analysis.assembly.flows.finalize_assembly_study import (
     finalize_assembly_study,
 )
 from workflows.flows.analysis.assembly.flows.run_assembly_analysis_pipeline_batch import (
-    run_assembly_analysis_pipeline_batch,
+    run_assembly_batch,
 )
 from workflows.flows.analysis.assembly.tasks.add_assembly_study_summaries_to_downloads import (
     add_assembly_study_summaries_to_downloads,
@@ -31,7 +32,6 @@ from workflows.models import (
     AssemblyAnalysisPipeline,
     AssemblyAnalysisPipelineStatus,
 )
-from workflows.prefect_utils.analyses_models_helpers import get_users_as_choices
 from workflows.prefect_utils.slurm_status import SlurmStatus
 from workflows.prefect_utils.testing_utils import (
     should_not_mock_httpx_requests_to_prefect_server,
@@ -92,6 +92,18 @@ def assembly_test_scenario(test_workspace):
         biome_path="root.engineered",
         biome_name="Engineered",
     )
+
+
+@pytest.fixture
+def analyse_study_input_mocker(biome_choices, user_choices):
+    """Fixture that creates a mock AnalyseStudyInput class for assembly analysis tests."""
+
+    class MockAnalyseStudyInput(BaseModel):
+        biome: biome_choices
+        watchers: Optional[List[user_choices]] = None
+        webin_owner: Optional[str] = None
+
+    return MockAnalyseStudyInput
 
 
 def setup_assembly_batch_fixtures(scenario: AssemblyTestScenario):
@@ -437,6 +449,9 @@ def test_prefect_analyse_assembly_flow(
     admin_user,
     top_level_biomes,
     tmp_path,
+    biome_choices,
+    user_choices,
+    analyse_study_input_mocker,
 ):
     """
     Test the complete assembly analysis flow (ASA pipeline).
@@ -464,10 +479,8 @@ def test_prefect_analyse_assembly_flow(
     # This allows the test to verify batch processing while preventing actual deployment
     def run_batch_deployment(name, parameters, timeout):
         """Call the actual batch flow instead of deploying."""
-        if EMG_CONFIG.assembly_analysis_pipeline.batch_runner_deployment_id in name:
-            run_assembly_analysis_pipeline_batch(
-                parameters["assembly_analyses_batch_id"]
-            )
+        if "run_assembly_batch_deployment" in name:
+            run_assembly_batch(parameters["assembly_analyses_batch_id"])
         return Mock(id="mock-batch-flow-run-id")
 
     mock_run_deployment_analysis_assembly_study.side_effect = run_batch_deployment
@@ -564,23 +577,12 @@ def test_prefect_analyse_assembly_flow(
     )
 
     # Pretend that a human resumed the flow with the biome picker
-    BiomeChoices = Enum(
-        "BiomeChoices",
-        {
-            assembly_test_scenario.biome_path: f"Root:{assembly_test_scenario.biome_name}"
-        },
-    )
-    UserChoices = get_users_as_choices()
-
-    class AnalyseStudyInput(BaseModel):
-        biome: BiomeChoices
-        watchers: List[UserChoices]
-
     def suspend_side_effect(wait_for_input=None):
         if wait_for_input.__name__ == "AnalyseStudyInput":
-            return AnalyseStudyInput(
-                biome=BiomeChoices[assembly_test_scenario.biome_path],
-                watchers=[UserChoices[admin_user.username]],
+            return analyse_study_input_mocker(
+                biome=biome_choices[assembly_test_scenario.biome_path],
+                watchers=[user_choices[admin_user.username]],
+                webin_owner=None,
             )
 
     mock_suspend_flow_run.side_effect = suspend_side_effect
@@ -824,6 +826,9 @@ def test_prefect_analyse_assembly_flow_missing_directory(
     admin_user,
     top_level_biomes,
     test_workspace,
+    biome_choices,
+    user_choices,
+    analyse_study_input_mocker,
 ):
     """
     Test assembly analysis flow validation catches missing required directories.
@@ -848,10 +853,8 @@ def test_prefect_analyse_assembly_flow_missing_directory(
     # Mock run_deployment for batch submission to actually call the batch flow
     def run_batch_deployment(name, parameters, timeout):
         """Call the actual batch flow instead of deploying."""
-        if EMG_CONFIG.assembly_analysis_pipeline.batch_runner_deployment_id in name:
-            run_assembly_analysis_pipeline_batch(
-                parameters["assembly_analyses_batch_id"]
-            )
+        if "run_assembly_batch_deployment" in name:
+            run_assembly_batch(parameters["assembly_analyses_batch_id"])
         return Mock(id="mock-batch-flow-run-id")
 
     mock_run_deployment_analysis_assembly_study.side_effect = run_batch_deployment
@@ -936,20 +939,12 @@ def test_prefect_analyse_assembly_flow_missing_directory(
     )
 
     # Mock biome picker
-    BiomeChoices = Enum(
-        "BiomeChoices", {scenario.biome_path: f"Root:{scenario.biome_name}"}
-    )
-    UserChoices = get_users_as_choices()
-
-    class AnalyseStudyInput(BaseModel):
-        biome: BiomeChoices
-        watchers: List[UserChoices]
-
     def suspend_side_effect(wait_for_input=None):
         if wait_for_input.__name__ == "AnalyseStudyInput":
-            return AnalyseStudyInput(
-                biome=BiomeChoices[scenario.biome_path],
-                watchers=[UserChoices[admin_user.username]],
+            return analyse_study_input_mocker(
+                biome=biome_choices[scenario.biome_path],
+                watchers=[user_choices[admin_user.username]],
+                webin_owner=None,
             )
 
     mock_suspend_flow_run.side_effect = suspend_side_effect
@@ -1011,6 +1006,9 @@ def test_prefect_analyse_assembly_flow_invalid_schema(
     admin_user,
     top_level_biomes,
     test_workspace,
+    biome_choices,
+    user_choices,
+    analyse_study_input_mocker,
 ):
     """
     Test assembly analysis flow validates file content with Pandera schemas.
@@ -1036,10 +1034,8 @@ def test_prefect_analyse_assembly_flow_invalid_schema(
     # Mock run_deployment for batch submission to actually call the batch flow
     def run_batch_deployment(name, parameters, timeout):
         """Call the actual batch flow instead of deploying."""
-        if EMG_CONFIG.assembly_analysis_pipeline.batch_runner_deployment_id in name:
-            run_assembly_analysis_pipeline_batch(
-                parameters["assembly_analyses_batch_id"]
-            )
+        if "run_assembly_batch_deployment" in name:
+            run_assembly_batch(parameters["assembly_analyses_batch_id"])
         return Mock(id="mock-batch-flow-run-id")
 
     mock_run_deployment_analysis_assembly_study.side_effect = run_batch_deployment
@@ -1122,20 +1118,12 @@ def test_prefect_analyse_assembly_flow_invalid_schema(
     )
 
     # Mock biome picker
-    BiomeChoices = Enum(
-        "BiomeChoices", {scenario.biome_path: f"Root:{scenario.biome_name}"}
-    )
-    UserChoices = get_users_as_choices()
-
-    class AnalyseStudyInput(BaseModel):
-        biome: BiomeChoices
-        watchers: List[UserChoices]
-
     def suspend_side_effect(wait_for_input=None):
         if wait_for_input.__name__ == "AnalyseStudyInput":
-            return AnalyseStudyInput(
-                biome=BiomeChoices[scenario.biome_path],
-                watchers=[UserChoices[admin_user.username]],
+            return analyse_study_input_mocker(
+                biome=biome_choices[scenario.biome_path],
+                watchers=[user_choices[admin_user.username]],
+                webin_owner=None,
             )
 
     mock_suspend_flow_run.side_effect = suspend_side_effect
@@ -1162,3 +1150,85 @@ def test_prefect_analyse_assembly_flow_invalid_schema(
     # Verify batch progressed to READY (even though analysis failed QC)
     batch = AssemblyAnalysisBatch.objects.get(study=study)
     assert batch.pipeline_status_counts.asa.failed == batch.total_analyses
+
+
+@pytest.mark.django_db(transaction=True)
+@patch(
+    "workflows.flows.analysis.assembly.flows.analysis_assembly_study.get_study_assemblies_from_ena"
+)
+@patch("workflows.flows.analysis.assembly.flows.analysis_assembly_study.run_deployment")
+@pytest.mark.parametrize(
+    "mock_suspend_flow_run",
+    ["workflows.flows.analysis.assembly.flows.analysis_assembly_study"],
+    indirect=True,
+)
+def test_private_assembly_study_requests_webin(
+    mock_run_deployment,
+    mock_get_assemblies,
+    prefect_harness,
+    mock_suspend_flow_run,
+    top_level_biomes,
+    test_workspace,
+    biome_choices,
+    user_choices,
+    analyse_study_input_mocker,
+):
+    """
+    Test that a private study without a webin_submitter triggers a suspend
+    to collect webin_owner, and that the webin_owner is set on the ENA study
+    after the flow resumes.
+
+    The study already has a biome set so the only reason for the suspend is
+    the missing webin_owner.
+    """
+    webin_owner = "Webin-12345"
+
+    # Create a private ENA study with no webin_submitter set yet — this is what
+    # triggers the suspend to ask for the webin owner
+    private_ena_study = ena.models.Study.objects.create(
+        accession="PRJEB88888",
+        title="Private Assembly Study",
+        is_private=True,
+    )
+
+    # Pre-create the mgnify study with a biome already set so that the flow
+    # only suspends because of the missing webin_owner, not for biome selection
+    biome = analyses.models.Biome.objects.get(path="root.engineered")
+    mgnify_study = analyses.models.Study.objects.create(
+        ena_study=private_ena_study,
+        title=private_ena_study.title,
+        is_private=True,
+        biome=biome,
+    )
+    mgnify_study.inherit_accessions_from_related_ena_object("ena_study")
+    mgnify_study.save()
+
+    mock_get_assemblies.return_value = []
+    mock_run_deployment.return_value = Mock(id="mock-flow-run-id")
+
+    # Simulate a human resuming the flow and providing the webin_owner
+    def suspend_side_effect(wait_for_input=None):
+        """Return webin_owner when the flow suspends."""
+        if wait_for_input.__name__ == "AnalyseStudyInput":
+            return analyse_study_input_mocker(
+                biome=biome_choices[str(biome.path)],
+                webin_owner=webin_owner,
+            )
+
+    mock_suspend_flow_run.side_effect = suspend_side_effect
+
+    analysis_assembly_study(
+        study_accession="PRJEB88888",
+        workspace_dir=str(test_workspace),
+    )
+
+    mock_suspend_flow_run.assert_called_once()
+
+    # Verify webin_owner was set on the ENA study after the flow resumed
+    private_ena_study.refresh_from_db()
+    assert private_ena_study.webin_submitter == webin_owner
+
+    # Verify the mgnify study also reflects the private status and has the webin set
+    mgnify_study.refresh_from_db()
+    assert mgnify_study.is_private
+    assert mgnify_study.webin_submitter == webin_owner

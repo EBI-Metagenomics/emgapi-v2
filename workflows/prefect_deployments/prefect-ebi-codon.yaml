@@ -47,9 +47,9 @@ deployments:
   work_pool:
     name: slurm
 
-- name: run_assembly_analysis_pipeline_batch_deployment
+- name: run_assembly_batch_deployment
   description: |-
-    Run the assembly analysis pipeline-v6 for a given batch, including ASA, VIRify, and MAP.
+    Run the assembly analysis batch (ASA, VIRify, and MAP) for a given batch.
 
     This function orchestrates the execution of the ASA pipeline, VIRify, and MAP. It handles tasks such as generating
     samplesheets, managing pipeline states, and storing relevant metadata into the database for further processing.
@@ -66,7 +66,7 @@ deployments:
     :type assembly_analyses_batch_id: uuid.UUID
     :raises ClusterJobFailedException: If the cluster job fails during the ASA pipeline execution.
     :raises Exception: For any unexpected errors encountered during the pipeline execution.
-  entrypoint: workflows/flows/analysis/assembly/flows/run_assembly_analysis_pipeline_batch.py:run_assembly_analysis_pipeline_batch
+  entrypoint: workflows/flows/analysis/assembly/flows/run_assembly_analysis_pipeline_batch.py:run_assembly_batch
   schedule: null
   work_pool:
     name: slurm
@@ -290,3 +290,28 @@ deployments:
   entrypoint: workflows.prefect_utils.datamovers:move_data
   work_pool:
     name: slurm
+
+- name: import_v5_analyses_deployment
+  description: |-
+    This flow will iteratively import analyses (made with MGnify V5 pipeline)
+    into the EMG DB.
+
+    It connects to the legacy EMG MySQL and Mongo DBs, but not through Django.
+
+    :param mgys: accession of the study to import (with its analyses)
+  entrypoint: workflows/flows/legacy/flows/import_v5_analyses.py:import_v5_analyses
+  work_pool:
+    name: slurm
+
+- name: clean_old_nextflow_workdirs_deployment
+  description: |-
+    Scan a directory for old Nextflow work directories and delete them after human confirmation.
+    :param path: Root path to scan
+    :param min_age_days: Minimum age in days for a directory to be a candidate (default 30)
+    :param scan_depth: How many subdirectory levels to scan (default 1)
+    :param max_candidates: Cap on directories collected per run (default 10 000)
+  entrypoint: workflows/flows/housekeeping/clean_nextflow_workdirs.py:clean_old_nextflow_workdirs
+  parameters: {}
+  work_pool:
+    name: slurm
+  schedules: []

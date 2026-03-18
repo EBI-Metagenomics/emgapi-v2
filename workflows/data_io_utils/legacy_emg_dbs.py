@@ -204,8 +204,15 @@ class LegacyAnalysisJob(LegacyEMGBase):
         "LegacySample", back_populates="analysis_jobs"
     )
 
-    run_id: Mapped[int] = mapped_column("RUN_ID", ForeignKey("RUN.RUN_ID"))
-    run: Mapped["LegacyRun"] = relationship("LegacyRun")
+    run_id: Mapped[Optional[int]] = mapped_column(
+        "RUN_ID", ForeignKey("RUN.RUN_ID"), nullable=True
+    )
+    run: Mapped[Optional["LegacyRun"]] = relationship("LegacyRun")
+
+    assembly_id: Mapped[Optional[int]] = mapped_column(
+        "ASSEMBLY_ID", ForeignKey("ASSEMBLY.ASSEMBLY_ID"), nullable=True
+    )
+    assembly: Mapped[Optional["LegacyAssembly"]] = relationship("LegacyAssembly")
 
     downloads: Mapped[List["LegacyAnalysisJobDownload"]] = relationship(
         back_populates="analysis_job"

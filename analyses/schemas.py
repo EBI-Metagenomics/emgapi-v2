@@ -472,7 +472,15 @@ class MGnifyAnalysisDetail(MGnifyAnalysis):
     )
 
     @staticmethod
-    def resolve_results_dir(obj: analyses.models.Analysis) -> str:
+    def resolve_results_dir(obj: analyses.models.Analysis) -> Optional[str]:
+        """Resolve the results directory URL, using private storage for private analyses.
+
+        :param obj: The Analysis model instance.
+        :return: URL string pointing to the results directory.
+        :rtype: Optional[str]
+        """
+        if obj.is_private:
+            return str(private_storage.generate_secure_link(obj.external_results_dir))
         return urljoin(
             settings.EMG_CONFIG.service_urls.transfer_services_url_root,
             obj.external_results_dir,

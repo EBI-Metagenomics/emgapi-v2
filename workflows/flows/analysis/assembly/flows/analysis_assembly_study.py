@@ -1,4 +1,3 @@
-import time
 from pathlib import Path
 from textwrap import dedent as _
 from typing import Optional, List
@@ -25,6 +24,7 @@ from workflows.prefect_utils.analyses_models_helpers import (
     get_users_as_choices,
     add_study_watchers,
 )
+from workflows.ena_utils.webin_owner_utils import validate_and_set_webin_owner
 
 
 @flow(
@@ -62,6 +62,9 @@ def analysis_assembly_study(
     mgnify_study.refresh_from_db()
     logger.info(f"MGnify study is {mgnify_study.accession}: {mgnify_study.title}")
 
+    if mgnify_study.is_private:
+        logger.info(f"{mgnify_study} is a private study.")
+
     # Get assemble-able runs
     assemblies_accessions: list[str] = get_study_assemblies_from_ena(
         ena_study.accession,
@@ -69,8 +72,11 @@ def analysis_assembly_study(
     )
     logger.info(f"Returned {len(assemblies_accessions)} assemblies from ENA portal API")
 
-    # Check if biome-picker is needed
-    if not mgnify_study.biome:
+    # Suspend if biome is needed, or if the study is private and has no webin submitter set yet
+    needs_biome = not mgnify_study.biome
+    needs_webin = mgnify_study.is_private and not ena_study.webin_submitter
+
+    if needs_biome or needs_webin:
         BiomeChoices = get_biomes_as_choices()
         UserChoices = get_users_as_choices()
 
@@ -80,18 +86,27 @@ def analysis_assembly_study(
                 None,
                 description="Admin users watching this study will get status notifications.",
             )
+            webin_owner: Optional[str] = Field(
+                None,
+                description="Webin ID of study owner, if data is private. Can be left as None if public.",
+            )
+
+        initial_data = {}
+        if not needs_biome:
+            initial_data["biome"] = BiomeChoices[str(mgnify_study.biome.path)]
 
         analyse_study_input: AnalyseStudyInput = suspend_flow_run(
             wait_for_input=AnalyseStudyInput.with_initial_data(
+                **initial_data,
                 description=_(
                     f"""\
                         **Assembly Analysis V6**
                         This will analyse all {len(assemblies_accessions)} assemblies of study {ena_study.accession} \
                         using [Assembly Analysis Pipeline V6](https://github.com/EBI-Metagenomics/assembly-analysis-pipeline).
 
-                        **Biome tagger**
-                        Please select a Biome for the entire study \
-                        [{ena_study.accession}: {ena_study.title}](https://www.ebi.ac.uk/ena/browser/view/{ena_study.accession}).
+                        {"**Biome tagger** Please select a Biome for the entire study " + f"[{ena_study.accession}: {ena_study.title}](https://www.ebi.ac.uk/ena/browser/view/{ena_study.accession})." if needs_biome else f"Biome is already set to {mgnify_study.biome} — change here if needed."}
+
+                        {"**Webin owner** The study is private. Please provide the Webin account ID of the study owner so they can view their study." if needs_webin else ""}
                         """
                 ),
             )
@@ -104,12 +119,20 @@ def analysis_assembly_study(
 
         if analyse_study_input.watchers:
             add_study_watchers(mgnify_study, analyse_study_input.watchers)
+
+        validate_and_set_webin_owner(ena_study, analyse_study_input.webin_owner)
+        mgnify_study.refresh_from_db()
     else:
         logger.info(
-            f"Biome {mgnify_study.biome} was already set for this study. If an change is needed, do so in the DB Admin Panel."
+            f"Biome {mgnify_study.biome} was already set for this study. If a change is needed, do so in the DB Admin Panel."
         )
         logger.info(
             f"MGnify study currently has watchers {mgnify_study.watchers.values_list('username', flat=True)}. Add more in the DB Admin Panel if needed."
+        )
+
+    if mgnify_study.is_private and not mgnify_study.webin_submitter:
+        raise ValueError(
+            f"Study {mgnify_study.accession} is private, but no webin owner was provided."
         )
 
     # Create analysis objects for all assemblies
@@ -136,13 +159,10 @@ def analysis_assembly_study(
         logger.info(
             f"Running batch {str(batch.id)[:8]} with {batch.total_analyses} analyses"
         )
-        # TODO: review this sleep, I've seen loads of batches failed (so we are probably scheduling too many too quickly)
-        time.sleep(0.25)
         run_deployment(
-            # TODO: use the deployment name, re-deploy the flow properly
-            name=EMG_CONFIG.assembly_analysis_pipeline.batch_runner_deployment_id,
+            name="run-assembly-batch/run_assembly_batch_deployment",
             parameters={"assembly_analyses_batch_id": batch.id},
-            timeout=0,  # Timeout=0 means to run in background and return immediately
+            timeout=0,  # Timeout=0 means to run in the background and return immediately
         )
 
     logger.info(
