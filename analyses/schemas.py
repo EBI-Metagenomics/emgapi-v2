@@ -293,10 +293,6 @@ class AnalysedRunDetail(AnalysedRun):
     sample: Optional[MGnifySample]
     study: Optional[MGnifyStudy]
 
-    class Meta:
-        pass
-        # model = analyses.models.Run
-        # fields = ["instrument_model", "instrument_platform"]
 
 
 class Assembly(ModelSchema):
