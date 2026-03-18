@@ -17,6 +17,7 @@ from analyses.base_models.with_downloads_models import (
     DownloadFile,
     DownloadFileIndexFile,
 )
+from analyses.base_models.with_experiment_type_models import WithExperimentTypeModel
 from emgapiv2.api.storage import private_storage
 from emgapiv2.api.third_party_metadata import EuropePmcAnnotationResponse
 from emgapiv2.enum_utils import FutureStrEnum
@@ -246,7 +247,22 @@ class MGnifyStudyDownloadFile(MGnifyAnalysisDownloadFile):
         return f"{EMG_CONFIG.service_urls.transfer_services_url_root.rstrip('/')}/{study.external_results_dir}/{obj.path}"
 
 
-class AnalysedRun(ModelSchema):
+class WithExperimentTypeSchema:
+    experiment_type: str = Field(
+        ...,
+        examples=[
+            label for _, label in WithExperimentTypeModel.ExperimentTypes.choices
+        ],
+        description=(
+            "Experiment type refers to the type of "
+            "sequencing data that was analysed, "
+            "e.g. amplicon reads or a metagenome assembly"
+        ),
+        alias="get_experiment_type_display",
+    )
+
+
+class AnalysedRun(ModelSchema, WithExperimentTypeSchema):
     accession: str = Field(..., alias="first_accession", examples=["ERR0000001"])
     sample_accession: Optional[str] = Field(
         None,
@@ -257,12 +273,6 @@ class AnalysedRun(ModelSchema):
         None,
         description="ENA accession of the study associated with this run",
         examples=["SRP135937", "PRJNA438545"],
-    )
-    experiment_type: str = Field(
-        ...,
-        examples=[label for _, label in analyses.models.Run.ExperimentTypes.choices],
-        description="Experiment type refers to the type of sequencing data that was analysed, e.g. amplicon reads or a metagenome assembly",
-        alias="get_experiment_type_display",
     )
     instrument_model: Optional[str] = Field(..., examples=["Illumina HiSeq 2000"])
     instrument_platform: Optional[str] = Field(..., examples=["Illumina"])
@@ -279,7 +289,6 @@ class AnalysedRun(ModelSchema):
 class AnalysedRunDetail(AnalysedRun):
     sample: Optional[MGnifySample]
     study: Optional[MGnifyStudy]
-
 
 
 class Assembly(ModelSchema):
@@ -410,7 +419,7 @@ class AssemblyDetail(Assembly):
         fields = ["updated_at", "metadata", "status"]
 
 
-class MGnifyAnalysis(ModelSchema):
+class MGnifyAnalysis(ModelSchema, WithExperimentTypeSchema):
     study_accession: str = Field(..., alias="study_id", examples=["MGYS000000001"])
 
     accession: str = Field(..., examples=["MGYA000000001"])
