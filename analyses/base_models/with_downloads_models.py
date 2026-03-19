@@ -122,6 +122,8 @@ class DownloadFile(DownloadFileMetadata):
     parent_identifier: Optional[Union[str, int]] = (
         None  # e.g. the accession of an Analysis this download is for
     )
+    parent_is_private: Optional[bool] = None
+    parent_results_dir: Optional[str] = None
 
     @field_validator("path", mode="before")
     def coerce_path(cls, value):
@@ -251,18 +253,31 @@ class WithDownloadsModel(models.Model):
                 f"Download group {download.download_group} is not allowed for model {self.__class__.__name__}: only prefixes {self.ALLOWED_DOWNLOAD_GROUP_PREFIXES}"
             )
 
-        self.downloads.append(download.model_dump(exclude={"parent_identifier"}))
+        self.downloads.append(
+            download.model_dump(
+                exclude={"parent_identifier", "parent_is_private", "parent_results_dir"}
+            )
+        )
         self.save()
 
     @property
     def downloads_as_objects(self) -> List[DownloadFile]:
+        """
+        Deserialize the downloads JSON list into DownloadFile objects,
+        injecting parent context (identifier, privacy, results dir).
+
+        :return: List of DownloadFile objects with parent context populated.
+        """
+        parent_identifier = getattr(self, self.DOWNLOAD_PARENT_IDENTIFIER_ATTR)
+        is_private = getattr(self, "is_private", False)
+        results_dir = getattr(self, "external_results_dir", None)
         return [
             DownloadFile.model_validate(
                 dict(
                     **dl,
-                    parent_identifier=getattr(
-                        self, self.DOWNLOAD_PARENT_IDENTIFIER_ATTR
-                    ),
+                    parent_identifier=parent_identifier,
+                    parent_is_private=is_private,
+                    parent_results_dir=results_dir,
                 )
             )
             for dl in self.downloads

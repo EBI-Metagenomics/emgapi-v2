@@ -6,6 +6,7 @@ import pytest
 
 from analyses.base_models.with_downloads_models import (
     DownloadFile,
+    DownloadFileIndexFile,
     DownloadType,
     DownloadFileType,
 )
@@ -106,6 +107,45 @@ def private_analysis_with_download(webin_private_study, private_run):
             long_description="Sequence data for private analysis",
             path="private_analysis_sequences.fasta",
             download_group="all.sequence_data.private",
+        )
+    )
+    private_analysis.mark_status(
+        private_analysis.AnalysisStates.ANALYSIS_ANNOTATIONS_IMPORTED
+    )
+    return private_analysis
+
+
+@pytest.fixture
+def private_analysis_with_indexed_download(webin_private_study, private_run):
+    """Private analysis with a download file that has an index file."""
+    private_run.sample.studies.add(webin_private_study)
+
+    private_analysis = mg_models.Analysis.objects.create(
+        accession="MGYA00000889",
+        study=webin_private_study,
+        sample=private_run.sample,
+        run=private_run,
+        is_private=True,
+        webin_submitter=webin_private_study.webin_submitter,
+        ena_study=webin_private_study.ena_study,
+    )
+
+    private_analysis.external_results_dir = "MGYS/00/000/999/analyses/MGYA00000889"
+    private_analysis.save()
+
+    private_analysis.add_download(
+        DownloadFile(
+            download_type=DownloadType.SEQUENCE_DATA,
+            file_type=DownloadFileType.FASTA,
+            alias=f"{private_analysis.accession}_sequences.fasta.gz",
+            short_description="Private analysis sequences",
+            long_description="Compressed sequence data for private analysis",
+            path="private_sequences.fasta.gz",
+            download_group="all.sequence_data.private",
+            index_file=DownloadFileIndexFile(
+                path="private_sequences.fasta.gz.gzi",
+                index_type="gzi",
+            ),
         )
     )
     private_analysis.mark_status(

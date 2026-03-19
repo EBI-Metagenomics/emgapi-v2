@@ -5,6 +5,7 @@ from django.conf import settings
 
 from analyses.base_models.with_downloads_models import (
     DownloadFile,
+    DownloadFileIndexFile,
     DownloadType,
     DownloadFileType,
 )
@@ -74,6 +75,10 @@ def test_public_vs_private_study_urls(
     raw_reads_mgnify_study, private_study_with_download
 ):
     """Test that public and private study download URLs are different."""
+    if not raw_reads_mgnify_study.external_results_dir:
+        raw_reads_mgnify_study.external_results_dir = "MGYS/00/000/001"
+        raw_reads_mgnify_study.save()
+
     # Add a download to the public study if it doesn't have one
     if not raw_reads_mgnify_study.downloads:
         raw_reads_mgnify_study.add_download(
@@ -143,3 +148,75 @@ def test_public_analysis_results_dir(amplicon_analysis_with_downloads, prefect_h
     assert url is not None
     assert settings.EMG_CONFIG.service_urls.transfer_services_url_root in url
     assert settings.EMG_CONFIG.service_urls.private_data_url_root not in url
+
+
+@pytest.mark.django_db
+def test_private_analysis_index_file_url(private_analysis_with_indexed_download):
+    """Test that index files for a private analysis get pre-signed URLs."""
+    download_file = private_analysis_with_indexed_download.downloads_as_objects[0]
+
+    index_files = MGnifyAnalysisDownloadFile.resolve_index_files(download_file)
+
+    assert index_files is not None
+    assert len(index_files) == 1
+    index_url = index_files[0].url
+
+    assert index_url is not None
+    assert settings.EMG_CONFIG.service_urls.private_data_url_root in index_url
+
+    parsed = urlparse(index_url)
+    query_params = parse_qs(parsed.query)
+    assert "token" in query_params
+    assert "expires" in query_params
+
+
+@pytest.mark.django_db
+def test_private_study_index_file_url(private_study_with_indexed_download):
+    """Test that index files for a private study get pre-signed URLs."""
+    download_file = private_study_with_indexed_download.downloads_as_objects[0]
+
+    index_files = MGnifyStudyDownloadFile.resolve_index_files(download_file)
+
+    assert index_files is not None
+    assert len(index_files) == 1
+    index_url = index_files[0].url
+
+    assert index_url is not None
+    assert settings.EMG_CONFIG.service_urls.private_data_url_root in index_url
+
+    parsed = urlparse(index_url)
+    query_params = parse_qs(parsed.query)
+    assert "token" in query_params
+    assert "expires" in query_params
+
+
+@pytest.mark.django_db
+def test_public_analysis_index_file_url(raw_read_analyses):
+    """Test that index files for a public analysis get regular (non-signed) URLs."""
+    analysis = raw_read_analyses[0]
+    dl = DownloadFile(
+        alias="sequences.fasta.gz",
+        short_description="Sequences",
+        file_type=DownloadFileType.FASTA,
+        download_type=DownloadType.SEQUENCE_DATA,
+        long_description="Sequences with index",
+        path="sequences.fasta.gz",
+        download_group="all.sequences",
+        index_file=DownloadFileIndexFile(
+            path="sequences.fasta.gz.gzi",
+            index_type="gzi",
+        ),
+        parent_identifier=analysis.accession,
+        parent_is_private=analysis.is_private,
+        parent_results_dir=analysis.external_results_dir,
+    )
+
+    index_files = MGnifyAnalysisDownloadFile.resolve_index_files(dl)
+
+    assert index_files is not None
+    assert len(index_files) == 1
+    index_url = index_files[0].url
+
+    assert index_url is not None
+    assert settings.EMG_CONFIG.service_urls.transfer_services_url_root in index_url
+    assert "token" not in index_url
