@@ -555,7 +555,7 @@ def test_runs_analyses_list(ninja_api_client, raw_read_run, raw_read_analyses):
 
     items = call_endpoint_and_get_data(
         ninja_api_client,
-        f"/runs/{run.first_accession}/analyses/",
+        f"/runs/{run.ena_accessions[0]}/analyses/",
         count=len(finished_analyses),
     )
 
