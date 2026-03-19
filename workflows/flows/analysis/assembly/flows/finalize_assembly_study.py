@@ -9,6 +9,7 @@ from workflows.flows.analyse_study_tasks.shared.copy_v6_pipeline_results import 
     copy_v6_study_summaries,
 )
 from workflows.flows.analyse_study_tasks.shared.study_summary import (
+    AnalysisType,
     merge_assembly_study_summaries,
 )
 from workflows.flows.analysis.assembly.tasks.add_assembly_study_summaries_to_downloads import (
@@ -94,7 +95,7 @@ def finalize_assembly_study(study_accession: str):
     #####################################
     add_assembly_study_summaries_to_downloads(mgnify_study.accession)
 
-    copy_v6_study_summaries(mgnify_study.accession)
+    copy_v6_study_summaries(mgnify_study.accession, analysis_type=AnalysisType.ASSEMBLY)
 
     mgnify_study.refresh_from_db()
 

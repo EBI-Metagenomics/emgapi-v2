@@ -29,6 +29,7 @@ from workflows.flows.analyse_study_tasks.shared.markergene_study_summary import 
     generate_markergene_summary_for_pipeline_run,
 )
 from workflows.flows.analyse_study_tasks.shared.study_summary import (
+    AnalysisType,
     generate_study_summary_for_pipeline_run,
 )
 from workflows.prefect_utils.build_cli_command import cli_command
@@ -148,7 +149,7 @@ def run_amplicon_pipeline_via_samplesheet(
         generate_study_summary_for_pipeline_run(
             pipeline_outdir=nextflow_outdir,
             mgnify_study_accession=mgnify_study.accession,
-            analysis_type="amplicon",
+            analysis_type=AnalysisType.AMPLICON,
             completed_runs_filename=EMG_CONFIG.amplicon_pipeline.completed_runs_csv,
         )
         generate_dwc_ready_summary_for_pipeline_run(
