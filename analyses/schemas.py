@@ -247,7 +247,7 @@ class MGnifyStudyDownloadFile(MGnifyAnalysisDownloadFile):
         return f"{EMG_CONFIG.service_urls.transfer_services_url_root.rstrip('/')}/{study.external_results_dir}/{obj.path}"
 
 
-class WithExperimentTypeSchema:
+class ExperimentTypeMixin(Schema):
     experiment_type: str = Field(
         ...,
         examples=[
@@ -262,7 +262,7 @@ class WithExperimentTypeSchema:
     )
 
 
-class AnalysedRun(ModelSchema, WithExperimentTypeSchema):
+class AnalysedRun(ModelSchema, ExperimentTypeMixin):
     accession: str = Field(..., alias="first_accession", examples=["ERR0000001"])
     sample_accession: Optional[str] = Field(
         None,
@@ -419,18 +419,10 @@ class AssemblyDetail(Assembly):
         fields = ["updated_at", "metadata", "status"]
 
 
-class MGnifyAnalysis(ModelSchema, WithExperimentTypeSchema):
+class MGnifyAnalysis(ModelSchema, ExperimentTypeMixin):
     study_accession: str = Field(..., alias="study_id", examples=["MGYS000000001"])
 
     accession: str = Field(..., examples=["MGYA000000001"])
-    experiment_type: str = Field(
-        ...,
-        examples=[
-            label for _, label in analyses.models.Analysis.ExperimentTypes.choices
-        ],
-        description="Experiment type refers to the type of sequencing data that was analysed, e.g. amplicon reads or a metagenome assembly",
-        alias="get_experiment_type_display",
-    )
     run: Optional[AnalysedRun]
     sample: Optional[MGnifySample]
     assembly: Optional[Assembly]
