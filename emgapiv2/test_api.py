@@ -544,3 +544,26 @@ def test_runs_detail_not_found(ninja_api_client):
     response = ninja_api_client.get("/runs/DOESNOTEXIST")
     assert response.status_code == 404
     assert "not found" in response.json()["detail"].lower()
+
+
+@pytest.mark.django_db
+def test_runs_analyses_list(ninja_api_client, raw_read_run, raw_read_analyses):
+
+    finished_analyses = list(filter(lambda a: a.is_ready, raw_read_analyses))
+
+    run = raw_read_run[0]
+
+    items = call_endpoint_and_get_data(
+        ninja_api_client,
+        f"/runs/{run.first_accession}/analyses/",
+        count=len(finished_analyses),
+    )
+
+    assert items[0]["accession"] in [a.accession for a in finished_analyses]
+    assert items[0]["experiment_type"] in ["Metagenomic", "Amplicon"]
+
+    for analysis in items:
+        assert "accession" in analysis
+        assert "experiment_type" in analysis
+        assert "sample_accession" in analysis
+        assert "study_accession" in analysis

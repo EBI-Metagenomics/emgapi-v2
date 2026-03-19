@@ -5,7 +5,7 @@ from ninja_extra.exceptions import NotFound
 from ninja import FilterSchema
 
 import analyses.models
-from analyses.schemas import AnalysedRun, AnalysedRunDetail
+from analyses.schemas import AnalysedRun, AnalysedRunDetail, MGnifyAnalysis
 from emgapiv2.api import ApiSections
 from emgapiv2.api import perms
 from emgapiv2.api.auth import WebinJWTAuth, DjangoSuperUserAuth, NoAuth
@@ -68,3 +68,30 @@ class AnalysedRunController(UnauthorisedIsUnfoundController):
         ):
             raise NotFound(detail=f"Analysed run with accession {accession} not found.")
         return run
+
+    @http_get(
+        "/{accession}/analyses/",
+        response=NinjaPaginationResponseSchema[MGnifyAnalysis],
+        summary="List MGnify Analyses associated with this Run",
+        description="MGnify analyses correspond to an individual Run or Assembly",
+        operation_id="list_runs_analyses",
+        tags=[ApiSections.RUNS, ApiSections.ANALYSES],
+        # openapi_extra=make_links_section(
+        #     make_related_detail_link(
+        #         related_detail_operation_id="get_mgnify_analysis",
+        #         self_object_name="run",
+        #         related_object_name="analysis",
+        #         related_id_in_response="accession",
+        #         from_list_to_detail=True,
+        #     )
+        # ),
+        auth=[WebinJWTAuth(), DjangoSuperUserAuth(), NoAuth()],
+        permissions=[
+            perms.IsPublic | perms.IsWebinOwner | perms.IsAdminUserWithObjectPerms
+        ],
+    )
+    @paginate()
+    def list_runs_analyses(self, accession: str):
+        return self.get_object_or_exception(
+            analyses.models.Run.objects, accession=accession
+        ).analyses.filter(is_ready=True)
