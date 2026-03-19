@@ -282,7 +282,6 @@ class AnalysedRun(ModelSchema, ExperimentTypeMixin):
         fields = [
             "instrument_model",
             "instrument_platform",
-            "experiment_type",
         ]
 
 
@@ -419,7 +418,7 @@ class AssemblyDetail(Assembly):
         fields = ["updated_at", "metadata", "status"]
 
 
-class MGnifyAnalysis(ModelSchema, ExperimentTypeMixin):
+class MGnifyAnalysis(ExperimentTypeMixin, ModelSchema):
     study_accession: str = Field(..., alias="study_id", examples=["MGYS000000001"])
 
     accession: str = Field(..., examples=["MGYA000000001"])
@@ -430,7 +429,7 @@ class MGnifyAnalysis(ModelSchema, ExperimentTypeMixin):
 
     class Meta:
         model = analyses.models.Analysis
-        fields = ["accession", "experiment_type"]
+        fields = ["accession"]
 
 
 class MGnifyAnalysisDetail(MGnifyAnalysis):
