@@ -179,6 +179,7 @@ class MGnifyAnalysisDownloadFile(Schema, DownloadFile):
     parent_identifier: Annotated[Union[int, str], Field(exclude=True)]
     parent_is_private: Annotated[Optional[bool], Field(exclude=True)] = None
     parent_results_dir: Annotated[Optional[str], Field(exclude=True)] = None
+    index_file: Annotated[Optional[Any], Field(exclude=True)] = None
     index_files: Optional[list[MGnifyDownloadFileIndexFile]] = Field(
         None,
         examples=[
@@ -194,7 +195,7 @@ class MGnifyAnalysisDownloadFile(Schema, DownloadFile):
         ],
     )
 
-    url: Optional[str] = Field(
+    url: str = Field(
         None,
         examples=[
             urljoin(
