@@ -4,8 +4,16 @@ import pymongo
 import pytest
 from sqlalchemy import select
 
-from analyses.models import Analysis
-from workflows.data_io_utils.legacy_emg_dbs import LegacyStudy, legacy_emg_db_session
+from analyses.models import Analysis, Study, Sample
+import ena.models
+from workflows.flows.legacy.tasks.make_sample_from_legacy_emg_db import (
+    make_sample_from_legacy_emg_db,
+)
+from workflows.data_io_utils.legacy_emg_dbs import (
+    LegacyStudy,
+    LegacySample,
+    legacy_emg_db_session,
+)
 from workflows.flows.legacy.flows.import_v5_analyses import import_v5_analyses
 from workflows.prefect_utils.testing_utils import (
     run_flow_and_capture_logs,
@@ -170,3 +178,47 @@ def test_prefect_import_v5_analyses_flow(
         {"count": 10, "organism": "Archaea:Euks::Something|5.0", "description": None},
         {"count": 20, "organism": "Bacteria|5.0", "description": None},
     ]
+
+
+@pytest.mark.django_db
+def test_make_sample_from_legacy_emg_db_multiple_studies(prefect_harness):
+    # Setup: Existing Study and Sample in Django DB
+    ena_study_1 = ena.models.Study.objects.create(accession="ERP1", title="Study 1")
+    mg_study_1 = Study.objects.create(ena_study=ena_study_1)
+
+    ena_sample = ena.models.Sample.objects.create(
+        accession="SAMEA1",
+        additional_accessions=["ERS1"],
+        study=ena_study_1,
+    )
+    mg_sample = Sample.objects.create(
+        ena_sample=ena_sample,
+        ena_study=ena_study_1,
+        ena_accessions=["SAMEA1", "ERS1"],
+    )
+    mg_sample.studies.add(mg_study_1)
+
+    # Setup: A NEW Study in Django DB
+    ena_study_2 = ena.models.Study.objects.create(
+        accession="ERP2", title="Study 2, e.g. a TPA of Study 1"
+    )
+    mg_study_2 = Study.objects.create(ena_study=ena_study_2)
+
+    # Setup: A LegacySample that matches the existing Sample
+    legacy_sample = LegacySample(
+        sample_id=1000,
+        ext_sample_id="ERS1",
+        primary_accession="SAMEA1",
+    )
+
+    # Pretend we were importing Study 2, and it included (e.g. via an Assembly) ERS1
+    returned_sample = make_sample_from_legacy_emg_db(legacy_sample, mg_study_2)
+
+    # ERS1 should now ALSO be linked to Study 2, since it was in the legacy db we imported
+    assert returned_sample.id == mg_sample.id
+    assert returned_sample.studies.count() == 2
+    assert mg_study_1 in returned_sample.studies.all()
+    assert mg_study_2 in returned_sample.studies.all()
+
+    # Also check ena_sample has NOT changed its study (ENA samples are 1:1 with ENA studies in our simplified data model)
+    assert returned_sample.ena_sample.study == ena_study_1

@@ -31,20 +31,22 @@ def create_analysis(is_private=False):
 @pytest.mark.django_db(transaction=True, reset_sequences=True)
 def test_study():
     # Test accessioning
-    ena_study = ENAStudy.objects.create(accession="PRJ1", title="Project 1")
+    ena_study = ENAStudy.objects.create(accession="PRJNA1", title="Project 1")
     study = Study.objects.create(ena_study=ena_study, title="Project 1")
     assert study.accession == "MGYS00000001"
     study.inherit_accessions_from_related_ena_object("ena_study")
-    assert "PRJ1" in study.ena_accessions
-    study.ena_study.additional_accessions = ["ERP1"]
+    assert "PRJNA1" in study.ena_accessions
+    study.ena_study.additional_accessions = ["ERP000001"]
     study.ena_study.save()
     study.inherit_accessions_from_related_ena_object("ena_study")
-    assert "PRJ1" in study.ena_accessions
-    assert "ERP1" in study.ena_accessions
-    assert study.first_accession == "ERP1"
-    study.ena_accessions = ["PRJ1", "ERP1"]
+    assert "PRJNA1" in study.ena_accessions
+    assert "ERP000001" in study.ena_accessions
+    assert study.first_accession == "ERP000001"  # ERP is preferred over PRJ
+    study.ena_accessions = ["PRJNA1", "ERP000001"]
     study.save()
-    assert study.first_accession == "ERP1"
+    assert (
+        study.first_accession == "ERP000001"
+    )  # ERP is preferred even when PRJ is explicitly before it in accessions array
 
 
 def test_biome_lineage_path_generator():
