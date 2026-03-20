@@ -8,8 +8,8 @@ import workflows.models
 from workflows.flows.analyse_study_tasks.shared.copy_v6_pipeline_results import (
     copy_v6_study_summaries,
 )
+from workflows.flows.analysis import AnalysisType
 from workflows.flows.analyse_study_tasks.shared.study_summary import (
-    AnalysisType,
     merge_assembly_study_summaries,
 )
 from workflows.flows.analysis.assembly.tasks.add_assembly_study_summaries_to_downloads import (

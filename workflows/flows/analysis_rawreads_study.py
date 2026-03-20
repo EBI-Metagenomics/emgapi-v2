@@ -31,8 +31,8 @@ from workflows.ena_utils.ena_api_requests import (
     ENALibraryStrategyPolicy,
 )
 from workflows.ena_utils.webin_owner_utils import validate_and_set_webin_owner
+from workflows.flows.analysis import AnalysisType
 from workflows.flows.analyse_study_tasks.shared.study_summary import (
-    AnalysisType,
     merge_study_summaries,
     add_study_summaries_to_downloads,
 )
