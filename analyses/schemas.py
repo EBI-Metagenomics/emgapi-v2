@@ -478,16 +478,6 @@ class MGnifyAnalysisDetail(MGnifyAnalysis):
         examples=[{"marker_gene_summary": {"ssu": {"total_read_count": 11}}}],
     )
 
-    @staticmethod
-    def resolve_sample_accession(obj: analyses.models.Analysis) -> Optional[str]:
-        if obj.sample:
-            # either ENA sample accession:
-            if obj.sample.ena_sample:
-                return obj.sample.ena_sample.accession
-            # or MGnify first_accession:
-            return obj.sample.first_accession
-        return None
-
     class Meta:
         model = analyses.models.Analysis
         fields = [
