@@ -268,20 +268,29 @@ class AnalysedRun(ModelSchema, ExperimentTypeMixin):
         None,
         description="ENA accession of the sample associated with this run",
         examples=["ERS000001", "SAMEA000000001"],
-        alias="sample_id",
     )
     study_accession: Optional[str] = Field(
         None,
         description="ENA accession of the study associated with this run",
         examples=["SRP135937", "PRJNA438545"],
-        alias="ena_study_id",
     )
     instrument_model: Optional[str] = Field(..., examples=["Illumina HiSeq 2000"])
     instrument_platform: Optional[str] = Field(..., examples=["Illumina"])
 
+    @staticmethod
+    def resolve_sample_accession(obj: analyses.models.Run) -> Optional[str]:
+        return (
+            obj.sample.ena_sample.accession
+            if obj.sample and obj.sample.ena_sample
+            else None
+        )
+
     class Meta:
         model = analyses.models.Run
-        fields = ["instrument_model", "instrument_platform"]
+        fields = [
+            "instrument_model",
+            "instrument_platform",
+        ]
 
 
 class AnalysedRunDetail(AnalysedRun):
