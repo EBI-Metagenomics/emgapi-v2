@@ -86,6 +86,10 @@ class AssemblyResultSchema(PipelineResultSchema):
                         short_description="Filtered contigs FASTA file",
                         long_description="Filtered contigs FASTA file used in downstream pipelines",
                     ),
+                    index_files=[
+                        DownloadFileIndexFileMetadata(index_type="fai"),
+                        DownloadFileIndexFileMetadata(index_type="gzi"),
+                    ],
                 ),
                 PipelineFileSchema(
                     filename_template="{identifier}_quast_stats.tsv.gz",
