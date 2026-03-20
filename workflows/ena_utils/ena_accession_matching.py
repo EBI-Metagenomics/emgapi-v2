@@ -19,8 +19,8 @@ ENA_ASSEMBLY_ACCESSION_REGEX: re.Pattern = re.compile(
 ENA_ASSEMBLY_ACCESSION_GLOB: str = f"[{_INSDC_CENTRE_PREFIXES}]RZ[0-9]*"
 
 INSDC_BIOSAMPLE_ACCESSION_REGEX: re.Pattern = re.compile(
-    f"SAM[{_INSDC_CENTRE_SUFFIXES}][AG][0-9]+"
-)  # SAMEA, SAMNG etc
+    f"SAM[{_INSDC_CENTRE_SUFFIXES}][AG]?[0-9]+"
+)  # SAMEA1, SAMEG1, SAMN1, SAMN2 etc – note that the extra prefix are A|G|None
 
 
 def extract_all_accessions(accessions_from_api: str | list[str]) -> list[str]:
