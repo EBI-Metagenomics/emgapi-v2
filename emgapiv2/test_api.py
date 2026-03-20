@@ -565,5 +565,5 @@ def test_runs_analyses_list(ninja_api_client, raw_read_run, raw_read_analyses):
     for analysis in items:
         assert "accession" in analysis
         assert "experiment_type" in analysis
-        assert "sample_accession" in analysis
+        assert "sample" in analysis
         assert "study_accession" in analysis
