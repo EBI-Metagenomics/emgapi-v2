@@ -13,61 +13,58 @@ from analyses.schemas import (
     MGnifyStudyDownloadFile,
     MGnifyAnalysisDownloadFile,
     MGnifyAnalysisDetail,
+    MGnifyStudyDetail,
 )
+
+
+def _download_with_parent_context(parent_obj, download_file, schema_class):
+    """
+    Validate a DownloadFile into a schema instance with parent context injected.
+
+    :param parent_obj: The parent Django model (Analysis or Study).
+    :param download_file: The DownloadFile pydantic model.
+    :param schema_class: The schema class to validate into.
+    :return: Schema instance with parent context.
+    """
+    return schema_class.model_validate(
+        {
+            **download_file.model_dump(),
+            "parent_is_private": parent_obj.is_private,
+            "parent_results_dir": parent_obj.external_results_dir,
+        }
+    )
+
+
+def _assert_is_presigned_url(url):
+    """Assert that a URL has pre-signed query parameters."""
+    assert url is not None
+    assert settings.EMG_CONFIG.service_urls.private_data_url_root in url
+    parsed = urlparse(url)
+    query_params = parse_qs(parsed.query)
+    assert "token" in query_params
+    assert "expires" in query_params
 
 
 @pytest.mark.django_db
 def test_private_study_download_url(private_study_with_download):
     """Test that a private study download file has a secure URL."""
-    # Get the download file
     download_file = private_study_with_download.downloads_as_objects[0]
-
-    # Convert to MGnifyStudyDownloadFile to access the url property
-    study_download_file = MGnifyStudyDownloadFile.model_validate(
-        download_file.model_dump()
+    study_download = _download_with_parent_context(
+        private_study_with_download, download_file, MGnifyStudyDownloadFile
     )
-
-    # Get the URL
-    url = MGnifyStudyDownloadFile.resolve_url(study_download_file)
-
-    # Check that the URL is a secure URL
-    assert url is not None
-    assert settings.EMG_CONFIG.service_urls.private_data_url_root in url
-
-    # Parse the URL to check for secure link parameters
-    parsed_url = urlparse(url)
-    query_params = parse_qs(parsed_url.query)
-
-    # Check that the URL has the required secure link parameters
-    assert "token" in query_params
-    assert "expires" in query_params
+    url = MGnifyStudyDownloadFile.resolve_url(study_download)
+    _assert_is_presigned_url(url)
 
 
 @pytest.mark.django_db
 def test_private_analysis_download_url(private_analysis_with_download):
     """Test that a private analysis download file has a secure URL."""
-    # Get the download file
     download_file = private_analysis_with_download.downloads_as_objects[0]
-
-    # Convert to MGnifyAnalysisDownloadFile to access the url property
-    analysis_download_file = MGnifyAnalysisDownloadFile.model_validate(
-        download_file.model_dump()
+    analysis_download = _download_with_parent_context(
+        private_analysis_with_download, download_file, MGnifyAnalysisDownloadFile
     )
-
-    # Get the URL
-    url = MGnifyAnalysisDownloadFile.resolve_url(analysis_download_file)
-
-    # Check that the URL is a secure URL
-    assert url is not None
-    assert settings.EMG_CONFIG.service_urls.private_data_url_root in url
-
-    # Parse the URL to check for secure link parameters
-    parsed_url = urlparse(url)
-    query_params = parse_qs(parsed_url.query)
-
-    # Check that the URL has the required secure link parameters
-    assert "token" in query_params
-    assert "expires" in query_params
+    url = MGnifyAnalysisDownloadFile.resolve_url(analysis_download)
+    _assert_is_presigned_url(url)
 
 
 @pytest.mark.django_db
@@ -79,7 +76,6 @@ def test_public_vs_private_study_urls(
         raw_reads_mgnify_study.external_results_dir = "MGYS/00/000/001"
         raw_reads_mgnify_study.save()
 
-    # Add a download to the public study if it doesn't have one
     if not raw_reads_mgnify_study.downloads:
         raw_reads_mgnify_study.add_download(
             DownloadFile(
@@ -93,51 +89,31 @@ def test_public_vs_private_study_urls(
             )
         )
 
-    # Get the download files
-    public_download = raw_reads_mgnify_study.downloads_as_objects[0]
-    private_download = private_study_with_download.downloads_as_objects[0]
-
-    # Convert to MGnifyStudyDownloadFile to access the url property
-    public_study_download = MGnifyStudyDownloadFile.model_validate(
-        public_download.model_dump()
+    public_download = _download_with_parent_context(
+        raw_reads_mgnify_study,
+        raw_reads_mgnify_study.downloads_as_objects[0],
+        MGnifyStudyDownloadFile,
     )
-    private_study_download = MGnifyStudyDownloadFile.model_validate(
-        private_download.model_dump()
+    private_download = _download_with_parent_context(
+        private_study_with_download,
+        private_study_with_download.downloads_as_objects[0],
+        MGnifyStudyDownloadFile,
     )
 
-    # Get the URLs
-    public_url = MGnifyStudyDownloadFile.resolve_url(public_study_download)
-    private_url = MGnifyStudyDownloadFile.resolve_url(private_study_download)
+    public_url = MGnifyStudyDownloadFile.resolve_url(public_download)
+    private_url = MGnifyStudyDownloadFile.resolve_url(private_download)
 
-    # Check that the URLs are different
     assert public_url != private_url
-
-    # Check that the public URL uses the transfer_services_url_root
     assert settings.EMG_CONFIG.service_urls.transfer_services_url_root in public_url
-
-    # Check that the private URL uses the private_data_url_root
-    assert settings.EMG_CONFIG.service_urls.private_data_url_root in private_url
-
-    # Check that the private URL has secure link parameters
-    parsed_url = urlparse(private_url)
-    query_params = parse_qs(parsed_url.query)
-    assert "token" in query_params
-    assert "expires" in query_params
+    _assert_is_presigned_url(private_url)
 
 
 @pytest.mark.django_db
 def test_private_analysis_results_dir(private_analysis_with_download):
     """Test that a private analysis results_dir uses a secure private URL."""
     url = MGnifyAnalysisDetail.resolve_results_dir(private_analysis_with_download)
-
-    assert url is not None
-    assert settings.EMG_CONFIG.service_urls.private_data_url_root in url
+    _assert_is_presigned_url(url)
     assert settings.EMG_CONFIG.service_urls.transfer_services_url_root not in url
-
-    parsed_url = urlparse(url)
-    query_params = parse_qs(parsed_url.query)
-    assert "token" in query_params
-    assert "expires" in query_params
 
 
 @pytest.mark.django_db
@@ -153,41 +129,31 @@ def test_public_analysis_results_dir(amplicon_analysis_with_downloads, prefect_h
 @pytest.mark.django_db
 def test_private_analysis_index_file_url(private_analysis_with_indexed_download):
     """Test that index files for a private analysis get pre-signed URLs."""
-    download_file = private_analysis_with_indexed_download.downloads_as_objects[0]
-
+    download_file = _download_with_parent_context(
+        private_analysis_with_indexed_download,
+        private_analysis_with_indexed_download.downloads_as_objects[0],
+        MGnifyAnalysisDownloadFile,
+    )
     index_files = MGnifyAnalysisDownloadFile.resolve_index_files(download_file)
 
     assert index_files is not None
     assert len(index_files) == 1
-    index_url = index_files[0].url
-
-    assert index_url is not None
-    assert settings.EMG_CONFIG.service_urls.private_data_url_root in index_url
-
-    parsed = urlparse(index_url)
-    query_params = parse_qs(parsed.query)
-    assert "token" in query_params
-    assert "expires" in query_params
+    _assert_is_presigned_url(index_files[0].url)
 
 
 @pytest.mark.django_db
 def test_private_study_index_file_url(private_study_with_indexed_download):
     """Test that index files for a private study get pre-signed URLs."""
-    download_file = private_study_with_indexed_download.downloads_as_objects[0]
-
+    download_file = _download_with_parent_context(
+        private_study_with_indexed_download,
+        private_study_with_indexed_download.downloads_as_objects[0],
+        MGnifyStudyDownloadFile,
+    )
     index_files = MGnifyStudyDownloadFile.resolve_index_files(download_file)
 
     assert index_files is not None
     assert len(index_files) == 1
-    index_url = index_files[0].url
-
-    assert index_url is not None
-    assert settings.EMG_CONFIG.service_urls.private_data_url_root in index_url
-
-    parsed = urlparse(index_url)
-    query_params = parse_qs(parsed.query)
-    assert "token" in query_params
-    assert "expires" in query_params
+    _assert_is_presigned_url(index_files[0].url)
 
 
 @pytest.mark.django_db
@@ -207,11 +173,11 @@ def test_public_analysis_index_file_url(raw_read_analyses):
             index_type="gzi",
         ),
         parent_identifier=analysis.accession,
-        parent_is_private=analysis.is_private,
-        parent_results_dir=analysis.external_results_dir,
     )
-
-    index_files = MGnifyAnalysisDownloadFile.resolve_index_files(dl)
+    download_file = _download_with_parent_context(
+        analysis, dl, MGnifyAnalysisDownloadFile
+    )
+    index_files = MGnifyAnalysisDownloadFile.resolve_index_files(download_file)
 
     assert index_files is not None
     assert len(index_files) == 1
@@ -220,3 +186,39 @@ def test_public_analysis_index_file_url(raw_read_analyses):
     assert index_url is not None
     assert settings.EMG_CONFIG.service_urls.transfer_services_url_root in index_url
     assert "token" not in index_url
+
+
+@pytest.mark.django_db
+def test_private_analysis_downloads_via_detail_resolver(
+    private_analysis_with_indexed_download,
+):
+    """Test that MGnifyAnalysisDetail.resolve_downloads injects parent context correctly."""
+    downloads = MGnifyAnalysisDetail.resolve_downloads(
+        private_analysis_with_indexed_download
+    )
+
+    assert len(downloads) == 1
+    dl = downloads[0]
+
+    _assert_is_presigned_url(dl.url)
+
+    assert dl.index_files is not None
+    assert len(dl.index_files) == 1
+    _assert_is_presigned_url(dl.index_files[0].url)
+
+
+@pytest.mark.django_db
+def test_private_study_downloads_via_detail_resolver(
+    private_study_with_indexed_download,
+):
+    """Test that MGnifyStudyDetail.resolve_downloads injects parent context correctly."""
+    downloads = MGnifyStudyDetail.resolve_downloads(private_study_with_indexed_download)
+
+    assert len(downloads) == 1
+    dl = downloads[0]
+
+    _assert_is_presigned_url(dl.url)
+
+    assert dl.index_files is not None
+    assert len(dl.index_files) == 1
+    _assert_is_presigned_url(dl.index_files[0].url)

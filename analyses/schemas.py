@@ -83,6 +83,15 @@ class MGnifyStudyDetail(MGnifyStudy):
         description="Metadata associated with the study, a partial copy of the ENA Study record.",
     )
 
+    @staticmethod
+    def resolve_downloads(obj: analyses.models.Study) -> List[MGnifyStudyDownloadFile]:
+        """Resolve downloads with URLs and index file URLs populated.
+
+        :param obj: The Study model instance.
+        :return: List of MGnifyStudyDownloadFile with urls resolved.
+        """
+        return MGnifyStudyDownloadFile.from_parent(obj, obj.downloads_as_objects)
+
     class Meta:
         model = analyses.models.Study
         fields = [
@@ -254,6 +263,26 @@ class MGnifyAnalysisDownloadFile(Schema, DownloadFile):
             for idx in raw_indexes
         ]
 
+    @classmethod
+    def from_parent(cls, parent_obj, download_files: list[DownloadFile]) -> list:
+        """
+        Build resolved download file schemas from a parent model and its downloads.
+
+        :param parent_obj: The parent Django model (Analysis or Study) with is_private and external_results_dir.
+        :param download_files: List of DownloadFile objects from downloads_as_objects.
+        :return: List of schema instances with url and index_files resolved.
+        """
+        results = []
+        for dl in download_files:
+            data = dl.model_dump()
+            data["parent_is_private"] = parent_obj.is_private
+            data["parent_results_dir"] = parent_obj.external_results_dir
+            download = cls.model_validate(data)
+            download.url = cls.resolve_url(download)
+            download.index_files = cls.resolve_index_files(download)
+            results.append(download)
+        return results
+
 
 class MGnifyStudyDownloadFile(MGnifyAnalysisDownloadFile):
     path: Annotated[str, Field(exclude=True)]
@@ -423,9 +452,7 @@ class MGnifyAnalysis(ModelSchema):
 
 
 class MGnifyAnalysisDetail(MGnifyAnalysis):
-    downloads: List[MGnifyAnalysisDownloadFile] = Field(
-        ..., alias="downloads_as_objects"
-    )
+    downloads: List[MGnifyAnalysisDownloadFile] = Field(None)
     read_run: Optional[list[AnalysedRun]] = Field(
         ...,
         alias="raw_runs",
@@ -447,6 +474,18 @@ class MGnifyAnalysisDetail(MGnifyAnalysis):
         description="Directory path where analysis results are stored",
         examples=["http://example.org/data/analyses/MGYA00000001/results"],
     )
+
+    @staticmethod
+    def resolve_downloads(
+        obj: analyses.models.Analysis,
+    ) -> List[MGnifyAnalysisDownloadFile]:
+        """
+        Resolve downloads with URLs and index file URLs populated.
+
+        :param obj: The Analysis model instance.
+        :return: List of MGnifyAnalysisDownloadFile with urls resolved.
+        """
+        return MGnifyAnalysisDownloadFile.from_parent(obj, obj.downloads_as_objects)
 
     @staticmethod
     def resolve_results_dir(obj: analyses.models.Analysis) -> Optional[str]:
