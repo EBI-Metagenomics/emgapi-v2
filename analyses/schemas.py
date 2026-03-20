@@ -196,7 +196,7 @@ class MGnifyAnalysisDownloadFile(Schema, DownloadFile):
     )
 
     url: Optional[str] = Field(
-        None,
+        None,  # Optional because legacy analyses may not have an external_results_dir
         examples=[
             urljoin(
                 EMG_CONFIG.service_urls.transfer_services_url_root, "annotations.tsv.gz"
