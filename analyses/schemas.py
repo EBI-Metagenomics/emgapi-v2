@@ -285,6 +285,10 @@ class AnalysedRun(ModelSchema, ExperimentTypeMixin):
             else None
         )
 
+    @staticmethod
+    def resolve_study_accession(obj: analyses.models.Run) -> Optional[str]:
+        return obj.study.accession if obj.study else None
+
     class Meta:
         model = analyses.models.Run
         fields = [
