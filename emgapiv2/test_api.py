@@ -570,3 +570,27 @@ def test_runs_analyses_list(ninja_api_client, raw_read_run, raw_read_analyses):
         assert "experiment_type" in analysis
         assert "sample" in analysis
         assert "study_accession" in analysis
+
+
+@pytest.mark.django_db
+def test_list_sample_runs(ninja_api_client, raw_reads_mgnify_sample, raw_read_run):
+
+    sample: Sample = raw_reads_mgnify_sample[0]
+
+    items: list = call_endpoint_and_get_data(
+        ninja_api_client, f"/samples/{sample.ena_accessions[0]}/runs/", count=1
+    )
+
+    for run in items:
+        assert run["accession"] in [r.first_accession for r in raw_read_run]
+        assert run["instrument_model"] in [r.instrument_model for r in raw_read_run]
+        assert run["instrument_platform"] in [
+            r.instrument_platform for r in raw_read_run
+        ]
+        assert run["experiment_type"] in [
+            r.get_experiment_type_display() for r in raw_read_run
+        ]
+        assert run["sample_accession"] in [
+            r.sample.ena_sample.accession for r in raw_read_run
+        ]
+        assert run["study_accession"] in [r.study.accession for r in raw_read_run]
