@@ -9,7 +9,7 @@ from zoneinfo import ZoneInfo
 
 from django.conf import settings
 from ninja import Field, ModelSchema, Schema
-from pydantic import field_validator, BaseModel
+from pydantic import BaseModel
 from typing_extensions import Annotated
 
 import analyses.models
@@ -82,6 +82,15 @@ class MGnifyStudyDetail(MGnifyStudy):
         ],
         description="Metadata associated with the study, a partial copy of the ENA Study record.",
     )
+
+    @staticmethod
+    def resolve_downloads(obj: analyses.models.Study) -> List[MGnifyStudyDownloadFile]:
+        """Resolve downloads with URLs and index file URLs populated.
+
+        :param obj: The Study model instance.
+        :return: List of MGnifyStudyDownloadFile with urls resolved.
+        """
+        return MGnifyStudyDownloadFile.from_parent(obj, obj.downloads_as_objects)
 
     class Meta:
         model = analyses.models.Study
@@ -158,31 +167,34 @@ class MGnifySampleDetail(MGnifySampleWithMetadata):
 
 class MGnifyDownloadFileIndexFile(Schema, DownloadFileIndexFile):
     path: Annotated[str, Field(exclude=True)]
-    relative_url: str = Field(
+    url: Optional[str] = Field(
         None,
-        description="URL of the index file, relative to the DownloadFile it relates to.",
-        examples=["annotations.tsv.gz.gzi"],
+        description="Full URL of the index file.",
+        examples=["https://www.ebi.ac.uk/metagenomics/path/to/annotations.tsv.gz.gzi"],
     )
-
-    @staticmethod
-    def resolve_relative_url(obj: DownloadFileIndexFile):
-        # NB! This assumes that the index file is ALWAYS a sibling of the file it indexes.
-        # Generally fine, but if not we would need to know about the parent DownloadFile object
-        #  in this resolver, to calculate a true relative path or an absolute URL.
-        return Path(obj.path).name
 
 
 class MGnifyAnalysisDownloadFile(Schema, DownloadFile):
     path: Annotated[str, Field(exclude=True)]
     parent_identifier: Annotated[Union[int, str], Field(exclude=True)]
+    parent_is_private: Annotated[Optional[bool], Field(exclude=True)] = None
+    parent_results_dir: Annotated[Optional[str], Field(exclude=True)] = None
     index_files: Optional[list[MGnifyDownloadFileIndexFile]] = Field(
-        None, alias="index_file"
-    )  # only show list of indexes
-    index_file: Optional[Any] = Field(
-        ..., exclude=True
-    )  # hide internal implementation which may be singular
+        None,
+        examples=[
+            [
+                {
+                    "index_type": "gzi",
+                    "url": urljoin(
+                        EMG_CONFIG.service_urls.transfer_services_url_root,
+                        "annotations.tsv.gz.gzi",
+                    ),
+                }
+            ]
+        ],
+    )
 
-    url: str = Field(
+    url: Optional[str] = Field(
         None,
         examples=[
             urljoin(
@@ -191,59 +203,92 @@ class MGnifyAnalysisDownloadFile(Schema, DownloadFile):
         ],
     )
 
-    @field_validator("index_files", mode="before")
-    def coerce_index_files_to_plural(cls, value):
-        # Ensures even a singular index_file is serialized as a list-of-one
-        if isinstance(value, DownloadFileIndexFile):
-            return [MGnifyDownloadFileIndexFile.model_validate(value.model_dump())]
-        if isinstance(value, list):
-            return [
-                MGnifyDownloadFileIndexFile.model_validate(idx.model_dump())
-                for idx in value
-            ]
-        return value
-
     @staticmethod
-    def resolve_url(obj: MGnifyAnalysisDownloadFile):
-        analysis = analyses.models.Analysis.objects.get(accession=obj.parent_identifier)
-        if not analysis:
-            logger.warning(
-                f"No parent Analysis object found with identified {obj.parent_identifier}"
-            )
-            return None
+    def _build_file_url(file_path: str, results_dir: str, is_private: bool) -> str:
+        """
+        Build a full URL for a download file or index file.
 
-        if analysis.is_private:
-            private_path = Path(analysis.external_results_dir) / obj.path
-            return private_storage.generate_secure_link(private_path)
-
+        :param file_path: Relative path of the file within results_dir.
+        :param results_dir: The external results directory of the parent object.
+        :param is_private: Whether the parent object is private.
+        :return: Absolute URL, pre-signed if private.
+        """
+        if is_private:
+            return private_storage.generate_secure_link(Path(results_dir) / file_path)
         return urljoin(
             EMG_CONFIG.service_urls.transfer_services_url_root,
-            urljoin(
-                trailing_slash_ensured_dir(analysis.external_results_dir), obj.path
-            ),
+            urljoin(trailing_slash_ensured_dir(results_dir), file_path),
         )
+
+    @staticmethod
+    def resolve_url(obj: DownloadFile) -> Optional[str]:
+        """
+        Resolve the download URL, using a pre-signed URL if the parent is private.
+
+        :param obj: The source DownloadFile object.
+        :return: URL string or None.
+        """
+        if obj.parent_results_dir is None:
+            return None
+        return MGnifyAnalysisDownloadFile._build_file_url(
+            obj.path, obj.parent_results_dir, obj.parent_is_private
+        )
+
+    @staticmethod
+    def resolve_index_files(
+        obj: DownloadFile,
+    ) -> Optional[list[MGnifyDownloadFileIndexFile]]:
+        """
+        Resolve index files with absolute URLs, using pre-signed URLs if the parent is private.
+
+        :param obj: The source DownloadFile object.
+        :return: List of index files with URLs, or None.
+        """
+        if obj.index_file is None or obj.parent_results_dir is None:
+            return None
+        raw_indexes = (
+            [obj.index_file]
+            if isinstance(obj.index_file, DownloadFileIndexFile)
+            else obj.index_file
+        )
+        return [
+            MGnifyDownloadFileIndexFile.model_validate(
+                {
+                    **idx.model_dump(),
+                    "url": MGnifyAnalysisDownloadFile._build_file_url(
+                        idx.path, obj.parent_results_dir, obj.parent_is_private
+                    ),
+                }
+            )
+            for idx in raw_indexes
+        ]
+
+    @classmethod
+    def from_parent(cls, parent_obj, download_files: list[DownloadFile]) -> list:
+        """
+        Build resolved download file schemas from a parent model and its downloads.
+
+        :param parent_obj: The parent Django model (Analysis or Study) with is_private and external_results_dir.
+        :param download_files: List of DownloadFile objects from downloads_as_objects.
+        :return: List of schema instances with url and index_files resolved.
+        """
+        results = []
+        for dl in download_files:
+            data = dl.model_dump()
+            data["parent_is_private"] = parent_obj.is_private
+            data["parent_results_dir"] = parent_obj.external_results_dir
+            download = cls.model_validate(data)
+            download.url = cls.resolve_url(download)
+            download.index_files = cls.resolve_index_files(download)
+            results.append(download)
+        return results
 
 
 class MGnifyStudyDownloadFile(MGnifyAnalysisDownloadFile):
     path: Annotated[str, Field(exclude=True)]
     parent_identifier: Annotated[Union[int, str], Field(exclude=True)]
 
-    url: str = None
-
-    @staticmethod
-    def resolve_url(obj: MGnifyStudyDownloadFile):
-        study = analyses.models.Study.objects.get(accession=obj.parent_identifier)
-        if not study:
-            logger.warning(
-                f"No parent Study object found with identified {obj.parent_identifier}"
-            )
-            return None
-
-        if study.is_private:
-            private_path = Path(study.external_results_dir) / obj.path
-            return private_storage.generate_secure_link(private_path)
-
-        return f"{EMG_CONFIG.service_urls.transfer_services_url_root.rstrip('/')}/{study.external_results_dir}/{obj.path}"
+    url: Optional[str] = None
 
 
 class AnalysedRun(ModelSchema):
@@ -407,9 +452,7 @@ class MGnifyAnalysis(ModelSchema):
 
 
 class MGnifyAnalysisDetail(MGnifyAnalysis):
-    downloads: List[MGnifyAnalysisDownloadFile] = Field(
-        ..., alias="downloads_as_objects"
-    )
+    downloads: List[MGnifyAnalysisDownloadFile] = Field(None)
     read_run: Optional[list[AnalysedRun]] = Field(
         ...,
         alias="raw_runs",
@@ -431,6 +474,18 @@ class MGnifyAnalysisDetail(MGnifyAnalysis):
         description="Directory path where analysis results are stored",
         examples=["http://example.org/data/analyses/MGYA00000001/results"],
     )
+
+    @staticmethod
+    def resolve_downloads(
+        obj: analyses.models.Analysis,
+    ) -> List[MGnifyAnalysisDownloadFile]:
+        """
+        Resolve downloads with URLs and index file URLs populated.
+
+        :param obj: The Analysis model instance.
+        :return: List of MGnifyAnalysisDownloadFile with urls resolved.
+        """
+        return MGnifyAnalysisDownloadFile.from_parent(obj, obj.downloads_as_objects)
 
     @staticmethod
     def resolve_results_dir(obj: analyses.models.Analysis) -> Optional[str]:

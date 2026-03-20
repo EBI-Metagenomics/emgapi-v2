@@ -7,7 +7,7 @@ from ena.models import Study as ENAStudy
 from workflows.flows.analyse_study_tasks.shared.copy_v6_pipeline_results import (
     copy_v6_study_summaries,
 )
-from workflows.flows.analyse_study_tasks.shared.study_summary import AnalysisType
+from workflows.flows.analysis import AnalysisType
 
 
 @pytest.mark.django_db
