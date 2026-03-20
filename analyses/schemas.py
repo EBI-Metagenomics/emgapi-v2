@@ -268,21 +268,20 @@ class AnalysedRun(ModelSchema, ExperimentTypeMixin):
         None,
         description="ENA accession of the sample associated with this run",
         examples=["ERS000001", "SAMEA000000001"],
+        alias="sample_id",
     )
     study_accession: Optional[str] = Field(
         None,
         description="ENA accession of the study associated with this run",
         examples=["SRP135937", "PRJNA438545"],
+        alias="ena_study_id",
     )
     instrument_model: Optional[str] = Field(..., examples=["Illumina HiSeq 2000"])
     instrument_platform: Optional[str] = Field(..., examples=["Illumina"])
 
     class Meta:
         model = analyses.models.Run
-        fields = [
-            "instrument_model",
-            "instrument_platform",
-        ]
+        fields = ["instrument_model", "instrument_platform"]
 
 
 class AnalysedRunDetail(AnalysedRun):
@@ -478,6 +477,16 @@ class MGnifyAnalysisDetail(MGnifyAnalysis):
         description="Additional metadata associated with the analysis",
         examples=[{"marker_gene_summary": {"ssu": {"total_read_count": 11}}}],
     )
+
+    @staticmethod
+    def resolve_sample_accession(obj: analyses.models.Analysis) -> Optional[str]:
+        if obj.sample:
+            # either ENA sample accession:
+            if obj.sample.ena_sample:
+                return obj.sample.ena_sample.accession
+            # or MGnify first_accession:
+            return obj.sample.first_accession
+        return None
 
     class Meta:
         model = analyses.models.Analysis

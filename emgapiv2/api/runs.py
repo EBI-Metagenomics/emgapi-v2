@@ -92,6 +92,5 @@ class AnalysedRunController(UnauthorisedIsUnfoundController):
     )
     @paginate()
     def list_runs_analyses(self, accession: str):
-        return self.get_object_or_exception(
-            analyses.models.Run.objects, accession=accession
-        ).analyses.filter(is_ready=True)
+        run = analyses.models.Run.objects.get_by_accession(accession)
+        return run.analyses.filter(is_ready=True)
