@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, Protocol
+import re
+from typing import Any, Protocol, TypeVar, Generic, ClassVar
 
 from django.conf import settings
 from django.contrib.postgres.fields import ArrayField
@@ -88,7 +89,10 @@ class GetByENAAccessionManagerMixin:
         return matching_assemblies
 
 
-class UpdateOrCreateByAccessionManagerMixin:
+T_ENADerivedModel = TypeVar("T_ENADerivedModel", bound="ENADerivedModel")
+
+
+class UpdateOrCreateByAccessionManagerMixin(Generic[T_ENADerivedModel]):
     def update_or_create_by_accession(
         self,
         known_accessions: list[str],
@@ -96,7 +100,7 @@ class UpdateOrCreateByAccessionManagerMixin:
         create_defaults: dict[str, Any] | None = None,
         include_update_defaults_in_create_defaults: bool = True,
         **kwargs,
-    ) -> tuple[ENADerivedModel, bool]:
+    ) -> tuple[T_ENADerivedModel, bool]:
         """
         Like django update_or_create, but with handling for multiple accessions.
         I.e., will select the model based on ena_accessions field containing any of the given accessions,
@@ -153,13 +157,17 @@ class UpdateOrCreateByAccessionManagerMixin:
 class ENADerivedManager(
     SelectRelatedEnaStudyManagerMixin,
     GetByENAAccessionManagerMixin,
-    UpdateOrCreateByAccessionManagerMixin,
+    UpdateOrCreateByAccessionManagerMixin[T_ENADerivedModel],
     models.Manager,
 ): ...
 
 
 class ENADerivedModel(VisibilityControlledModel):
     objects = ENADerivedManager()
+
+    # Allow certain accession prefixes (i.e. formats) to be preferred over others.
+    # E.g. if this is "[ESD]RP.*", .first_accession will return ERP001 even if ena_accessions is {PRJ098, ERP001}
+    PREFERRED_ENA_ACCESSION_REGEX: ClassVar[re.Pattern] = re.compile(r".*")
 
     ena_accessions = ArrayField(
         models.CharField(max_length=20, blank=True),
@@ -169,12 +177,14 @@ class ENADerivedModel(VisibilityControlledModel):
     )
     is_suppressed = models.BooleanField(default=False)
 
-    # TODO – postgres GIN index on accessions?
-
     @property
     def first_accession(self):
         if len(self.ena_accessions):
-            return self.ena_accessions[0]
+            pattern = self.PREFERRED_ENA_ACCESSION_REGEX
+            return next(
+                (acc for acc in self.ena_accessions if pattern.match(acc)),
+                self.ena_accessions[0],
+            )
         return None
 
     @property

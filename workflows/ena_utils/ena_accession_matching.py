@@ -1,15 +1,26 @@
 import re
 
 _INSDC_CENTRE_PREFIXES = "EDS"
+_INSDC_CENTRE_SUFFIXES = "NED"
 
-INSDC_STUDY_ACCESSION_REGEX: str = f"([{_INSDC_CENTRE_PREFIXES}]RP[0-9]{{6,}})"
+INSDC_STUDY_ACCESSION_REGEX: re.Pattern = re.compile(
+    f"([{_INSDC_CENTRE_PREFIXES}]RP[0-9]{{6,}})"
+)
 INSDC_STUDY_ACCESSION_GLOB: str = f"[{_INSDC_CENTRE_PREFIXES}]RP[0-9]*"
 
-INSDC_PROJECT_ACCESSION_REGEX: str = "(PRJ[NED][AB][0-9]+)"  # PRJNA, PRJEB, PRJDB
-INSDC_PROJECT_ACCESSION_GLOB: str = "PRJ[NED][AB][0-9]*"
+INSDC_PROJECT_ACCESSION_REGEX: re.Pattern = re.compile(
+    f"(PRJ[{_INSDC_CENTRE_SUFFIXES}][AB][0-9]+)"
+)  # PRJNA, PRJEB, PRJDB
+INSDC_PROJECT_ACCESSION_GLOB: str = f"PRJ[{_INSDC_CENTRE_SUFFIXES}][AB][0-9]*"
 
-ENA_ASSEMBLY_ACCESSION_REGEX: str = f"([{_INSDC_CENTRE_PREFIXES}]RZ[0-9]{{6,}})"
+ENA_ASSEMBLY_ACCESSION_REGEX: re.Pattern = re.compile(
+    f"([{_INSDC_CENTRE_PREFIXES}]RZ[0-9]{{6,}})"
+)
 ENA_ASSEMBLY_ACCESSION_GLOB: str = f"[{_INSDC_CENTRE_PREFIXES}]RZ[0-9]*"
+
+INSDC_BIOSAMPLE_ACCESSION_REGEX: re.Pattern = re.compile(
+    f"SAM[{_INSDC_CENTRE_SUFFIXES}][AG]?[0-9]+"
+)  # SAMEA1, SAMEG1, SAMN1, SAMN2 etc – note that the extra prefix are A|G|None
 
 
 def extract_all_accessions(accessions_from_api: str | list[str]) -> list[str]:

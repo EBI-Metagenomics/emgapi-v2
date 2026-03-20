@@ -28,8 +28,8 @@ from workflows.flows.analyse_study_tasks.shared.dwcr_generator import (
 from workflows.flows.analyse_study_tasks.shared.markergene_study_summary import (
     generate_markergene_summary_for_pipeline_run,
 )
+from workflows.flows.analysis import AnalysisType
 from workflows.flows.analyse_study_tasks.shared.study_summary import (
-    AnalysisType,
     generate_study_summary_for_pipeline_run,
 )
 from workflows.prefect_utils.build_cli_command import cli_command

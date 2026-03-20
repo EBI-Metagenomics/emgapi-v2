@@ -37,6 +37,11 @@ from analyses.base_models.with_status_models import SelectByStatusManagerMixin
 from analyses.base_models.with_watchers_models import WithWatchersModel
 from emgapiv2.enum_utils import FutureStrEnum, DjangoChoicesCompatibleStrEnum
 from emgapiv2.model_utils import JSONFieldWithSchema
+from workflows.ena_utils.ena_accession_matching import (
+    INSDC_STUDY_ACCESSION_REGEX,
+    INSDC_BIOSAMPLE_ACCESSION_REGEX,
+    ENA_ASSEMBLY_ACCESSION_REGEX,
+)
 from workflows.ena_utils.read_run import ENAReadRunFields
 from workflows.ena_utils.sample import ENASampleFields
 
@@ -119,9 +124,10 @@ class Study(
     TimeStampedModel,
     WithWatchersModel,
 ):
-    objects = StudyManager()
+    objects: ClassVar[ENADerivedManager[Study]] = StudyManager()
     public_objects = PublicStudyManager()
 
+    PREFERRED_ENA_ACCESSION_REGEX = INSDC_STUDY_ACCESSION_REGEX
     DOWNLOAD_PARENT_IDENTIFIER_ATTR = "accession"
     ALLOWED_DOWNLOAD_GROUP_PREFIXES = ["study_summary"]
 
@@ -199,18 +205,6 @@ class Study(
             # Fast fulltext (ish) search on the study title.
         ]
 
-    @property
-    def first_accession(self):
-        # Prefer ERP--,SRP--,DRP-- etc style accessions over PRJ--, if available
-        return next(
-            (
-                accession
-                for accession in self.ena_accessions
-                if not accession.upper().startswith("PRJ")
-            ),
-            super().first_accession,
-        )
-
 
 class PublicSampleManager(PrivacyFilterManagerMixin, ENADerivedManager):
     """
@@ -226,9 +220,10 @@ class PublicSampleManager(PrivacyFilterManagerMixin, ENADerivedManager):
 
 
 class Sample(InferredMetadataMixin, ENADerivedModel, TimeStampedModel):
+    PREFERRED_ENA_ACCESSION_REGEX = INSDC_BIOSAMPLE_ACCESSION_REGEX
     CommonMetadataKeys = ENASampleFields
 
-    objects = ENADerivedManager()
+    objects: ClassVar[ENADerivedManager[Sample]] = ENADerivedManager()
     public_objects = PublicSampleManager()
 
     id = models.AutoField(primary_key=True)
@@ -352,7 +347,7 @@ class Run(
         PACBIO_SMRT = "PACBIO_SMRT"
         ION_TORRENT = "ION_TORRENT"
 
-    objects = ENADerivedManager()
+    objects: ClassVar[ENADerivedManager[Run]] = ENADerivedManager()
     public_objects = PublicRunManager()
 
     id = models.AutoField(primary_key=True)
@@ -478,8 +473,10 @@ class PublicAssemblyManager(PrivacyFilterManagerMixin, AssemblyManager): ...
 
 
 class Assembly(InferredMetadataMixin, TimeStampedModel, ENADerivedModel):
-    objects = AssemblyManager()
+    objects: ClassVar[ENADerivedManager[Assembly]] = AssemblyManager()
     public_objects = PublicAssemblyManager()
+
+    PREFERRED_ENA_ACCESSION_REGEX = ENA_ASSEMBLY_ACCESSION_REGEX
 
     dir = models.CharField(max_length=200, null=True, blank=True)
     runs = models.ManyToManyField(Run, related_name="assemblies", blank=True)

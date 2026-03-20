@@ -23,8 +23,8 @@ from workflows.flows.analyse_study_tasks.shared.analysis_states import (
 from workflows.flows.analyse_study_tasks.raw_reads.set_rawreads_post_analysis_states import (
     set_post_analysis_states,
 )
+from workflows.flows.analysis import AnalysisType
 from workflows.flows.analyse_study_tasks.shared.study_summary import (
-    AnalysisType,
     generate_study_summary_for_pipeline_run,
 )
 from workflows.prefect_utils.build_cli_command import cli_command
