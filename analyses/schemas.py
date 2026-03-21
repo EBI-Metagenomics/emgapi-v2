@@ -180,7 +180,10 @@ class MGnifyAnalysisDownloadFile(Schema, DownloadFile):
     parent_identifier: Annotated[Union[int, str], Field(exclude=True)]
     parent_is_private: Annotated[Optional[bool], Field(exclude=True)] = None
     parent_results_dir: Annotated[Optional[str], Field(exclude=True)] = None
-    index_file: Annotated[Optional[Any], Field(exclude=True)] = None
+    index_file: Annotated[
+        Optional[DownloadFileIndexFile | list[DownloadFileIndexFile]],
+        Field(exclude=True),
+    ] = None
     index_files: Optional[list[MGnifyDownloadFileIndexFile]] = Field(
         None,
         examples=[
@@ -196,8 +199,8 @@ class MGnifyAnalysisDownloadFile(Schema, DownloadFile):
         ],
     )
 
-    url: str = Field(
-        None,
+    url: Optional[str] = Field(
+        None,  # Optional because legacy analyses may not have an external_results_dir
         examples=[
             urljoin(
                 EMG_CONFIG.service_urls.transfer_services_url_root, "annotations.tsv.gz"
