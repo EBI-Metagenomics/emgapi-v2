@@ -69,6 +69,12 @@ class MGnifyStudy(ModelSchema):
 
 
 class MGnifyStudyDetail(MGnifyStudy):
+    # New field: the preferred ENA accession for the study (aka first_accession on the model)
+    first_accession: Optional[str] = Field(
+        None,
+        description="Preferred ENA accession for the study (derived from ENA/INSDC accessions)",
+        examples=["PRJEB12345", "SRP135937"],
+    )
     downloads: List[MGnifyStudyDownloadFile] = Field(..., alias="downloads_as_objects")
     metadata: dict[ENAStudyFields, Any] = Field(
         ...,
@@ -82,6 +88,17 @@ class MGnifyStudyDetail(MGnifyStudy):
         ],
         description="Metadata associated with the study, a partial copy of the ENA Study record.",
     )
+
+    @staticmethod
+    def resolve_first_accession(obj: analyses.models.Study) -> Optional[str]:
+        # Many ENA-derived models expose a computed `first_accession` selecting a preferred accession.
+        # Fall back to the first item in `ena_accessions` if needed.
+        if hasattr(obj, "first_accession") and obj.first_accession:
+            return obj.first_accession
+        try:
+            return obj.ena_accessions[0]
+        except Exception:
+            return None
 
     @staticmethod
     def resolve_downloads(obj: analyses.models.Study) -> List[MGnifyStudyDownloadFile]:
