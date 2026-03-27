@@ -467,6 +467,94 @@ def test_nextflow_trace_etl_flow(sample_orchestrated_job, prefect_harness, tmp_p
 
 
 @pytest.mark.django_db
+def test_nextflow_trace_etl_flow_task_name_filter(prefect_harness, tmp_path):
+    """Test the ETL flow with the task_name_filter argument."""
+    job = OrchestratedClusterJob(
+        id=uuid.uuid4(),
+        cluster_job_id=99999,
+        job_submit_description={
+            "name": "Mixed pipeline job",
+            "script": "srun sleep 1",
+        },
+        flow_run_id=uuid.uuid4(),
+        created_at=datetime(2023, 1, 1, 10, 0, 0),
+        updated_at=datetime(2023, 1, 1, 12, 0, 0),
+        last_known_state="COMPLETED",
+        nextflow_trace={
+            "1": {
+                "%cpu": "95 %",
+                "%mem": "85 %",
+                "peak_rss": "1.2 GB",
+                "peak_vmem": "2.5 GB",
+                "rchar": "123456",
+                "wchar": "654321",
+                "submit": "2023-01-01T10:00:00Z",
+                "duration": "1h 30m 15s",
+                "realtime": "1h 35m 20s",
+                "exit": "0",
+                "status": "COMPLETED",
+                "hash": "abc123",
+                "task_id": 1,
+                "native_id": "12345",
+                "name": "EBIMETAGENOMICS_MIASSEMBLER:MIASSEMBLER:FASTP (SRR111111)",
+            },
+            "2": {
+                "%cpu": "88 %",
+                "%mem": "75 %",
+                "peak_rss": "999 MB",
+                "peak_vmem": "1.8 GB",
+                "rchar": "123456",
+                "wchar": "654321",
+                "submit": "2023-01-01T11:00:00Z",
+                "duration": "2h 15m 30s",
+                "realtime": "2h 20m 45s",
+                "exit": "0",
+                "status": "COMPLETED",
+                "hash": "def456",
+                "task_id": 2,
+                "native_id": "67890",
+                "name": "PIPELINE:AMPLICON:DADA2 (SRR222222)",
+            },
+            "3": {
+                "%cpu": "50 %",
+                "%mem": "60 %",
+                "peak_rss": "500 MB",
+                "peak_vmem": "1 GB",
+                "rchar": "123456",
+                "wchar": "654321",
+                "submit": "2023-01-01T12:00:00Z",
+                "duration": "30m 10s",
+                "realtime": "35m 5s",
+                "exit": "0",
+                "status": "COMPLETED",
+                "hash": "ghi789",
+                "task_id": 3,
+                "native_id": "11111",
+                "name": "EBIMETAGENOMICS_MIASSEMBLER:MIASSEMBLER:MEGAHIT (SRR333333)",
+            },
+        },
+    )
+    job.save()
+
+    # Run with task_name_filter to keep only MIASSEMBLER tasks
+    nextflow_trace_etl_flow(
+        sqlite_db_path=str(tmp_path),
+        task_name_filter="EBIMETAGENOMICS_MIASSEMBLER:",
+        batch_size=1000,
+    )
+
+    db_file = tmp_path / "nf_traces.db"
+    assert db_file.exists()
+
+    with sqlite3.connect(str(db_file)) as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT COUNT(*) FROM nextflow_traces")
+        count = cursor.fetchone()[0]
+        # Only the 2 MIASSEMBLER traces should be in the database
+        assert count == 2
+
+
+@pytest.mark.django_db
 def test_extract_traces_with_failed_jobs(prefect_harness):
     """Test extraction with failed jobs."""
     # Create a failed job
