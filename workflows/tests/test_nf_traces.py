@@ -440,16 +440,17 @@ def test_schema_validation(sample_nextflow_trace_data):
 @pytest.mark.django_db
 def test_nextflow_trace_etl_flow(sample_orchestrated_job, prefect_harness, tmp_path):
     """Test the complete ETL flow."""
+    db_file = tmp_path / "nf_traces.db"
+
     # Call the flow
     nextflow_trace_etl_flow(
-        sqlite_db_path=str(tmp_path),
+        sqlite_db_path=str(db_file),
         batch_size=1000,
         only_completed=True,
         exclude_failed=True,
     )
 
     # Check that the SQLite database was created
-    db_file = tmp_path / "nf_traces.db"
     assert db_file.exists()
 
     # Verify the database contains the expected table
@@ -468,7 +469,7 @@ def test_nextflow_trace_etl_flow(sample_orchestrated_job, prefect_harness, tmp_p
 
 @pytest.mark.django_db
 def test_nextflow_trace_etl_flow_task_name_filter(prefect_harness, tmp_path):
-    """Test the ETL flow with the task_name_filter argument."""
+    """Test the ETL flow with the task_name_prefix_filter argument."""
     job = OrchestratedClusterJob(
         id=uuid.uuid4(),
         cluster_job_id=99999,
@@ -536,14 +537,15 @@ def test_nextflow_trace_etl_flow_task_name_filter(prefect_harness, tmp_path):
     )
     job.save()
 
-    # Run with task_name_filter to keep only MIASSEMBLER tasks
+    db_file = tmp_path / "nf_traces.db"
+
+    # Run with task_name_prefix_filter to keep only MIASSEMBLER tasks
     nextflow_trace_etl_flow(
-        sqlite_db_path=str(tmp_path),
-        task_name_filter="EBIMETAGENOMICS_MIASSEMBLER:",
+        sqlite_db_path=str(db_file),
+        task_name_prefix_filter="EBIMETAGENOMICS_MIASSEMBLER:",
         batch_size=1000,
     )
 
-    db_file = tmp_path / "nf_traces.db"
     assert db_file.exists()
 
     with sqlite3.connect(str(db_file)) as conn:
