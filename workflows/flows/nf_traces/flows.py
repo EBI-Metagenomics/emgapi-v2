@@ -58,13 +58,17 @@ def nextflow_trace_etl_flow(
         if "task_name" in raw_records.columns:
             initial_record_count = len(raw_records)
             raw_records = raw_records[
-                raw_records["task_name"].str.startswith(task_name_prefix_filter, na=False)
+                raw_records["task_name"].str.startswith(
+                    task_name_prefix_filter, na=False
+                )
             ].reset_index(drop=True)
             logger.info(
                 f"Pipeline filter '{task_name_prefix_filter}': kept {len(raw_records)}/{initial_record_count} trace rows"
             )
         else:
-            logger.warning("No `task_name` column found in records, so filtering is being ignored.")
+            logger.warning(
+                "No `task_name` column found in records, so filtering is being ignored."
+            )
 
     # Transform
     transformed_data = transform_traces_task(raw_records)
