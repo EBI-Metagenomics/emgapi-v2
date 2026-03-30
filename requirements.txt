@@ -22,7 +22,7 @@ django-unfold==0.67.0  # admin panel
 
 # Serving
 asgiref~=3.10.0
-gunicorn==23.0.0
+gunicorn==25.3.0
 whitenoise==6.11.0
 
 # DB
