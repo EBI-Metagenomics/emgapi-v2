@@ -182,7 +182,11 @@ class ENADerivedModel(VisibilityControlledModel):
         if len(self.ena_accessions):
             pattern = self.PREFERRED_ENA_ACCESSION_REGEX
             return next(
-                (acc for acc in self.ena_accessions if pattern.match(acc)),
+                (
+                    acc
+                    for acc in self.ena_accessions
+                    if acc is not None and pattern.match(acc)
+                ),
                 self.ena_accessions[0],
             )
         return None
