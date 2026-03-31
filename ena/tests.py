@@ -134,3 +134,28 @@ def test_sync_studies_with_ena(raw_reads_mgnify_study, httpx_mock):
         "study_title": "from tromso",
         "study_description": "we looked deep into the fjords",
     }
+
+
+@pytest.mark.django_db(transaction=True)
+def test_reproduce_ena_models_accession_problem():
+    primary_accession = "PRJNA1"
+    secondary_accession = "ERP1"
+
+    # at first, we only know about the primary accession (for any reason)
+    ena_study = ena.models.Study.objects.create(accession="PRJNA1", title="Project 1")
+    ena_study.save()
+
+    # later, we know about the secondary accession because we got both from ENA portal API
+    additional_accessions = [secondary_accession]  # e.g. from ena_utils
+    study_got_later, created_again = (
+        ena.models.Study.objects.update_or_create_by_accession(
+            accession=primary_accession,
+            defaults={
+                "title": "Project 1",
+                "additional_accessions": additional_accessions,
+            },
+        )
+    )
+    assert not created_again
+    assert study_got_later.accession == primary_accession
+    assert study_got_later.additional_accessions == additional_accessions

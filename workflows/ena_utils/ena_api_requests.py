@@ -124,7 +124,7 @@ def get_study_from_ena(accession: str, limit: int = 10) -> ena.models.Study:
     else:
         primary_accession: str = s[ENAStudyFields.STUDY_ACCESSION]
 
-    study, created = ena.models.Study.objects.get_or_create(
+    study, created = ena.models.Study.objects.update_or_create_by_accession(
         accession=primary_accession,
         defaults={
             "title": s[ENAStudyFields.STUDY_TITLE],
