@@ -159,3 +159,14 @@ def test_reproduce_ena_models_accession_problem():
     assert not created_again
     assert study_got_later.accession == primary_accession
     assert study_got_later.additional_accessions == additional_accessions
+    
+    # later again, we know only about the secondary accession
+    study_got_by_secondary, created_by_secondary = (
+        ena.models.Study.objects.update_or_create_by_accession(
+            accession=secondary_accession,
+            defaults={"webin_submitter": "Webin-newlyknown"},
+        )
+    )
+    assert not created_by_secondary
+    assert study_got_by_secondary == study_got_later
+    assert study_got_by_secondary.webin_submitter == "Webin-newlyknown"
