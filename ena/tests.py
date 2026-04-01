@@ -137,7 +137,7 @@ def test_sync_studies_with_ena(raw_reads_mgnify_study, httpx_mock):
 
 
 @pytest.mark.django_db(transaction=True)
-def test_reproduce_ena_models_accession_problem():
+def test_ena_study_accession_lookups_and_updating():
     primary_accession = "PRJNA1"
     secondary_accession = "ERP1"
 
