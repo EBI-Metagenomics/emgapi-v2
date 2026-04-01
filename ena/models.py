@@ -58,7 +58,15 @@ class StudyManager(models.Manager):
         additional_accessions = defaults.pop("additional_accessions", [])
 
         try:
-            obj = self.get_queryset().get(accession=accession)
+            qs = self.get_queryset().filter(
+                models.Q(accession=accession)
+                | models.Q(additional_accessions__icontains=accession)
+            )
+            if qs.count() > 1:
+                raise self.model.MultipleObjectsReturned()
+            elif not qs.exists():
+                raise self.model.DoesNotExist()
+            obj = qs.first()
             changed = False
             for key, value in defaults.items():
                 if getattr(obj, key) != value:
