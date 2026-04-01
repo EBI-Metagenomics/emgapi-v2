@@ -159,7 +159,7 @@ def test_ena_study_accession_lookups_and_updating():
     assert not created_again
     assert study_got_later.accession == primary_accession
     assert study_got_later.additional_accessions == additional_accessions
-    
+
     # later again, we know only about the secondary accession
     study_got_by_secondary, created_by_secondary = (
         ena.models.Study.objects.update_or_create_by_accession(
