@@ -44,6 +44,11 @@ SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "insecure-dev-key")
 
 DEBUG = os.getenv("DJANGO_DEBUG", False)
 
+sentry_sdk.init(
+    dsn=os.getenv("SENTRY_DSN"),
+    send_default_pii=True,
+)
+
 
 def show_toolbar(request):
     return False
