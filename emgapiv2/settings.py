@@ -24,6 +24,7 @@ warnings.filterwarnings(
     category=UserWarning,
 )
 
+import sentry_sdk
 import dj_database_url
 from django.templatetags.static import static
 from django.urls import reverse_lazy
@@ -42,6 +43,11 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "insecure-dev-key")
 
 DEBUG = os.getenv("DJANGO_DEBUG", False)
+
+sentry_sdk.init(
+    dsn=os.getenv("SENTRY_DSN"),
+    send_default_pii=True,
+)
 
 
 def show_toolbar(request):
