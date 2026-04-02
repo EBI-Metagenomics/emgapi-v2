@@ -282,7 +282,7 @@ class AssemblyAnalysisBatchStatusCounts(BaseModel):
     virify: PipelineStatusCounts = Field(default_factory=PipelineStatusCounts)
     map: PipelineStatusCounts = Field(default_factory=PipelineStatusCounts)
 
-    def get_pipeline(self, pipeline: AssemblyAnalysisPipeline) -> PipelineStatusCounts:
+    def get_for_pipeline(self, pipeline: AssemblyAnalysisPipeline) -> PipelineStatusCounts:
         """
         Get status counts for a specific pipeline using the enum.
 
