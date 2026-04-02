@@ -345,7 +345,7 @@ class EMGConfig(BaseSettings):
     europe_pmc: EuropePMCConfig = EuropePMCConfig()
     genomes: GenomeConfig = GenomeConfig()
     darwin_core_archive: DarwinCoreArchiveConfig = DarwinCoreArchiveConfig()
-    sentry_dsn: str = None
+    sentry_dsn: str = ""
 
     model_config = SettingsConfigDict(
         env_prefix="emg_",
