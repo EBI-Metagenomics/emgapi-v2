@@ -70,6 +70,12 @@ class MGnifyStudy(ModelSchema):
 
 
 class MGnifyStudyDetail(MGnifyStudy):
+    # New field: the preferred ENA accession for the study (aka first_accession on the model)
+    first_accession: Optional[str] = Field(
+        None,
+        description="Preferred ENA accession for the study (derived from ENA/INSDC accessions)",
+        examples=["ERP123459", "SRP135937"],
+    )
     downloads: List[MGnifyStudyDownloadFile] = Field(..., alias="downloads_as_objects")
     metadata: dict[ENAStudyFields, Any] = Field(
         ...,

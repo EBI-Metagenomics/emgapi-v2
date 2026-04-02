@@ -20,6 +20,7 @@ from workflows.flows.nf_traces.tasks import (
 )
 def nextflow_trace_etl_flow(
     sqlite_db_path: str,
+    task_name_prefix_filter: Optional[str] = None,
     batch_size: int = 1000,
     min_created_at: Optional[datetime] = None,
     max_created_at: Optional[datetime] = None,
@@ -32,7 +33,9 @@ def nextflow_trace_etl_flow(
     This flow orchestrates the extraction and transformation of Nextflow trace data
     from OrchestratedClusterJob models.
 
-    :param sqlite_db_path: Path to the SQLite database where the transformed data will be stored
+    :param sqlite_db_path: Path to the SQLite database file where the transformed data will be stored
+    :param task_name_prefix_filter: Only include trace rows whose task_name starts with this prefix,
+        e.g. ``"MIASSEMBLER:"`` to keep only MIASSEMBLER tasks
     :param batch_size: Number of database records to process at once
     :param min_created_at: Only process jobs created after this datetime
     :param max_created_at: Only process jobs created before this datetime
@@ -50,11 +53,28 @@ def nextflow_trace_etl_flow(
         exclude_failed=exclude_failed,
     )
 
+    # Filter by pipeline prefix if requested
+    if task_name_prefix_filter and not raw_records.empty:
+        if "task_name" in raw_records.columns:
+            initial_record_count = len(raw_records)
+            raw_records = raw_records[
+                raw_records["task_name"].str.startswith(
+                    task_name_prefix_filter, na=False
+                )
+            ].reset_index(drop=True)
+            logger.info(
+                f"Pipeline filter '{task_name_prefix_filter}': kept {len(raw_records)}/{initial_record_count} trace rows"
+            )
+        else:
+            logger.warning(
+                "No `task_name` column found in records, so filtering is being ignored."
+            )
+
     # Transform
     transformed_data = transform_traces_task(raw_records)
 
     # Store in an SQLlite db for now
-    with sqlite3.connect(f"{sqlite_db_path}/nf_traces.db") as sqlite_conn:
+    with sqlite3.connect(sqlite_db_path) as sqlite_conn:
         transformed_data.to_sql("nextflow_traces", sqlite_conn, if_exists="replace")
 
     # Generate final summary
@@ -64,12 +84,11 @@ def nextflow_trace_etl_flow(
 ## Nextflow trace extraction and transformation pipeline results
 
 ## SQLite database with traces
-SQLite db path: {sqlite_db_path}/nf_traces.db
+SQLite db path: {sqlite_db_path}
 
 ## Summary:
 
 - Total records: {summary['total_records']}
-- Pipelines: {list(summary['pipelines'].keys())}
 """
 
     create_markdown_artifact(
@@ -79,5 +98,5 @@ SQLite db path: {sqlite_db_path}/nf_traces.db
     )
 
     logger.info(
-        f"SQLite database with the traces: {len(transformed_data)} records stored in {sqlite_db_path}/nf_traces.db"
+        f"SQLite database with the traces: {len(transformed_data)} records stored in {sqlite_db_path}"
     )
