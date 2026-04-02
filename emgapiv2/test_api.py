@@ -504,7 +504,7 @@ def test_api_assembly_additional_contained_genomes_with_data(
 
 
 @pytest.mark.django_db
-def test_runs_list_endpoint(ninja_api_client, raw_read_run):
+def test_runs_list_endpoint(ninja_api_client, raw_read_run, private_run):
     # raw_read_run creates 3 run objects
 
     items = call_endpoint_and_get_data(
@@ -515,6 +515,9 @@ def test_runs_list_endpoint(ninja_api_client, raw_read_run):
 
     for run in items:
         assert "accession" in run
+        assert (
+            run["accession"] not in private_run.ena_accessions
+        ), "Private runs should not be visible in the list endpoint"
         assert "instrument_model" in run
         assert "instrument_platform" in run
         assert "experiment_type" in run
@@ -543,7 +546,19 @@ def test_runs_detail_endpoint(ninja_api_client, raw_read_run):
 
 
 @pytest.mark.django_db
-def test_runs_detail_not_found(ninja_api_client):
+def test_runs_detail_private(ninja_api_client, private_run):
+    private_accession = private_run.ena_accessions[0]
+    response = ninja_api_client.get(f"/runs/{private_accession}")
+    assert (
+        response.status_code == 404
+    ), "Private runs should not be visible in the detail endpoint"
+    assert (
+        "not found" in response.json()["detail"].lower()
+    ), "Response should indicate not found"
+
+
+@pytest.mark.django_db
+def test_runs_detail_nonexistent(ninja_api_client):
     response = ninja_api_client.get("/runs/DOESNOTEXIST")
     assert response.status_code == 404
     assert "not found" in response.json()["detail"].lower()
@@ -564,12 +579,20 @@ def test_runs_analyses_list(ninja_api_client, raw_read_run, raw_read_analyses):
 
     assert items[0]["accession"] in [a.accession for a in finished_analyses]
     assert items[0]["experiment_type"] in ["Metagenomic", "Amplicon"]
+    assert "sample" in items[0]
+    assert "study_accession" in items[0]
 
-    for analysis in items:
-        assert "accession" in analysis
-        assert "experiment_type" in analysis
-        assert "sample" in analysis
-        assert "study_accession" in analysis
+
+@pytest.mark.django_db
+def test_runs_analyses_private(ninja_api_client, private_run):
+    private_accession = private_run.ena_accessions[0]
+    response = ninja_api_client.get(f"/runs/{private_accession}/analyses")
+    assert (
+        response.status_code == 404
+    ), "Private runs should not be visible in the detail endpoint"
+    assert (
+        "not found" in response.json()["detail"].lower()
+    ), "Response should indicate not found"
 
 
 @pytest.mark.django_db
