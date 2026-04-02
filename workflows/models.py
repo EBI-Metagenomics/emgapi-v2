@@ -262,6 +262,8 @@ class PipelineStatusCounts(BaseModel):
     completed: int = Field(0, ge=0)
     failed: int = Field(0, ge=0)
 
+    @computed_field
+    @property
     def is_running(self) -> bool:
         """Check if any analyses are currently running."""
         return self.running > 0
