@@ -44,11 +44,6 @@ SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "insecure-dev-key")
 
 DEBUG = os.getenv("DJANGO_DEBUG", False)
 
-sentry_sdk.init(
-    dsn=os.getenv("SENTRY_DSN"),
-    send_default_pii=True,
-)
-
 
 def show_toolbar(request):
     return False
@@ -70,6 +65,12 @@ EMG_CONFIG: EMGConfig = EMGConfig(_env_file=emg_config_env)
 BASE_URL = EMG_CONFIG.service_urls.base_url.lstrip("/").rstrip("/")
 if BASE_URL:
     BASE_URL += "/"
+
+sentry_sdk.init(
+    dsn=EMG_CONFIG.sentry_dsn,
+    send_default_pii=True,
+)
+
 
 # Application definition
 
