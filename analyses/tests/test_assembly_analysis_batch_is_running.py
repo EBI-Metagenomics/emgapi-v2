@@ -12,13 +12,13 @@ from workflows.models import (
 def test_pipeline_status_counts_is_running_true():
     """Test that is_running returns True when there are running analyses."""
     counts = PipelineStatusCounts(running=3)
-    assert counts.is_running() is True
+    assert counts.is_running is True
 
 
 def test_pipeline_status_counts_is_running_false():
     """Test that is_running returns False when no analyses are running."""
     counts = PipelineStatusCounts(running=0, completed=5)
-    assert counts.is_running() is False
+    assert counts.is_running is False
 
 
 def test_batch_status_counts_is_any_running_true():
@@ -26,7 +26,7 @@ def test_batch_status_counts_is_any_running_true():
     status = AssemblyAnalysisBatchStatusCounts(
         asa=PipelineStatusCounts(running=1),
     )
-    assert status.is_any_running() is True
+    assert status.is_any_running is True
 
 
 def test_batch_status_counts_is_any_running_false():
@@ -36,17 +36,17 @@ def test_batch_status_counts_is_any_running_false():
         virify=PipelineStatusCounts(completed=5),
         map=PipelineStatusCounts(completed=5),
     )
-    assert status.is_any_running() is False
+    assert status.is_any_running is False
 
 
-def test_batch_status_counts_is_pipeline_running():
-    """Test that is_pipeline_running correctly distinguishes between running and non-running pipelines."""
+def test_batch_status_counts_includes_pipeline_running():
+    """Test that includes_pipeline_running correctly distinguishes between running and non-running pipelines."""
     status = AssemblyAnalysisBatchStatusCounts(
         asa=PipelineStatusCounts(completed=5),
         virify=PipelineStatusCounts(running=2),
     )
-    assert status.is_pipeline_running(AssemblyAnalysisPipeline.ASA) is False
-    assert status.is_pipeline_running(AssemblyAnalysisPipeline.VIRIFY) is True
+    assert status.includes_pipeline_running(AssemblyAnalysisPipeline.ASA) is False
+    assert status.includes_pipeline_running(AssemblyAnalysisPipeline.VIRIFY) is True
 
 
 @pytest.mark.django_db(transaction=True)

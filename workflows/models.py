@@ -262,7 +262,6 @@ class PipelineStatusCounts(BaseModel):
     completed: int = Field(0, ge=0)
     failed: int = Field(0, ge=0)
 
-    @computed_field
     @property
     def is_running(self) -> bool:
         """Check if any analyses are currently running."""
@@ -282,7 +281,9 @@ class AssemblyAnalysisBatchStatusCounts(BaseModel):
     virify: PipelineStatusCounts = Field(default_factory=PipelineStatusCounts)
     map: PipelineStatusCounts = Field(default_factory=PipelineStatusCounts)
 
-    def get_for_pipeline(self, pipeline: AssemblyAnalysisPipeline) -> PipelineStatusCounts:
+    def get_for_pipeline(
+        self, pipeline: AssemblyAnalysisPipeline
+    ) -> PipelineStatusCounts:
         """
         Get status counts for a specific pipeline using the enum.
 
@@ -291,15 +292,14 @@ class AssemblyAnalysisBatchStatusCounts(BaseModel):
         """
         return getattr(self, pipeline.value, PipelineStatusCounts())
 
+    @property
     def is_any_running(self) -> bool:
         """Check if any pipeline has running analyses."""
-        return (
-            self.asa.is_running() or self.virify.is_running() or self.map.is_running()
-        )
+        return self.asa.is_running or self.virify.is_running or self.map.is_running
 
-    def is_pipeline_running(self, pipeline: AssemblyAnalysisPipeline) -> bool:
-        """Check if a specific pipeline has running analyses."""
-        return self.get_pipeline(pipeline).is_running()
+    def includes_pipeline_running(self, pipeline: AssemblyAnalysisPipeline) -> bool:
+        """Check if a specific pipeline has running analyses based on stored counts."""
+        return self.get_for_pipeline(pipeline).is_running
 
 
 class AssemblyAnalysisPipelineBaseModel(models.Model):
@@ -727,8 +727,8 @@ class AssemblyAnalysisBatch(StudyAnalysisBatch):
             return False
 
         if pipeline_type:
-            return self.pipeline_status_counts.is_pipeline_running(pipeline_type)
-        return self.pipeline_status_counts.is_any_running()
+            return self.pipeline_status_counts.includes_pipeline_running(pipeline_type)
+        return self.pipeline_status_counts.is_any_running
 
     def update_pipeline_status_counts(
         self, pipeline_type: Optional[AssemblyAnalysisPipeline] = None
