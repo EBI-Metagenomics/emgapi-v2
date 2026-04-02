@@ -501,3 +501,119 @@ def test_api_assembly_additional_contained_genomes_with_data(
     assert item["genome"]["accession"] == genome.accession
     assert item["genome"]["catalogue_version"] == genome.catalogue.version
     assert item["run_accession"] == assembly.runs.first().first_accession
+
+
+@pytest.mark.django_db
+def test_runs_list_endpoint(ninja_api_client, raw_read_run, private_run):
+    # raw_read_run creates 3 run objects
+
+    items = call_endpoint_and_get_data(
+        ninja_api_client,
+        "/runs/",
+        count=len(raw_read_run),
+    )
+
+    for run in items:
+        assert "accession" in run
+        assert (
+            run["accession"] not in private_run.ena_accessions
+        ), "Private runs should not be visible in the list endpoint"
+        assert "instrument_model" in run
+        assert "instrument_platform" in run
+        assert "experiment_type" in run
+        assert "sample_accession" in run
+        assert "study_accession" in run
+
+
+@pytest.mark.django_db
+def test_runs_detail_endpoint(ninja_api_client, raw_read_run):
+    run = raw_read_run[0]
+
+    run_detail = call_endpoint_and_get_data(
+        ninja_api_client,
+        f"/runs/{run.first_accession}",
+        getter=_whole_object,
+    )
+
+    assert run_detail["accession"] == run.first_accession
+    assert run_detail["instrument_model"] == run.instrument_model
+    assert run_detail["instrument_platform"] == run.instrument_platform
+    assert run_detail["experiment_type"] == run.get_experiment_type_display()
+    assert run_detail["sample_accession"] == run.sample.ena_sample.accession
+    assert run_detail["study_accession"] == run.study.accession
+    assert isinstance(run_detail["sample"], dict)
+    assert isinstance(run_detail["study"], dict)
+
+
+@pytest.mark.django_db
+def test_runs_detail_private(ninja_api_client, private_run):
+    private_accession = private_run.ena_accessions[0]
+    response = ninja_api_client.get(f"/runs/{private_accession}")
+    assert (
+        response.status_code == 404
+    ), "Private runs should not be visible in the detail endpoint"
+    assert (
+        "not found" in response.json()["detail"].lower()
+    ), "Response should indicate not found"
+
+
+@pytest.mark.django_db
+def test_runs_detail_nonexistent(ninja_api_client):
+    response = ninja_api_client.get("/runs/DOESNOTEXIST")
+    assert response.status_code == 404
+    assert "not found" in response.json()["detail"].lower()
+
+
+@pytest.mark.django_db
+def test_runs_analyses_list(ninja_api_client, raw_read_run, raw_read_analyses):
+
+    finished_analyses = list(filter(lambda a: a.is_ready, raw_read_analyses))
+
+    run = raw_read_run[0]
+
+    items = call_endpoint_and_get_data(
+        ninja_api_client,
+        f"/runs/{run.ena_accessions[0]}/analyses/",
+        count=len(finished_analyses),
+    )
+
+    assert items[0]["accession"] in [a.accession for a in finished_analyses]
+    assert items[0]["experiment_type"] in ["Metagenomic", "Amplicon"]
+    assert "sample" in items[0]
+    assert "study_accession" in items[0]
+
+
+@pytest.mark.django_db
+def test_runs_analyses_private(ninja_api_client, private_run):
+    private_accession = private_run.ena_accessions[0]
+    response = ninja_api_client.get(f"/runs/{private_accession}/analyses/")
+    assert (
+        response.status_code == 404
+    ), "Private runs should not be visible in the detail endpoint"
+    assert (
+        "not found" in response.json()["detail"].lower()
+    ), "Response should indicate not found"
+
+
+@pytest.mark.django_db
+def test_list_sample_runs(ninja_api_client, raw_reads_mgnify_sample, raw_read_run):
+
+    sample: Sample = raw_reads_mgnify_sample[0]
+
+    items: list = call_endpoint_and_get_data(
+        ninja_api_client, f"/samples/{sample.ena_accessions[0]}/runs/", count=1
+    )
+
+    for run in items:
+        assert run["accession"] in [r.first_accession for r in raw_read_run]
+        assert run["instrument_model"] in [r.instrument_model for r in raw_read_run]
+        assert run["instrument_platform"] in [
+            r.instrument_platform for r in raw_read_run
+        ]
+        assert run["experiment_type"] in [
+            r.get_experiment_type_display() for r in raw_read_run
+        ]
+        assert run["sample_accession"] in [
+            r.sample.ena_sample.accession for r in raw_read_run
+        ]
+        assert run["study_accession"] in [r.study.accession for r in raw_read_run]
