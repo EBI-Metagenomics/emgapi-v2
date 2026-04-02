@@ -47,6 +47,49 @@ class StudyManager(models.Manager):
             )
         return ena_study
 
+    def update_or_create_by_accession(
+        self, accession: str, defaults: dict | None = None, **kwargs
+    ) -> tuple["Study", bool]:
+        """
+        Like django update_or_create, but also ensures additional_accessions are updated.
+        Looks up by primary accession key. Applies all defaults (including additional_accessions) on both create and update.
+        """
+        defaults = defaults or {}
+        additional_accessions = defaults.pop("additional_accessions", [])
+
+        try:
+            qs = self.get_queryset().filter(
+                models.Q(accession=accession)
+                | models.Q(additional_accessions__icontains=accession)
+            )
+            if qs.count() > 1:
+                raise self.model.MultipleObjectsReturned()
+            elif not qs.exists():
+                raise self.model.DoesNotExist()
+            obj = qs.first()
+            changed = False
+            for key, value in defaults.items():
+                if getattr(obj, key) != value:
+                    setattr(obj, key, value)
+                    changed = True
+            existing = set(obj.additional_accessions or [])
+            new_additional = existing | set(additional_accessions)
+            if new_additional != existing:
+                obj.additional_accessions = list(new_additional)
+                changed = True
+            if changed:
+                obj.save()
+            return obj, False
+        except ObjectDoesNotExist:
+            obj = self.model(
+                accession=accession,
+                additional_accessions=additional_accessions,
+                **defaults,
+                **kwargs,
+            )
+            obj.save()
+            return obj, True
+
 
 class Study(ENAModel):
     title = models.TextField()
