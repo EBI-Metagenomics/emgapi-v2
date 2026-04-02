@@ -182,11 +182,7 @@ class ENADerivedModel(VisibilityControlledModel):
         if len(self.ena_accessions):
             pattern = self.PREFERRED_ENA_ACCESSION_REGEX
             return next(
-                (
-                    acc
-                    for acc in self.ena_accessions
-                    if acc is not None and pattern.match(acc)
-                ),
+                (acc for acc in self.ena_accessions if pattern.match(acc)),
                 self.ena_accessions[0],
             )
         return None
@@ -217,7 +213,8 @@ class ENADerivedModel(VisibilityControlledModel):
             if related_additional_accessions:
                 try:
                     for accession in list(related_additional_accessions):
-                        all_accessions.append(accession)
+                        if accession:
+                            all_accessions.append(accession)
                 except ValueError:
                     pass
         self.ena_accessions = list(set(all_accessions))
