@@ -53,7 +53,7 @@ def youngest_mtime_in_dir(
     return youngest_age
 
 
-@task(name="Collect old workdir candidates")
+@task(name="Collect old workdir candidates", persist_result=True)
 def collect_old_workdir_candidates(
     path: str,
     min_age_days: int,
