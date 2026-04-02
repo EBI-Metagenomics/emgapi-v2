@@ -586,7 +586,7 @@ def test_runs_analyses_list(ninja_api_client, raw_read_run, raw_read_analyses):
 @pytest.mark.django_db
 def test_runs_analyses_private(ninja_api_client, private_run):
     private_accession = private_run.ena_accessions[0]
-    response = ninja_api_client.get(f"/runs/{private_accession}/analyses")
+    response = ninja_api_client.get(f"/runs/{private_accession}/analyses/")
     assert (
         response.status_code == 404
     ), "Private runs should not be visible in the detail endpoint"
