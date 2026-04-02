@@ -1,4 +1,5 @@
 from emgapiv2.api.schema_utils import (
+    make_child_link,
     make_links_section,
     make_related_detail_link,
 )
@@ -41,13 +42,26 @@ class AnalysedRunController(UnauthorisedIsUnfoundController):
         description="List all analysed runs in the MGnify database.",
         operation_id="list_analysed_runs",
         openapi_extra=make_links_section(
-            make_related_detail_link(
-                related_detail_operation_id="get_mgnify_analysis",
-                self_object_name="run",
-                related_object_name="analysis",
-                related_id_in_response="accession",
-                from_list_to_detail=True,
-            )
+            {
+                **make_related_detail_link(
+                    related_detail_operation_id="get_analysed_run",
+                    self_object_name="run",
+                    related_object_name="run",
+                    related_id_in_response="accession",
+                ),
+                **make_related_detail_link(
+                    related_detail_operation_id="get_mgnify_sample",
+                    self_object_name="run",
+                    related_object_name="sample",
+                    related_id_in_response="sample_accession",
+                ),
+                **make_related_detail_link(
+                    related_detail_operation_id="get_mgnify_study",
+                    self_object_name="run",
+                    related_object_name="study",
+                    related_id_in_response="study_accession",
+                ),
+            }
         ),
         auth=[WebinJWTAuth(), DjangoSuperUserAuth(), NoAuth()],
         permissions=[
@@ -75,29 +89,45 @@ class AnalysedRunController(UnauthorisedIsUnfoundController):
         summary="Get the detail of a single analysed run",
         description="Get the detail of a single analysed run in the MGnify database.",
         operation_id="get_analysed_run",
-        # auth=[WebinJWTAuth(), DjangoSuperUserAuth(), NoAuth()],
-        # permissions=[
-        #     perms.IsPublic
-        #     | (perms.IsWebinOwner & perms.IsReady)
-        #     | perms.IsAdminUserWithObjectPerms
-        # ],
+        openapi_extra=make_links_section(
+            {
+                **make_related_detail_link(
+                    related_detail_operation_id="get_mgnify_sample",
+                    self_object_name="run",
+                    related_object_name="sample",
+                    related_id_in_response="sample_accession",
+                ),
+                **make_related_detail_link(
+                    related_detail_operation_id="get_mgnify_study",
+                    self_object_name="run",
+                    related_object_name="study",
+                    related_id_in_response="study_accession",
+                ),
+                **make_child_link(
+                    operation_id="list_runs_analyses",
+                    child_name="analyses",
+                    self_object_name="run",
+                    description="Analyses performed on this run",
+                ),
+            }
+        ),
+        auth=[WebinJWTAuth(), DjangoSuperUserAuth(), NoAuth()],
+        permissions=[
+            perms.IsPublic
+            | (perms.IsWebinOwner & perms.IsReady)
+            | perms.IsAdminUserWithObjectPerms
+        ],
     )
     def get_analysed_run(self, accession: str):
         try:
-            # run = analyses.models.Run.objects.get_by_accession(accession)
-            run = self.get_object_or_exception(
-                analyses.models.Run.objects.select_related(
-                    "sample",
-                    "sample__ena_sample",
-                    "study",
-                ),
-                ena_accessions__contains=[accession],
-            )
+            run = analyses.models.Run.objects.get_by_accession(accession)
         except (
             analyses.models.Run.DoesNotExist,
             analyses.models.Run.MultipleObjectsReturned,
         ):
             raise NotFound(detail=f"Analysed run with accession {accession} not found.")
+        # raise not found if user doesn't have permission to see
+        self.check_object_permissions(run)
         return run
 
     @http_get(
@@ -123,9 +153,13 @@ class AnalysedRunController(UnauthorisedIsUnfoundController):
     )
     @paginate()
     def list_runs_analyses(self, accession: str):
-        # run = analyses.models.Run.objects.get_by_accession(accession)
         try:
             run = analyses.models.Run.objects.get_by_accession(accession)
-        except (analyses.models.Run.DoesNotExist,):
+        except (
+            analyses.models.Run.DoesNotExist,
+            analyses.models.Run.MultipleObjectsReturned,
+        ):
             raise NotFound(detail=f"Analysed run with accession {accession} not found.")
+        # raise not found if user doesn't have permission to see
+        self.check_object_permissions(run)
         return run.analyses.filter(is_ready=True)
