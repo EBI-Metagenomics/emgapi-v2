@@ -3,7 +3,7 @@ from datetime import timedelta
 from pathlib import Path
 
 from django.utils.text import slugify
-from django.db import close_old_connections
+from django.db import close_old_connections, transaction
 from prefect import flow, get_run_logger
 from prefect.runtime import flow_run
 
@@ -73,12 +73,23 @@ def run_assembly_batch(
     """
     logger = get_run_logger()
 
-    assembly_analysis_batch = AssemblyAnalysisBatch.objects.get(
-        id=assembly_analyses_batch_id
-    )
+    # Lock the batch row to prevent two concurrent flows from both passing
+    # the is_running() check before either writes its flow_run_id.
+    with transaction.atomic():
+        assembly_analysis_batch = AssemblyAnalysisBatch.objects.select_for_update().get(
+            id=assembly_analyses_batch_id
+        )
 
-    # Store Prefect flow run ID, this will be persisted in the db later in the code
-    assembly_analysis_batch.asa_flow_run_id = flow_run.id
+        if assembly_analysis_batch.is_running():
+            # TODO: add reverse URL to study-assembly-analysis-status-summary admin page
+            logger.warning(
+                f"Batch {assembly_analyses_batch_id} is already being processed. "
+                f"Current flow will exit to avoid duplicate processing."
+            )
+            return
+
+        assembly_analysis_batch.asa_flow_run_id = flow_run.id
+        assembly_analysis_batch.save()
 
     # Each batch is used to keep track of the pipelines executed.
     assembly_analysis_batch.set_pipeline_version(

@@ -262,6 +262,10 @@ class PipelineStatusCounts(BaseModel):
     completed: int = Field(0, ge=0)
     failed: int = Field(0, ge=0)
 
+    def is_running(self) -> bool:
+        """Check if any analyses are currently running."""
+        return self.running > 0
+
 
 class AssemblyAnalysisBatchStatusCounts(BaseModel):
     """
@@ -275,6 +279,25 @@ class AssemblyAnalysisBatchStatusCounts(BaseModel):
     asa: PipelineStatusCounts = Field(default_factory=PipelineStatusCounts)
     virify: PipelineStatusCounts = Field(default_factory=PipelineStatusCounts)
     map: PipelineStatusCounts = Field(default_factory=PipelineStatusCounts)
+
+    def get_pipeline(self, pipeline: AssemblyAnalysisPipeline) -> PipelineStatusCounts:
+        """
+        Get status counts for a specific pipeline using the enum.
+
+        :param pipeline: The pipeline enum value
+        :return: PipelineStatusCounts for the specified pipeline
+        """
+        return getattr(self, pipeline.value, PipelineStatusCounts())
+
+    def is_any_running(self) -> bool:
+        """Check if any pipeline has running analyses."""
+        return (
+            self.asa.is_running() or self.virify.is_running() or self.map.is_running()
+        )
+
+    def is_pipeline_running(self, pipeline: AssemblyAnalysisPipeline) -> bool:
+        """Check if a specific pipeline has running analyses."""
+        return self.get_pipeline(pipeline).is_running()
 
 
 class AssemblyAnalysisPipelineBaseModel(models.Model):
@@ -684,6 +707,26 @@ class AssemblyAnalysisBatch(StudyAnalysisBatch):
         """
         self.total_analyses = self.analyses.count()
         self.save()
+
+    def is_running(
+        self, pipeline_type: Optional[AssemblyAnalysisPipeline] = None
+    ) -> bool:
+        """
+        Check if the batch has running analyses for a specific pipeline or any pipeline.
+
+        Note: this relies on pipeline_status_counts which is a cached field. If a previous
+        flow crashed without updating counts back to 0, this could return a stale "running"
+        state. TODO: add a check against actual Prefect flow run state to detect stale entries.
+
+        :param pipeline_type: The pipeline to check (ASA, VIRify, MAP). If None, checks all pipelines.
+        :return: True if there are running analyses, False otherwise
+        """
+        if not self.pipeline_status_counts:
+            return False
+
+        if pipeline_type:
+            return self.pipeline_status_counts.is_pipeline_running(pipeline_type)
+        return self.pipeline_status_counts.is_any_running()
 
     def update_pipeline_status_counts(
         self, pipeline_type: Optional[AssemblyAnalysisPipeline] = None
