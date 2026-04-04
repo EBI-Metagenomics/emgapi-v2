@@ -2,7 +2,7 @@ import uuid
 from datetime import timedelta
 from pathlib import Path
 
-from django.db import close_old_connections, transaction
+from django.db import transaction
 from prefect import flow, get_run_logger
 from prefect.runtime import flow_run
 
@@ -198,9 +198,7 @@ def run_virify_batch(assembly_analyses_batch_id: uuid.UUID):
             working_dir=virify_outdir,
             resubmit_policy=ResubmitAlwaysPolicy,  # We let Nextflow handle resubmissions
         )
-        close_old_connections()
     except Exception as e:
-        close_old_connections()
         error_type = (
             "VIRIfy pipeline failed"
             if isinstance(e, ClusterJobFailedException)

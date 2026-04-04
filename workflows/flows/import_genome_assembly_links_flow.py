@@ -237,7 +237,6 @@ def create_links(
     skipped_count += len(objects) - len(valid_rows)
 
     for batch in chunker(valid_rows, chunk_size):
-        # close_old_connections()
         key_to_record = {}
         genome_ids = set()
         assembly_ids = set()
