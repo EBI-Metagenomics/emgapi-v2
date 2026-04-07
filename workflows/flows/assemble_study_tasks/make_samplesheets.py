@@ -138,6 +138,7 @@ def make_samplesheet(
             # Reference doc -> https://github.com/EBI-Metagenomics/miassembler?tab=readme-ov-file#usage
             "human_reference": "",
             "phix_reference": "",
+            "lambdaphage_reference": "",
         },
         bludgeon=True,
     )
