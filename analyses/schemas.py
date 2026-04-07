@@ -17,6 +17,7 @@ from analyses.base_models.with_downloads_models import (
     DownloadFile,
     DownloadFileIndexFile,
 )
+from analyses.base_models.with_experiment_type_models import WithExperimentTypeModel
 from emgapiv2.api.storage import private_storage
 from emgapiv2.api.third_party_metadata import EuropePmcAnnotationResponse
 from emgapiv2.enum_utils import FutureStrEnum
@@ -301,14 +302,59 @@ class MGnifyStudyDownloadFile(MGnifyAnalysisDownloadFile):
     url: Optional[str] = None
 
 
-class AnalysedRun(ModelSchema):
+class ExperimentTypeMixin(Schema):
+    experiment_type: str = Field(
+        ...,
+        examples=[
+            label for _, label in WithExperimentTypeModel.ExperimentTypes.choices
+        ],
+        description=(
+            "Experiment type refers to the type of "
+            "sequencing data that was analysed, "
+            "e.g. amplicon reads or a metagenome assembly"
+        ),
+        alias="get_experiment_type_display",
+    )
+
+
+class AnalysedRun(ModelSchema, ExperimentTypeMixin):
     accession: str = Field(..., alias="first_accession", examples=["ERR0000001"])
+    sample_accession: Optional[str] = Field(
+        None,
+        description="ENA accession of the sample associated with this run",
+        examples=["ERS000001", "SAMEA000000001"],
+    )
+    study_accession: Optional[str] = Field(
+        None,
+        description="ENA accession of the study associated with this run",
+        examples=["SRP135937", "PRJNA438545"],
+    )
     instrument_model: Optional[str] = Field(..., examples=["Illumina HiSeq 2000"])
     instrument_platform: Optional[str] = Field(..., examples=["Illumina"])
 
+    @staticmethod
+    def resolve_sample_accession(obj: analyses.models.Run) -> Optional[str]:
+        return (
+            obj.sample.ena_sample.accession
+            if obj.sample and obj.sample.ena_sample
+            else None
+        )
+
+    @staticmethod
+    def resolve_study_accession(obj: analyses.models.Run) -> Optional[str]:
+        return obj.study.accession if obj.study else None
+
     class Meta:
         model = analyses.models.Run
-        fields = ["instrument_model", "instrument_platform"]
+        fields = [
+            "instrument_model",
+            "instrument_platform",
+        ]
+
+
+class AnalysedRunDetail(AnalysedRun):
+    sample: Optional[MGnifySample]
+    study: Optional[MGnifyStudy]
 
 
 class Assembly(ModelSchema):
@@ -439,18 +485,10 @@ class AssemblyDetail(Assembly):
         fields = ["updated_at", "metadata", "status"]
 
 
-class MGnifyAnalysis(ModelSchema):
+class MGnifyAnalysis(ExperimentTypeMixin, ModelSchema):
     study_accession: str = Field(..., alias="study_id", examples=["MGYS000000001"])
 
     accession: str = Field(..., examples=["MGYA000000001"])
-    experiment_type: str = Field(
-        ...,
-        examples=[
-            label for _, label in analyses.models.Analysis.ExperimentTypes.choices
-        ],
-        description="Experiment type refers to the type of sequencing data that was analysed, e.g. amplicon reads or a metagenome assembly",
-        alias="get_experiment_type_display",
-    )
     run: Optional[AnalysedRun]
     sample: Optional[MGnifySample]
     assembly: Optional[Assembly]
@@ -458,7 +496,7 @@ class MGnifyAnalysis(ModelSchema):
 
     class Meta:
         model = analyses.models.Analysis
-        fields = ["accession", "experiment_type"]
+        fields = ["accession"]
 
 
 class MGnifyAnalysisDetail(MGnifyAnalysis):
