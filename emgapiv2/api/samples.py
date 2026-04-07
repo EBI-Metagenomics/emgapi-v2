@@ -6,7 +6,12 @@ from ninja_extra.exceptions import NotFound
 from ninja_extra.schemas import NinjaPaginationResponseSchema
 
 import analyses.models
-from analyses.schemas import MGnifySample, MGnifySampleDetail, OrderByFilter
+from analyses.schemas import (
+    AnalysedRun,
+    MGnifySample,
+    MGnifySampleDetail,
+    OrderByFilter,
+)
 from emgapiv2.api import perms
 from emgapiv2.api.auth import WebinJWTAuth, NoAuth, DjangoSuperUserAuth
 from emgapiv2.api.perms import UnauthorisedIsUnfoundController
@@ -79,3 +84,32 @@ class SampleController(UnauthorisedIsUnfoundController):
         qs = order.order_by(qs)
         qs = filters.filter(qs)
         return qs
+
+    @http_get(
+        "/{accession}/runs/",
+        response=NinjaPaginationResponseSchema[AnalysedRun],
+        summary="List ENA Runs associated with this sample",
+        description=(
+            "Samples may be associated with one or more ENA runs. "
+            "ENA runs 'Hold raw read files and sequencing methods'"
+        ),
+        operation_id="list_sample_runs",
+        tags=[ApiSections.SAMPLES, ApiSections.RUNS],
+        openapi_extra=make_links_section(
+            make_related_detail_link(
+                related_detail_operation_id="get_analysed_run",
+                self_object_name="sample",
+                related_object_name="run",
+                related_id_in_response="accession",
+                from_list_to_detail=True,
+            )
+        ),
+        auth=[WebinJWTAuth(), DjangoSuperUserAuth(), NoAuth()],
+        permissions=[
+            perms.IsPublic | perms.IsWebinOwner | perms.IsAdminUserWithObjectPerms
+        ],
+    )
+    @paginate()
+    def list_sample_runs(self, accession: str):
+        sample = analyses.models.Sample.objects.get_by_accession(accession)
+        return sample.runs.all()
