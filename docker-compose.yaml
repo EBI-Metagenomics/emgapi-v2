@@ -84,6 +84,7 @@ services:
       - PREFECT_API_URL=http://prefect-server:4200/api
       - DATABASE_URL=postgres://postgres:postgres@app-database:5432/emg
       - DJANGO_DEBUG=1
+      - DJANGO_SETTINGS_MODULE=emgapiv2.settings_prefect
     profiles: ["prefect", "all"]
     env_file:
       - path: ./secrets-local.env

@@ -3,7 +3,7 @@ from datetime import timedelta
 from pathlib import Path
 
 from django.utils.text import slugify
-from django.db import close_old_connections, transaction
+from django.db import transaction
 from prefect import flow, get_run_logger
 from prefect.runtime import flow_run
 
@@ -203,12 +203,7 @@ def run_assembly_batch(
                 working_dir=assembly_analyses_workspace_dir,
                 resubmit_policy=ResubmitAlwaysPolicy,  # Let Nextflow handle resubmissions
             )
-            # This is required because a flow may need a few days to run, and when that is done, the connection to
-            # psql is going to be closed or dead at least
-            close_old_connections()
         except Exception as e:
-
-            close_old_connections()
 
             error_type = (
                 "ASA pipeline failed"
@@ -237,7 +232,6 @@ def run_assembly_batch(
     ##################
     logger.info("Starting VIRify pipeline")
     run_virify_batch(assembly_analyses_batch_id=assembly_analysis_batch.id)
-    close_old_connections()
 
     ###############
     # === MAP === #
@@ -246,8 +240,6 @@ def run_assembly_batch(
     run_map_batch(
         assembly_analyses_batch_id=assembly_analysis_batch.id,
     )
-    # Just in case the connection was closed because previous steps took a long time
-    close_old_connections()
 
     # At this point, the batch is completed and all analyses are in the DB. #
 
