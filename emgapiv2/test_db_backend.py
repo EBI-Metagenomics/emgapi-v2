@@ -1,6 +1,6 @@
 from unittest.mock import patch
 
-from emgapiv2.db_backend.base import DatabaseWrapper
+from emgapiv2.db_backend.postgresql.base import DatabaseWrapper
 
 
 def make_wrapper():
@@ -48,6 +48,9 @@ def test_ensure_connection_checks_health_even_with_existing_connection():
 
 
 def test_worker_settings_uses_custom_backend_engine():
-    from emgapiv2 import settings_worker
+    from emgapiv2 import settings_prefect
 
-    assert settings_worker.DATABASES["default"]["ENGINE"] == "emgapiv2.db_backend"
+    assert (
+        settings_prefect.DATABASES["default"]["ENGINE"]
+        == "emgapiv2.db_backend.postgresql"
+    )
