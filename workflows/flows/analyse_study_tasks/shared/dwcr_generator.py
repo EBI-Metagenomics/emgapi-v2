@@ -3,7 +3,7 @@ import click
 
 from activate_django_first import EMG_CONFIG
 
-from prefect import flow, task, get_run_logger
+from prefect import get_run_logger
 from analyses.models import Study
 
 from workflows.data_io_utils.file_rules.common_rules import (
@@ -32,10 +32,11 @@ from mgnify_pipelines_toolkit.analysis.shared.dwc_summary_generator import (
     merge_dwcr_summaries,
 )
 
+from workflows.prefect_utils.flows_utils import django_flow, django_task
 from workflows.prefect_utils.dir_context import chdir
 
 
-@flow
+@django_flow()
 def generate_dwc_ready_summary_for_pipeline_run(
     mgnify_study_accession: str,
     pipeline_outdir: Path,
@@ -106,7 +107,7 @@ def generate_dwc_ready_summary_for_pipeline_run(
     return generated_files
 
 
-@flow
+@django_task()
 def merge_dwc_ready_summaries(
     mgnify_study_accession: str,
     cleanup_partials: bool = False,
@@ -189,7 +190,7 @@ def merge_dwc_ready_summaries(
             file.unlink()
 
 
-@task
+@django_task()
 def add_dwcr_summaries_to_downloads(mgnify_study_accession: str):
     logger = get_run_logger()
     study = Study.objects.get(accession=mgnify_study_accession)

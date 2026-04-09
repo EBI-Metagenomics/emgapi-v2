@@ -1,7 +1,6 @@
 from pathlib import Path
 from typing import List
 
-from prefect import flow, task
 
 import analyses.models
 from workflows.data_io_utils.mgnify_v6_utils.amplicon import (
@@ -14,9 +13,10 @@ from workflows.flows.analyse_study_tasks.shared.copy_v6_pipeline_results import 
     copy_v6_pipeline_results,
 )
 from workflows.prefect_utils.analyses_models_helpers import mark_analysis_status
+from workflows.prefect_utils.flows_utils import django_task, django_flow
 
 
-@task
+@django_task()
 def import_completed_analysis(analysis: analyses.models.Analysis):
     analysis.refresh_from_db()
     dir_for_analysis = Path(analysis.results_dir)
@@ -48,7 +48,7 @@ def import_completed_analysis(analysis: analyses.models.Analysis):
     )
 
 
-@flow(log_prints=True)
+@django_flow(log_prints=True)
 def import_completed_analyses(
     amplicon_current_outdir: Path, amplicon_analyses: List[analyses.models.Analysis]
 ):

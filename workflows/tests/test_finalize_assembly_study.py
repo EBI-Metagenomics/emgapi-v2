@@ -28,6 +28,7 @@ def test_finalize_assembly_study_all_complete(
     mock_logger,
     raw_reads_mgnify_study,
     batch,
+    prefect_harness,
 ):
     # Set pipeline version to v6 to match the filter in the flow
     batch.pipeline_versions = [Analysis.PipelineVersions.v6]
@@ -39,7 +40,7 @@ def test_finalize_assembly_study_all_complete(
     mock_load_flow_run.return_value = mock_flow_run
 
     # Execute flow
-    finalize_assembly_study.fn(raw_reads_mgnify_study.accession)
+    finalize_assembly_study(raw_reads_mgnify_study.accession)
 
     # Verify all tasks were called
     mock_merge.assert_called_once_with(
@@ -71,6 +72,7 @@ def test_finalize_assembly_study_still_running(
     mock_logger,
     raw_reads_mgnify_study,
     batch,
+    prefect_harness,
 ):
     # Set pipeline version to v6 to match the filter in the flow
     batch.pipeline_versions = [Analysis.PipelineVersions.v6]
@@ -93,7 +95,7 @@ def test_finalize_assembly_study_still_running(
     mock_load_flow_run.side_effect = side_effect
 
     # Execute flow
-    finalize_assembly_study.fn(raw_reads_mgnify_study.accession)
+    finalize_assembly_study(raw_reads_mgnify_study.accession)
 
     # Verify tasks were NOT called
     mock_merge.assert_not_called()
@@ -120,6 +122,7 @@ def test_finalize_assembly_study_invalid_flow_ids(
     mock_load_flow_run,
     mock_logger,
     raw_reads_mgnify_study,
+    prefect_harness,
 ):
     # Batch with some None and invalid flow IDs
     AssemblyAnalysisBatch.objects.create(
@@ -141,7 +144,7 @@ def test_finalize_assembly_study_invalid_flow_ids(
     mock_load_flow_run.side_effect = side_effect
 
     # Execute flow - should not crash and should proceed if "123" is not running
-    finalize_assembly_study.fn(raw_reads_mgnify_study.accession)
+    finalize_assembly_study(raw_reads_mgnify_study.accession)
 
     # Tasks should be called because none are "running" (None/invalid are skipped)
     mock_merge.assert_called_once()
@@ -167,6 +170,7 @@ def test_finalize_assembly_study_features_update(
     mock_logger,
     assembly_analysis,
     batch,
+    prefect_harness,
 ):
     # Mock all complete
     mock_flow_run = MagicMock()
@@ -184,7 +188,7 @@ def test_finalize_assembly_study_features_update(
     analysis.status[Analysis.AnalysisStates.ANALYSIS_ANNOTATIONS_IMPORTED] = True
     analysis.save()
 
-    finalize_assembly_study.fn(study.accession)
+    finalize_assembly_study(study.accession)
 
     study.refresh_from_db()
     assert study.features.has_v6_analyses is True
@@ -194,6 +198,6 @@ def test_finalize_assembly_study_features_update(
         study=study, pipeline_version=Analysis.PipelineVersions.v6
     ).delete()
 
-    finalize_assembly_study.fn(study.accession)
+    finalize_assembly_study(study.accession)
     study.refresh_from_db()
     assert study.features.has_v6_analyses is False

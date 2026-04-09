@@ -2,7 +2,7 @@ from pathlib import Path
 from textwrap import dedent as _
 from typing import Optional, List
 
-from prefect import flow, get_run_logger, suspend_flow_run
+from prefect import get_run_logger, suspend_flow_run
 from prefect.events import emit_event
 from prefect.input import RunInput
 from prefect.runtime import flow_run, deployment
@@ -49,13 +49,13 @@ from workflows.prefect_utils.analyses_models_helpers import (
 )
 from workflows.flows.analyse_study_tasks.cleanup_pipeline_directories import (
     delete_study_nextflow_workdir,
-    # delete_study_results_dir,
 )
+from workflows.prefect_utils.flows_utils import django_flow
 
 _AMPLICON = "AMPLICON"
 
 
-@flow(
+@django_flow(
     name="Run analysis pipeline-v6 on amplicon study",
     log_prints=True,
     flow_run_name="Analyse amplicon: {study_accession}",

@@ -3,7 +3,7 @@ import uuid
 from pathlib import Path
 
 from django.db.models import QuerySet
-from prefect import task, get_run_logger
+from prefect import get_run_logger
 
 from activate_django_first import EMG_CONFIG
 
@@ -20,9 +20,10 @@ from workflows.nextflow_utils.samplesheets import (
     SamplesheetColumnSource,
 )
 from workflows.prefect_utils.cache_control import context_agnostic_task_input_hash
+from workflows.prefect_utils.flows_utils import django_task
 
 
-@task(cache_key_fn=context_agnostic_task_input_hash)
+@django_task(cache_key_fn=context_agnostic_task_input_hash)
 def make_samplesheet_assembly(
     mgnify_study: analyses.models.Study,
     assembly_analyses: QuerySet,
@@ -79,7 +80,7 @@ def make_samplesheet_assembly(
     return sample_sheet_csv, ss_hash
 
 
-@task
+@django_task()
 def make_samplesheet_for_map(
     assembly_analysis_batch_id: uuid.UUID,
     analysis_batch_job_ids: list[int],

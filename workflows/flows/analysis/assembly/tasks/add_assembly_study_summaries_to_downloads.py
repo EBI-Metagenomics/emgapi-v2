@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from prefect import task, get_run_logger
+from prefect import get_run_logger
 
 import activate_django_first  # noqa
 
@@ -11,9 +11,10 @@ from analyses.base_models.with_downloads_models import (
 )
 from analyses.models import Study
 from workflows.data_io_utils.schemas.assembly import AssemblyStudySummary
+from workflows.prefect_utils.flows_utils import django_task
 
 
-@task
+@django_task()
 def add_assembly_study_summaries_to_downloads(
     mgnify_study_accession: str,
 ) -> int:

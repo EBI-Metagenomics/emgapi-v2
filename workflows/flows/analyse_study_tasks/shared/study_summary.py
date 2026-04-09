@@ -11,7 +11,7 @@ from mgnify_pipelines_toolkit.analysis.assembly import (
 from mgnify_pipelines_toolkit.analysis.rawreads import (
     study_summary_generator as rawreads_study_summary_generator,
 )
-from prefect import flow, get_run_logger, task
+from prefect import get_run_logger
 
 from activate_django_first import EMG_CONFIG
 from analyses.base_models.with_downloads_models import (
@@ -31,6 +31,7 @@ from workflows.ena_utils.ena_accession_matching import (
     INSDC_STUDY_ACCESSION_GLOB,
 )
 from workflows.flows.analysis import AnalysisType
+from workflows.prefect_utils.flows_utils import django_flow, django_task
 from workflows.prefect_utils.dir_context import chdir
 
 STUDY_SUMMARY = "_study_summary"
@@ -50,7 +51,7 @@ PIPELINE_CONFIGS = {
 }
 
 
-@flow
+@django_flow()
 def generate_study_summary_for_pipeline_run(
     mgnify_study_accession: str,
     pipeline_outdir: Path,
@@ -131,7 +132,7 @@ def generate_study_summary_for_pipeline_run(
     return generated_files
 
 
-@flow
+@django_flow()
 def merge_study_summaries(
     mgnify_study_accession: str,
     analysis_type: AnalysisType = AnalysisType.AMPLICON,
@@ -223,7 +224,7 @@ def merge_study_summaries(
             file.unlink()
 
 
-@task
+@django_task()
 def add_study_summaries_to_downloads(
     mgnify_study_accession: str,
     analysis_type: AnalysisType = AnalysisType.AMPLICON,
@@ -338,7 +339,7 @@ def _get_download_file(
         )
 
 
-@flow
+@django_flow()
 def merge_assembly_study_summaries(
     study: Union[Study, str],
     cleanup_partials: bool = False,
@@ -434,7 +435,7 @@ def merge_assembly_study_summaries(
     return generated_files
 
 
-@task
+@django_task()
 def add_rawreads_study_summaries_to_downloads(mgnify_study_accession: str):
     logger = get_run_logger()
     pipeline_config = PIPELINE_CONFIGS[AnalysisType.RAWREADS]

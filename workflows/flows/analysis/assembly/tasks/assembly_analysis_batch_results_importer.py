@@ -2,11 +2,11 @@ import uuid
 from typing import List
 import logging
 
-from prefect import task, get_run_logger
+from prefect import get_run_logger
 
-import django
+import activate_django_first  # noqa
 
-django.setup()
+from workflows.prefect_utils.flows_utils import django_task
 
 from analyses.models import Analysis
 
@@ -76,7 +76,7 @@ def clear_pipeline_downloads(
         analysis.save()
 
 
-@task
+@django_task()
 def assembly_analysis_batch_results_importer(
     assembly_analyses_batch_id: uuid.UUID,
     pipeline_type: AssemblyAnalysisPipeline,

@@ -1,7 +1,7 @@
 import uuid
 from pathlib import Path
 
-from prefect import task, get_run_logger
+from prefect import get_run_logger
 from prefect.deployments import run_deployment
 
 from activate_django_first import EMG_CONFIG
@@ -24,9 +24,10 @@ from workflows.models import (
     AssemblyAnalysisPipeline,
 )
 from workflows.prefect_utils.build_cli_command import cli_command
+from workflows.prefect_utils.flows_utils import django_task
 
 
-@task(
+@django_task(
     name="Copy V6 Pipeline Results",
     task_run_name="Copy V6 Pipeline Results for {analysis_accession}",
 )
@@ -116,7 +117,7 @@ def copy_v6_pipeline_results(analysis_accession: str, timeout: int = 14400):
     analysis.save()
 
 
-@task(name="Copy V6 Study Summaries")
+@django_task(name="Copy V6 Study Summaries")
 def copy_v6_study_summaries(
     study_accession: str,
     analysis_type: AnalysisType = AnalysisType.AMPLICON,
@@ -190,7 +191,7 @@ def copy_v6_study_summaries(
     )
 
 
-@task(
+@django_task(
     name="Copy Assembly Batch Results",
     task_run_name="Copy Assembly Batch Results for batch {batch_id}",
 )

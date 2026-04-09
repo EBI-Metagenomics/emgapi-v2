@@ -3,7 +3,7 @@ from datetime import timedelta
 from pathlib import Path
 
 from django.db import transaction
-from prefect import flow, get_run_logger
+from prefect import get_run_logger
 from prefect.runtime import flow_run
 
 from activate_django_first import EMG_CONFIG
@@ -17,6 +17,7 @@ from workflows.models import (
     AssemblyAnalysisPipelineStatus,
 )
 from workflows.prefect_utils.build_cli_command import cli_command
+from workflows.prefect_utils.flows_utils import django_flow
 from workflows.prefect_utils.slurm_flow import (
     run_cluster_job,
     ClusterJobFailedException,
@@ -30,7 +31,7 @@ from workflows.flows.analyse_study_tasks.cleanup_pipeline_directories import (
 )
 
 
-@flow(
+@django_flow(
     flow_run_name="Run VIRify Batch: {assembly_analyses_batch_id}",
     on_running=[update_batch_status_counts],
     on_completion=[update_batch_status_counts],

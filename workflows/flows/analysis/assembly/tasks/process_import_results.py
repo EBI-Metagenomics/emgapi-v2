@@ -1,5 +1,5 @@
 import uuid
-from prefect import get_run_logger, task
+from prefect import get_run_logger
 
 from activate_django_first import EMG_CONFIG  # noqa
 
@@ -13,9 +13,10 @@ from workflows.models import (
     AssemblyAnalysisPipeline,
     AssemblyAnalysisPipelineStatus,
 )
+from workflows.prefect_utils.flows_utils import django_task
 
 
-@task(
+@django_task(
     retries=2,
     retry_delay_seconds=60,
 )

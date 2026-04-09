@@ -4,7 +4,6 @@ from typing import List, Union, Optional
 
 from django.conf import settings
 from django.utils.text import slugify
-from prefect import flow
 
 from activate_django_first import EMG_CONFIG
 
@@ -33,6 +32,7 @@ from workflows.flows.analyse_study_tasks.shared.study_summary import (
     generate_study_summary_for_pipeline_run,
 )
 from workflows.prefect_utils.build_cli_command import cli_command
+from workflows.prefect_utils.flows_utils import django_flow
 from workflows.prefect_utils.slurm_flow import (
     run_cluster_job,
     ClusterJobFailedException,
@@ -44,7 +44,7 @@ from workflows.flows.analyse_study_tasks.cleanup_pipeline_directories import (
 from workflows.nextflow_utils.samplesheets import queryset_hash
 
 
-@flow(name="Run analysis pipeline-v6 via samplesheet", log_prints=True)
+@django_flow(name="Run analysis pipeline-v6 via samplesheet", log_prints=True)
 def run_amplicon_pipeline_via_samplesheet(
     mgnify_study: analyses.models.Study,
     amplicon_analysis_ids: List[Union[str, int]],

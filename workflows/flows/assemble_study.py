@@ -4,7 +4,7 @@ from typing import Optional, List
 from pathlib import Path
 
 from django.urls import reverse_lazy
-from prefect import flow, get_run_logger, suspend_flow_run
+from prefect import get_run_logger, suspend_flow_run
 from prefect.events import emit_event
 from prefect.input import RunInput
 from prefect.runtime import flow_run, deployment
@@ -41,8 +41,8 @@ from workflows.prefect_utils.analyses_models_helpers import (
 )
 from workflows.flows.analyse_study_tasks.cleanup_pipeline_directories import (
     delete_assemble_study_nextflow_workdir,
-    # delete_study_results_dir,
 )
+from workflows.prefect_utils.flows_utils import django_flow
 
 
 class AssemblerChoices(FutureStrEnum):
@@ -64,7 +64,7 @@ def get_biomes_as_choices():
     return BiomeChoices
 
 
-@flow(
+@django_flow(
     name="Assemble a study",
     flow_run_name="Assemble: {accession}",
 )

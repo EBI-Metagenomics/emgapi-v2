@@ -1,11 +1,12 @@
 from typing import List
 
-from prefect import task, get_run_logger
+from prefect import get_run_logger
 
 import analyses.models
+from workflows.prefect_utils.flows_utils import django_task
 
 
-@task
+@django_task()
 def create_analyses_for_assemblies(
     study_id: int,
     assemblies_accessions: list[str],
