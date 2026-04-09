@@ -16,6 +16,11 @@ class DatabaseWrapper(base.DatabaseWrapper):
     def ensure_connection(self) -> None:
         """
         Guarantee a live connection, closing stale or obsolete connections first.
+
+        Only checks for stale/obsolete connections when one already exists, to avoid
+        a recursion: ``get_autocommit()`` (called inside ``close_if_unusable_or_obsolete``)
+        would otherwise call ``ensure_connection()`` again when no connection is open.
         """
-        self.close_if_unusable_or_obsolete()
+        if self.connection is not None:
+            self.close_if_unusable_or_obsolete()
         super().ensure_connection()
