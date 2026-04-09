@@ -163,7 +163,7 @@ DATABASES = {
     "default": dj_database_url.config(
         conn_max_age=600,
         conn_health_checks=True,
-        default="postgres://postgres:postgres@localhost:5432/emg_test",
+        default="postgres://postgres:postgres@localhost:5432/emg_test?pool=True",
     ),
 }
 
