@@ -2,7 +2,6 @@ import csv
 from pathlib import Path
 from typing import List
 
-from prefect import task
 
 from activate_django_first import EMG_CONFIG
 from workflows.flows.analyse_study_tasks.shared.analysis_states import AnalysisStates
@@ -11,6 +10,7 @@ from workflows.flows.analyse_study_tasks.raw_reads.sanity_check_rawreads_results
     sanity_check_rawreads_results,
 )
 from workflows.prefect_utils.analyses_models_helpers import mark_analysis_status
+from workflows.prefect_utils.flows_utils import django_db_task as task
 
 
 @task()

@@ -1,7 +1,7 @@
 import uuid
 from pathlib import Path
 
-from prefect import task, get_run_logger
+from prefect import get_run_logger
 from prefect.deployments import run_deployment
 
 from activate_django_first import EMG_CONFIG
@@ -24,6 +24,7 @@ from workflows.models import (
     AssemblyAnalysisPipeline,
 )
 from workflows.prefect_utils.build_cli_command import cli_command
+from workflows.prefect_utils.flows_utils import django_db_task as task
 
 
 @task(

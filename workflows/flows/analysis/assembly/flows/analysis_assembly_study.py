@@ -2,7 +2,7 @@ from pathlib import Path
 from textwrap import dedent as _
 from typing import Optional, List
 
-from prefect import flow, get_run_logger, suspend_flow_run
+from prefect import get_run_logger, suspend_flow_run
 from prefect.deployments import run_deployment
 from prefect.input import RunInput
 from pydantic import Field
@@ -25,6 +25,7 @@ from workflows.prefect_utils.analyses_models_helpers import (
     add_study_watchers,
 )
 from workflows.ena_utils.webin_owner_utils import validate_and_set_webin_owner
+from workflows.prefect_utils.flows_utils import django_db_flow as flow
 
 
 @flow(
