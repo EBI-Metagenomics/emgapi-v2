@@ -20,11 +20,13 @@ class TestAddAssemblyStudySummariesToDownloads:
         )
         study.inherit_accessions_from_related_ena_object("ena_study")
 
-        # Create taxonomy and functional summary files
+        # Create taxonomy and functional summary files in the asa_v6 subdirectory
+        summary_dir = tmp_path / "asa_v6"
+        summary_dir.mkdir()
         sources = ["taxonomy", "ko", "pfam"]
         for source in sources:
             (
-                tmp_path / f"{study.first_accession}_{source}_study_summary.tsv"
+                summary_dir / f"{study.first_accession}_{source}_study_summary.tsv"
             ).write_text("data\n")
 
         added_count = add_assembly_study_summaries_to_downloads(study.accession)
@@ -58,9 +60,11 @@ class TestAddAssemblyStudySummariesToDownloads:
         )
         study.inherit_accessions_from_related_ena_object("ena_study")
 
-        (tmp_path / f"{study.first_accession}_taxonomy_study_summary.tsv").write_text(
-            "data\n"
-        )
+        summary_dir = tmp_path / "asa_v6"
+        summary_dir.mkdir()
+        (
+            summary_dir / f"{study.first_accession}_taxonomy_study_summary.tsv"
+        ).write_text("data\n")
 
         # Run twice
         add_assembly_study_summaries_to_downloads(study.accession)
@@ -81,18 +85,20 @@ class TestAddAssemblyStudySummariesToDownloads:
         )
         study.inherit_accessions_from_related_ena_object("ena_study")
 
-        # Create valid and invalid files
-        (tmp_path / f"{study.first_accession}_taxonomy_study_summary.tsv").write_text(
-            "data\n"
-        )
-        (tmp_path / f"{study.first_accession}_invalid_study_summary.tsv").write_text(
+        # Create valid and invalid files in the asa_v6 subdirectory
+        summary_dir = tmp_path / "asa_v6"
+        summary_dir.mkdir()
+        (
+            summary_dir / f"{study.first_accession}_taxonomy_study_summary.tsv"
+        ).write_text("data\n")
+        (summary_dir / f"{study.first_accession}_invalid_study_summary.tsv").write_text(
             "data\n"
         )
 
         added_count = add_assembly_study_summaries_to_downloads(study.accession)
         assert added_count == 1
 
-        # Test an empty directory
+        # Test a directory with no asa_v6 subdir (summary_dir missing)
         study2 = Study.objects.create(
             ena_study=ENAStudy.objects.create(accession="PRJEB99999", title="Empty"),
             title="Empty",
@@ -112,11 +118,13 @@ class TestAddAssemblyStudySummariesToDownloads:
         # Verify starting with no downloads
         assert len(study.downloads) == 0
 
-        # Create summary files
-        (tmp_path / f"{study.first_accession}_taxonomy_study_summary.tsv").write_text(
-            "data\n"
-        )
-        (tmp_path / f"{study.first_accession}_ko_study_summary.tsv").write_text(
+        # Create summary files in the asa_v6 subdirectory
+        summary_dir = tmp_path / "asa_v6"
+        summary_dir.mkdir()
+        (
+            summary_dir / f"{study.first_accession}_taxonomy_study_summary.tsv"
+        ).write_text("data\n")
+        (summary_dir / f"{study.first_accession}_ko_study_summary.tsv").write_text(
             "data\n"
         )
 
