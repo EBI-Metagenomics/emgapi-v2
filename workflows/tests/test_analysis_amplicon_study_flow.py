@@ -230,6 +230,22 @@ def generate_fake_pipeline_all_results(amplicon_run_folder: Path, run):
                 )
             )
 
+    with open(
+        amplicon_run_folder
+        / EMG_CONFIG.amplicon_pipeline.asv_folder
+        / f"{run}_dada2_truncation_points.tsv",
+        "w",
+    ) as fw:
+        fw.write(
+            dedent(
+                """\
+        pair	position
+        forward	150
+        reverse	108
+                """
+            )
+        )
+
     # SEQUENCE CATEGORISATION
     (
         amplicon_run_folder

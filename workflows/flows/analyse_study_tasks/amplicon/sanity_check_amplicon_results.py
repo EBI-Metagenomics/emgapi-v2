@@ -53,6 +53,7 @@ def sanity_check_amplicon_results(
          - ${run_id}_DADA2-SILVA_asv_tax.tsv
          - ${run_id}_DADA2-PR2_asv_tax.tsv
          - ${run_id}_asv_seqs.fasta
+         - ${run_id}_dada2_truncation_points.tsv
          - /${var_region}
          - /${var_region}/${run_id}_${var_region}_asv_read_counts.tsv
         optional:
@@ -199,11 +200,13 @@ def sanity_check_amplicon_results(
         dada2_silva = Path(f"{asv_folder}/{run_id}_DADA2-SILVA_asv_tax.tsv")
         dada2_pr2 = Path(f"{asv_folder}/{run_id}_DADA2-PR2_asv_tax.tsv")
         asv_stats = Path(f"{asv_folder}/{run_id}_asv_seqs.fasta")
+        dada2_trunc_point = Path(f"{asv_folder}/{run_id}_dada2_truncation_points.tsv")
         if not (
             dada2_stats.exists()
             and dada2_pr2.exists()
             and dada2_silva.exists()
             and asv_stats.exists()
+            and dada2_trunc_point.exists()
         ):
             reason = (
                 f"missing required file in {EMG_CONFIG.amplicon_pipeline.asv_folder}"
