@@ -28,3 +28,19 @@ repos:
     rev: 'v0.1.0'
     hooks:
       - id: talisman-no-duplicate-filenames
+  - repo: local
+    hooks:
+      - id: no-bare-prefect-flow-task
+        name: Use django_flow/django_task wrappers instead of bare prefect imports
+        language: pygrep
+        entry: "from prefect import[^\\n]*(\\bflow\\b|\\btask\\b)"
+        types: [python]
+        files: ^workflows/
+        exclude: ^workflows/tests/test_flows_utils\.py$
+      - id: activate-django-before-models
+        name: activate_django_first must precede any models import
+        language: python
+        entry: python scripts/check_activate_django_first.py
+        types: [python]
+        files: ^workflows/
+        exclude: ^workflows/tests/
