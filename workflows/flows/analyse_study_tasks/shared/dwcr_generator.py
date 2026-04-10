@@ -32,11 +32,14 @@ from mgnify_pipelines_toolkit.analysis.shared.dwc_summary_generator import (
     merge_dwcr_summaries,
 )
 
-from workflows.prefect_utils.flows_utils import django_flow, django_task
+from workflows.prefect_utils.flows_utils import (
+    django_db_flow as flow,
+    django_db_task as task,
+)
 from workflows.prefect_utils.dir_context import chdir
 
 
-@django_flow()
+@flow()
 def generate_dwc_ready_summary_for_pipeline_run(
     mgnify_study_accession: str,
     pipeline_outdir: Path,
@@ -107,7 +110,7 @@ def generate_dwc_ready_summary_for_pipeline_run(
     return generated_files
 
 
-@django_task()
+@task()
 def merge_dwc_ready_summaries(
     mgnify_study_accession: str,
     cleanup_partials: bool = False,
@@ -190,7 +193,7 @@ def merge_dwc_ready_summaries(
             file.unlink()
 
 
-@django_task()
+@task()
 def add_dwcr_summaries_to_downloads(mgnify_study_accession: str):
     logger = get_run_logger()
     study = Study.objects.get(accession=mgnify_study_accession)

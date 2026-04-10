@@ -13,7 +13,7 @@ from workflows.nextflow_utils.samplesheets import (
     SamplesheetColumnSource,
 )
 from workflows.prefect_utils.cache_control import context_agnostic_task_input_hash
-from workflows.prefect_utils.flows_utils import django_task
+from workflows.prefect_utils.flows_utils import django_db_task as task
 from workflows.views import encode_samplesheet_path
 
 
@@ -21,7 +21,7 @@ FASTQ_FTPS = analyses.models.Run.CommonMetadataKeys.FASTQ_FTPS
 METADATA__FASTQ_FTPS = f"{analyses.models.Run.metadata.field.name}__{FASTQ_FTPS}"
 
 
-@django_task(
+@task(
     cache_key_fn=context_agnostic_task_input_hash,
     log_prints=True,
 )

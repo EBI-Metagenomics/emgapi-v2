@@ -11,11 +11,11 @@ from activate_django_first import EMG_CONFIG
 from workflows.data_io_utils.file_rules.nodes import Directory
 from workflows.flows.analyse_study_tasks.shared.study_summary import STUDY_SUMMARY_TSV
 from workflows.models import AssemblyAnalysisBatch, AssemblyAnalysisPipeline
-from workflows.prefect_utils.flows_utils import django_task
+from workflows.prefect_utils.flows_utils import django_db_task as task
 from workflows.prefect_utils.dir_context import chdir
 
 
-@django_task()
+@task()
 def generate_assembly_analysis_pipeline_batch_summary(
     assembly_batch_id: uuid.UUID,
 ) -> Union[List[Path], None]:

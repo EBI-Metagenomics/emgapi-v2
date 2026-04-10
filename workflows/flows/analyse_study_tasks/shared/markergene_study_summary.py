@@ -17,14 +17,14 @@ from workflows.data_io_utils.file_rules.common_rules import (
     FileIsNotEmptyRule,
 )
 from workflows.data_io_utils.file_rules.nodes import Directory, File
-from workflows.prefect_utils.flows_utils import django_flow
+from workflows.prefect_utils.flows_utils import django_db_flow as flow
 from workflows.prefect_utils.dir_context import chdir
 
 STUDY_SUMMARY = "study_summary"
 STUDY_SUMMARY_TSV = STUDY_SUMMARY + ".tsv"
 
 
-@django_flow()
+@flow()
 def generate_markergene_summary_for_pipeline_run(
     mgnify_study_accession: str,
     pipeline_outdir: Path | str,

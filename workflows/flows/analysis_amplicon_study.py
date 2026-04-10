@@ -50,12 +50,12 @@ from workflows.prefect_utils.analyses_models_helpers import (
 from workflows.flows.analyse_study_tasks.cleanup_pipeline_directories import (
     delete_study_nextflow_workdir,
 )
-from workflows.prefect_utils.flows_utils import django_flow
+from workflows.prefect_utils.flows_utils import django_db_flow as flow
 
 _AMPLICON = "AMPLICON"
 
 
-@django_flow(
+@flow(
     name="Run analysis pipeline-v6 on amplicon study",
     log_prints=True,
     flow_run_name="Analyse amplicon: {study_accession}",

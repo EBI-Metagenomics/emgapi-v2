@@ -15,10 +15,10 @@ from workflows.flows.analyse_study_tasks.shared.study_summary import (
 from workflows.flows.analysis.assembly.tasks.add_assembly_study_summaries_to_downloads import (
     add_assembly_study_summaries_to_downloads,
 )
-from workflows.prefect_utils.flows_utils import django_flow
+from workflows.prefect_utils.flows_utils import django_db_flow as flow
 
 
-@django_flow(
+@flow(
     name="Generate the study summary and mark the study as completed.",
     flow_run_name="Finalize assembly: {study_accession}",
 )

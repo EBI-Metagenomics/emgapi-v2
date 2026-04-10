@@ -23,7 +23,7 @@ def _close_stale_connections() -> None:
             conn.close_if_unusable_or_obsolete()
 
 
-def django_flow(**flow_kwargs) -> Callable:
+def django_db_flow(**flow_kwargs) -> Callable:
     """
     Drop-in replacement for prefect ``@flow`` that automatically closes stale Django DB
     connections before the flow body runs.
@@ -52,7 +52,7 @@ def django_flow(**flow_kwargs) -> Callable:
     return decorator
 
 
-def django_task(**task_kwargs) -> Callable:
+def django_db_task(**task_kwargs) -> Callable:
     """
     Drop-in replacement for prefect ``@task`` that automatically closes stale Django DB
     connections before the task body runs.

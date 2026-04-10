@@ -13,10 +13,10 @@ from workflows.models import (
     AssemblyAnalysisPipeline,
     AssemblyAnalysisPipelineStatus,
 )
-from workflows.prefect_utils.flows_utils import django_task
+from workflows.prefect_utils.flows_utils import django_db_task as task
 
 
-@django_task(
+@task(
     retries=2,
     retry_delay_seconds=60,
 )

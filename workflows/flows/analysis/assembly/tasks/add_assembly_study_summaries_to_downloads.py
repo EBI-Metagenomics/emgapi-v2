@@ -11,10 +11,10 @@ from analyses.base_models.with_downloads_models import (
 )
 from analyses.models import Study
 from workflows.data_io_utils.schemas.assembly import AssemblyStudySummary
-from workflows.prefect_utils.flows_utils import django_task
+from workflows.prefect_utils.flows_utils import django_db_task as task
 
 
-@django_task()
+@task()
 def add_assembly_study_summaries_to_downloads(
     mgnify_study_accession: str,
 ) -> int:

@@ -9,10 +9,10 @@ from activate_django_first import EMG_CONFIG
 import analyses.models
 from workflows.flows.analyse_study_tasks.shared.analysis_states import AnalysisStates
 from workflows.prefect_utils.analyses_models_helpers import mark_analysis_status
-from workflows.prefect_utils.flows_utils import django_task
+from workflows.prefect_utils.flows_utils import django_db_task as task
 
 
-@django_task(
+@task(
     cache_key_fn=task_input_hash,
 )
 def sanity_check_amplicon_results(

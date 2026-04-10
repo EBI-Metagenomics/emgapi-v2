@@ -3,10 +3,10 @@ from typing import List
 from prefect import get_run_logger
 
 import analyses.models
-from workflows.prefect_utils.flows_utils import django_task
+from workflows.prefect_utils.flows_utils import django_db_task as task
 
 
-@django_task()
+@task()
 def create_analyses_for_assemblies(
     study_id: int,
     assemblies_accessions: list[str],

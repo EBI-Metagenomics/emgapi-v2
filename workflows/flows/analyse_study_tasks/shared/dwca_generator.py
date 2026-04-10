@@ -23,14 +23,14 @@ from workflows.data_io_utils.darwin_core.dwca_models import (
     MetadataProvider,
 )
 from workflows.ena_utils.study import ENAStudyFields
-from workflows.prefect_utils.flows_utils import django_task
+from workflows.prefect_utils.flows_utils import django_db_task as task
 
 
 # from dwca import DarwinCoreArchive
 # from eml.types import ResponsibleParty, IndividualName
 
 
-@django_task()
+@task()
 def convert_dwcr_to_dwca(
     study_accession: str,
     experiment_type: Analysis.ExperimentTypes,

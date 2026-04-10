@@ -20,10 +20,10 @@ from workflows.nextflow_utils.samplesheets import (
     SamplesheetColumnSource,
 )
 from workflows.prefect_utils.cache_control import context_agnostic_task_input_hash
-from workflows.prefect_utils.flows_utils import django_task
+from workflows.prefect_utils.flows_utils import django_db_task as task
 
 
-@django_task(cache_key_fn=context_agnostic_task_input_hash)
+@task(cache_key_fn=context_agnostic_task_input_hash)
 def make_samplesheet_assembly(
     mgnify_study: analyses.models.Study,
     assembly_analyses: QuerySet,
@@ -80,7 +80,7 @@ def make_samplesheet_assembly(
     return sample_sheet_csv, ss_hash
 
 
-@django_task()
+@task()
 def make_samplesheet_for_map(
     assembly_analysis_batch_id: uuid.UUID,
     analysis_batch_job_ids: list[int],

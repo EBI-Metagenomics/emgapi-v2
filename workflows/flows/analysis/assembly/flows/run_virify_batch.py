@@ -17,7 +17,7 @@ from workflows.models import (
     AssemblyAnalysisPipelineStatus,
 )
 from workflows.prefect_utils.build_cli_command import cli_command
-from workflows.prefect_utils.flows_utils import django_flow
+from workflows.prefect_utils.flows_utils import django_db_flow as flow
 from workflows.prefect_utils.slurm_flow import (
     run_cluster_job,
     ClusterJobFailedException,
@@ -31,7 +31,7 @@ from workflows.flows.analyse_study_tasks.cleanup_pipeline_directories import (
 )
 
 
-@django_flow(
+@flow(
     flow_run_name="Run VIRify Batch: {assembly_analyses_batch_id}",
     on_running=[update_batch_status_counts],
     on_completion=[update_batch_status_counts],

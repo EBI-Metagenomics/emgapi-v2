@@ -42,7 +42,7 @@ from workflows.prefect_utils.analyses_models_helpers import (
 from workflows.flows.analyse_study_tasks.cleanup_pipeline_directories import (
     delete_assemble_study_nextflow_workdir,
 )
-from workflows.prefect_utils.flows_utils import django_flow
+from workflows.prefect_utils.flows_utils import django_db_flow as flow
 
 
 class AssemblerChoices(FutureStrEnum):
@@ -64,7 +64,7 @@ def get_biomes_as_choices():
     return BiomeChoices
 
 
-@django_flow(
+@flow(
     name="Assemble a study",
     flow_run_name="Assemble: {accession}",
 )

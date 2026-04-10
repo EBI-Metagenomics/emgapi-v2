@@ -25,10 +25,10 @@ from workflows.prefect_utils.analyses_models_helpers import (
     add_study_watchers,
 )
 from workflows.ena_utils.webin_owner_utils import validate_and_set_webin_owner
-from workflows.prefect_utils.flows_utils import django_flow
+from workflows.prefect_utils.flows_utils import django_db_flow as flow
 
 
-@django_flow(
+@flow(
     name="Run assembly analysis v6 pipeline on a study",
     flow_run_name="Analyse assembly: {study_accession}",
 )

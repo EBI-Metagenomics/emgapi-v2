@@ -6,7 +6,7 @@ from prefect import get_run_logger
 
 import activate_django_first  # noqa
 
-from workflows.prefect_utils.flows_utils import django_task
+from workflows.prefect_utils.flows_utils import django_db_task as task
 
 from analyses.models import Analysis
 
@@ -76,7 +76,7 @@ def clear_pipeline_downloads(
         analysis.save()
 
 
-@django_task()
+@task()
 def assembly_analysis_batch_results_importer(
     assembly_analyses_batch_id: uuid.UUID,
     pipeline_type: AssemblyAnalysisPipeline,

@@ -31,7 +31,10 @@ from workflows.ena_utils.ena_accession_matching import (
     INSDC_STUDY_ACCESSION_GLOB,
 )
 from workflows.flows.analysis import AnalysisType
-from workflows.prefect_utils.flows_utils import django_flow, django_task
+from workflows.prefect_utils.flows_utils import (
+    django_db_flow as flow,
+    django_db_task as task,
+)
 from workflows.prefect_utils.dir_context import chdir
 
 STUDY_SUMMARY = "_study_summary"
@@ -51,7 +54,7 @@ PIPELINE_CONFIGS = {
 }
 
 
-@django_flow()
+@flow()
 def generate_study_summary_for_pipeline_run(
     mgnify_study_accession: str,
     pipeline_outdir: Path,
@@ -132,7 +135,7 @@ def generate_study_summary_for_pipeline_run(
     return generated_files
 
 
-@django_flow()
+@flow()
 def merge_study_summaries(
     mgnify_study_accession: str,
     analysis_type: AnalysisType = AnalysisType.AMPLICON,
@@ -224,7 +227,7 @@ def merge_study_summaries(
             file.unlink()
 
 
-@django_task()
+@task()
 def add_study_summaries_to_downloads(
     mgnify_study_accession: str,
     analysis_type: AnalysisType = AnalysisType.AMPLICON,
@@ -339,7 +342,7 @@ def _get_download_file(
         )
 
 
-@django_flow()
+@flow()
 def merge_assembly_study_summaries(
     study: Union[Study, str],
     cleanup_partials: bool = False,
@@ -435,7 +438,7 @@ def merge_assembly_study_summaries(
     return generated_files
 
 
-@django_task()
+@task()
 def add_rawreads_study_summaries_to_downloads(mgnify_study_accession: str):
     logger = get_run_logger()
     pipeline_config = PIPELINE_CONFIGS[AnalysisType.RAWREADS]

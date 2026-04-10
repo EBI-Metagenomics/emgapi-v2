@@ -10,10 +10,10 @@ from workflows.models import (
     AssemblyAnalysisPipelineStatus,
 )
 from workflows.flows.analyse_study_tasks.shared.analysis_states import AnalysisStates
-from workflows.prefect_utils.flows_utils import django_task
+from workflows.prefect_utils.flows_utils import django_db_task as task
 
 
-@django_task()
+@task()
 def set_post_assembly_analysis_states(
     assembly_current_outdir: Path, assembly_analyses_ids: List[int]
 ):

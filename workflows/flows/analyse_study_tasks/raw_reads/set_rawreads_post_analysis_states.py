@@ -10,10 +10,10 @@ from workflows.flows.analyse_study_tasks.raw_reads.sanity_check_rawreads_results
     sanity_check_rawreads_results,
 )
 from workflows.prefect_utils.analyses_models_helpers import mark_analysis_status
-from workflows.prefect_utils.flows_utils import django_task
+from workflows.prefect_utils.flows_utils import django_db_task as task
 
 
-@django_task()
+@task()
 def set_post_analysis_states(current_outdir: Path, rawreads_analyses: List):
     # The pipeline produces top level end of execution reports, which contain
     # the list of the runs that were completed, and those that were not.

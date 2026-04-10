@@ -26,7 +26,7 @@ from workflows.flows.analyse_study_tasks.shared.study_summary import (
     generate_study_summary_for_pipeline_run,
 )
 from workflows.prefect_utils.build_cli_command import cli_command
-from workflows.prefect_utils.flows_utils import django_flow
+from workflows.prefect_utils.flows_utils import django_db_flow as flow
 from workflows.prefect_utils.slurm_flow import (
     run_cluster_job,
     ClusterJobFailedException,
@@ -38,7 +38,7 @@ from workflows.flows.analyse_study_tasks.cleanup_pipeline_directories import (
 from workflows.nextflow_utils.samplesheets import queryset_hash
 
 
-@django_flow(name="Run raw-reads analysis pipeline-v6 via samplesheet", log_prints=True)
+@flow(name="Run raw-reads analysis pipeline-v6 via samplesheet", log_prints=True)
 def run_rawreads_pipeline_via_samplesheet(
     mgnify_study: analyses.models.Study,
     rawreads_analysis_ids: List[Union[str, int]],

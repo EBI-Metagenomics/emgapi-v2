@@ -1,9 +1,9 @@
 import shutil
 from pathlib import Path
-from prefect import task, get_run_logger
+from prefect import get_run_logger
 from typing import List, Union
 import analyses.models
-from workflows.prefect_utils.flows_utils import django_task
+from workflows.prefect_utils.flows_utils import django_db_task as task
 
 AnalysisStates = analyses.models.Analysis.AnalysisStates
 AssemblyStates = analyses.models.Assembly.AssemblyStates
@@ -22,7 +22,7 @@ def remove_dir(dir: Path):
         logger.warn(f"Deleting directory failed with {e}")
 
 
-@django_task()
+@task()
 def delete_study_nextflow_workdir(
     study_workdir: Path,
     analyses_to_attempt: List[Union[str, int]],
@@ -54,7 +54,7 @@ def delete_study_nextflow_workdir(
         logger.warn(f"Deleting Nextflow work directory failed with {e}")
 
 
-@django_task()
+@task()
 def delete_assemble_study_nextflow_workdir(
     study_workdir: Path,
     assemblies: List[Union[int, str]],

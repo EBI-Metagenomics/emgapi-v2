@@ -14,10 +14,13 @@ from workflows.flows.analyse_study_tasks.shared.copy_v6_pipeline_results import 
     copy_v6_pipeline_results,
 )
 from workflows.prefect_utils.analyses_models_helpers import mark_analysis_status
-from workflows.prefect_utils.flows_utils import django_task, django_flow
+from workflows.prefect_utils.flows_utils import (
+    django_db_task as task,
+    django_db_flow as flow,
+)
 
 
-@django_task()
+@task()
 def import_completed_analysis(analysis: analyses.models.Analysis):
     analysis.refresh_from_db()
     dir_for_analysis = Path(analysis.results_dir)
@@ -51,7 +54,7 @@ def import_completed_analysis(analysis: analyses.models.Analysis):
     )
 
 
-@django_flow()
+@flow()
 def import_completed_analyses(
     rawreads_current_outdir: Path, rawreads_analyses: List[analyses.models.Analysis]
 ):

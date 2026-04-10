@@ -46,12 +46,12 @@ from workflows.flows.analyse_study_tasks.cleanup_pipeline_directories import (
     delete_study_nextflow_workdir,
     # delete_study_results_dir,
 )
-from workflows.prefect_utils.flows_utils import django_flow
+from workflows.prefect_utils.flows_utils import django_db_flow as flow
 
 _METAGENOMIC = "WGS"
 
 
-@django_flow(
+@flow(
     name="Run analysis pipeline-v6 on raw-reads WGS study",
     log_prints=True,
     flow_run_name="Analyse raw-reads: {study_accession}",

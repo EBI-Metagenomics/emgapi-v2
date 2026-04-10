@@ -5,10 +5,10 @@ from django.db.models import Q
 import analyses.base_models.with_experiment_type_models
 import analyses.models
 from workflows.ena_utils.ena_api_requests import ENALibraryStrategyPolicy
-from workflows.prefect_utils.flows_utils import django_task
+from workflows.prefect_utils.flows_utils import django_db_task as task
 
 
-@django_task(
+@task(
     log_prints=True,
 )
 def create_analyses(

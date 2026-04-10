@@ -17,10 +17,10 @@ from workflows.models import (
     AssemblyAnalysisBatch,
     AssemblyAnalysisPipeline,
 )
-from workflows.prefect_utils.flows_utils import django_flow
+from workflows.prefect_utils.flows_utils import django_db_flow as flow
 
 
-@django_flow(
+@flow(
     flow_run_name="Import ASA Batch: {assembly_analyses_batch_id}",
     retries=2,
     retry_delay_seconds=60,

@@ -5,10 +5,10 @@ from django.db import connection, OperationalError
 from prefect import task
 
 from ena.models import Study
-from workflows.prefect_utils.flows_utils import django_task
+from workflows.prefect_utils.flows_utils import django_db_task
 
 
-@django_task()
+@django_db_task()
 def count_ena_studies() -> int:
     return Study.objects.count()
 
