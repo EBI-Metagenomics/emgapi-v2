@@ -2,7 +2,7 @@ from pathlib import Path
 
 from prefect import get_run_logger
 
-import activate_django_first  # noqa
+from activate_django_first import EMG_CONFIG
 
 from analyses.base_models.with_downloads_models import (
     DownloadFile,
@@ -36,18 +36,22 @@ def add_assembly_study_summaries_to_downloads(
         )
         return 0
 
+    pipeline_config = EMG_CONFIG.assembly_analysis_pipeline
+    summary_dir = (
+        study.results_dir_path
+        / f"{pipeline_config.pipeline_name}_{pipeline_config.pipeline_version}"
+    )
+
     # Find all study summary files matching the study accession
     summary_files = list(
-        study.results_dir_path.glob(f"{study.first_accession}*_study_summary.tsv")
+        summary_dir.glob(f"{study.first_accession}*_study_summary.tsv")
     )
 
     if not summary_files:
-        logger.error(f"No study summary files found in {study.results_dir}")
+        logger.error(f"No study summary files found in {summary_dir}")
         return 0
 
-    logger.info(
-        f"Found {len(summary_files)} study summary files in {study.results_dir}"
-    )
+    logger.info(f"Found {len(summary_files)} study summary files in {summary_dir}")
 
     # Clear existing downloads that match the aliases of files we're about to add
     # This makes the task idempotent by removing only what will be re-added
