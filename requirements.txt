@@ -23,7 +23,7 @@ django-unfold==0.67.0  # admin panel
 # Serving
 asgiref~=3.11.1
 gunicorn==25.3.0
-whitenoise==6.11.0
+whitenoise==6.12.0
 
 # DB
 psycopg-pool==3.3.0
