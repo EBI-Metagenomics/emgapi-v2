@@ -3,11 +3,14 @@ from typing import List
 
 from prefect import flow, task
 
+from activate_django_first import EMG_CONFIG
+
 import analyses.models
 from workflows.data_io_utils.mgnify_v6_utils.amplicon import (
     import_qc,
     import_taxonomy,
     import_asv,
+    import_primer_identification,
 )
 from workflows.flows.analyse_study_tasks.shared.analysis_states import AnalysisStates
 from workflows.flows.analyse_study_tasks.shared.copy_v6_pipeline_results import (
@@ -22,6 +25,8 @@ def import_completed_analysis(analysis: analyses.models.Analysis):
     dir_for_analysis = Path(analysis.results_dir)
 
     import_qc(analysis, dir_for_analysis, allow_non_exist=False)
+    # Primer identification outputs are optional; import if present
+    import_primer_identification(analysis, dir_for_analysis, allow_non_exist=True)
 
     t = analyses.models.Analysis.TaxonomySources
     for source in [
