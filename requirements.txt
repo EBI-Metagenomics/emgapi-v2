@@ -38,7 +38,7 @@ prefect-slurm==0.1.5
 # Pydantic
 pydantic<2.12.0  # TODO upgrade once https://github.com/eadwinCode/django-ninja-jwt/pull/151 is released
 pydantic-settings~=2.11.0
-pydantic-xml[lxml]~=2.18.0
+pydantic-xml[lxml]~=2.20.0
 email-validator==2.3.0
 lxml==6.0.2
 
