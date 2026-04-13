@@ -48,6 +48,6 @@ mysql-connector-python
 SQLAlchemy
 
 # Outbound network
-requests~=2.32.4
+requests~=2.33.1
 httpx~=0.28.1
 parse==1.21.1
