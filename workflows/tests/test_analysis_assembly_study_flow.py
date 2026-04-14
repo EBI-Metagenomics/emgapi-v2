@@ -760,7 +760,7 @@ def test_prefect_analyse_assembly_flow(
     taxonomy_downloads = [
         d
         for d in study.downloads_as_objects
-        if d.download_group == "study_summary.taxonomy"
+        if d.download_group == "study_summary.v6.assembly.taxonomy"
     ]
     assert len(taxonomy_downloads) == 1
     assert taxonomy_downloads[0].download_type == DownloadType.TAXONOMIC_ANALYSIS
@@ -780,7 +780,7 @@ def test_prefect_analyse_assembly_flow(
         functional_downloads = [
             d
             for d in study.downloads_as_objects
-            if d.download_group == f"study_summary.{source}"
+            if d.download_group == f"study_summary.v6.assembly.{source}"
         ]
         assert len(functional_downloads) == 1, f"Missing {source} summary"
         assert functional_downloads[0].download_type == DownloadType.FUNCTIONAL_ANALYSIS
@@ -794,7 +794,7 @@ def test_prefect_analyse_assembly_flow(
     study_summary_downloads = [
         d
         for d in study.downloads_as_objects
-        if d.download_group.startswith("study_summary")
+        if d.download_group.startswith("study_summary.v6.assembly")
     ]
     assert len(study_summary_downloads) == 8
 

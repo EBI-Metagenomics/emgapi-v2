@@ -40,7 +40,7 @@ class TestAddAssemblyStudySummariesToDownloads:
         taxonomy_download = next(
             d
             for d in study.downloads_as_objects
-            if d.download_group == "study_summary.taxonomy"
+            if d.download_group == "study_summary.v6.assembly.taxonomy"
         )
         assert taxonomy_download.download_type == DownloadType.TAXONOMIC_ANALYSIS
 
@@ -48,7 +48,7 @@ class TestAddAssemblyStudySummariesToDownloads:
         ko_download = next(
             d
             for d in study.downloads_as_objects
-            if d.download_group == "study_summary.ko"
+            if d.download_group == "study_summary.v6.assembly.ko"
         )
         assert ko_download.download_type == DownloadType.FUNCTIONAL_ANALYSIS
 
