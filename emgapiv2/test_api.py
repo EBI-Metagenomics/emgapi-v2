@@ -620,7 +620,9 @@ def test_list_sample_runs(ninja_api_client, raw_reads_mgnify_sample, raw_read_ru
 
 
 @pytest.mark.django_db
-def test_runs_assemblies_list(ninja_api_client, raw_read_run, mgnify_assemblies_with_ena):
+def test_runs_assemblies_list(
+    ninja_api_client, raw_read_run, mgnify_assemblies_with_ena
+):
     # The first run (SRR6180434) has two assemblies in the fixtures: one metaspades and one megahit
     run = raw_read_run[0]
 
