@@ -318,7 +318,9 @@ class ExperimentTypeMixin(Schema):
 
 
 class AnalysedRun(ModelSchema, ExperimentTypeMixin):
-    accession: str = Field(..., alias="first_accession", examples=["ERR0000001"])
+    accession: Optional[str] = Field(
+        None, alias="first_accession", examples=["ERR0000001"]
+    )
     sample_accession: Optional[str] = Field(
         None,
         description="ENA accession of the sample associated with this run",

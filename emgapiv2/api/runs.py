@@ -10,7 +10,7 @@ from ninja_extra.exceptions import NotFound
 from ninja import FilterSchema
 
 import analyses.models
-from analyses.schemas import AnalysedRun, AnalysedRunDetail, MGnifyAnalysis
+from analyses.schemas import AnalysedRun, AnalysedRunDetail, MGnifyAnalysis, Assembly
 from emgapiv2.api import ApiSections
 from emgapiv2.api import perms
 from emgapiv2.api.auth import WebinJWTAuth, DjangoSuperUserAuth, NoAuth
@@ -27,7 +27,7 @@ class RunListFilters(FilterSchema):
         description="If set, will only show runs with the specified experiment type",
     )
 
-    def filter_has_experiment_type(self, experiment_type: str | None) -> Q:
+    def filter_has_experiment_type(self, experiment_type: Optional[str]) -> Q:
         if not experiment_type:
             return Q()
         return Q(experiment_type=experiment_type)
@@ -109,6 +109,12 @@ class AnalysedRunController(UnauthorisedIsUnfoundController):
                     self_object_name="run",
                     description="Analyses performed on this run",
                 ),
+                **make_child_link(
+                    operation_id="list_runs_assemblies",
+                    child_name="assemblies",
+                    self_object_name="run",
+                    description="Assemblies generated from or including this run",
+                ),
             }
         ),
         auth=[WebinJWTAuth(), DjangoSuperUserAuth(), NoAuth()],
@@ -163,3 +169,39 @@ class AnalysedRunController(UnauthorisedIsUnfoundController):
         # raise not found if user doesn't have permission to see
         self.check_object_permissions(run)
         return run.analyses.filter(is_ready=True)
+
+    @http_get(
+        "/{accession}/assemblies/",
+        response=NinjaPaginationResponseSchema[Assembly],
+        summary="List Assemblies associated with this Run",
+        description="Assemblies generated from or including this run",
+        operation_id="list_runs_assemblies",
+        tags=[ApiSections.RUNS, ApiSections.ASSEMBLIES],
+        openapi_extra=make_links_section(
+            make_related_detail_link(
+                related_detail_operation_id="get_assembly",
+                self_object_name="run",
+                related_object_name="assembly",
+                related_id_in_response="accession",
+                from_list_to_detail=True,
+            )
+        ),
+        auth=[WebinJWTAuth(), DjangoSuperUserAuth(), NoAuth()],
+        permissions=[
+            perms.IsPublic | perms.IsWebinOwner | perms.IsAdminUserWithObjectPerms
+        ],
+    )
+    @paginate()
+    def list_runs_assemblies(self, accession: str):
+        try:
+            run = analyses.models.Run.objects.get_by_accession(accession)
+        except (
+            analyses.models.Run.DoesNotExist,
+            analyses.models.Run.MultipleObjectsReturned,
+        ):
+            raise NotFound(detail=f"Analysed run with accession {accession} not found.")
+        # raise not found if user doesn't have permission to see
+        self.check_object_permissions(run)
+        return run.assemblies.select_related(
+            "reads_study", "assembly_study", "assembler", "sample"
+        )
