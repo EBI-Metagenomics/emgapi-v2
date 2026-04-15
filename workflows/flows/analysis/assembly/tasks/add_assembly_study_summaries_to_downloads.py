@@ -95,7 +95,7 @@ def add_assembly_study_summaries_to_downloads(
                 if is_taxonomy
                 else DownloadType.FUNCTIONAL_ANALYSIS
             ),
-            download_group=f"study_summary.{matched_type.source}",
+            download_group=f"study_summary.v6.assembly.{matched_type.source}",  # hard-coded pipeline in this case
             file_type=DownloadFileType.TSV,
             short_description=matched_type.short_description,
             long_description=matched_type.long_description,
