@@ -31,6 +31,15 @@ from workflows.data_io_utils.file_rules.mgnify_v6_result_rules import (
 )
 from workflows.data_io_utils.file_rules.nodes import Directory, File
 
+
+
+# status ann imported
+# use data mover node for temp
+# check for amplicon analyses that have annotations imported status
+# Traverse results dir and import primer_identification
+
+
+
 EMG_CONFIG = settings.EMG_CONFIG
 
 _TAXONOMY = analyses.models.Analysis.TAXONOMIES
@@ -350,27 +359,9 @@ def import_primer_identification(
     ]
 
     # Create File nodes with existence rules if strict
-    for fp in expected_files:
-        rules = [FileExistsRule, FileIsNotEmptyRule] if not allow_non_exist else []
-        primer_dir.files.append(File(path=fp, rules=rules))
-
-    # Parse TSV into annotations if present
-    tsv_path = primer_dir.path / f"{run}_primer_validation.tsv"
-    if tsv_path.exists():
-        with tsv_path.open("r") as tsv_reader:
-            move_file_pointer_past_comment_lines(
-                tsv_reader, delimiter=CSVDelimiter.TAB, comment_char="#"
-            )
-            try:
-                df = pd.read_csv(tsv_reader, sep=CSVDelimiter.TAB)
-                analysis.annotations[analyses.models.Analysis.PRIMER_IDENTIFICATION] = (
-                    df.to_dict(orient="records")
-                )
-                analysis.save()
-            except pd.errors.EmptyDataError:
-                logging.warning(
-                    f"Primer validation TSV empty at {tsv_path}. Skipping annotations."
-                )
+    # for fp in expected_files:
+    #     rules = [FileExistsRule, FileIsNotEmptyRule] if not allow_non_exist else []
+    #     primer_dir.files.append(File(path=fp, rules=rules))
 
     # Register available files as downloads
     for fp in expected_files:

@@ -25,7 +25,6 @@ def import_completed_analysis(analysis: analyses.models.Analysis):
     dir_for_analysis = Path(analysis.results_dir)
 
     import_qc(analysis, dir_for_analysis, allow_non_exist=False)
-    # Primer identification outputs are optional; import if present
     import_primer_identification(analysis, dir_for_analysis, allow_non_exist=True)
 
     t = analyses.models.Analysis.TaxonomySources
