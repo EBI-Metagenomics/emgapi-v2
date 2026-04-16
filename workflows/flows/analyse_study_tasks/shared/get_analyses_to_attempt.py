@@ -1,11 +1,11 @@
 from typing import List, Union
 
 from django.db.models import Q
-from prefect import task
 
 import analyses.base_models.with_experiment_type_models
 import analyses.models
 from workflows.ena_utils.ena_api_requests import ENALibraryStrategyPolicy
+from workflows.prefect_utils.flows_utils import django_db_task as task
 
 
 @task(

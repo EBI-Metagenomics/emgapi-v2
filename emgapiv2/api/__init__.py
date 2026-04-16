@@ -13,6 +13,7 @@ from .super_studies import SuperStudyController
 from .genomes import GenomeController
 from .assemblies import AssemblyController
 from .token_controller import WebinJwtController
+from .runs import AnalysedRunController
 
 # Avoid circular imports between analyses and genomes apps' schemas by resolving forward references here
 from analyses.schemas import Biome, MGnifyAnalysisDownloadFile  # noqa
@@ -81,6 +82,14 @@ api = NinjaExtraAPI(
                 OpenApiKeywords.DESCRIPTION: dedent(
                     """
                     MGnify samples are based on ENA/BioSamples samples, and represent individual biological samples.
+                    """
+                ),
+            },
+            {
+                OpenApiKeywords.NAME: ApiSections.RUNS,
+                OpenApiKeywords.DESCRIPTION: dedent(
+                    """
+                    Sequencing runs are based on ENA run accessions, and represent individual sequencing runs of a sample.
                     """
                 ),
             },
@@ -167,6 +176,7 @@ api.register_controllers(GenomeController)
 api.register_controllers(AssemblyController)
 api.register_controllers(BiomeController)
 api.register_controllers(MyDataController)
+api.register_controllers(AnalysedRunController)
 
 # Private data auth token provider (Webin JWTs)
 api.register_controllers(WebinJwtController)

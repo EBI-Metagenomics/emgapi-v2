@@ -1,7 +1,6 @@
 from pathlib import Path
 from typing import List
 
-from prefect import flow, task
 
 
 import analyses.models
@@ -16,9 +15,13 @@ from workflows.flows.analyse_study_tasks.shared.copy_v6_pipeline_results import 
     copy_v6_pipeline_results,
 )
 from workflows.prefect_utils.analyses_models_helpers import mark_analysis_status
+from workflows.prefect_utils.flows_utils import (
+    django_db_task as task,
+    django_db_flow as flow,
+)
 
 
-@task
+@task()
 def import_completed_analysis(analysis: analyses.models.Analysis):
     analysis.refresh_from_db()
     dir_for_analysis = Path(analysis.results_dir)

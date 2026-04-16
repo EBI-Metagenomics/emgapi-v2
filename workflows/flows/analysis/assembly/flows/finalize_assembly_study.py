@@ -1,4 +1,4 @@
-from prefect import flow, get_run_logger
+from prefect import get_run_logger
 from prefect.flow_engine import load_flow_run
 
 from activate_django_first import EMG_CONFIG  # noqa
@@ -15,6 +15,7 @@ from workflows.flows.analyse_study_tasks.shared.study_summary import (
 from workflows.flows.analysis.assembly.tasks.add_assembly_study_summaries_to_downloads import (
     add_assembly_study_summaries_to_downloads,
 )
+from workflows.prefect_utils.flows_utils import django_db_flow as flow
 
 
 @flow(

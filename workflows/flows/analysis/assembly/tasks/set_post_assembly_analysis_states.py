@@ -2,7 +2,7 @@ import csv
 from pathlib import Path
 from typing import List
 
-from prefect import task, get_run_logger
+from prefect import get_run_logger
 
 from analyses.models import Analysis
 from workflows.models import (
@@ -10,9 +10,10 @@ from workflows.models import (
     AssemblyAnalysisPipelineStatus,
 )
 from workflows.flows.analyse_study_tasks.shared.analysis_states import AnalysisStates
+from workflows.prefect_utils.flows_utils import django_db_task as task
 
 
-@task
+@task()
 def set_post_assembly_analysis_states(
     assembly_current_outdir: Path, assembly_analyses_ids: List[int]
 ):
