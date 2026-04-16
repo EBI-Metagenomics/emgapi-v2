@@ -3,7 +3,6 @@ from typing import List
 
 from prefect import flow, task
 
-from activate_django_first import EMG_CONFIG
 
 import analyses.models
 from workflows.data_io_utils.mgnify_v6_utils.amplicon import (

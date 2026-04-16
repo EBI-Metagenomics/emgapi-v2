@@ -12,14 +12,18 @@ from workflows.data_io_utils.mgnify_v6_utils.amplicon import (
 
 
 @task
-def import_primer_identification_for_analysis(analysis_id: int) -> tuple[str, bool, Optional[str]]:
+def import_primer_identification_for_analysis(
+    analysis_id: int,
+) -> tuple[str, bool, Optional[str]]:
     """
     Import primer-identification outputs for a single analysis, if possible.
 
     Returns a tuple of (analysis_accession, success, error_message_if_any)
     """
     try:
-        analysis = analyses.models.Analysis.objects.select_related("run").get(id=analysis_id)
+        analysis = analyses.models.Analysis.objects.select_related("run").get(
+            id=analysis_id
+        )
     except analyses.models.Analysis.DoesNotExist:  # type: ignore[attr-defined]
         return (f"<id:{analysis_id}>", False, "Analysis no longer exists")
 
@@ -44,8 +48,13 @@ def import_primer_identification_for_analysis(analysis_id: int) -> tuple[str, bo
         return (analysis.accession, False, str(e))
 
 
-@flow(name="Import primer-identification for ANALYSIS_ANNOTATIONS_IMPORTED amplicon analyses", log_prints=True)
-def import_primer_identification_for_imported_analyses(max_count: Optional[int] = None) -> None:
+@flow(
+    name="Import primer-identification for ANALYSIS_ANNOTATIONS_IMPORTED amplicon analyses",
+    log_prints=True,
+)
+def import_primer_identification_for_imported_analyses(
+    max_count: Optional[int] = None,
+) -> None:
     """
     Find all amplicon analyses with status ANALYSIS_ANNOTATIONS_IMPORTED=True and
     import any available primer-identification outputs for each.
@@ -54,23 +63,31 @@ def import_primer_identification_for_imported_analyses(max_count: Optional[int] 
         max_count: Optional safety cap limiting how many analyses to process in one run.
     """
     # Build queryset: amplicon analyses with annotations already imported
-    q = analyses.models.Analysis.objects.select_related("run").filter(
-        experiment_type=analyses.models.Analysis.ExperimentTypes.AMPLICON,
-    ).filter_by_statuses(
-        [analyses.models.Analysis.AnalysisStates.ANALYSIS_ANNOTATIONS_IMPORTED]
+    q = (
+        analyses.models.Analysis.objects.select_related("run")
+        .filter(
+            experiment_type=analyses.models.Analysis.ExperimentTypes.AMPLICON,
+        )
+        .filter_by_statuses(
+            [analyses.models.Analysis.AnalysisStates.ANALYSIS_ANNOTATIONS_IMPORTED]
+        )
     )
 
     if max_count is not None:
-        q = q.order_by("id")[: max_count]
+        q = q.order_by("id")[:max_count]
 
     count = q.count()
-    print(f"Found {count} amplicon analyses with ANALYSIS_ANNOTATIONS_IMPORTED to check for primer-identification outputs")
+    print(
+        f"Found {count} amplicon analyses with ANALYSIS_ANNOTATIONS_IMPORTED to check for primer-identification outputs"
+    )
 
     successes = 0
     failures = 0
 
     for analysis in q:
-        acc, ok, err = import_primer_identification_for_analysis.submit(analysis.id).result()
+        acc, ok, err = import_primer_identification_for_analysis.submit(
+            analysis.id
+        ).result()
         if ok:
             successes += 1
             print(f"[{acc}] primer-identification import done (if files present)")
@@ -78,4 +95,6 @@ def import_primer_identification_for_imported_analyses(max_count: Optional[int] 
             failures += 1
             print(f"[{acc}] skipped/failed: {err}")
 
-    print(f"Primer-identification import complete. Successes={successes}, Failures/Skipped={failures}")
+    print(
+        f"Primer-identification import complete. Successes={successes}, Failures/Skipped={failures}"
+    )

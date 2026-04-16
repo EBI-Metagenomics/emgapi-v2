@@ -32,12 +32,10 @@ from workflows.data_io_utils.file_rules.mgnify_v6_result_rules import (
 from workflows.data_io_utils.file_rules.nodes import Directory, File
 
 
-
 # status ann imported
 # use data mover node for temp
 # check for amplicon analyses that have annotations imported status
 # Traverse results dir and import primer_identification
-
 
 
 EMG_CONFIG = settings.EMG_CONFIG
@@ -340,7 +338,8 @@ def import_primer_identification(
     as a list of records.
     """
     primer_dir = Directory(
-        path=dir_for_analysis / EMG_CONFIG.amplicon_pipeline.primer_identification_folder,
+        path=dir_for_analysis
+        / EMG_CONFIG.amplicon_pipeline.primer_identification_folder,
         rules=[DirectoryExistsRule] if not allow_non_exist else [],
     )
 
@@ -368,7 +367,9 @@ def import_primer_identification(
         if not fp.exists():
             if not allow_non_exist:
                 # If strict, raise for truly missing items
-                raise FileNotFoundError(f"Expected primer-identification file missing: {fp}")
+                raise FileNotFoundError(
+                    f"Expected primer-identification file missing: {fp}"
+                )
             continue
         if not fp.is_file():
             continue
