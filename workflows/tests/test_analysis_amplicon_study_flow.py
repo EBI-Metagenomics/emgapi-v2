@@ -127,7 +127,7 @@ def generate_fake_pipeline_all_results(amplicon_run_folder: Path, run):
 
     (
         amplicon_run_folder
-        / EMG_CONFIG.amplicon_pipeline.asv_folder
+        / EMG_CONFIG.amplicon_pipeline.qc_folder
         / f"{run}_dada2_stats.tsv"
     ).touch()
 

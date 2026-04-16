@@ -329,17 +329,17 @@ def import_asv(analysis: analyses.models.Analysis, dir_for_analysis: Path):
         / EMG_CONFIG.amplicon_pipeline.asv_folder,  # asv/
         rules=[DirectoryExistsRule],
         glob_rules=[
-            GlobHasFilesCountRule[4:],  # stats, pr2+silva, sequences
+            GlobHasFilesCountRule[3:],  # pr2+silva, sequences
             GlobOfAsvFolderHasRegionFolders,
         ],
     )
 
     dada2_stats_file = File(
-        path=asv_dir.path / f"{analysis.run.first_accession}_dada2_stats.tsv",
+        path=dir_for_analysis
+        / EMG_CONFIG.amplicon_pipeline.qc_folder
+        / f"{analysis.run.first_accession}_dada2_stats.tsv",
         rules=[FileExistsRule, FileIsNotEmptyRule],
     )
-
-    asv_dir.files.append(dada2_stats_file)
 
     analysis.add_download(
         DownloadFile(
