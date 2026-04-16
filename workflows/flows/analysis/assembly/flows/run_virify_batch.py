@@ -2,8 +2,8 @@ import uuid
 from datetime import timedelta
 from pathlib import Path
 
-from django.db import close_old_connections, transaction
-from prefect import flow, get_run_logger
+from django.db import transaction
+from prefect import get_run_logger
 from prefect.runtime import flow_run
 
 from activate_django_first import EMG_CONFIG
@@ -17,6 +17,7 @@ from workflows.models import (
     AssemblyAnalysisPipelineStatus,
 )
 from workflows.prefect_utils.build_cli_command import cli_command
+from workflows.prefect_utils.flows_utils import django_db_flow as flow
 from workflows.prefect_utils.slurm_flow import (
     run_cluster_job,
     ClusterJobFailedException,
@@ -198,9 +199,7 @@ def run_virify_batch(assembly_analyses_batch_id: uuid.UUID):
             working_dir=virify_outdir,
             resubmit_policy=ResubmitAlwaysPolicy,  # We let Nextflow handle resubmissions
         )
-        close_old_connections()
     except Exception as e:
-        close_old_connections()
         error_type = (
             "VIRIfy pipeline failed"
             if isinstance(e, ClusterJobFailedException)

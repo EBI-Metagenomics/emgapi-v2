@@ -168,3 +168,13 @@ deployments:
   work_pool:
     name: slurm
   schedules: []
+
+- name: sync_studies_with_ena
+  description: |-
+    This flow will sync studies metadata with ENA.
+    :param study_accessions: List of study accessions to sync
+  entrypoint: workflows/flows/housekeeping/sync_studies_with_ena.py:sync_studies_with_ena
+  parameters: {}
+  work_pool:
+    name: slurm
+  schedules: []

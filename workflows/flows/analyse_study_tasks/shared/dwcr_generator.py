@@ -3,7 +3,7 @@ import click
 
 from activate_django_first import EMG_CONFIG
 
-from prefect import flow, task, get_run_logger
+from prefect import get_run_logger
 from analyses.models import Study
 
 from workflows.data_io_utils.file_rules.common_rules import (
@@ -32,10 +32,14 @@ from mgnify_pipelines_toolkit.analysis.shared.dwc_summary_generator import (
     merge_dwcr_summaries,
 )
 
+from workflows.prefect_utils.flows_utils import (
+    django_db_flow as flow,
+    django_db_task as task,
+)
 from workflows.prefect_utils.dir_context import chdir
 
 
-@flow
+@flow()
 def generate_dwc_ready_summary_for_pipeline_run(
     mgnify_study_accession: str,
     pipeline_outdir: Path,
@@ -106,7 +110,7 @@ def generate_dwc_ready_summary_for_pipeline_run(
     return generated_files
 
 
-@flow
+@task()
 def merge_dwc_ready_summaries(
     mgnify_study_accession: str,
     cleanup_partials: bool = False,
@@ -189,7 +193,7 @@ def merge_dwc_ready_summaries(
             file.unlink()
 
 
-@task
+@task()
 def add_dwcr_summaries_to_downloads(mgnify_study_accession: str):
     logger = get_run_logger()
     study = Study.objects.get(accession=mgnify_study_accession)
@@ -217,7 +221,7 @@ def add_dwcr_summaries_to_downloads(mgnify_study_accession: str):
                 DownloadFile(
                     path=Path("study-summaries") / summary_file.name,
                     download_type=DownloadType.TAXONOMIC_ANALYSIS,
-                    download_group="study_summary",
+                    download_group=f"study_summary.{pipeline_config.pipeline_version}.{pipeline_config.pipeline_name}",
                     file_type=DownloadFileType.CSV,
                     short_description=f"DwC-Ready summary of {region} ASV taxonomies using {db} as ref DB",
                     long_description=f"DwC-Ready summary of {region} ASV taxonomies using {db} as ref DB, across all runs in the study",

@@ -1,8 +1,9 @@
 import shutil
 from pathlib import Path
-from prefect import task, get_run_logger
+from prefect import get_run_logger
 from typing import List, Union
 import analyses.models
+from workflows.prefect_utils.flows_utils import django_db_task as task
 
 AnalysisStates = analyses.models.Analysis.AnalysisStates
 AssemblyStates = analyses.models.Assembly.AssemblyStates
