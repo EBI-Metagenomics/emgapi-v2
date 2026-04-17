@@ -10,7 +10,12 @@ from ninja_extra.exceptions import NotFound
 from ninja import FilterSchema
 
 import analyses.models
-from analyses.schemas import AnalysedRun, AnalysedRunDetail, MGnifyAnalysis, Assembly
+from analyses.schemas import (
+    AnalysedRun,
+    AnalysedRunDetail,
+    MGnifyAnalysis,
+    AssemblyDetail,
+)
 from emgapiv2.api import ApiSections
 from emgapiv2.api import perms
 from emgapiv2.api.auth import WebinJWTAuth, DjangoSuperUserAuth, NoAuth
@@ -172,7 +177,7 @@ class AnalysedRunController(UnauthorisedIsUnfoundController):
 
     @http_get(
         "/{accession}/assemblies/",
-        response=NinjaPaginationResponseSchema[Assembly],
+        response=NinjaPaginationResponseSchema[AssemblyDetail],
         summary="List Assemblies associated with this Run",
         description="Assemblies generated from or including this run",
         operation_id="list_runs_assemblies",
@@ -202,6 +207,11 @@ class AnalysedRunController(UnauthorisedIsUnfoundController):
             raise NotFound(detail=f"Analysed run with accession {accession} not found.")
         # raise not found if user doesn't have permission to see
         self.check_object_permissions(run)
-        return run.assemblies.select_related(
-            "reads_study", "assembly_study", "assembler", "sample"
+        return (
+            analyses.models.Assembly.public_objects.select_related(
+                "reads_study", "assembly_study", "assembler", "sample"
+            )
+            .prefetch_related("runs")
+            .filter(runs__ena_accessions__contains=[accession])
+            .distinct()
         )
