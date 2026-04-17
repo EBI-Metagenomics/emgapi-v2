@@ -380,7 +380,7 @@ def import_primer_identification(
         elif suffix in {".fa", ".fasta", ".fna"}:
             ftype = DownloadFileType.FASTA
             dtype = DownloadType.SEQUENCE_DATA
-            short_desc = "Primer sequences"
+            short_desc = "Forward primer sequences" if "fwd" in fp.name.lower() else "Reverse primer sequences"
             long_desc = "FASTA file(s) containing primer sequences used or identified"
 
         try:
