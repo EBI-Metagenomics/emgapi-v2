@@ -31,13 +31,6 @@ from workflows.data_io_utils.file_rules.mgnify_v6_result_rules import (
 )
 from workflows.data_io_utils.file_rules.nodes import Directory, File
 
-
-# status ann imported
-# use data mover node for temp
-# check for amplicon analyses that have annotations imported status
-# Traverse results dir and import primer_identification
-
-
 EMG_CONFIG = settings.EMG_CONFIG
 
 _TAXONOMY = analyses.models.Analysis.TAXONOMIES
@@ -352,7 +345,6 @@ def import_primer_identification(
     expected_files = [
         primer_dir.path / f"{run}.cutadapt.json",
         primer_dir.path / f"{run}_primer_validation.tsv",
-        primer_dir.path / f"{run}_primers.fasta",
         primer_dir.path / "fwd_primers.fasta",
         primer_dir.path / "rev_primers.fasta",
     ]
@@ -390,11 +382,6 @@ def import_primer_identification(
             dtype = DownloadType.SEQUENCE_DATA
             short_desc = "Primer sequences"
             long_desc = "FASTA file(s) containing primer sequences used or identified"
-        else:
-            ftype = DownloadFileType.OTHER
-            dtype = DownloadType.OTHER
-            short_desc = "Primer identification output"
-            long_desc = "Output produced during primer identification"
 
         try:
             analysis.add_download(

@@ -1,7 +1,10 @@
 from pathlib import Path
 from typing import Optional
 
-from prefect import flow, task
+from workflows.prefect_utils.flows_utils import (
+    django_db_flow as flow,
+    django_db_task as task,
+)
 
 from activate_django_first import EMG_CONFIG  # noqa: F401  # Ensure Django is setup
 
@@ -11,7 +14,7 @@ from workflows.data_io_utils.mgnify_v6_utils.amplicon import (
 )
 
 
-@task
+@task()
 def import_primer_identification_for_analysis(
     analysis_id: int,
 ) -> tuple[str, bool, Optional[str]]:
@@ -85,9 +88,7 @@ def import_primer_identification_for_imported_analyses(
     failures = 0
 
     for analysis in q:
-        acc, ok, err = import_primer_identification_for_analysis.submit(
-            analysis.id
-        ).result()
+        acc, ok, err = import_primer_identification_for_analysis(analysis.id)
         if ok:
             successes += 1
             print(f"[{acc}] primer-identification import done (if files present)")

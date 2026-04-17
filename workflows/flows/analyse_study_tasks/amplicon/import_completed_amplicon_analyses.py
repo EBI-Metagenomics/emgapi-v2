@@ -2,7 +2,6 @@ from pathlib import Path
 from typing import List
 
 
-
 import analyses.models
 from workflows.data_io_utils.mgnify_v6_utils.amplicon import (
     import_qc,
