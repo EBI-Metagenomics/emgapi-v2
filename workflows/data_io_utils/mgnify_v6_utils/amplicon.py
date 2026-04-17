@@ -377,7 +377,7 @@ def import_primer_identification(
             dtype = DownloadType.STATISTICS
             short_desc = "Primer validation table"
             long_desc = "Tabular summary of primer validation metrics"
-        elif suffix in {".fa", ".fasta", ".fna"}:
+        elif suffix == '.fasta':
             ftype = DownloadFileType.FASTA
             dtype = DownloadType.SEQUENCE_DATA
             short_desc = "Forward primer sequences" if "fwd" in fp.name.lower() else "Reverse primer sequences"
