@@ -1,11 +1,11 @@
 import functools
-from typing import Callable
+from typing import Callable, Optional
 
 import prefect
 from django.db import connections
 
 
-def _close_stale_connections() -> None:
+def close_stale_connections() -> None:
     """
     Close Django DB connections that are unusable or past their max age,
     skipping any connection that is currently inside an atomic block.
@@ -23,7 +23,7 @@ def _close_stale_connections() -> None:
             conn.close_if_unusable_or_obsolete()
 
 
-def django_db_flow(**flow_kwargs) -> Callable:
+def django_db_flow(_fn: Optional[Callable] = None, **flow_kwargs) -> Callable:
     """
     Drop-in replacement for prefect ``@flow`` that automatically closes stale Django DB
     connections before the flow body runs.
@@ -44,15 +44,18 @@ def django_db_flow(**flow_kwargs) -> Callable:
     def decorator(fn: Callable) -> Callable:
         @functools.wraps(fn)
         def wrapper(*args, **kwargs):
-            _close_stale_connections()
+            close_stale_connections()
             return fn(*args, **kwargs)
 
         return prefect_decorator(wrapper)
 
+    if _fn is not None:
+        return decorator(_fn)
+
     return decorator
 
 
-def django_db_task(**task_kwargs) -> Callable:
+def django_db_task(_fn: Optional[Callable] = None, **task_kwargs) -> Callable:
     """
     Drop-in replacement for prefect ``@task`` that automatically closes stale Django DB
     connections before the task body runs.
@@ -73,9 +76,12 @@ def django_db_task(**task_kwargs) -> Callable:
     def decorator(fn: Callable) -> Callable:
         @functools.wraps(fn)
         def wrapper(*args, **kwargs):
-            _close_stale_connections()
+            close_stale_connections()
             return fn(*args, **kwargs)
 
         return prefect_decorator(wrapper)
+
+    if _fn is not None:
+        return decorator(_fn)
 
     return decorator

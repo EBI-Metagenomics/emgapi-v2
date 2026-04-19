@@ -11,7 +11,7 @@ from typing import List, Optional, Union
 from django.conf import settings
 from django.urls import reverse
 from django.utils.timezone import now
-from prefect import flow, get_run_logger, task
+from prefect import get_run_logger
 from prefect.artifacts import create_markdown_artifact
 from prefect.runtime import flow_run
 from prefect_slurm.worker import SlurmWorker
@@ -20,6 +20,11 @@ from emgapiv2.log_utils import mask_sensitive_data as safe
 from workflows.models import OrchestratedClusterJob
 from workflows.nextflow_utils.tower import get_nextflow_tower_url
 from workflows.nextflow_utils.trace import maybe_get_nextflow_trace_df
+from workflows.prefect_utils.flows_utils import (
+    close_stale_connections,
+    django_db_flow as flow,
+    django_db_task as task,
+)
 from workflows.prefect_utils.prefect_worker_utils import (
     get_prefect_worker_type,
     make_environment,
@@ -73,6 +78,8 @@ def check_cluster_job(
     :param orchestrated_cluster_job: Orchestrated Cluster Job referencing the Slurm job
     :return: state of the job, as one of the string values of SlurmStatus.
     """
+    # Refresh Django connections before DB updates after the poll interval.
+    close_stale_connections()
     logger = get_run_logger()
     logger.info(f"Checking job {orchestrated_cluster_job}")
 
@@ -280,6 +287,9 @@ def start_or_attach_cluster_job(
     nf_link = get_nextflow_tower_url()
     nf_link_markdown = f"[Watch Nextflow Workflow]({nf_link})" if nf_link else ""
 
+    # Refresh Django connections before DB writes after any preparation job.
+    close_stale_connections()
+
     ocj = OrchestratedClusterJob.objects.create(
         cluster_job_id=job_id,
         flow_run_id=flow_run.id,
@@ -473,11 +483,15 @@ def run_subprocess(
         process.kill()
         process.wait()
 
+        # Refresh Django connections before saving after the subprocess wait.
+        close_stale_connections()
         ocj.last_known_state = SlurmStatus.failed
         ocj.save()
 
         raise SubprocessFailedException(process.pid, process.returncode, "Timed out")
 
+    # Refresh Django connections before saving after the subprocess wait.
+    close_stale_connections()
     if process.returncode == 0:
         logger.info(f"Job {ocj} finished successfully.")
 
@@ -670,7 +684,7 @@ def run_cluster_job(
 
     # Wait for job completion
     # Resumability: if this flow was re-run / restarted for some reason, or the exact same cluster job was sent later,
-    #  we should have gotten  back an existing slurm job_id of a previous run of it. And therefore the first status
+    #  we should have gotten back an existing slurm job_id of a previous run of it. And therefore the first status
     #  check will just tell us the job finished immediately / it'll wait for the EXISTING job to finish.
     is_job_in_terminal_state = False
     while not is_job_in_terminal_state:

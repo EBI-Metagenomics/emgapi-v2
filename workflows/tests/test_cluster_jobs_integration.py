@@ -1,10 +1,13 @@
 import logging
 import re
+import time
 import uuid
 from datetime import timedelta
 from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 import pytest
+from django.db import connection
 from prefect import flow, task, runtime
 from prefect.runtime import flow_run
 
@@ -12,16 +15,19 @@ from workflows.models import OrchestratedClusterJob
 from workflows.prefect_utils.slurm_flow import (
     compute_hash_of_input_file,
     run_cluster_job,
+    run_subprocess,
+    start_or_attach_cluster_job,
 )
 from workflows.prefect_utils.slurm_policies import (
     DontResubmitIfOnlyInputFilesChangePolicy,
     ResubmitAlwaysPolicy,
     ResubmitIfFailedPolicy,
+    _SlurmResubmitPolicy,
 )
 from workflows.prefect_utils.slurm_status import SlurmStatus
 from workflows.prefect_utils.testing_utils import (
-    run_flow_and_capture_logs,
     combine_caplog_records,
+    run_flow_and_capture_logs,
 )
 
 
@@ -314,3 +320,96 @@ def test_passing_retries_to_task_subflow(prefect_harness):
     assert str(excinfo.value) == "Failing first time"
 
     assert task_that_includes_a_retriable_subflow(subflow_max_retries=2) == "Did yellow"
+
+
+@patch("workflows.prefect_utils.slurm_flow.store_nextflow_trace")
+@patch(
+    "workflows.prefect_utils.slurm_flow.flow_run",
+    new=type("FlowRun", (), {"id": uuid.uuid4()})(),
+)
+@patch("workflows.prefect_utils.slurm_flow.get_run_logger", return_value=MagicMock())
+@patch("workflows.prefect_utils.slurm_flow.create_markdown_artifact")
+@pytest.mark.django_db(transaction=True)
+def test_run_subprocess_recovers_stale_connection(
+    mock_create_markdown_artifact,
+    mock_get_run_logger,
+    mock_store_nextflow_trace,
+    tmp_path,
+):
+    with connection.cursor() as cursor:
+        cursor.execute("SET SESSION idle_session_timeout = '200ms'")
+
+    result = run_subprocess.fn(
+        name="subprocess stale connection test",
+        command="sleep 0.5",
+        expected_time=timedelta(seconds=2),
+        memory="100M",
+        environment={},
+        slurm_resubmit_policy=ResubmitAlwaysPolicy,
+        workdir=tmp_path / "work",
+    )
+
+    assert result.last_known_state == SlurmStatus.completed
+    connection.close()
+
+
+@patch(
+    "workflows.prefect_utils.slurm_flow.run_cluster_job",
+    side_effect=lambda *args, **kwargs: time.sleep(0.5),
+)
+@patch("workflows.prefect_utils.slurm_flow.submit_cluster_job", return_value=2)
+@patch(
+    "workflows.prefect_utils.slurm_flow.flow_run",
+    new=type("FlowRun", (), {"id": uuid.uuid4()})(),
+)
+@patch("workflows.prefect_utils.slurm_flow.get_run_logger", return_value=MagicMock())
+@patch("workflows.prefect_utils.slurm_flow.create_markdown_artifact")
+@pytest.mark.django_db(transaction=True)
+def test_start_or_attach_cluster_job_recovers_stale_connection_after_preparation(
+    mock_create_markdown_artifact,
+    mock_get_run_logger,
+    mock_submit_cluster_job,
+    mock_run_cluster_job,
+    tmp_path,
+):
+    workdir = tmp_path / "work"
+    workdir.mkdir()
+    prior_job_description = OrchestratedClusterJob.SlurmJobSubmitDescription(
+        name="slurm stale connection test",
+        time_limit="00-00:01:00",
+        memory_per_node="100M",
+        script="#!/bin/bash\nset -euo pipefail\necho 'test'\n",
+        working_directory=str(workdir),
+        environment="ALL",
+    )
+    OrchestratedClusterJob.objects.create(
+        cluster_job_id=1,
+        flow_run_id=uuid.uuid4(),
+        job_submit_description=prior_job_description,
+        input_files_hashes=[],
+        last_known_state=SlurmStatus.failed,
+    )
+    resubmit_policy = _SlurmResubmitPolicy(
+        policy_name="Resubmit with preparation command",
+        if_status_matches=[SlurmStatus.failed],
+        then_resubmit=True,
+        resubmit_needs_preparation_command="sleep 0.5",
+    )
+
+    with connection.cursor() as cursor:
+        cursor.execute("SET SESSION idle_session_timeout = '200ms'")
+
+    result = start_or_attach_cluster_job.fn(
+        name="slurm stale connection test",
+        command="echo 'test'",
+        expected_time=timedelta(minutes=1),
+        memory="100M",
+        slurm_resubmit_policy=resubmit_policy,
+        workdir=workdir,
+        make_workdir_first=True,
+        environment={},
+    )
+
+    assert result.id is not None
+    assert result.cluster_job_id != 1
+    connection.close()
