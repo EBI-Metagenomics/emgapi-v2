@@ -13,6 +13,8 @@ from prefect.runtime import flow_run
 
 from workflows.models import OrchestratedClusterJob
 from workflows.prefect_utils.slurm_flow import (
+    SubprocessFailedException,
+    check_cluster_job,
     compute_hash_of_input_file,
     run_cluster_job,
     run_subprocess,
@@ -29,6 +31,15 @@ from workflows.prefect_utils.testing_utils import (
     combine_caplog_records,
     run_flow_and_capture_logs,
 )
+
+
+@pytest.fixture
+def mock_slurm_flow_run():
+    with patch(
+        "workflows.prefect_utils.slurm_flow.flow_run",
+        new=type("FlowRun", (), {"id": uuid.uuid4()})(),
+    ):
+        yield
 
 
 @flow(log_prints=True, retries=2)
@@ -323,10 +334,6 @@ def test_passing_retries_to_task_subflow(prefect_harness):
 
 
 @patch("workflows.prefect_utils.slurm_flow.store_nextflow_trace")
-@patch(
-    "workflows.prefect_utils.slurm_flow.flow_run",
-    new=type("FlowRun", (), {"id": uuid.uuid4()})(),
-)
 @patch("workflows.prefect_utils.slurm_flow.get_run_logger", return_value=MagicMock())
 @patch("workflows.prefect_utils.slurm_flow.create_markdown_artifact")
 @pytest.mark.django_db(transaction=True)
@@ -334,6 +341,7 @@ def test_run_subprocess_recovers_stale_connection(
     mock_create_markdown_artifact,
     mock_get_run_logger,
     mock_store_nextflow_trace,
+    mock_slurm_flow_run,
     tmp_path,
 ):
     with connection.cursor() as cursor:
@@ -353,15 +361,119 @@ def test_run_subprocess_recovers_stale_connection(
     connection.close()
 
 
+@patch("workflows.prefect_utils.slurm_flow.store_nextflow_trace")
+@patch(
+    "workflows.prefect_utils.slurm_flow.run_cluster_job",
+    side_effect=lambda *args, **kwargs: time.sleep(0.5),
+)
+@patch(
+    "workflows.models.OrchestratedClusterJob.objects.get_previous_job",
+)
+@patch("workflows.prefect_utils.slurm_flow.get_run_logger", return_value=MagicMock())
+@patch("workflows.prefect_utils.slurm_flow.create_markdown_artifact")
+@pytest.mark.django_db(transaction=True)
+def test_run_subprocess_recovers_stale_connection_after_preparation_job(
+    mock_create_markdown_artifact,
+    mock_get_run_logger,
+    mock_get_previous_job,
+    mock_run_cluster_job,
+    mock_store_nextflow_trace,
+    mock_slurm_flow_run,
+    tmp_path,
+):
+    prior_job = MagicMock()
+    prior_job.should_resubmit_according_to_policy.return_value = True
+    mock_get_previous_job.return_value = prior_job
+    resubmit_policy = _SlurmResubmitPolicy(
+        policy_name="Resubmit subprocess with preparation command",
+        if_status_matches=[SlurmStatus.failed],
+        then_resubmit=True,
+        resubmit_needs_preparation_command="sleep 0.5",
+    )
+
+    with connection.cursor() as cursor:
+        cursor.execute("SET SESSION idle_session_timeout = '200ms'")
+
+    result = run_subprocess.fn(
+        name="subprocess stale connection with preparation test",
+        command="echo 'test'",
+        expected_time=timedelta(seconds=2),
+        memory="100M",
+        environment={},
+        slurm_resubmit_policy=resubmit_policy,
+        workdir=tmp_path / "work",
+    )
+
+    assert result.last_known_state == SlurmStatus.completed
+    mock_run_cluster_job.assert_called_once()
+    connection.close()
+
+
+@patch("workflows.prefect_utils.slurm_flow.store_nextflow_trace")
+@patch("workflows.prefect_utils.slurm_flow.get_run_logger", return_value=MagicMock())
+@patch("workflows.prefect_utils.slurm_flow.create_markdown_artifact")
+@pytest.mark.django_db(transaction=True)
+def test_run_subprocess_timeout_recovers_stale_connection(
+    mock_create_markdown_artifact,
+    mock_get_run_logger,
+    mock_store_nextflow_trace,
+    mock_slurm_flow_run,
+    tmp_path,
+):
+    with connection.cursor() as cursor:
+        cursor.execute("SET SESSION idle_session_timeout = '200ms'")
+
+    with pytest.raises(SubprocessFailedException, match="Timed out"):
+        run_subprocess.fn(
+            name="subprocess stale connection timeout test",
+            command="sleep 0.5",
+            expected_time=timedelta(seconds=0.3),
+            memory="100M",
+            environment={},
+            slurm_resubmit_policy=ResubmitAlwaysPolicy,
+            workdir=tmp_path / "work",
+        )
+
+    connection.close()
+
+
+@patch("workflows.prefect_utils.slurm_flow.pyslurm.db.Job")
+@patch("workflows.prefect_utils.slurm_flow.close_stale_connections")
+@patch("workflows.prefect_utils.slurm_flow.get_run_logger", return_value=MagicMock())
+@pytest.mark.django_db
+def test_check_cluster_job_refreshes_stale_connection_before_poll(
+    mock_get_run_logger, mock_close_stale_connections, mock_slurm_job, tmp_path
+):
+    orchestrated_job = OrchestratedClusterJob.objects.create(
+        cluster_job_id=123,
+        flow_run_id=uuid.uuid4(),
+        job_submit_description=OrchestratedClusterJob.SlurmJobSubmitDescription(
+            name="check stale connection test",
+            time_limit="00-00:01:00",
+            memory_per_node="100M",
+            script="echo test",
+            working_directory=str(tmp_path),
+            environment="ALL",
+        ),
+        input_files_hashes=[],
+    )
+
+    fake_slurm_job = MagicMock(
+        state=SlurmStatus.completed.value,
+        working_directory=str(tmp_path),
+    )
+    mock_slurm_job.return_value.load.return_value = fake_slurm_job
+    status = check_cluster_job(orchestrated_job)
+
+    assert status == SlurmStatus.completed.value
+    mock_close_stale_connections.assert_called_once_with()
+
+
 @patch(
     "workflows.prefect_utils.slurm_flow.run_cluster_job",
     side_effect=lambda *args, **kwargs: time.sleep(0.5),
 )
 @patch("workflows.prefect_utils.slurm_flow.submit_cluster_job", return_value=2)
-@patch(
-    "workflows.prefect_utils.slurm_flow.flow_run",
-    new=type("FlowRun", (), {"id": uuid.uuid4()})(),
-)
 @patch("workflows.prefect_utils.slurm_flow.get_run_logger", return_value=MagicMock())
 @patch("workflows.prefect_utils.slurm_flow.create_markdown_artifact")
 @pytest.mark.django_db(transaction=True)
@@ -370,6 +482,7 @@ def test_start_or_attach_cluster_job_recovers_stale_connection_after_preparation
     mock_get_run_logger,
     mock_submit_cluster_job,
     mock_run_cluster_job,
+    mock_slurm_flow_run,
     tmp_path,
 ):
     workdir = tmp_path / "work"

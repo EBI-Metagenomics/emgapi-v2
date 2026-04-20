@@ -437,6 +437,8 @@ def run_subprocess(
             environment={},
         )
 
+    # Refresh Django connections before the first DB write after any preparation job.
+    close_stale_connections()
     env = make_environment(kwargs.get("environment", None))
 
     # need to submit new job
@@ -478,7 +480,7 @@ def run_subprocess(
 
     try:
         _stdout, stderr = process.communicate(timeout=expected_time.total_seconds())
-    except TimeoutError as e:
+    except (TimeoutError, subprocess.TimeoutExpired) as e:
         logger.error(f"Failed to run subprocess: {e}")
         process.kill()
         process.wait()
