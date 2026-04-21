@@ -2,8 +2,8 @@ import uuid
 from datetime import timedelta
 from pathlib import Path
 
-from django.db import close_old_connections
-from prefect import flow, get_run_logger
+from django.db import transaction
+from prefect import get_run_logger
 from prefect.runtime import flow_run
 
 from activate_django_first import EMG_CONFIG
@@ -17,6 +17,7 @@ from workflows.models import (
     AssemblyAnalysisPipelineStatus,
 )
 from workflows.prefect_utils.build_cli_command import cli_command
+from workflows.prefect_utils.flows_utils import django_db_flow as flow
 from workflows.prefect_utils.slurm_flow import (
     run_cluster_job,
     ClusterJobFailedException,
@@ -60,13 +61,23 @@ def run_virify_batch(assembly_analyses_batch_id: uuid.UUID):
     """
     logger = get_run_logger()
 
-    assembly_analysis_batch = AssemblyAnalysisBatch.objects.get(
-        id=assembly_analyses_batch_id
-    )
+    # Lock the batch row to prevent two concurrent flows from both passing
+    # the is_running() check before either writes its flow_run_id.
+    with transaction.atomic():
+        assembly_analysis_batch = AssemblyAnalysisBatch.objects.select_for_update().get(
+            id=assembly_analyses_batch_id
+        )
 
-    # Store Prefect flow run ID
-    assembly_analysis_batch.virify_flow_run_id = flow_run.id
-    assembly_analysis_batch.save()
+        if assembly_analysis_batch.is_running(AssemblyAnalysisPipeline.VIRIFY):
+            # TODO: add reverse URL to study-assembly-analysis-status-summary admin page
+            logger.warning(
+                f"VIRify for batch {assembly_analyses_batch_id} is already being processed. "
+                f"Current flow will exit to avoid duplicate processing."
+            )
+            return
+
+        assembly_analysis_batch.virify_flow_run_id = flow_run.id
+        assembly_analysis_batch.save()
 
     # Record pipeline version
     assembly_analysis_batch.set_pipeline_version(
@@ -188,9 +199,7 @@ def run_virify_batch(assembly_analyses_batch_id: uuid.UUID):
             working_dir=virify_outdir,
             resubmit_policy=ResubmitAlwaysPolicy,  # We let Nextflow handle resubmissions
         )
-        close_old_connections()
     except Exception as e:
-        close_old_connections()
         error_type = (
             "VIRIfy pipeline failed"
             if isinstance(e, ClusterJobFailedException)

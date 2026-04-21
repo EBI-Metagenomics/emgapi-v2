@@ -213,7 +213,8 @@ class ENADerivedModel(VisibilityControlledModel):
             if related_additional_accessions:
                 try:
                     for accession in list(related_additional_accessions):
-                        all_accessions.append(accession)
+                        if accession:
+                            all_accessions.append(accession)
                 except ValueError:
                     pass
         self.ena_accessions = list(set(all_accessions))

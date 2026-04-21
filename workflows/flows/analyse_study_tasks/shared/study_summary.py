@@ -11,7 +11,7 @@ from mgnify_pipelines_toolkit.analysis.assembly import (
 from mgnify_pipelines_toolkit.analysis.rawreads import (
     study_summary_generator as rawreads_study_summary_generator,
 )
-from prefect import flow, get_run_logger, task
+from prefect import get_run_logger
 
 from activate_django_first import EMG_CONFIG
 from analyses.base_models.with_downloads_models import (
@@ -31,6 +31,10 @@ from workflows.ena_utils.ena_accession_matching import (
     INSDC_STUDY_ACCESSION_GLOB,
 )
 from workflows.flows.analysis import AnalysisType
+from workflows.prefect_utils.flows_utils import (
+    django_db_flow as flow,
+    django_db_task as task,
+)
 from workflows.prefect_utils.dir_context import chdir
 
 STUDY_SUMMARY = "_study_summary"
@@ -50,7 +54,7 @@ PIPELINE_CONFIGS = {
 }
 
 
-@flow
+@flow()
 def generate_study_summary_for_pipeline_run(
     mgnify_study_accession: str,
     pipeline_outdir: Path,
@@ -131,7 +135,7 @@ def generate_study_summary_for_pipeline_run(
     return generated_files
 
 
-@flow
+@flow()
 def merge_study_summaries(
     mgnify_study_accession: str,
     analysis_type: AnalysisType = AnalysisType.AMPLICON,
@@ -223,7 +227,7 @@ def merge_study_summaries(
             file.unlink()
 
 
-@task
+@task()
 def add_study_summaries_to_downloads(
     mgnify_study_accession: str,
     analysis_type: AnalysisType = AnalysisType.AMPLICON,
@@ -240,7 +244,9 @@ def add_study_summaries_to_downloads(
 
     :param mgnify_study_accession: The accession identifier for the study to process.
     """
-    pipeline_config = PIPELINE_CONFIGS[analysis_type]
+    pipeline_config = PIPELINE_CONFIGS[
+        analysis_type
+    ]  # TODO: this will not scale to future pipeline versions
 
     logger = get_run_logger()
     study = Study.objects.get(accession=mgnify_study_accession)
@@ -272,7 +278,7 @@ def add_study_summaries_to_downloads(
                 DownloadFile(
                     path=Path("study-summaries") / summary_file.name,
                     download_type=DownloadType.TAXONOMIC_ANALYSIS,
-                    download_group="study_summary",
+                    download_group=f"study_summary.{pipeline_config.pipeline_version}.{pipeline_config.pipeline_name}",
                     file_type=DownloadFileType.TSV,
                     short_description=f"Summary of {db_or_region} taxonomies",
                     long_description=f"Summary of {db_or_region} taxonomic assignments, across all runs in the study",
@@ -338,7 +344,7 @@ def _get_download_file(
         )
 
 
-@flow
+@flow()
 def merge_assembly_study_summaries(
     study: Union[Study, str],
     cleanup_partials: bool = False,
@@ -434,7 +440,7 @@ def merge_assembly_study_summaries(
     return generated_files
 
 
-@task
+@task()
 def add_rawreads_study_summaries_to_downloads(mgnify_study_accession: str):
     logger = get_run_logger()
     pipeline_config = PIPELINE_CONFIGS[AnalysisType.RAWREADS]

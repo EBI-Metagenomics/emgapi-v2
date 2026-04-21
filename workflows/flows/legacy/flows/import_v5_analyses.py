@@ -43,12 +43,15 @@ from workflows.data_io_utils.legacy_emg_dbs import (
     name="Import V5 Analyses",
     flow_run_name="Import V5 analyses from study: {mgys}",
 )
-def import_v5_analyses(mgys: str):
+def import_v5_analyses(mgys: str, fetch_functions: bool = False):
     """
     This flow will iteratively import analyses (made with MGnify V5 pipeline)
     into the EMG DB.
 
     It connects to the legacy EMG MySQL and Mongo DBs, but not through Django.
+
+    Functions (functional annotations) are not fetched by default due to this being a very slow
+    read operation. Set fetch_functions=True to include them in the import.
     """
 
     logger = get_run_logger()
@@ -131,7 +134,10 @@ def import_v5_analyses(mgys: str):
             taxonomy = get_taxonomy_from_api_v1_mongo(analysis.accession)
             analysis.refresh_from_db()
             analysis.annotations[Analysis.TAXONOMIES] = taxonomy
-            if not analysis.experiment_type == analysis.ExperimentTypes.AMPLICON:
+            if (
+                fetch_functions
+                and not analysis.experiment_type == analysis.ExperimentTypes.AMPLICON
+            ):
                 functions = get_functions_from_api_v1_mongo(analysis.accession)
                 analysis.annotations.update(functions)
             analysis.mark_status(analysis.AnalysisStates.ANALYSIS_STARTED, save=False)

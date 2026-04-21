@@ -1,6 +1,5 @@
-from prefect import task
-
 import analyses.models
+from workflows.prefect_utils.flows_utils import django_db_task as task
 
 AnalysisStates = analyses.models.Analysis.AnalysisStates
 

@@ -14,19 +14,19 @@ django-cors-headers==4.9.0
 dj-database-url==3.0.1
 django-debug-toolbar==5.2.0
 django-json-widget==2.0.4  # for jsonfields in admin panel
-django-ltree-2==0.1.12  # biome hierarchies
+django-ltree-2==0.1.13  # biome hierarchies
 django-ninja~=1.4.3  # api
 django-ninja-jwt~=5.3.9  # api auth
 django-db-file-storage~=0.5.6.1  # logo storage in db
 django-unfold==0.67.0  # admin panel
 
 # Serving
-asgiref~=3.10.0
-gunicorn==23.0.0
+asgiref~=3.11.1
+gunicorn==25.3.0
 whitenoise==6.11.0
 
 # DB
-psycopg2-binary
+psycopg-pool==3.3.0
 
 # Prefect workflows
 prefect==3.4.19
@@ -53,4 +53,4 @@ sentry-sdk[django]~=2.25.1
 # Outbound network
 requests~=2.32.4
 httpx~=0.28.1
-parse==1.20.2
+parse==1.21.1

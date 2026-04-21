@@ -53,7 +53,7 @@ def youngest_mtime_in_dir(
     return youngest_age
 
 
-@task(name="Collect old workdir candidates")
+@task(name="Collect old workdir candidates", persist_result=True)
 def collect_old_workdir_candidates(
     path: str,
     min_age_days: int,
@@ -166,6 +166,7 @@ def clean_old_nextflow_workdirs(
     scan_depth: int = 1,
     max_candidates: int = 10_000,
     ignore_patterns: list[str] | None = None,
+    skip_confirmation: bool = False,
 ):
     """Scan a directory for directories and delete them after human confirmation.
 
@@ -173,6 +174,7 @@ def clean_old_nextflow_workdirs(
 
     Collects candidate directories at exactly ``scan_depth`` levels below ``path`` into a
     Prefect table artifact for review, then suspends waiting for confirmation to delete (or not).
+    Set ``skip_confirmation=True`` to delete immediately without suspending.
 
     :param path: Root path to scan for old Nextflow work directories.
     :param min_age_days: Directories not modified in this many days are candidates (default 30).
@@ -180,6 +182,8 @@ def clean_old_nextflow_workdirs(
     :param max_candidates: Cap on directories collected per run (default 10 000).
     :param ignore_patterns: fnmatch patterns matched against each directory basename to skip
         (e.g. ``["tmp_*", "keep_*"]``).
+    :param skip_confirmation: If True, delete candidates immediately without suspending for
+        human confirmation (default False).
     """
     candidates = collect_old_workdir_candidates(
         path, min_age_days, scan_depth, max_candidates, ignore_patterns
@@ -189,6 +193,14 @@ def clean_old_nextflow_workdirs(
 
     if not candidates:
         logger.info("No candidate directories found. Nothing to do.")
+        return
+
+    if skip_confirmation:
+        logger.info(
+            f"skip_confirmation=True — deleting {len(candidates)} directories without prompt."
+        )
+        deleted_count = delete_workdirs(candidates)
+        logger.info(f"Deleted {deleted_count} of {len(candidates)} directories.")
         return
 
     description = dedent(
