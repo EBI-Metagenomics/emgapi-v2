@@ -251,6 +251,68 @@ def amplicon_analysis_with_downloads(
 @patch(
     "workflows.flows.analyse_study_tasks.shared.copy_v6_pipeline_results.run_deployment"
 )
+def amplicon_analysis_with_downloads_v6_1(
+    mock_run_deployment,
+    raw_reads_mgnify_study,
+    raw_reads_mgnify_sample,
+):
+    sample = raw_reads_mgnify_sample[0]
+    study = raw_reads_mgnify_study
+    mock_run_deployment.return_value = Mock(id="mock-flow-run-id")
+
+    run = Run.objects.create(
+        ena_accessions=["SRR1111111"],
+        study=study,
+        ena_study=study.ena_study,
+        sample=sample,
+        experiment_type=Run.ExperimentTypes.AMPLICON,
+        metadata={
+            Run.CommonMetadataKeys.FASTQ_FTPS: ["ftp://example.org/SRR1111111.fastq"]
+        },
+    )
+
+    analysis = Analysis.objects.create(
+        ena_study=study.ena_study,
+        study=study,
+        experiment_type=Run.ExperimentTypes.AMPLICON,
+        sample=sample,
+        run=run,
+        pipeline_version=Analysis.PipelineVersions.v6_1,
+    )
+    analysis.mark_status(analysis.AnalysisStates.ANALYSIS_COMPLETED)
+
+    analysis.pipeline_outdir = "/app/data/tests/amplicon_v6_output"
+    analysis.results_dir = "/app/data/tests/amplicon_v6_output/SRR1111111"
+    analysis.metadata[analysis.KnownMetadataKeys.MARKER_GENE_SUMMARY] = {
+        analysis.CLOSED_REFERENCE: {
+            "marker_genes": {
+                "SSU": {
+                    "Archaea": {"read_count": 65, "majority_marker": True},
+                    "Eukarya": {"read_count": 0, "majority_marker": True},
+                    "Bacteria": {"read_count": 28655, "majority_marker": True},
+                }
+            }
+        },
+        analysis.ASV: {
+            "amplified_regions": [
+                {
+                    "asv_count": 94,
+                    "read_count": 16664,
+                    "marker_gene": "16S",
+                    "amplified_region": "V3-V4",
+                }
+            ]
+        },
+    }
+    analysis.save()
+    import_completed_amplicon_analysis(analysis)
+    return analysis
+
+
+@pytest.fixture
+@patch(
+    "workflows.flows.analyse_study_tasks.shared.copy_v6_pipeline_results.run_deployment"
+)
 def assembly_analysis_with_downloads(mock_run_deployment, assembly_analysis):
     mock_run_deployment.return_value = Mock(id="mock-flow-run-id")
 

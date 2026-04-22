@@ -3,6 +3,7 @@ from pathlib import Path
 from textwrap import dedent as _
 
 from django.db.models import QuerySet
+from django.utils.text import slugify
 from prefect.artifacts import create_table_artifact
 
 from activate_django_first import EMG_CONFIG
@@ -33,6 +34,8 @@ def make_samplesheet_amplicon(runs: QuerySet, samplesheet_path: Path) -> Path:
     :return: Tuple of the Path to the samplesheet file, and a hash of the run IDs which is used in the SS filename.
     """
 
+    pipeline_version = EMG_CONFIG.amplicon_pipeline.pipeline_version
+
     sample_sheet_csv = queryset_to_samplesheet(
         queryset=runs,
         filename=samplesheet_path,
@@ -62,11 +65,11 @@ def make_samplesheet_amplicon(runs: QuerySet, samplesheet_path: Path) -> Path:
         table = list(csv_reader)
 
     create_table_artifact(
-        key="amplicon-v6-initial-sample-sheet",
+        key=slugify(f"amplicon-{pipeline_version}-initial-sample-sheet"),
         table=table,
         description=_(
             f"""\
-            Sample sheet created for run of amplicon-v6.
+            Sample sheet created for run of amplicon-{pipeline_version}.
             Saved to `{sample_sheet_csv}`
             **Warning!** This table is the *initial* content of the samplesheet, when it was first made. Any edits made since are not shown here.
             [Edit it]({EMG_CONFIG.service_urls.app_root}/workflows/edit-samplesheet/fetch/{encode_samplesheet_path(sample_sheet_csv)})

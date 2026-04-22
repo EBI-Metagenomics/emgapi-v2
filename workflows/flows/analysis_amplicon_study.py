@@ -37,6 +37,10 @@ from workflows.ena_utils.ena_api_requests import (
 )
 from workflows.ena_utils.webin_owner_utils import validate_and_set_webin_owner
 from workflows.flows.analysis import AnalysisType
+from workflows.flows.analysis.pipeline_versions import (
+    get_current_pipeline_version_for_experiment_type,
+    get_v6_family_pipeline_versions_for_experiment_type,
+)
 from workflows.flows.analyse_study_tasks.shared.study_summary import (
     merge_study_summaries,
     add_study_summaries_to_downloads,
@@ -56,17 +60,20 @@ _AMPLICON = "AMPLICON"
 
 
 @flow(
-    name="Run analysis pipeline-v6 on amplicon study",
+    name="Run amplicon analysis pipeline on study",
     log_prints=True,
     flow_run_name="Analyse amplicon: {study_accession}",
 )
 def analysis_amplicon_study(study_accession: str):
     """
     Get a study from ENA, and input it to MGnify.
-    Kick off amplicon-v6 pipeline.
+    Kick off the configured amplicon pipeline.
     :param study_accession: Study accession e.g. PRJxxxxxx
     """
     logger = get_run_logger()
+    amplicon_pipeline_version = get_current_pipeline_version_for_experiment_type(
+        analyses.models.Analysis.ExperimentTypes.AMPLICON
+    )
     # Create/get ENA Study object
     ena_study = ena.models.Study.objects.get_ena_study(study_accession)
     if not ena_study:
@@ -118,9 +125,9 @@ def analysis_amplicon_study(study_accession: str):
         wait_for_input=AnalyseStudyInput.with_initial_data(
             description=_(
                 f"""\
-                **Amplicon V6**
+                **Amplicon {amplicon_pipeline_version.label}**
                 This will analyse all {len(read_runs)} amplicon read-runs of study {ena_study.accession} \
-                using [Amplicon Pipeline V6](https://github.com/ebi-metagenomics/amplicon-pipeline).
+                using [Amplicon Pipeline {amplicon_pipeline_version.label.upper()}](https://github.com/ebi-metagenomics/amplicon-pipeline).
 
                 **Read-run filtering**
                 If you expected more than {len(read_runs)} amplicon read-runs, you can add other (incorrect) \
@@ -177,7 +184,7 @@ def analysis_amplicon_study(study_accession: str):
     create_analyses(
         mgnify_study,
         for_experiment_type=analyses.base_models.with_experiment_type_models.WithExperimentTypeModel.ExperimentTypes.AMPLICON,
-        pipeline=analyses.models.Analysis.PipelineVersions.v6,
+        pipeline=amplicon_pipeline_version,
         ena_library_strategy_policy=analyse_study_input.library_strategy_policy,
     )
     ena_study.save()  # just for safety, propagate privacy state/owner from study to new analyses etc.
@@ -185,6 +192,7 @@ def analysis_amplicon_study(study_accession: str):
     analyses_to_attempt = get_analyses_to_attempt(
         mgnify_study,
         for_experiment_type=analyses.base_models.with_experiment_type_models.WithExperimentTypeModel.ExperimentTypes.AMPLICON,
+        pipeline=amplicon_pipeline_version,
         ena_library_strategy_policy=analyse_study_input.library_strategy_policy,
     )
 
@@ -233,7 +241,10 @@ def analysis_amplicon_study(study_accession: str):
 
     mgnify_study.refresh_from_db()
     mgnify_study.features.has_v6_analyses = mgnify_study.analyses.filter(
-        pipeline_version=analyses.models.Analysis.PipelineVersions.v6, is_ready=True
+        pipeline_version__in=get_v6_family_pipeline_versions_for_experiment_type(
+            analyses.models.Analysis.ExperimentTypes.AMPLICON
+        ),
+        is_ready=True,
     ).exists()
     mgnify_study.save()
 
