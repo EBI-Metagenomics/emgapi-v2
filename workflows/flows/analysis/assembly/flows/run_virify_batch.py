@@ -40,6 +40,7 @@ from workflows.flows.analyse_study_tasks.cleanup_pipeline_directories import (
     on_cancellation=[update_batch_status_counts],
     retries=2,
     retry_delay_seconds=60,
+    persist_result=False,
 )
 def run_virify_batch(assembly_analyses_batch_id: uuid.UUID):
     """
