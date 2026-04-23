@@ -199,6 +199,12 @@ def convert_dwcr_to_dwca(
     return archive_path
 
 
+@task()
+def add_dwca__to_downloads(mgnify_study_accession: str):
+    # TODO: gotta do this once the dwca generator is ready
+    pass
+
+
 def _read_dwcr_files(dwcr_files: list[Path]) -> pd.DataFrame:
     frames = []
     for dwcr_file in dwcr_files:

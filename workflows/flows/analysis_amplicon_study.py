@@ -20,6 +20,9 @@ from workflows.flows.analyse_study_tasks.shared.dwcr_generator import (
     add_dwcr_summaries_to_downloads,
     merge_dwc_ready_summaries,
 )
+from workflows.flows.analyse_study_tasks.shared.dwca_generator import (
+    convert_dwcr_to_dwca,
+)
 from workflows.flows.analyse_study_tasks.shared.get_analyses_to_attempt import (
     get_analyses_to_attempt,
 )
@@ -221,6 +224,12 @@ def analysis_amplicon_study(study_accession: str):
     merge_dwc_ready_summaries(
         mgnify_study.accession,
         cleanup_partials=not EMG_CONFIG.amplicon_pipeline.keep_study_summary_partials,
+    )
+    convert_dwcr_to_dwca(
+        mgnify_study.accession,
+        analyses.base_models.with_experiment_type_models.WithExperimentTypeModel.ExperimentTypes.AMPLICON,
+        analyses.models.Analysis.PipelineVersions.v6,
+        EMG_CONFIG.darwin_core_archive.gbif_ftp_results_dir,
     )
     add_study_summaries_to_downloads(
         mgnify_study.accession, analysis_type=AnalysisType.AMPLICON
