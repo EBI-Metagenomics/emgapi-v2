@@ -67,7 +67,6 @@ if BASE_URL:
     BASE_URL += "/"
 
 
-
 if EMG_CONFIG.sentry_dsn:
     sentry_sdk.init(
         dsn=EMG_CONFIG.sentry_dsn,
