@@ -148,6 +148,20 @@ deployments:
   work_pool:
     name: slurm
 
+- name: import_primer_identification_for_imported_analyses_deployment
+  description: |-
+    Imports primer-identification outputs for amplicon analyses that already have
+    ANALYSIS_ANNOTATIONS_IMPORTED set.
+
+    The flow scans eligible amplicon analyses and imports any available
+    primer-identification outputs from their results directories.
+
+    :param max_count: Optional safety cap limiting how many analyses to process in one run.
+  entrypoint: workflows/flows/analyse_study_tasks/amplicon/import_primer_identification_for_imported_analyses.py:import_primer_identification_for_imported_analyses
+  schedule: null
+  work_pool:
+    name: slurm
+
 - name: finalize_assembly_study_deployment
   description: |-
     Run the last study level steps on study assembly analysis batches.

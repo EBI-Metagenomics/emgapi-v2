@@ -76,7 +76,7 @@ class MGnifyStudyDetail(MGnifyStudy):
         description="Preferred ENA accession for the study (derived from ENA/INSDC accessions)",
         examples=["ERP123459", "SRP135937"],
     )
-    downloads: List[MGnifyStudyDownloadFile] = Field(..., alias="downloads_as_objects")
+    downloads: List[MGnifyStudyDownloadFile] = Field(...)
     metadata: dict[ENAStudyFields, Any] = Field(
         ...,
         examples=[

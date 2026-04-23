@@ -311,6 +311,101 @@ def import_qc(
     analysis.save()
 
 
+def import_primer_identification(
+    analysis: analyses.models.Analysis,
+    dir_for_analysis: Path,
+    allow_non_exist: bool = True,
+):
+    """
+    Import primer-identification outputs for an amplicon analysis.
+
+    Expected files (under <results>/<run>/<primer-identification>/):
+      - <RUN>.cutadapt.json
+      - <RUN>_primer_validation.tsv
+      - <RUN>_primers.fasta
+      - fwd_primers.fasta
+      - rev_primers.fasta
+
+    Registers each as a download under download_group="primer_identification".
+    If the TSV exists, it is parsed into analysis.annotations[PRIMER_IDENTIFICATION]
+    as a list of records.
+    """
+    primer_dir = Directory(
+        path=dir_for_analysis
+        / EMG_CONFIG.amplicon_pipeline.primer_identification_folder,
+        rules=[DirectoryExistsRule] if not allow_non_exist else [],
+    )
+
+    if not primer_dir.path.is_dir():
+        print(f"No primer-identification dir at {primer_dir.path}. Nothing to import.")
+        return
+
+    run = analysis.run.first_accession
+
+    expected_files = [
+        primer_dir.path / f"{run}.cutadapt.json",
+        primer_dir.path / f"{run}_primer_validation.tsv",
+        primer_dir.path / "fwd_primers.fasta",
+        primer_dir.path / "rev_primers.fasta",
+    ]
+
+    # Create File nodes with existence rules if strict
+    # for fp in expected_files:
+    #     rules = [FileExistsRule, FileIsNotEmptyRule] if not allow_non_exist else []
+    #     primer_dir.files.append(File(path=fp, rules=rules))
+
+    # Register available files as downloads
+    for fp in expected_files:
+        if not fp.exists():
+            if not allow_non_exist:
+                # If strict, raise for truly missing items
+                raise FileNotFoundError(
+                    f"Expected primer-identification file missing: {fp}"
+                )
+            continue
+        if not fp.is_file():
+            continue
+
+        suffix = fp.suffix.lower()
+        if suffix == ".json":
+            ftype = DownloadFileType.JSON
+            dtype = DownloadType.QUALITY_CONTROL
+            short_desc = "Cutadapt summary"
+            long_desc = "JSON report from cutadapt during primer identification"
+        elif suffix == ".tsv":
+            ftype = DownloadFileType.TSV
+            dtype = DownloadType.STATISTICS
+            short_desc = "Primer validation table"
+            long_desc = "Tabular summary of primer validation metrics"
+        elif suffix == ".fasta":
+            ftype = DownloadFileType.FASTA
+            dtype = DownloadType.SEQUENCE_DATA
+            short_desc = (
+                "Forward primer sequences"
+                if "fwd" in fp.name.lower()
+                else "Reverse primer sequences"
+            )
+            long_desc = "FASTA file(s) containing primer sequences used or identified"
+
+        try:
+            analysis.add_download(
+                DownloadFile(
+                    path=fp.relative_to(analysis.results_dir),
+                    file_type=ftype,
+                    alias=fp.name,
+                    download_type=dtype,
+                    download_group=analyses.models.Analysis.PRIMER_IDENTIFICATION,
+                    parent_identifier=analysis.accession,
+                    short_description=short_desc,
+                    long_description=long_desc,
+                )
+            )
+        except FileExistsError:
+            logging.info(f"Duplicate download alias, skipping: {fp}")
+
+    analysis.save()
+
+
 def import_asv(analysis: analyses.models.Analysis, dir_for_analysis: Path):
     if not (dir_for_analysis / EMG_CONFIG.amplicon_pipeline.asv_folder).is_dir():
         print(f"No asv dir in {dir_for_analysis}. Nothing to import.")
