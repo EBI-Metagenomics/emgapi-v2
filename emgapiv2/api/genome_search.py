@@ -49,20 +49,36 @@ def _backend_url() -> str:
     )
 
 
-def _post_to_backend(payload: Dict[str, Any], files: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+def _normalise_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
+    """Translate client-facing 'sequence' key to the backend's expected 'seq' key."""
+    if "sequence" in payload:
+        payload = dict(payload)
+        payload["seq"] = payload.pop("sequence")
+    return payload
+
+
+def _post_to_backend(payload: Dict[str, Any], files: Optional[Dict[str, Any]] = None, as_form: bool = False) -> Dict[str, Any]:
     url = _backend_url()
     try:
-        if files:
+        if files or as_form:
             resp = requests.post(url, data=payload, files=files, timeout=30)
         else:
             resp = requests.post(url, json=payload, timeout=30)
     except requests.exceptions.RequestException as ex:
+        # Log the actual exception and include backend URL context
+        logger.exception("MGS Failed to post to backend: %s", ex)
         logger.exception("Failed to talk to genome search backend at %s", url)
-        raise Http404("Genome search failed. Please try later.") from ex
+        # Build a safe, informative message. ex.response may be None (e.g. timeouts),
+        # so guard access and include at most the first 500 chars of response text.
+        detail = str(ex)
+        resp_text = getattr(getattr(ex, "response", None), "text", "")
+        if resp_text:
+            detail = f"{detail} | {resp_text[:500]}"
+        raise Http404(f"Genome search failed. Please try later. {detail}") from ex
 
     if not 200 <= resp.status_code < 300:
         logger.error("Genome search backend returned %s: %s", resp.status_code, resp.text[:500])
-        raise Http404("Genome search failed. Please try later.")
+        raise Http404(f"Genome search failed. Please try later. {resp.text[:500]}")
 
     try:
         return resp.json()
@@ -106,12 +122,15 @@ class GenomeSearchController(UnauthorisedIsUnfoundController):
         summary="Search genomes by short sequence and annotate with MGnify metadata",
         operation_id="genome_fragment_search",
     )
-    def genome_fragment_search_json(self, request, body: Optional[GenomeFragmentSearchIn] = None):
-        # Accept both JSON and multipart/form-data on the same endpoint for client convenience
+    def genome_fragment_search_json(self, request):
         content_type = request.headers.get("content-type", "").lower()
         files = None
-        if content_type.startswith("multipart/"):
-            # Build payload from form-data
+        is_form_like = (
+            content_type.startswith("multipart/")
+            or content_type.startswith("application/x-www-form-urlencoded")
+            or (hasattr(request, "POST") and (bool(request.POST) or bool(getattr(request, "FILES", None))))
+        )
+        if is_form_like:
             seq = request.POST.get("sequence") or request.POST.get("seq")
             payload: Dict[str, Any] = {
                 k: v
@@ -123,22 +142,12 @@ class GenomeSearchController(UnauthorisedIsUnfoundController):
                 }.items()
                 if v not in (None, "")
             }
-            # Coerce numeric fields if present
-            if "kmer_size" in payload:
-                try:
-                    payload["kmer_size"] = int(payload["kmer_size"])  # type: ignore[index]
-                except ValueError:
-                    del payload["kmer_size"]
-            if "max_results" in payload:
-                try:
-                    payload["max_results"] = int(payload["max_results"])  # type: ignore[index]
-                except ValueError:
-                    del payload["max_results"]
-            if "threshold" in payload:
-                try:
-                    payload["threshold"] = float(payload["threshold"])  # type: ignore[index]
-                except ValueError:
-                    del payload["threshold"]
+            for field, coerce in (("kmer_size", int), ("max_results", int), ("threshold", float)):
+                if field in payload:
+                    try:
+                        payload[field] = coerce(payload[field])  # type: ignore[operator]
+                    except ValueError:
+                        del payload[field]
 
             if "catalogues_filter" in request.POST:
                 payload["catalogues_filter"] = request.POST.getlist("catalogues_filter")
@@ -153,10 +162,14 @@ class GenomeSearchController(UnauthorisedIsUnfoundController):
                     )
                 }
         else:
-            # JSON or x-www-form-urlencoded automatically parsed by Ninja
-            payload = (body.dict(exclude_none=True) if body else {})
+            try:
+                data = json.loads(request.body or b"{}")
+            except (JSONDecodeError, ValueError):
+                data = {}
+            body = GenomeFragmentSearchIn(**data)
+            payload = body.dict(exclude_none=True)
 
-        backend = _post_to_backend(payload, files=files)
+        backend = _post_to_backend(_normalise_payload(payload), files=files, as_form=is_form_like)
         results = backend.get("results") or []
         annotated = _annotate_results(results)
         return GenomeFragmentSearchOut(results=annotated)
@@ -205,7 +218,7 @@ class GenomeSearchController(UnauthorisedIsUnfoundController):
                 )
             }
 
-        backend = _post_to_backend(payload, files=files)
+        backend = _post_to_backend(_normalise_payload(payload), files=files)
         results = backend.get("results") or []
         annotated = _annotate_results(results)
         return GenomeFragmentSearchOut(results=annotated)
