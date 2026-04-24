@@ -930,16 +930,10 @@ class Analysis(
     def pipeline_version_from_config(
         cls, pipeline_version: str
     ) -> "Analysis.PipelineVersions":
-        normalized = pipeline_version.strip().lower()
-        version_map = {
-            cls.PipelineVersions.v6.label.lower(): cls.PipelineVersions.v6.value,
-            "v6": cls.PipelineVersions.v6.value,
-            cls.PipelineVersions.v6_1.label.lower(): cls.PipelineVersions.v6_1.value,
-            "v6.1": cls.PipelineVersions.v6_1.value,
-        }
+        normalized = pipeline_version.strip().lower().rstrip(".0")
         try:
-            return cls.PipelineVersions(version_map[normalized])
-        except KeyError as exc:
+            return getattr(cls.PipelineVersions, normalized)
+        except AttributeError as exc:
             raise ValueError(
                 f"Unsupported pipeline version {pipeline_version!r}"
             ) from exc

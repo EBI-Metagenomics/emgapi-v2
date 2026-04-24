@@ -1,7 +1,7 @@
 from activate_django_first import EMG_CONFIG
 
 from analyses.models import Analysis
-
+from emgapiv2.config import MGnifyPipelineConfig
 
 PIPELINE_CONFIGS_BY_EXPERIMENT_TYPE = {
     Analysis.ExperimentTypes.AMPLICON: EMG_CONFIG.amplicon_pipeline,
@@ -15,7 +15,7 @@ PIPELINE_CONFIGS_BY_EXPERIMENT_TYPE = {
 
 def get_pipeline_config_for_experiment_type(
     experiment_type: Analysis.ExperimentTypes | str,
-):
+) -> MGnifyPipelineConfig:
     normalized_experiment_type = (
         experiment_type
         if isinstance(experiment_type, Analysis.ExperimentTypes)
@@ -34,6 +34,7 @@ def get_current_pipeline_version_for_experiment_type(
 def get_v6_family_pipeline_versions_for_experiment_type(
     experiment_type: Analysis.ExperimentTypes | str,
 ) -> tuple[Analysis.PipelineVersions, ...]:
+    # TODO: remove after all legacy data are imported
     normalized_experiment_type = (
         experiment_type
         if isinstance(experiment_type, Analysis.ExperimentTypes)

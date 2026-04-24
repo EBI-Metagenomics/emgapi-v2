@@ -246,6 +246,7 @@ def analysis_amplicon_study(study_accession: str):
         ),
         is_ready=True,
     ).exists()
+    # TODO: remove has_v6_analyses from features json once all legacy data imported
     mgnify_study.save()
 
     emit_event(
