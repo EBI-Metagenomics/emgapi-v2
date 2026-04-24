@@ -1,16 +1,14 @@
 import logging
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Tuple
 import json
 from json import JSONDecodeError
 
 import requests
 from django.conf import settings
-from django.http import Http404
-from ninja import Schema, Field, File, Form
-from ninja.files import UploadedFile
+from ninja import Schema, Field
+from ninja.errors import HttpError
 from ninja_extra import api_controller, http_post
 
-from emgapiv2.api.perms import UnauthorisedIsUnfoundController
 from emgapiv2.api.schema_utils import ApiSections
 from genomes.models import Genome
 from genomes.schemas import GenomeList
@@ -49,7 +47,6 @@ class GenomeFragmentSearchOut(Schema):
 
 
 def _backend_url() -> str:
-    # Use the provided default if not set in Django settings
     return getattr(
         settings,
         "GENOME_SEARCH_PROXY",
@@ -57,13 +54,67 @@ def _backend_url() -> str:
     )
 
 
-def _normalise_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
-    """Translate client-facing 'sequence' key to the backend's expected 'seq' key."""
-    if "sequence" in payload:
-        payload = dict(payload)
-        payload["seq"] = payload.pop("sequence")
-    return payload
+def _parse_request(request) -> Tuple[Dict[str, Any], Optional[Dict[str, Any]], bool]:
+    """
+    Returns (payload, files, as_form).
 
+    Ninja binds its parsing strategy to type annotations, so a single handler
+    cannot natively accept both JSON and multipart for the same fields. This
+    function handles that dispatch manually, keeping the handler thin.
+
+    `as_form` is True for multipart/form requests and tells _post_to_backend
+    to forward as form data rather than JSON.
+    """
+    content_type = request.headers.get("content-type", "").lower()
+    is_form = (
+        content_type.startswith("multipart/")
+        or content_type.startswith("application/x-www-form-urlencoded")
+        or (hasattr(request, "POST") and (bool(request.POST) or bool(getattr(request, "FILES", None))))
+    )
+
+    if is_form:
+        seq = request.POST.get("sequence") or request.POST.get("seq")
+        payload: Dict[str, Any] = {
+            k: v
+            for k, v in {
+                "seq": seq,
+                "kmer_size": request.POST.get("kmer_size"),
+                "max_results": request.POST.get("max_results"),
+                "threshold": request.POST.get("threshold"),
+            }.items()
+            if v not in (None, "")
+        }
+        for field, coerce in (("kmer_size", int), ("max_results", int), ("threshold", float)):
+            if field in payload:
+                try:
+                    payload[field] = coerce(payload[field])  # type: ignore[operator]
+                except ValueError:
+                    del payload[field]
+
+        if "catalogues_filter" in request.POST:
+            payload["catalogues_filter"] = request.POST.getlist("catalogues_filter")
+
+        files = None
+        if "sequence_file" in request.FILES:
+            f = request.FILES["sequence_file"]
+            files = {
+                "sequence_file": (
+                    getattr(f, "name", "sequence_file"),
+                    f,
+                    getattr(f, "content_type", "application/octet-stream") or "application/octet-stream",
+                )
+            }
+        return payload, files, True
+
+    try:
+        data = json.loads(request.body or b"{}")
+    except (JSONDecodeError, ValueError):
+        data = {}
+    body = GenomeFragmentSearchIn(**data)
+    payload = body.dict(exclude_none=True)
+    if "sequence" in payload:
+        payload["seq"] = payload.pop("sequence")
+    return payload, None, False
 
 def _post_to_backend(payload: Dict[str, Any], files: Optional[Dict[str, Any]] = None, as_form: bool = False) -> Dict[str, Any]:
     url = _backend_url()
@@ -72,49 +123,44 @@ def _post_to_backend(payload: Dict[str, Any], files: Optional[Dict[str, Any]] = 
             resp = requests.post(url, data=payload, files=files, timeout=30)
         else:
             resp = requests.post(url, json=payload, timeout=30)
+        resp.raise_for_status()
+    except requests.exceptions.HTTPError as ex:
+        status = ex.response.status_code
+        logger.error("Genome search backend returned %s: %s", status, ex.response.text[:500])
+        if status >= 500:
+            raise HttpError(502, "Genome search backend is unavailable. Please try later.")
+        raise HttpError(400, "Genome search request was rejected by the backend.")
     except requests.exceptions.RequestException as ex:
-        # Log the actual exception and include backend URL context
-        logger.exception("MGS Failed to post to backend: %s", ex)
-        logger.exception("Failed to talk to genome search backend at %s", url)
-        # Build a safe, informative message. ex.response may be None (e.g. timeouts),
-        # so guard access and include at most the first 500 chars of response text.
-        detail = str(ex)
-        resp_text = getattr(getattr(ex, "response", None), "text", "")
-        if resp_text:
-            detail = f"{detail} | {resp_text[:500]}"
-        raise Http404(f"Genome search failed. Please try later. {detail}") from ex
-
-    if not 200 <= resp.status_code < 300:
-        logger.error("Genome search backend returned %s: %s", resp.status_code, resp.text[:500])
-        raise Http404(f"Genome search failed. Please try later. {resp.text[:500]}")
+        logger.exception("Failed to reach genome search backend at %s", url)
+        raise HttpError(503, "Genome search is temporarily unavailable. Please try later.") from ex
 
     try:
         return resp.json()
     except (JSONDecodeError, ValueError) as ex:
         logger.exception("Failed to decode JSON from genome search backend")
-        raise Http404("Genome search failed. Please try later.") from ex
+        raise HttpError(502, "Genome search backend returned an invalid response.") from ex
 
 
 def _annotate_results(raw_results: List[Dict[str, Any]]) -> List[AnnotatedResult]:
-    matches = {r.get("genome"): r for r in raw_results if r.get("genome")}
-    if not matches:
+    cobs_result_by_accession = {r.get("genome"): r for r in raw_results if r.get("genome")}
+    if not cobs_result_by_accession:
         return []
 
     genomes = (
-        Genome.objects.filter(accession__in=list(matches.keys()))
+        Genome.objects.filter(accession__in=list(cobs_result_by_accession.keys()))
         .select_related("catalogue", "biome")
         .all()
     )
 
     annotated: List[AnnotatedResult] = []
     for genome in genomes:
-        m = matches.get(genome.accession)
-        if not m:
+        cobs_result = cobs_result_by_accession.get(genome.accession)
+        if not cobs_result:
             continue
         annotated.append(
             AnnotatedResult(
                 mgnify=GenomeList.from_orm(genome),
-                cobs=CobsMatch(**m),
+                cobs=CobsMatch(**cobs_result),
             )
         )
 
@@ -123,123 +169,21 @@ def _annotate_results(raw_results: List[Dict[str, Any]]) -> List[AnnotatedResult
 
 
 @api_controller("genome-search", tags=[ApiSections.GENOMES])
-class GenomeSearchController(UnauthorisedIsUnfoundController):
+class GenomeSearchController():
     @http_post(
         "/",
         response=GenomeFragmentSearchOut,
         summary="Search genomes by short sequence and annotate with MGnify metadata",
         operation_id="genome_fragment_search",
     )
-    def genome_fragment_search_json(self, request):
-        content_type = request.headers.get("content-type", "").lower()
-        files = None
-        is_form_like = (
-            content_type.startswith("multipart/")
-            or content_type.startswith("application/x-www-form-urlencoded")
-            or (hasattr(request, "POST") and (bool(request.POST) or bool(getattr(request, "FILES", None))))
-        )
-        if is_form_like:
-            seq = request.POST.get("sequence") or request.POST.get("seq")
-            payload: Dict[str, Any] = {
-                k: v
-                for k, v in {
-                    "sequence": seq,
-                    "kmer_size": request.POST.get("kmer_size"),
-                    "max_results": request.POST.get("max_results"),
-                    "threshold": request.POST.get("threshold"),
-                }.items()
-                if v not in (None, "")
-            }
-            for field, coerce in (("kmer_size", int), ("max_results", int), ("threshold", float)):
-                if field in payload:
-                    try:
-                        payload[field] = coerce(payload[field])  # type: ignore[operator]
-                    except ValueError:
-                        del payload[field]
-
-            if "catalogues_filter" in request.POST:
-                payload["catalogues_filter"] = request.POST.getlist("catalogues_filter")
-
-            if "sequence_file" in request.FILES:
-                f = request.FILES["sequence_file"]
-                files = {
-                    "sequence_file": (
-                        getattr(f, "name", "sequence_file"),
-                        f,
-                        getattr(f, "content_type", "application/octet-stream") or "application/octet-stream",
-                    )
-                }
-        else:
-            try:
-                data = json.loads(request.body or b"{}")
-            except (JSONDecodeError, ValueError):
-                data = {}
-            body = GenomeFragmentSearchIn(**data)
-            payload = body.dict(exclude_none=True)
-
-        normalised = _normalise_payload(payload)
-        backend = _post_to_backend(normalised, files=files, as_form=is_form_like)
+    def genome_fragment_search(self, request):
+        payload, files, as_form = _parse_request(request)
+        backend = _post_to_backend(payload, files=files, as_form=as_form)
         results = backend.get("results") or []
         annotated = _annotate_results(results)
         return GenomeFragmentSearchOut(
             data=GenomeSearchData(
-                query=payload.get("sequence") or payload.get("seq"),
-                threshold=payload.get("threshold"),
-                results=annotated,
-            )
-        )
-
-    @http_post(
-        "/:multipart",
-        response=GenomeFragmentSearchOut,
-        summary="Search genomes by sequence file (multipart/form-data)",
-        operation_id="genome_fragment_search_multipart",
-    )
-    def genome_fragment_search_multipart(
-        self,
-        request,
-        sequence: Optional[str] = Form(None),
-        seq: Optional[str] = Form(None),
-        kmer_size: Optional[int] = Form(None),
-        max_results: Optional[int] = Form(None),
-        threshold: Optional[float] = Form(None),
-        sequence_file: Optional[UploadedFile] = File(None),
-    ):
-        # Prefer 'sequence'; fall back to 'seq' alias for compatibility
-        effective_sequence = sequence if sequence is not None else seq
-
-        payload: Dict[str, Any] = {
-            k: v
-            for k, v in {
-                "sequence": effective_sequence,
-                "kmer_size": kmer_size,
-                "max_results": max_results,
-                "threshold": threshold,
-            }.items()
-            if v is not None
-        }
-
-        # Collect repeated form fields
-        if hasattr(request, "POST") and "catalogues_filter" in request.POST:
-            payload["catalogues_filter"] = request.POST.getlist("catalogues_filter")
-
-        files = None
-        if sequence_file is not None:
-            files = {
-                "sequence_file": (
-                    sequence_file.name,
-                    sequence_file,
-                    sequence_file.content_type or "application/octet-stream",
-                )
-            }
-
-        normalised = _normalise_payload(payload)
-        backend = _post_to_backend(normalised, files=files)
-        results = backend.get("results") or []
-        annotated = _annotate_results(results)
-        return GenomeFragmentSearchOut(
-            data=GenomeSearchData(
-                query=payload.get("sequence") or payload.get("seq"),
+                query=payload.get("seq"),
                 threshold=payload.get("threshold"),
                 results=annotated,
             )
