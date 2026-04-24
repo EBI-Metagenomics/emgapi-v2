@@ -29,6 +29,8 @@ class GenomeFragmentSearchIn(Schema):
 class CobsMatch(Schema):
     genome: str
     percent_kmers_found: Optional[float] = 0.0
+    num_kmers: Optional[int] = None
+    num_kmers_found: Optional[int] = None
 
 
 class AnnotatedResult(Schema):
@@ -36,8 +38,14 @@ class AnnotatedResult(Schema):
     cobs: CobsMatch
 
 
-class GenomeFragmentSearchOut(Schema):
+class GenomeSearchData(Schema):
+    query: Optional[str] = None
+    threshold: Optional[float] = None
     results: List[AnnotatedResult]
+
+
+class GenomeFragmentSearchOut(Schema):
+    data: GenomeSearchData
 
 
 def _backend_url() -> str:
@@ -169,10 +177,17 @@ class GenomeSearchController(UnauthorisedIsUnfoundController):
             body = GenomeFragmentSearchIn(**data)
             payload = body.dict(exclude_none=True)
 
-        backend = _post_to_backend(_normalise_payload(payload), files=files, as_form=is_form_like)
+        normalised = _normalise_payload(payload)
+        backend = _post_to_backend(normalised, files=files, as_form=is_form_like)
         results = backend.get("results") or []
         annotated = _annotate_results(results)
-        return GenomeFragmentSearchOut(results=annotated)
+        return GenomeFragmentSearchOut(
+            data=GenomeSearchData(
+                query=payload.get("sequence") or payload.get("seq"),
+                threshold=payload.get("threshold"),
+                results=annotated,
+            )
+        )
 
     @http_post(
         "/:multipart",
@@ -218,7 +233,14 @@ class GenomeSearchController(UnauthorisedIsUnfoundController):
                 )
             }
 
-        backend = _post_to_backend(_normalise_payload(payload), files=files)
+        normalised = _normalise_payload(payload)
+        backend = _post_to_backend(normalised, files=files)
         results = backend.get("results") or []
         annotated = _annotate_results(results)
-        return GenomeFragmentSearchOut(results=annotated)
+        return GenomeFragmentSearchOut(
+            data=GenomeSearchData(
+                query=payload.get("sequence") or payload.get("seq"),
+                threshold=payload.get("threshold"),
+                results=annotated,
+            )
+        )
