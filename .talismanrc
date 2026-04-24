@@ -213,6 +213,12 @@ fileignoreconfig:
 - filename: workflows/flows/housekeeping/clean_nextflow_workdirs.py
   allowed_patterns: [key]
 
+- filename: workflows/flows/housekeeping/sync_samples_with_ena.py
+  allowed_patterns: [key]
+
+- filename: workflows/flows/housekeeping/sync_studies_with_ena.py
+  allowed_patterns: [key]
+
 - filename: workflows/tests/test_flows_utils.py
   checksum: 7044790c62db033597a0c9391751a32f2db1f88d5ba5a953b6c607d97ff7ed6d
 

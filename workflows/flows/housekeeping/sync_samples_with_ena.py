@@ -1,4 +1,5 @@
 from prefect import get_run_logger
+from prefect.artifacts import create_table_artifact
 
 from activate_django_first import EMG_CONFIG  # noqa: F401
 
@@ -24,7 +25,11 @@ def sync_samples(sample_accessions: list[str]) -> list[str]:
     failed = []
     for sample_accession in sample_accessions:
         try:
-            sample = ena.models.Sample.objects.get(accession=sample_accession)
+            sample = ena.models.Sample.objects.get_ena_sample(sample_accession)
+            if sample is None:
+                raise ena.models.Sample.DoesNotExist(
+                    f"No sample found for accession {sample_accession}"
+                )
             logger.info(f"Syncing metadata for sample {sample.accession}")
             sync_sample_metadata_from_ena(sample)
             logger.info(f"Successfully synced metadata for sample {sample.accession}")
@@ -67,18 +72,25 @@ def sync_samples_with_ena(
     total = len(sample_accessions)
     logger.info(f"Syncing metadata for {total} samples in batches of {batch_size}")
 
-    all_failed = []
+    failed_accessions = []
     for i in range(0, total, batch_size):
         batch = sample_accessions[i : i + batch_size]
         logger.info(f"Processing batch {i // batch_size + 1} ({len(batch)} samples)")
         failed = sync_samples(batch)
-        all_failed.extend(failed)
+        if failed:
+            failed_accessions.extend(failed)
 
-    if all_failed:
+    if failed_accessions:
         logger.warning(
-            f"Failed to sync {len(all_failed)} samples: {', '.join(all_failed)}"
+            f"Failed to sync {len(failed_accessions)} samples. "
+            "See the 'failed-ena-sample-syncs' table artifact for accessions."
+        )
+        create_table_artifact(
+            key="failed-ena-sample-syncs",
+            table=[{"accession": accession} for accession in failed_accessions],
+            description=f"{len(failed_accessions)} samples failed to sync from ENA.",
         )
     else:
         logger.info("All samples synced successfully")
 
-    return all_failed
+    return failed_accessions
