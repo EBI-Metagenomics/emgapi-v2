@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from prefect import flow, get_run_logger
+from prefect import get_run_logger
 from sqlalchemy import select
 
 import activate_django_first  # noqa
@@ -36,16 +36,19 @@ from workflows.data_io_utils.legacy_emg_dbs import (
     get_taxonomy_from_api_v1_mongo,
     legacy_emg_db_session,
     get_functions_from_api_v1_mongo,
+    LEGACY_PIPELINE_ID_MAP,
 )
+
+from workflows.prefect_utils.flows_utils import django_db_flow as flow
 
 
 @flow(
-    name="Import V5 Analyses",
-    flow_run_name="Import V5 analyses from study: {mgys}",
+    name="Import Legacy (pre-V6) Analyses",
+    flow_run_name="Import legacy analyses from study: {mgys}",
 )
-def import_v5_analyses(mgys: str, fetch_functions: bool = False):
+def import_legacy_analyses(mgys: str, fetch_functions: bool = False):
     """
-    This flow will iteratively import analyses (made with MGnify V5 pipeline)
+    This flow will iteratively import analyses (made with MGnify V1-V5 pipelines)
     into the EMG DB.
 
     It connects to the legacy EMG MySQL and Mongo DBs, but not through Django.
@@ -95,7 +98,9 @@ def import_v5_analyses(mgys: str, fetch_functions: bool = False):
                     "sample": sample,
                     "results_dir": legacy_analysis.result_directory,
                     "ena_study": study.ena_study,
-                    "pipeline_version": Analysis.PipelineVersions.v5,
+                    "pipeline_version": LEGACY_PIPELINE_ID_MAP.get(
+                        legacy_analysis.pipeline_id
+                    ),
                     "run": run,
                     "assembly": assembly,
                 },
@@ -149,3 +154,33 @@ def import_v5_analyses(mgys: str, fetch_functions: bool = False):
 
         sync_privacy_state_of_ena_study_and_derived_objects(study.ena_study)
         sync_study_metadata_from_ena(study.ena_study)
+
+
+@flow(
+    name="Import all legacy analyses",
+    flow_run_name="Import legacy analyses from all known studies",
+)
+def import_all_legacy_analyses(fetch_functions: bool = False):
+    """
+    Imports all legacy analyses from all known studies.
+
+    This function retrieves a list of all studies and processes each study to
+    import legacy analyses. It optionally fetches associated functions during
+    the import process.
+
+    :param fetch_functions: Boolean indicating whether to fetch associated
+        functions during the import process.
+    :type fetch_functions: bool
+    :return: None
+    """
+    logger = get_run_logger()
+    with legacy_emg_db_session() as session:
+        study_ids_stmt = select(LegacyStudy.id)
+        study_ids = session.scalars(study_ids_stmt).all()
+
+    logger.info(f"Found {len(study_ids)} legacy studies to import")
+
+    for study_id in study_ids:
+        mgys = f"MGYS{study_id:08d}"
+        logger.info(f"Importing study {mgys}")
+        import_legacy_analyses(mgys=mgys, fetch_functions=fetch_functions)

@@ -14,7 +14,10 @@ from workflows.data_io_utils.legacy_emg_dbs import (
     LegacySample,
     legacy_emg_db_session,
 )
-from workflows.flows.legacy.flows.import_v5_analyses import import_v5_analyses
+from workflows.flows.legacy.flows.import_legacy_analyses import (
+    import_legacy_analyses,
+    import_all_legacy_analyses,
+)
 from workflows.prefect_utils.testing_utils import (
     run_flow_and_capture_logs,
     should_not_mock_httpx_requests_to_prefect_server,
@@ -91,7 +94,7 @@ def test_prefect_import_v5_analyses_flow(
         is_optional=False,
     )
     importer_flow_run = run_flow_and_capture_logs(
-        import_v5_analyses,
+        import_legacy_analyses,
         mgys="MGYS00005000",
     )
 
@@ -222,3 +225,29 @@ def test_make_sample_from_legacy_emg_db_multiple_studies(prefect_harness):
 
     # Also check ena_sample has NOT changed its study (ENA samples are 1:1 with ENA studies in our simplified data model)
     assert returned_sample.ena_sample.study == ena_study_1
+
+
+@pytest.mark.httpx_mock(should_mock=should_not_mock_httpx_requests_to_prefect_server)
+@pytest.mark.django_db(transaction=True)
+def test_prefect_import_all_legacy_analyses_flow(
+    prefect_harness,
+    mock_legacy_emg_db_session,
+    mock_mongo_client_for_taxonomy,
+    ena_any_sample_metadata,
+    httpx_mock,
+):
+    httpx_mock.add_response(
+        url=re.compile(r".*result=study.*ERP1.*"),
+        json=[{"study_accession": "ERP1"}],
+        is_reusable=True,
+    )
+
+    importer_flow_run = run_flow_and_capture_logs(
+        import_all_legacy_analyses,
+    )
+
+    assert "Found 1 legacy studies to import" in importer_flow_run.logs
+    assert "Importing study MGYS00005000" in importer_flow_run.logs
+
+    assert Study.objects.filter(accession="MGYS00005000").exists()
+    assert Analysis.objects.filter(id=12345).exists()
