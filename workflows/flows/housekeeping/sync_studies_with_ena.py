@@ -1,4 +1,5 @@
 from prefect import get_run_logger
+from prefect.artifacts import create_table_artifact
 
 from activate_django_first import EMG_CONFIG  # noqa: F401
 
@@ -11,7 +12,7 @@ from workflows.prefect_utils.flows_utils import (
 
 
 @task(name="Sync batch of studies metadata from ENA")
-def sync_studies(study_accessions: list[str]):
+def sync_studies(study_accessions: list[str]) -> list[str]:
     """Sync metadata for a batch of studies from ENA.
 
     Each study is synced individually with try/except so that a failure
@@ -39,7 +40,7 @@ def sync_studies_with_ena(
     accessions: list[str] | None = None,
     all_studies: bool = False,
     batch_size: int = 50,
-):
+) -> list[str]:
     """Sync study metadata from ENA for a list of accessions or all studies.
 
     Studies are processed in batches to avoid long-running DB connections.
@@ -47,6 +48,7 @@ def sync_studies_with_ena(
     :param accessions: List of study accessions to sync.
     :param all_studies: If True, sync all studies.
     :param batch_size: Number of studies to process per batch (default 50).
+    :return: List of study accessions that failed to sync.
     """
     logger = get_run_logger()
 
@@ -74,8 +76,16 @@ def sync_studies_with_ena(
         all_failed.extend(failed)
 
     if all_failed:
+        create_table_artifact(
+            key="failed-ena-study-syncs",
+            table=[{"accession": accession} for accession in all_failed],
+            description=f"{len(all_failed)} studies failed to sync from ENA.",
+        )
         logger.warning(
-            f"Failed to sync {len(all_failed)} studies: {', '.join(all_failed)}"
+            f"Failed to sync {len(all_failed)} studies. "
+            "See the 'failed-ena-study-syncs' table artifact for accessions."
         )
     else:
         logger.info("All studies synced successfully")
+
+    return all_failed
