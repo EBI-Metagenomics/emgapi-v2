@@ -259,6 +259,17 @@ deployments:
   work_pool:
     name: slurm
 
+
+- name: sync_samples_with_ena
+  description: |-
+    This flow will sync samples metadata with ENA.
+    :param accessions: List of sample accessions to sync
+  entrypoint: workflows/flows/housekeeping/sync_samples_with_ena.py:sync_samples_with_ena
+  parameters: {}
+  work_pool:
+    name: slurm
+  schedules: []
+
 - name: update_ena_accession_from_json_flow_deployment
   description: |-
     Traverse per-genome JSON files to update Genome.ena_genome_accession from the
@@ -333,7 +344,7 @@ deployments:
 - name: sync_studies_with_ena
   description: |-
     This flow will sync studies metadata with ENA.
-    :param study_accessions: List of study accessions to sync
+    :param accessions: List of study accessions to sync
   entrypoint: workflows/flows/housekeeping/sync_studies_with_ena.py:sync_studies_with_ena
   parameters: {}
   work_pool:
