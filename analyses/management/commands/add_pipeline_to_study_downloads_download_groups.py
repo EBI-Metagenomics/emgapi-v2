@@ -1,10 +1,20 @@
 from django.core.management.base import BaseCommand
-from analyses.models import Study
+from analyses.models import Study, Analysis
 from analyses.base_models.with_experiment_type_models import WithExperimentTypeModel
 
 
 class Command(BaseCommand):
     help = "Update the download_group for all Study downloads to include the pipeline version and type."
+
+    @staticmethod
+    def _infer_pipeline_version(analyses, inferred_type: str) -> str:
+        if inferred_type == "amplicon":
+            pipeline_versions = set(analyses.values_list("pipeline_version", flat=True))
+            if Analysis.PipelineVersions.v6_1 in pipeline_versions:
+                return "v6.1"
+            if Analysis.PipelineVersions.v6 in pipeline_versions:
+                return "v6"
+        return "v6"
 
     def handle(self, *args, **options):
         # Filter studies with non-empty downloads list. In Django JSONField, we can exclude []
@@ -58,7 +68,7 @@ class Command(BaseCommand):
                 continue
 
             updated = False
-            version = "v6"
+            version = self._infer_pipeline_version(analyses, inferred_type)
 
             for download in study.downloads:
                 current_group = download.get("download_group", "")

@@ -1179,7 +1179,9 @@ def test_prefect_analyse_amplicon_flow(
     mock_suspend_flow_run.assert_called()
 
     # Check samplesheet
-    assembly_samplesheet_table = Artifact.get("amplicon-v6-initial-sample-sheet")
+    assembly_samplesheet_table = Artifact.get(
+        f"amplicon-{EMG_CONFIG.amplicon_pipeline.pipeline_version}-initial-sample-sheet"
+    )
     assert assembly_samplesheet_table.type == "table"
     table_data = json.loads(assembly_samplesheet_table.data)
     assert len(table_data) == len(runs)
@@ -1710,7 +1712,9 @@ def test_prefect_analyse_amplicon_flow_private_data(
     mock_check_cluster_job_all_completed.assert_called()
     mock_suspend_flow_run.assert_called()
 
-    assembly_samplesheet_table = Artifact.get("amplicon-v6-initial-sample-sheet")
+    assembly_samplesheet_table = Artifact.get(
+        f"amplicon-{EMG_CONFIG.amplicon_pipeline.pipeline_version}-initial-sample-sheet"
+    )
     assert assembly_samplesheet_table.type == "table"
     table_data = json.loads(assembly_samplesheet_table.data)
     assert len(table_data) == len(runs)

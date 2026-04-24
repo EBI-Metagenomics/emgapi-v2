@@ -18,6 +18,9 @@ from workflows.data_io_utils.file_rules.common_rules import (
 )
 from workflows.data_io_utils.file_rules.nodes import Directory, File
 from workflows.prefect_utils.flows_utils import django_db_flow as flow
+from workflows.flows.analysis.pipeline_versions import (
+    get_current_pipeline_version_for_experiment_type,
+)
 from workflows.prefect_utils.dir_context import chdir
 
 STUDY_SUMMARY = "study_summary"
@@ -32,7 +35,7 @@ def generate_markergene_summary_for_pipeline_run(
 ):
     """
     Generate a markergene summary file for an analysis pipeline execution,
-    e.g. a run of the V6 Amplicon pipeline on a samplesheet of runs.
+    e.g. a run of the configured amplicon pipeline on a samplesheet of runs.
 
     :param mgnify_study_accession: e.g. MGYS0000001
     :param pipeline_outdir: The path to dir where pipeline published results are, e.g. /nfs/my/dir/abcedfg
@@ -41,6 +44,9 @@ def generate_markergene_summary_for_pipeline_run(
     """
     logger = get_run_logger()
     study = Study.objects.get(accession=mgnify_study_accession)
+    amplicon_pipeline_version = get_current_pipeline_version_for_experiment_type(
+        Analysis.ExperimentTypes.AMPLICON
+    )
     logger.info(f"Generating marker gene summaries for a pipeline execution of {study}")
 
     results_dir = Directory(
@@ -101,7 +107,7 @@ def generate_markergene_summary_for_pipeline_run(
         }
         analysis = study.analyses.get(
             run__ena_accessions__icontains=run_accession,
-            pipeline_version=Analysis.PipelineVersions.v6,
+            pipeline_version=amplicon_pipeline_version,
         )
         analysis.metadata[analysis.KnownMetadataKeys.MARKER_GENE_SUMMARY] = (
             marker_gene_summary_for_run

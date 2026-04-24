@@ -30,6 +30,7 @@ def test_add_pipeline_to_study_downloads_download_groups(
         run=run,
         ena_study=raw_reads_mgnify_study.ena_study,
         experiment_type=WithExperimentTypeModel.ExperimentTypes.AMPLICON,
+        pipeline_version=Analysis.PipelineVersions.v6_1,
     )
     # Test with both "study_summary.suffix" and just "study_summary"
     amplicon_study.add_download(
@@ -182,9 +183,11 @@ def test_add_pipeline_to_study_downloads_download_groups(
     amplicon_study.refresh_from_db()
     assert (
         amplicon_study.downloads[0]["download_group"]
-        == "study_summary.v6.amplicon.silva-ssu"
+        == "study_summary.v6.1.amplicon.silva-ssu"
     )
-    assert amplicon_study.downloads[1]["download_group"] == "study_summary.v6.amplicon"
+    assert (
+        amplicon_study.downloads[1]["download_group"] == "study_summary.v6.1.amplicon"
+    )
 
     assembly_study.refresh_from_db()
     assert (
@@ -207,3 +210,44 @@ def test_add_pipeline_to_study_downloads_download_groups(
 
     nodl_study.refresh_from_db()
     assert nodl_study.downloads == []
+
+
+@pytest.mark.django_db
+def test_add_pipeline_to_study_downloads_download_groups_amplicon_v6_1(
+    raw_reads_mgnify_study, raw_reads_mgnify_sample, raw_read_run
+):
+    sample = raw_reads_mgnify_sample[0]
+    run = raw_read_run[0]
+
+    study = Study.objects.create(
+        accession="MGYS00001007",
+        title="Amplicon Study v6.1",
+        ena_study=raw_reads_mgnify_study.ena_study,
+    )
+    Analysis.objects.create(
+        accession="MGYA00001007",
+        study=study,
+        sample=sample,
+        run=run,
+        ena_study=raw_reads_mgnify_study.ena_study,
+        experiment_type=WithExperimentTypeModel.ExperimentTypes.AMPLICON,
+        pipeline_version=Analysis.PipelineVersions.v6_1,
+    )
+    study.add_download(
+        DownloadFile(
+            path="s7.tsv",
+            alias="a7",
+            download_type=DownloadType.TAXONOMIC_ANALYSIS,
+            file_type=DownloadFileType.TSV,
+            download_group="study_summary.silva-ssu",
+            short_description="short",
+            long_description="long",
+        )
+    )
+
+    call_command("add_pipeline_to_study_downloads_download_groups")
+
+    study.refresh_from_db()
+    assert (
+        study.downloads[0]["download_group"] == "study_summary.v6.1.amplicon.silva-ssu"
+    )

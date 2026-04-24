@@ -134,7 +134,7 @@ fileignoreconfig:
 - filename: workflows/ena_utils/ena_auth.py
   checksum: e8122d8429dad2fcb68f7fe2f5c6068d077ebb7707653eb61dd9a5ef54d2137f
 
-- filename: workflows/flows/analyse_study_tasks/make_samplesheet_amplicon.py
+- filename: workflows/flows/analyse_study_tasks/amplicon/make_samplesheet_amplicon.py
   allowed_patterns: [key]
 
 - filename: workflows/flows/analyse_study_tasks/make_samplesheet_assembly.py
