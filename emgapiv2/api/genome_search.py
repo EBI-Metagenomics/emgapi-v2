@@ -69,7 +69,10 @@ def _parse_request(request) -> Tuple[Dict[str, Any], Optional[Dict[str, Any]], b
     is_form = (
         content_type.startswith("multipart/")
         or content_type.startswith("application/x-www-form-urlencoded")
-        or (hasattr(request, "POST") and (bool(request.POST) or bool(getattr(request, "FILES", None))))
+        or (
+            hasattr(request, "POST")
+            and (bool(request.POST) or bool(getattr(request, "FILES", None)))
+        )
     )
 
     if is_form:
@@ -84,7 +87,11 @@ def _parse_request(request) -> Tuple[Dict[str, Any], Optional[Dict[str, Any]], b
             }.items()
             if v not in (None, "")
         }
-        for field, coerce in (("kmer_size", int), ("max_results", int), ("threshold", float)):
+        for field, coerce in (
+            ("kmer_size", int),
+            ("max_results", int),
+            ("threshold", float),
+        ):
             if field in payload:
                 try:
                     payload[field] = coerce(payload[field])  # type: ignore[operator]
@@ -101,7 +108,8 @@ def _parse_request(request) -> Tuple[Dict[str, Any], Optional[Dict[str, Any]], b
                 "sequence_file": (
                     getattr(f, "name", "sequence_file"),
                     f,
-                    getattr(f, "content_type", "application/octet-stream") or "application/octet-stream",
+                    getattr(f, "content_type", "application/octet-stream")
+                    or "application/octet-stream",
                 )
             }
         return payload, files, True
@@ -116,7 +124,12 @@ def _parse_request(request) -> Tuple[Dict[str, Any], Optional[Dict[str, Any]], b
         payload["seq"] = payload.pop("sequence")
     return payload, None, False
 
-def _post_to_backend(payload: Dict[str, Any], files: Optional[Dict[str, Any]] = None, as_form: bool = False) -> Dict[str, Any]:
+
+def _post_to_backend(
+    payload: Dict[str, Any],
+    files: Optional[Dict[str, Any]] = None,
+    as_form: bool = False,
+) -> Dict[str, Any]:
     url = _backend_url()
     try:
         if files or as_form:
@@ -126,23 +139,33 @@ def _post_to_backend(payload: Dict[str, Any], files: Optional[Dict[str, Any]] = 
         resp.raise_for_status()
     except requests.exceptions.HTTPError as ex:
         status = ex.response.status_code
-        logger.error("Genome search backend returned %s: %s", status, ex.response.text[:500])
+        logger.error(
+            "Genome search backend returned %s: %s", status, ex.response.text[:500]
+        )
         if status >= 500:
-            raise HttpError(502, "Genome search backend is unavailable. Please try later.")
+            raise HttpError(
+                502, "Genome search backend is unavailable. Please try later."
+            )
         raise HttpError(400, "Genome search request was rejected by the backend.")
     except requests.exceptions.RequestException as ex:
         logger.exception("Failed to reach genome search backend at %s", url)
-        raise HttpError(503, "Genome search is temporarily unavailable. Please try later.") from ex
+        raise HttpError(
+            503, "Genome search is temporarily unavailable. Please try later."
+        ) from ex
 
     try:
         return resp.json()
     except (JSONDecodeError, ValueError) as ex:
         logger.exception("Failed to decode JSON from genome search backend")
-        raise HttpError(502, "Genome search backend returned an invalid response.") from ex
+        raise HttpError(
+            502, "Genome search backend returned an invalid response."
+        ) from ex
 
 
 def _annotate_results(raw_results: List[Dict[str, Any]]) -> List[AnnotatedResult]:
-    cobs_result_by_accession = {r.get("genome"): r for r in raw_results if r.get("genome")}
+    cobs_result_by_accession = {
+        r.get("genome"): r for r in raw_results if r.get("genome")
+    }
     if not cobs_result_by_accession:
         return []
 
@@ -169,7 +192,7 @@ def _annotate_results(raw_results: List[Dict[str, Any]]) -> List[AnnotatedResult
 
 
 @api_controller("genome-search", tags=[ApiSections.GENOMES])
-class GenomeSearchController():
+class GenomeSearchController:
     @http_post(
         "/",
         response=GenomeFragmentSearchOut,

@@ -16,7 +16,9 @@ def test_genome_search_json_success(ninja_api_client, genomes, monkeypatch):
 
     mock_resp = Mock(status_code=200)
     mock_resp.json.return_value = backend_payload
-    monkeypatch.setattr("emgapiv2.api.genome_search.requests.post", lambda *a, **k: mock_resp)
+    monkeypatch.setattr(
+        "emgapiv2.api.genome_search.requests.post", lambda *a, **k: mock_resp
+    )
 
     resp = ninja_api_client.post(
         "/genome-search/",
@@ -56,7 +58,9 @@ def test_genome_search_multipart_success(ninja_api_client, genomes, monkeypatch)
     }
     mock_resp = Mock(status_code=200)
     mock_resp.json.return_value = backend_payload
-    monkeypatch.setattr("emgapiv2.api.genome_search.requests.post", lambda *a, **k: mock_resp)
+    monkeypatch.setattr(
+        "emgapiv2.api.genome_search.requests.post", lambda *a, **k: mock_resp
+    )
 
     # Build a tiny FASTA file upload
     fasta_content = b">q\nACGTACGT\n"
@@ -84,8 +88,12 @@ def test_genome_search_backend_error(ninja_api_client, genomes, monkeypatch):
     import requests as req
 
     mock_resp = Mock(status_code=500, text="boom")
-    mock_resp.raise_for_status.side_effect = req.exceptions.HTTPError(response=mock_resp)
-    monkeypatch.setattr("emgapiv2.api.genome_search.requests.post", lambda *a, **k: mock_resp)
+    mock_resp.raise_for_status.side_effect = req.exceptions.HTTPError(
+        response=mock_resp
+    )
+    monkeypatch.setattr(
+        "emgapiv2.api.genome_search.requests.post", lambda *a, **k: mock_resp
+    )
 
     resp = ninja_api_client.post("/genome-search/", json={"sequence": "ACGT"})
     assert resp.status_code == 502  # Bad Gateway: upstream returned 5xx
@@ -96,8 +104,12 @@ def test_genome_search_backend_4xx_error(ninja_api_client, genomes, monkeypatch)
     import requests as req
 
     mock_resp = Mock(status_code=400, text="bad seq")
-    mock_resp.raise_for_status.side_effect = req.exceptions.HTTPError(response=mock_resp)
-    monkeypatch.setattr("emgapiv2.api.genome_search.requests.post", lambda *a, **k: mock_resp)
+    mock_resp.raise_for_status.side_effect = req.exceptions.HTTPError(
+        response=mock_resp
+    )
+    monkeypatch.setattr(
+        "emgapiv2.api.genome_search.requests.post", lambda *a, **k: mock_resp
+    )
 
     resp = ninja_api_client.post("/genome-search/", json={"sequence": "ACGT"})
     assert resp.status_code == 400  # Bad Request: client input rejected by backend
@@ -117,7 +129,9 @@ def test_genome_search_network_error(ninja_api_client, genomes, monkeypatch):
 
 
 @pytest.mark.django_db
-def test_genome_search_forwards_seq_key_to_backend(ninja_api_client, genomes, monkeypatch):
+def test_genome_search_forwards_seq_key_to_backend(
+    ninja_api_client, genomes, monkeypatch
+):
     """The COBS backend expects 'seq', not 'sequence'. Verify the translation happens."""
     import io
     from django.http import QueryDict
@@ -135,7 +149,9 @@ def test_genome_search_forwards_seq_key_to_backend(ninja_api_client, genomes, mo
 
     # JSON path: client sends 'sequence', backend must receive 'seq'
     ninja_api_client.post("/genome-search/", json={"sequence": "ACGT"})
-    assert "seq" in (captured.get("json") or {}), "JSON path must forward 'seq' not 'sequence'"
+    assert "seq" in (
+        captured.get("json") or {}
+    ), "JSON path must forward 'seq' not 'sequence'"
     assert "sequence" not in (captured.get("json") or {})
 
     # Multipart path: client sends 'seq' field (as browsers do), backend must receive 'seq'
@@ -158,7 +174,9 @@ def test_genome_search_backend_invalid_json(ninja_api_client, genomes, monkeypat
         def json(self):
             raise ValueError("bad json")
 
-    monkeypatch.setattr("emgapiv2.api.genome_search.requests.post", lambda *a, **k: BadResp())
+    monkeypatch.setattr(
+        "emgapiv2.api.genome_search.requests.post", lambda *a, **k: BadResp()
+    )
 
     resp = ninja_api_client.post("/genome-search/", json={"sequence": "ACGT"})
     assert resp.status_code == 502  # Bad Gateway: backend returned unparseable response
