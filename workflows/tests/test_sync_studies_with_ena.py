@@ -1,6 +1,8 @@
+import json
 from unittest.mock import patch
 
 import pytest
+from prefect.artifacts import Artifact
 
 from ena.models import Study
 from workflows.flows.housekeeping.sync_studies_with_ena import (
@@ -27,7 +29,7 @@ def test_sync_studies_with_ena_by_accessions(mock_sync, prefect_harness):
 
     mock_sync.side_effect = mock_sync_study
 
-    sync_studies_with_ena(
+    failed = sync_studies_with_ena(
         accessions=["PRJNA000001", "PRJNA000002"],
         batch_size=10,
     )
@@ -36,4 +38,9 @@ def test_sync_studies_with_ena_by_accessions(mock_sync, prefect_harness):
     assert prj_01.title == "Study OK - and updated!"
     assert prj_01.metadata["description"] == "Study OK - description updated!"
 
+    assert failed == ["PRJNA000002"]
     assert mock_sync.call_count == 2
+
+    failed_syncs_table = Artifact.get("failed-ena-study-syncs")
+    assert failed_syncs_table.type == "table"
+    assert json.loads(failed_syncs_table.data) == [{"accession": "PRJNA000002"}]
