@@ -148,6 +148,20 @@ deployments:
   work_pool:
     name: slurm
 
+- name: import_primer_identification_for_imported_analyses_deployment
+  description: |-
+    Imports primer-identification outputs for amplicon analyses that already have
+    ANALYSIS_ANNOTATIONS_IMPORTED set.
+
+    The flow scans eligible amplicon analyses and imports any available
+    primer-identification outputs from their results directories.
+
+    :param max_count: Optional safety cap limiting how many analyses to process in one run.
+  entrypoint: workflows/flows/analyse_study_tasks/amplicon/import_primer_identification_for_imported_analyses.py:import_primer_identification_for_imported_analyses
+  schedule: null
+  work_pool:
+    name: slurm
+
 - name: finalize_assembly_study_deployment
   description: |-
     Run the last study level steps on study assembly analysis batches.
@@ -245,6 +259,17 @@ deployments:
   work_pool:
     name: slurm
 
+
+- name: sync_samples_with_ena
+  description: |-
+    This flow will sync samples metadata with ENA.
+    :param accessions: List of sample accessions to sync
+  entrypoint: workflows/flows/housekeeping/sync_samples_with_ena.py:sync_samples_with_ena
+  parameters: {}
+  work_pool:
+    name: slurm
+  schedules: []
+
 - name: update_ena_accession_from_json_flow_deployment
   description: |-
     Traverse per-genome JSON files to update Genome.ena_genome_accession from the
@@ -319,7 +344,7 @@ deployments:
 - name: sync_studies_with_ena
   description: |-
     This flow will sync studies metadata with ENA.
-    :param study_accessions: List of study accessions to sync
+    :param accessions: List of study accessions to sync
   entrypoint: workflows/flows/housekeeping/sync_studies_with_ena.py:sync_studies_with_ena
   parameters: {}
   work_pool:

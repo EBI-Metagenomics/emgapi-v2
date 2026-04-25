@@ -913,12 +913,30 @@ class Analysis(
     metadata = models.JSONField(default=dict, blank=True)
 
     class PipelineVersions(models.TextChoices):
+        v1 = "V1", "v1.0"
+        v2 = "V2", "v2.0"
+        v3 = "V3", "v3.0"
+        v4 = "V4", "v4.0"
+        v4_1 = "V4.1", "v4.1"
         v5 = "V5", "v5.0"
         v6 = "V6", "v6.0"
+        v6_1 = "V6.1", "v6.1"
 
     pipeline_version = models.CharField(
         choices=PipelineVersions, max_length=5, default=PipelineVersions.v6
     )
+
+    @classmethod
+    def pipeline_version_from_config(
+        cls, pipeline_version: str
+    ) -> "Analysis.PipelineVersions":
+        normalized = pipeline_version.strip().lower().rstrip(".0")
+        try:
+            return getattr(cls.PipelineVersions, normalized)
+        except AttributeError as exc:
+            raise ValueError(
+                f"Unsupported pipeline version {pipeline_version!r}"
+            ) from exc
 
     class AnalysisStates(FutureStrEnum):
         # TODO: this is pipeline specific - I think we need to move elsewhere or refactor (mbc)

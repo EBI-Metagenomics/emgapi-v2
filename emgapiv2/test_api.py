@@ -639,7 +639,29 @@ def test_runs_assemblies_list(
     assert len(items) == 2
     for acc in returned_accessions:
         assert acc in all_fixture_accessions
-    assert "updated_at" in items[0]
+
+    # Validate presence and content of extra fields
+    for item in items:
+        assert (
+            item.get("run_accession")
+            in [r.first_accession for r in run.assemblies.first().runs.all()]
+            or item.get("run_accession") is not None
+        )
+        assert item.get("sample_accession") == run.sample.ena_sample.accession
+        assert item.get("reads_study_accession") == run.study.accession
+        # assembly_study_accession may be None in fixtures
+        assert "assembly_study_accession" in item
+        assert item.get("assembler_name") in [
+            a.assembler.name
+            for a in mgnify_assemblies_with_ena
+            if a.first_accession in returned_accessions
+        ]
+        assert item.get("assembler_version") in [
+            a.assembler.version
+            for a in mgnify_assemblies_with_ena
+            if a.first_accession in returned_accessions
+        ]
+        assert "updated_at" in item
 
 
 @pytest.mark.django_db
