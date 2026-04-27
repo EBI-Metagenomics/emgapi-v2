@@ -24,6 +24,7 @@ warnings.filterwarnings(
     category=UserWarning,
 )
 
+import sentry_sdk
 import dj_database_url
 from django.templatetags.static import static
 from django.urls import reverse_lazy
@@ -65,6 +66,12 @@ BASE_URL = EMG_CONFIG.service_urls.base_url.lstrip("/").rstrip("/")
 if BASE_URL:
     BASE_URL += "/"
 
+
+if EMG_CONFIG.sentry_dsn:
+    sentry_sdk.init(
+        dsn=EMG_CONFIG.sentry_dsn,
+        send_default_pii=True,
+    )
 # Application definition
 
 INSTALLED_APPS = [

@@ -47,6 +47,9 @@ pymongo==4.13.2
 mysql-connector-python
 SQLAlchemy
 
+# Monitoring
+sentry-sdk[django]~=2.25.1
+
 # Outbound network
 requests~=2.32.4
 httpx~=0.28.1
