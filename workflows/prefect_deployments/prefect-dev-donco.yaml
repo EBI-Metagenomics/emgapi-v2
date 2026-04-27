@@ -223,8 +223,7 @@ deployments:
 
     It connects to the legacy EMG MySQL and Mongo DBs, but not through Django.
 
-    :param mgys: accession of the study to import (with its analyses)
     :param fetch_functions: whether to fetch functional annotatins (slow!)
-  entrypoint: workflows/flows/legacy/flows/import_legacy_analyses.py:import_legacy_analyses
+  entrypoint: workflows/flows/legacy/flows/import_legacy_analyses.py:import_all_legacy_analyses
   work_pool:
     name: slurm
