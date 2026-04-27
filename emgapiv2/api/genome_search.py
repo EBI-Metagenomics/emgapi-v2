@@ -3,7 +3,7 @@ from typing import List, Optional, Dict, Any, Tuple
 import json
 from json import JSONDecodeError
 
-import requests
+import httpx
 from django.conf import settings
 from ninja import Schema, Field
 from ninja.errors import HttpError
@@ -14,6 +14,7 @@ from genomes.models import Genome
 from genomes.schemas import GenomeList
 
 logger = logging.getLogger(__name__)
+EMG_CONFIG = settings.EMG_CONFIG
 
 
 class GenomeFragmentSearchIn(Schema):
@@ -44,14 +45,6 @@ class GenomeSearchData(Schema):
 
 class GenomeFragmentSearchOut(Schema):
     data: GenomeSearchData
-
-
-def _backend_url() -> str:
-    return getattr(
-        settings,
-        "GENOME_SEARCH_PROXY",
-        "https://cobs-genome-search-01.mgnify.org/search",
-    )
 
 
 def _parse_request(request) -> Tuple[Dict[str, Any], Optional[Dict[str, Any]], bool]:
@@ -130,14 +123,14 @@ def _post_to_backend(
     files: Optional[Dict[str, Any]] = None,
     as_form: bool = False,
 ) -> Dict[str, Any]:
-    url = _backend_url()
+    url = EMG_CONFIG.service_urls.genome_search_proxy
     try:
         if files or as_form:
-            resp = requests.post(url, data=payload, files=files, timeout=30)
+            resp = httpx.post(url, data=payload, files=files, timeout=30)
         else:
-            resp = requests.post(url, json=payload, timeout=30)
+            resp = httpx.post(url, json=payload, timeout=30)
         resp.raise_for_status()
-    except requests.exceptions.HTTPError as ex:
+    except httpx.HTTPStatusError as ex:
         status = ex.response.status_code
         logger.error(
             "Genome search backend returned %s: %s", status, ex.response.text[:500]
@@ -147,7 +140,7 @@ def _post_to_backend(
                 502, "Genome search backend is unavailable. Please try later."
             )
         raise HttpError(400, "Genome search request was rejected by the backend.")
-    except requests.exceptions.RequestException as ex:
+    except httpx.RequestError as ex:
         logger.exception("Failed to reach genome search backend at %s", url)
         raise HttpError(
             503, "Genome search is temporarily unavailable. Please try later."

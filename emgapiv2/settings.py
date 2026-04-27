@@ -410,7 +410,4 @@ SECURE_LINK_EXPIRATION_SECONDS = 86400
 
 
 # Genome search backend proxy
-GENOME_SEARCH_PROXY = os.getenv(
-    "GENOME_SEARCH_PROXY",
-    "https://cobs-genome-search-01.mgnify.org/search",
-)
+GENOME_SEARCH_PROXY = EMG_CONFIG.service_urls.genome_search_proxy
