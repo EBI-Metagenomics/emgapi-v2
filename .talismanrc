@@ -150,7 +150,7 @@ fileignoreconfig:
   checksum: 6f0d0012faefa871ada95216a04997ce6ae54ff3e508b57399cccc859e1eccfa
 
 - filename: workflows/flows/analyse_study_tasks/shared/dwca_generator.py
-  allowed_patterns: [keywordSet, KeywordSet, keyword]
+  allowed_patterns: [keywordSet, KeywordSet, keyword, key]
 
 - filename: workflows/flows/assemble_study_tasks/assemble_samplesheets.py
   allowed_patterns: [key]

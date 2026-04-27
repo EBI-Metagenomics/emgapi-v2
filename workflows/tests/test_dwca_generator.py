@@ -23,8 +23,15 @@ def test_dwca_generator(
     # amplicon_analysis_with_downloads
 
     convert_dwcr_to_dwca(
-        study.accession, Analysis.ExperimentTypes.AMPLICON, Analysis.PipelineVersions.v6
+        study.accession,
+        Analysis.ExperimentTypes.AMPLICON,
+        Analysis.PipelineVersions.v6,
+        out_path=tmp_path,
     )
+
+    import shutil
+
+    shutil.copytree(tmp_path, "/app/tmp/outputs", dirs_exist_ok=True)
 
     # dwca_eml_path = study.results_dir_path / "dwca" / "eml.xml"
 

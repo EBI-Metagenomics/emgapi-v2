@@ -324,6 +324,9 @@ class DarwinCoreArchiveConfig(BaseModel):
     studies_url_root_for_distribution: str = Field(
         "https://www.ebi.ac.uk/metagenomics/studies/"
     )
+    gbif_ftp_results_dir: str = (
+        "/nfs/ftp/public/databases/metagenomics/mgnify_results/darwin_core_archives/"
+    )
 
 
 class EMGConfig(BaseSettings):
