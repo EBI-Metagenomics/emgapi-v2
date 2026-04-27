@@ -23,14 +23,21 @@ jobs:
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
-      - uses: actions/setup-python@v5
-        with:
-          python-version: 3.12
-      - uses: pre-commit/action@v3.0.1
 
       - name: Build Docker image
-        run: |
-          docker build --target ci -t app:latest .
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          target: ci
+          tags: app:latest
+          load: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: pre-commit/action@v3.0.1
 
       - name: Check for unmigrated code
         run: |
