@@ -316,15 +316,28 @@ deployments:
   work_pool:
     name: slurm
 
-- name: import_v5_analyses_deployment
+- name: import_legacy_analyses_deployment
   description: |-
-    This flow will iteratively import analyses (made with MGnify V5 pipeline)
+    This flow will iteratively import analyses (made with MGnify V1-V5 pipelines)
     into the EMG DB.
 
     It connects to the legacy EMG MySQL and Mongo DBs, but not through Django.
 
     :param mgys: accession of the study to import (with its analyses)
-  entrypoint: workflows/flows/legacy/flows/import_v5_analyses.py:import_v5_analyses
+    :param fetch_functions: whether to fetch functional annotatins (slow!)
+  entrypoint: workflows/flows/legacy/flows/import_legacy_analyses.py:import_legacy_analyses
+  work_pool:
+    name: slurm
+
+- name: import_all_legacy_analyses_deployment
+  description: |-
+    This flow will iteratively import analyses (made with MGnify V1-V5 pipelines)
+    into the EMG DB.
+
+    It connects to the legacy EMG MySQL and Mongo DBs, but not through Django.
+
+    :param fetch_functions: whether to fetch functional annotatins (slow!)
+  entrypoint: workflows/flows/legacy/flows/import_legacy_analyses.py:import_all_legacy_analyses
   work_pool:
     name: slurm
 

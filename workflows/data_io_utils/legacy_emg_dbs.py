@@ -1,5 +1,5 @@
 from contextlib import contextmanager
-from typing import List, Optional, TYPE_CHECKING, TypedDict
+from typing import List, Optional, TypedDict
 
 import pymongo
 from django.conf import settings
@@ -17,8 +17,7 @@ from sqlalchemy.orm import (
 from analyses.base_models.with_downloads_models import DownloadFileType, DownloadType
 from analyses.base_models.with_experiment_type_models import WithExperimentTypeModel
 
-if TYPE_CHECKING:
-    import analyses.models
+import analyses.models
 
 
 class LegacyEMGBase(DeclarativeBase):
@@ -311,6 +310,17 @@ LEGACY_EXPERIMENT_TYPE_MAP = {
     6: WithExperimentTypeModel.ExperimentTypes.UNKNOWN,
     7: WithExperimentTypeModel.ExperimentTypes.HYBRID_ASSEMBLY,
     8: WithExperimentTypeModel.ExperimentTypes.LONG_READ_ASSEMBLY,
+}
+
+
+LEGACY_PIPELINE_ID_MAP = {
+    # simple map of data from the legacy PIPELINE_ID, mapped to this codebase's Enums
+    1: analyses.models.Analysis.PipelineVersions.v1,
+    2: analyses.models.Analysis.PipelineVersions.v2,
+    3: analyses.models.Analysis.PipelineVersions.v3,
+    4: analyses.models.Analysis.PipelineVersions.v4,
+    5: analyses.models.Analysis.PipelineVersions.v4_1,
+    6: analyses.models.Analysis.PipelineVersions.v5,
 }
 
 
