@@ -28,6 +28,7 @@ def sanity_check_amplicon_results(
          - ${run_id}_suffix_header_err.json
          - ${run_id}_multiqc_report.html
          - ${run_id}_dada2_errors.txt
+         - ${run_id}_dada2_stats.tsv (present when ASV folder is non-empty)
     SEQUENCE CATEGORISATION folder:
         required:
          - ${run_id}_${gene}.fa(sta) (depending on if the gene was SSU/LSU/ITS)
@@ -50,7 +51,6 @@ def sanity_check_amplicon_results(
          - ${run_id}_primer_validation.tsv
     ASV:
         required:
-         - ${run_id}_dada2_stats.tsv
          - ${run_id}_DADA2-SILVA_asv_tax.tsv
          - ${run_id}_DADA2-PR2_asv_tax.tsv
          - ${run_id}_asv_seqs.fasta
@@ -196,16 +196,10 @@ def sanity_check_amplicon_results(
 
     # ASV optional folder
     if asv_folder.exists() and any(asv_folder.iterdir()):
-        dada2_stats = Path(f"{asv_folder}/{run_id}_dada2_stats.tsv")
         dada2_silva = Path(f"{asv_folder}/{run_id}_DADA2-SILVA_asv_tax.tsv")
         dada2_pr2 = Path(f"{asv_folder}/{run_id}_DADA2-PR2_asv_tax.tsv")
         asv_stats = Path(f"{asv_folder}/{run_id}_asv_seqs.fasta")
-        if not (
-            dada2_stats.exists()
-            and dada2_pr2.exists()
-            and dada2_silva.exists()
-            and asv_stats.exists()
-        ):
+        if not (dada2_pr2.exists() and dada2_silva.exists() and asv_stats.exists()):
             reason = (
                 f"missing required file in {EMG_CONFIG.amplicon_pipeline.asv_folder}"
             )
@@ -293,8 +287,14 @@ def sanity_check_amplicon_results(
 
     # QC mandatory folder
     if qc_folder.exists():
-        if not Path(f"{qc_folder}/{analysis.run.first_accession}_seqfu.tsv").exists():
+        if not Path(f"{qc_folder}/{run_id}_seqfu.tsv").exists():
             reason = f"No required seqfu.tsv in {EMG_CONFIG.amplicon_pipeline.qc_folder} folder"
+        if asv_folder.exists() and any(asv_folder.iterdir()):
+            if not Path(f"{qc_folder}/{run_id}_dada2_stats.tsv").exists():
+                reason = (
+                    f"missing {run_id}_dada2_stats.tsv in "
+                    f"{EMG_CONFIG.amplicon_pipeline.qc_folder} folder"
+                )
     else:
         reason = f"No {EMG_CONFIG.amplicon_pipeline.qc_folder} folder"
     logger.info(f"Post sanity check for {run_id}: {reason}")
