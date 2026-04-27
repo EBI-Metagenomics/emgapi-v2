@@ -12,7 +12,7 @@ from workflows.data_io_utils.legacy_emg_dbs import (
     LegacyAssemblyRun,
     LegacyAssemblySample,
 )
-from workflows.flows.legacy.flows.import_v5_analyses import import_v5_analyses
+from workflows.flows.legacy.flows.import_legacy_analyses import import_legacy_analyses
 from workflows.prefect_utils.testing_utils import (
     run_flow_and_capture_logs,
     should_not_mock_httpx_requests_to_prefect_server,
@@ -137,7 +137,7 @@ def test_import_coassembly(
     )
 
     run_flow_and_capture_logs(
-        import_v5_analyses,
+        import_legacy_analyses,
         mgys="MGYS00006000",
     )
 
