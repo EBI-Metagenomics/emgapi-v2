@@ -281,6 +281,31 @@ def import_qc(
     )
     analysis.save()
 
+    # dada2 stats lives in qc/ but is only produced when ASV inference ran successfully.
+    asv_dir_path = dir_for_analysis / EMG_CONFIG.amplicon_pipeline.asv_folder
+    dada2_failed = (
+        qc_dir.path / f"{analysis.run.first_accession}_dada2_errors.txt"
+    ).exists()
+    if asv_dir_path.is_dir() and any(asv_dir_path.iterdir()) and not dada2_failed:
+        dada2_stats = File(
+            path=qc_dir.path / f"{analysis.run.first_accession}_dada2_stats.tsv",
+            rules=[FileExistsRule, FileIsNotEmptyRule],
+        )
+        qc_dir.files.append(dada2_stats)
+        analysis.add_download(
+            DownloadFile(
+                path=dada2_stats.path.relative_to(analysis.results_dir),
+                file_type=DownloadFileType.TSV,
+                alias=dada2_stats.path.name,
+                download_group="asv.stats",
+                download_type=DownloadType.QUALITY_CONTROL,
+                short_description="Quality control statistics from dada2",
+                long_description="Quality control statistics for read trimming from dada2",
+                parent_identifier=analysis.accession,
+            )
+        )
+        analysis.save()
+
     fastp = File(
         path=qc_dir.path / f"{analysis.run.first_accession}.fastp.json",
         rules=(
@@ -427,26 +452,6 @@ def import_asv(analysis: analyses.models.Analysis, dir_for_analysis: Path):
             GlobHasFilesCountRule[3:],  # pr2+silva, sequences
             GlobOfAsvFolderHasRegionFolders,
         ],
-    )
-
-    dada2_stats_file = File(
-        path=dir_for_analysis
-        / EMG_CONFIG.amplicon_pipeline.qc_folder
-        / f"{analysis.run.first_accession}_dada2_stats.tsv",
-        rules=[FileExistsRule, FileIsNotEmptyRule],
-    )
-
-    analysis.add_download(
-        DownloadFile(
-            path=dada2_stats_file.path.relative_to(analysis.results_dir),
-            file_type=DownloadFileType.TSV,
-            alias=dada2_stats_file.path.name,
-            download_group="asv.stats",
-            download_type=DownloadType.QUALITY_CONTROL,
-            short_description="Quality control statistics from dada2",
-            long_description="Quality control statistics for read trimming from dada2",
-            parent_identifier=analysis.accession,
-        )
     )
 
     asv_counts_file_paths = asv_dir.path.glob(
