@@ -77,6 +77,63 @@ def test_mongo_functional_mock(mock_mongo_client_for_taxonomy_and_protein_functi
 
 @pytest.mark.httpx_mock(should_mock=should_not_mock_httpx_requests_to_prefect_server)
 @pytest.mark.django_db(transaction=True)
+def test_import_all_legacy_analyses_filtering(
+    prefect_harness,
+    in_memory_legacy_emg_db,
+    monkeypatch,
+    mock_mongo_client_for_taxonomy_and_protein_functions,
+    ninja_api_client,
+    ena_any_sample_metadata,
+    httpx_mock,
+):
+    # Add another study to the in-memory DB
+    with in_memory_legacy_emg_db as session:
+        study2 = LegacyStudy(
+            id=5001,
+            centre_name="MARS",
+            study_name="Bugs on mars 2",
+            ext_study_id="ERP2",
+            is_private=False,
+            submission_account_id="Weeble-1",
+            project_id="PRJ2",
+            is_suppressed=False,
+            biome_id=1,
+        )
+        session.add(study2)
+        session.commit()
+
+    # Mock legacy_emg_db_session to use our in_memory_legacy_emg_db
+    import workflows.flows.legacy.flows.import_legacy_analyses as target_module
+
+    monkeypatch.setattr(
+        target_module, "legacy_emg_db_session", lambda: in_memory_legacy_emg_db
+    )
+
+    httpx_mock.add_response(
+        url=re.compile(r".*result=study.*ERP.*"),
+        json=[{"study_accession": "ERP"}],
+        is_reusable=True,
+    )
+
+    # Test filtering with mgys_after=5000
+    # Should only import MGYS00005001
+    importer_flow_run = run_flow_and_capture_logs(
+        import_all_legacy_analyses,
+        mgys_after=5000,
+    )
+
+    assert "Found 1 legacy studies to import" in importer_flow_run.logs
+
+    # Test filtering with mgys_after=0 (default)
+    # Should import both
+    importer_flow_run_all = run_flow_and_capture_logs(
+        import_all_legacy_analyses, mgys_after=0
+    )
+    assert "Found 2 legacy studies to import" in importer_flow_run_all.logs
+
+
+@pytest.mark.httpx_mock(should_mock=should_not_mock_httpx_requests_to_prefect_server)
+@pytest.mark.django_db(transaction=True)
 def test_prefect_import_v5_analyses_flow(
     prefect_harness,
     mock_legacy_emg_db_session,
@@ -112,6 +169,11 @@ def test_prefect_import_v5_analyses_flow(
     assert "ERS1" in imported_analysis.sample.ena_accessions
     assert imported_analysis.study.biome.biome_name == "Martian soil"
     assert ["ERR1000"] == imported_analysis.run.ena_accessions
+    assert imported_analysis.study.external_results_dir == "ERP1/ERP1"
+    assert (
+        imported_analysis.external_results_dir
+        == "ERP1/ERP1/version_5.0/ERZ1/001/ERZ1_FASTA"
+    )
 
     imported_analysis_with_annos: Analysis = Analysis.objects_and_annotations.get(
         accession="MGYA00012345"
@@ -132,7 +194,20 @@ def test_prefect_import_v5_analyses_flow(
         "pr2": None,
     }
 
-    # check download files imported okay
+    # check study download files imported okay
+    study = Study.objects.get(accession="MGYS00005000")
+    assert len(study.downloads) == 1
+    sdl = study.downloads[0]
+    assert (
+        sdl.get("path")
+        == "version_5.0/project-summary/taxonomy_abundances_LSU_v5.0.tsv"
+    )
+    assert sdl.get("alias") == "taxonomy_abundances_LSU_v5.0.tsv"
+    assert sdl.get("download_group") == "study_summary.v5.0.taxonomic_analysis_lsu"
+    # group_id 100 is not in map, so it falls back to DownloadType.OTHER which is "Other"
+    assert sdl.get("download_type") == "Other"
+
+    # check analysis download files imported okay
     assert len(imported_analysis.downloads) == 1
     dl = imported_analysis.downloads[0]
     assert dl.get("path") == "tax/ssu_tax/BUGS_SSU.fasta.mseq_hdf5.biom"

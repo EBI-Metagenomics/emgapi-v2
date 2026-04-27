@@ -192,6 +192,9 @@ fileignoreconfig:
 - filename: workflows/data_io_utils/schemas/assembly.py
   checksum: 12b45869a636431bb6e1bfe193f02f301a6b484a0c4503bc793f5450c36c932a
 
+- filename: workflows/flows/legacy/flows/import_legacy_analyses.py
+  allowed_patterns: [key="failed]
+
 - filename: workflows/models.py
   checksum: 487ca9d7edb707de28311b4154ce86a9b10269d29f2951f010db5c17af88d9ae
 

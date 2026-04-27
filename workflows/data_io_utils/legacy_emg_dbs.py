@@ -62,6 +62,10 @@ class LegacyStudy(LegacyEMGBase):
         back_populates="study"
     )
 
+    study_downloads: Mapped[list["LegacyStudyDownload"]] = relationship(
+        back_populates="study"
+    )
+
     biome_id: Mapped[int] = mapped_column(
         "BIOME_ID", ForeignKey("BIOME_HIERARCHY_TREE.BIOME_ID")
     )
@@ -231,6 +235,47 @@ class LegacyDownloadDescription(LegacyEMGBase):
     id: Mapped[int] = mapped_column("DESCRIPTION_ID", Integer, primary_key=True)
     description: Mapped[str] = mapped_column("DESCRIPTION", String)
     description_label: Mapped[str] = mapped_column("DESCRIPTION_LABEL", String)
+
+
+class LegacyDownloadGroupType(LegacyEMGBase):
+    __tablename__ = "DOWNLOAD_GROUP_TYPE"
+
+    id: Mapped[int] = mapped_column("GROUP_ID", Integer, primary_key=True)
+    group_type: Mapped[str] = mapped_column("DOWNLOAD_GROUP_TYPE", String)
+
+
+class LegacyStudyDownload(LegacyEMGBase):
+    __tablename__ = "STUDY_DOWNLOAD"
+
+    id: Mapped[int] = mapped_column("id", Integer, primary_key=True)
+    real_name: Mapped[str] = mapped_column("REAL_NAME", String)
+    alias: Mapped[str] = mapped_column("ALIAS", String)
+
+    format_id: Mapped[int] = mapped_column("FORMAT_ID", Integer)
+
+    study_id: Mapped[int] = mapped_column("STUDY_ID", ForeignKey("STUDY.STUDY_ID"))
+    study: Mapped["LegacyStudy"] = relationship(
+        "LegacyStudy", back_populates="study_downloads"
+    )
+
+    subdir_id: Mapped[int] = mapped_column(
+        "SUBDIR_ID", ForeignKey("DOWNLOAD_SUBDIR.SUBDIR_ID")
+    )
+    subdir: Mapped["LegacyDownloadSubdir"] = relationship("LegacyDownloadSubdir")
+
+    description_id: Mapped[int] = mapped_column(
+        "DESCRIPTION_ID", ForeignKey("DOWNLOAD_DESCRIPTION_LABEL.DESCRIPTION_ID")
+    )
+    description: Mapped["LegacyDownloadDescription"] = relationship(
+        "LegacyDownloadDescription"
+    )
+
+    group_id: Mapped[int] = mapped_column(
+        "GROUP_ID", ForeignKey("DOWNLOAD_GROUP_TYPE.GROUP_ID")
+    )
+    group_type: Mapped["LegacyDownloadGroupType"] = relationship(
+        "LegacyDownloadGroupType"
+    )
 
 
 class LegacyAnalysisJobDownload(LegacyEMGBase):
