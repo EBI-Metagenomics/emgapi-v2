@@ -241,7 +241,7 @@ class LegacyDownloadGroupType(LegacyEMGBase):
     __tablename__ = "DOWNLOAD_GROUP_TYPE"
 
     id: Mapped[int] = mapped_column("GROUP_ID", Integer, primary_key=True)
-    group_type: Mapped[str] = mapped_column("DOWNLOAD_GROUP_TYPE", String)
+    group_type: Mapped[str] = mapped_column("GROUP_TYPE", String)
 
 
 class LegacyStudyDownload(LegacyEMGBase):
