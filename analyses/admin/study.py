@@ -17,6 +17,7 @@ from analyses.admin.base import (
     JSONFieldWidgetOverridesMixin,
     StudyFilter,
     TabularInlinePaginatedWithTabSupport,
+    CanonicalizeAccessionViewMixin,
 )
 from analyses.admin.publication import StudyPublicationInline
 from workflows.models import AssemblyAnalysisPipelineStatus
@@ -113,7 +114,12 @@ class _StudyPublicationInline(StudyPublicationInline):
 
 
 @admin.register(Study)
-class StudyAdmin(ENABrowserLinkMixin, JSONFieldWidgetOverridesMixin, ModelAdmin):
+class StudyAdmin(
+    ENABrowserLinkMixin,
+    JSONFieldWidgetOverridesMixin,
+    CanonicalizeAccessionViewMixin,
+    ModelAdmin,
+):
     inlines = [
         StudyRunsInline,
         StudyAssembliesInline,
