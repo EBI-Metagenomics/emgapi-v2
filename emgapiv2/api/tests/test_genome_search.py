@@ -17,7 +17,7 @@ def test_genome_search_json_success(ninja_api_client, genomes, monkeypatch):
     mock_resp = Mock(status_code=200)
     mock_resp.json.return_value = backend_payload
     monkeypatch.setattr(
-        "emgapiv2.api.genome_search.requests.post", lambda *a, **k: mock_resp
+        "emgapiv2.api.genome_search.httpx.post", lambda *a, **k: mock_resp
     )
 
     resp = ninja_api_client.post(
@@ -59,7 +59,7 @@ def test_genome_search_multipart_success(ninja_api_client, genomes, monkeypatch)
     mock_resp = Mock(status_code=200)
     mock_resp.json.return_value = backend_payload
     monkeypatch.setattr(
-        "emgapiv2.api.genome_search.requests.post", lambda *a, **k: mock_resp
+        "emgapiv2.api.genome_search.httpx.post", lambda *a, **k: mock_resp
     )
 
     # Build a tiny FASTA file upload
@@ -85,14 +85,12 @@ def test_genome_search_multipart_success(ninja_api_client, genomes, monkeypatch)
 
 @pytest.mark.django_db
 def test_genome_search_backend_error(ninja_api_client, genomes, monkeypatch):
-    import requests as req
+    import httpx as hx
 
-    mock_resp = Mock(status_code=500, text="boom")
-    mock_resp.raise_for_status.side_effect = req.exceptions.HTTPError(
-        response=mock_resp
-    )
+    request = hx.Request("POST", "https://backend")
+    mock_resp = hx.Response(500, request=request, text="boom")
     monkeypatch.setattr(
-        "emgapiv2.api.genome_search.requests.post", lambda *a, **k: mock_resp
+        "emgapiv2.api.genome_search.httpx.post", lambda *a, **k: mock_resp
     )
 
     resp = ninja_api_client.post("/genome-search/", json={"sequence": "ACGT"})
@@ -101,14 +99,12 @@ def test_genome_search_backend_error(ninja_api_client, genomes, monkeypatch):
 
 @pytest.mark.django_db
 def test_genome_search_backend_4xx_error(ninja_api_client, genomes, monkeypatch):
-    import requests as req
+    import httpx as hx
 
-    mock_resp = Mock(status_code=400, text="bad seq")
-    mock_resp.raise_for_status.side_effect = req.exceptions.HTTPError(
-        response=mock_resp
-    )
+    request = hx.Request("POST", "https://backend")
+    mock_resp = hx.Response(400, request=request, text="bad seq")
     monkeypatch.setattr(
-        "emgapiv2.api.genome_search.requests.post", lambda *a, **k: mock_resp
+        "emgapiv2.api.genome_search.httpx.post", lambda *a, **k: mock_resp
     )
 
     resp = ninja_api_client.post("/genome-search/", json={"sequence": "ACGT"})
@@ -117,11 +113,14 @@ def test_genome_search_backend_4xx_error(ninja_api_client, genomes, monkeypatch)
 
 @pytest.mark.django_db
 def test_genome_search_network_error(ninja_api_client, genomes, monkeypatch):
-    import requests as req
+    import httpx as hx
+
+    class Boom(hx.ConnectError):
+        pass
 
     monkeypatch.setattr(
-        "emgapiv2.api.genome_search.requests.post",
-        Mock(side_effect=req.exceptions.ConnectionError("unreachable")),
+        "emgapiv2.api.genome_search.httpx.post",
+        Mock(side_effect=Boom("unreachable", request=hx.Request("POST", "https://backend"))),
     )
 
     resp = ninja_api_client.post("/genome-search/", json={"sequence": "ACGT"})
@@ -145,7 +144,7 @@ def test_genome_search_forwards_seq_key_to_backend(
         mock.json.return_value = {"results": []}
         return mock
 
-    monkeypatch.setattr("emgapiv2.api.genome_search.requests.post", fake_post)
+    monkeypatch.setattr("emgapiv2.api.genome_search.httpx.post", fake_post)
 
     # JSON path: client sends 'sequence', backend must receive 'seq'
     ninja_api_client.post("/genome-search/", json={"sequence": "ACGT"})
@@ -175,7 +174,7 @@ def test_genome_search_backend_invalid_json(ninja_api_client, genomes, monkeypat
             raise ValueError("bad json")
 
     monkeypatch.setattr(
-        "emgapiv2.api.genome_search.requests.post", lambda *a, **k: BadResp()
+        "emgapiv2.api.genome_search.httpx.post", lambda *a, **k: BadResp()
     )
 
     resp = ninja_api_client.post("/genome-search/", json={"sequence": "ACGT"})
