@@ -128,3 +128,34 @@ def detail_action_error(request, message: str = "Something went wrong"):
     messages.add_message(request, messages.WARNING, message)
     referer = request.META.get("HTTP_REFERER", reverse("admin:index"))
     return redirect(referer)
+
+
+class CanonicalizeAccessionViewMixin:
+    """
+    For models with an accession field, redirect to the canonical PK-based URL if the change view is accessed with an accession.
+    e.g. /admin/analyses/study/MGYS00000002 -> /admin/analyses/study/2
+
+    This allows for related models (e.g. Analysis) to use accession as the FK (e.g. Analysis.study),
+    but for e.g. Study Reports to receive the pk as object_id.
+    """
+
+    def change_view(self, request, object_id, form_url="", extra_context=None):
+        model = self.model
+        if not hasattr(model, "accession"):
+            return super().change_view(request, object_id, form_url, extra_context)
+
+        if not object_id.isdigit():
+            try:
+                obj = model.objects.get(accession=object_id)
+                # Redirect to the canonical PK-based URL
+                return redirect(
+                    reverse(
+                        f"admin:{self.model._meta.app_label}_{self.model._meta.model_name}_change",
+                        args=(obj.pk,),
+                    )
+                )
+            except self.model.DoesNotExist:
+                # Let the default implementation handle 404
+                pass
+
+        return super().change_view(request, object_id, form_url, extra_context)
