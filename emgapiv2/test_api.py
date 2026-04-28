@@ -617,3 +617,60 @@ def test_list_sample_runs(ninja_api_client, raw_reads_mgnify_sample, raw_read_ru
             r.sample.ena_sample.accession for r in raw_read_run
         ]
         assert run["study_accession"] in [r.study.accession for r in raw_read_run]
+
+
+@pytest.mark.django_db
+def test_runs_assemblies_list(
+    ninja_api_client, raw_read_run, mgnify_assemblies_with_ena
+):
+    # The first run (SRR6180434) has two assemblies in the fixtures: one metaspades and one megahit
+    run = raw_read_run[0]
+
+    items = call_endpoint_and_get_data(
+        ninja_api_client,
+        f"/runs/{run.ena_accessions[0]}/assemblies/",
+        count=2,
+    )
+
+    # Ensure returned items belong to our fixture set and have expected fields
+    returned_accessions = [item["accession"] for item in items]
+    all_fixture_accessions = [a.first_accession for a in mgnify_assemblies_with_ena]
+
+    assert len(items) == 2
+    for acc in returned_accessions:
+        assert acc in all_fixture_accessions
+
+    # Validate presence and content of extra fields
+    for item in items:
+        assert (
+            item.get("run_accession")
+            in [r.first_accession for r in run.assemblies.first().runs.all()]
+            or item.get("run_accession") is not None
+        )
+        assert item.get("sample_accession") == run.sample.ena_sample.accession
+        assert item.get("reads_study_accession") == run.study.accession
+        # assembly_study_accession may be None in fixtures
+        assert "assembly_study_accession" in item
+        assert item.get("assembler_name") in [
+            a.assembler.name
+            for a in mgnify_assemblies_with_ena
+            if a.first_accession in returned_accessions
+        ]
+        assert item.get("assembler_version") in [
+            a.assembler.version
+            for a in mgnify_assemblies_with_ena
+            if a.first_accession in returned_accessions
+        ]
+        assert "updated_at" in item
+
+
+@pytest.mark.django_db
+def test_runs_assemblies_private(ninja_api_client, private_run):
+    private_accession = private_run.ena_accessions[0]
+    response = ninja_api_client.get(f"/runs/{private_accession}/assemblies/")
+    assert (
+        response.status_code == 404
+    ), "Private runs should not be visible in the assemblies list endpoint"
+    assert (
+        "not found" in response.json()["detail"].lower()
+    ), "Response should indicate not found"

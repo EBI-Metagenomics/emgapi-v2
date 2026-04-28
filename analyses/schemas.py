@@ -76,7 +76,7 @@ class MGnifyStudyDetail(MGnifyStudy):
         description="Preferred ENA accession for the study (derived from ENA/INSDC accessions)",
         examples=["ERP123459", "SRP135937"],
     )
-    downloads: List[MGnifyStudyDownloadFile] = Field(..., alias="downloads_as_objects")
+    downloads: List[MGnifyStudyDownloadFile] = Field(...)
     metadata: dict[ENAStudyFields, Any] = Field(
         ...,
         examples=[
@@ -318,7 +318,9 @@ class ExperimentTypeMixin(Schema):
 
 
 class AnalysedRun(ModelSchema, ExperimentTypeMixin):
-    accession: str = Field(..., alias="first_accession", examples=["ERR0000001"])
+    accession: Optional[str] = Field(
+        None, alias="first_accession", examples=["ERR0000001"]
+    )
     sample_accession: Optional[str] = Field(
         None,
         description="ENA accession of the sample associated with this run",

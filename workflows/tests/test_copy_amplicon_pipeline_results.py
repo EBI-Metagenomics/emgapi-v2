@@ -2,6 +2,7 @@ from unittest.mock import Mock, patch
 
 import pytest
 
+from analyses.models import Analysis
 from workflows.data_io_utils.filenames import trailing_slash_ensured_dir
 from workflows.data_io_utils.mgnify_v6_utils.amplicon import EMG_CONFIG
 from workflows.flows.analyse_study_tasks.shared.copy_v6_pipeline_results import (
@@ -83,6 +84,28 @@ def test_copy_amplicon_pipeline_results(raw_read_analyses, prefect_harness):
         job_variables = call_kwargs["job_variables"]
         assert "partition" in job_variables
         assert job_variables["partition"] == EMG_CONFIG.slurm.datamover_partition
+
+
+@pytest.mark.django_db(transaction=True)
+def test_copy_amplicon_pipeline_results_v6_1(
+    amplicon_analysis_with_downloads_v6_1, prefect_harness
+):
+    analysis = amplicon_analysis_with_downloads_v6_1
+
+    mock_run_deployment = Mock(return_value=Mock(id="mock-flow-run-id"))
+
+    with patch(
+        "workflows.flows.analyse_study_tasks.shared.copy_v6_pipeline_results.run_deployment",
+        mock_run_deployment,
+    ):
+        copy_v6_pipeline_results(analysis.accession)
+
+    parameters = mock_run_deployment.call_args.kwargs["parameters"]
+    assert parameters["source"] == trailing_slash_ensured_dir(analysis.results_dir)
+    assert f"/{Analysis.PipelineVersions.v6_1}/amplicon" in parameters["target"]
+
+    analysis.refresh_from_db()
+    assert str(analysis.external_results_dir).endswith("/V6.1/amplicon")
 
 
 @pytest.mark.django_db(transaction=True)

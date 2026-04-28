@@ -244,7 +244,9 @@ def add_study_summaries_to_downloads(
 
     :param mgnify_study_accession: The accession identifier for the study to process.
     """
-    pipeline_config = PIPELINE_CONFIGS[analysis_type]
+    pipeline_config = PIPELINE_CONFIGS[
+        analysis_type
+    ]  # TODO: this will not scale to future pipeline versions
 
     logger = get_run_logger()
     study = Study.objects.get(accession=mgnify_study_accession)
@@ -276,7 +278,7 @@ def add_study_summaries_to_downloads(
                 DownloadFile(
                     path=Path("study-summaries") / summary_file.name,
                     download_type=DownloadType.TAXONOMIC_ANALYSIS,
-                    download_group="study_summary",
+                    download_group=f"study_summary.{pipeline_config.pipeline_version}.{pipeline_config.pipeline_name}",
                     file_type=DownloadFileType.TSV,
                     short_description=f"Summary of {db_or_region} taxonomies",
                     long_description=f"Summary of {db_or_region} taxonomic assignments, across all runs in the study",

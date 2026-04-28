@@ -43,7 +43,7 @@ class StudyListFilters(BiomeFilter):
     def filter_has_analyses_from_pipeline(self, version: str | None) -> Q:
         if not version:
             return Q()
-        if version == analyses.models.Analysis.PipelineVersions.v6:
+        if version.lower().startswith("v6"):
             return Q(features__has_v6_analyses=True)
         if version == analyses.models.Analysis.PipelineVersions.v5:
             # TODO

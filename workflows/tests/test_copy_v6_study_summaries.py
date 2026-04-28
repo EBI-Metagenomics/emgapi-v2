@@ -109,3 +109,34 @@ class TestCopyV6StudySummaries:
 
         study.refresh_from_db()
         assert study.external_results_dir is None
+
+    @patch(
+        "workflows.flows.analyse_study_tasks.shared.copy_v6_pipeline_results.run_deployment"
+    )
+    def test_amplicon_uses_configured_pipeline_version_subdir(
+        self, mock_run_deployment, prefect_harness, tmp_path, monkeypatch
+    ):
+        mock_run_deployment.return_value = Mock(id="mock-flow-run-id")
+        monkeypatch.setattr(
+            "workflows.flows.analyse_study_tasks.shared.study_summary.EMG_CONFIG.amplicon_pipeline.pipeline_version",
+            "v6.1",
+        )
+
+        ena_study = ENAStudy.objects.create(accession="PRJEB12346", title="Test Study")
+        study = Study.objects.create(
+            ena_study=ena_study,
+            title="Test Study",
+            results_dir=str(tmp_path / "results"),
+        )
+        study.inherit_accessions_from_related_ena_object("ena_study")
+
+        pipeline_dir = study.results_dir_path / "amplicon_v6.1"
+        pipeline_dir.mkdir(parents=True)
+        (
+            pipeline_dir / f"{study.first_accession}_taxonomy_study_summary.tsv"
+        ).write_text("data\n")
+
+        copy_v6_study_summaries(study.accession, analysis_type=AnalysisType.AMPLICON)
+
+        source_path = mock_run_deployment.call_args.kwargs["parameters"]["source"]
+        assert source_path.rstrip("/") == str(pipeline_dir)

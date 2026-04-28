@@ -134,7 +134,7 @@ fileignoreconfig:
 - filename: workflows/ena_utils/ena_auth.py
   checksum: e8122d8429dad2fcb68f7fe2f5c6068d077ebb7707653eb61dd9a5ef54d2137f
 
-- filename: workflows/flows/analyse_study_tasks/make_samplesheet_amplicon.py
+- filename: workflows/flows/analyse_study_tasks/amplicon/make_samplesheet_amplicon.py
   allowed_patterns: [key]
 
 - filename: workflows/flows/analyse_study_tasks/make_samplesheet_assembly.py
@@ -192,6 +192,9 @@ fileignoreconfig:
 - filename: workflows/data_io_utils/schemas/assembly.py
   checksum: 12b45869a636431bb6e1bfe193f02f301a6b484a0c4503bc793f5450c36c932a
 
+- filename: workflows/flows/legacy/flows/import_legacy_analyses.py
+  allowed_patterns: [key="failed]
+
 - filename: workflows/models.py
   checksum: 487ca9d7edb707de28311b4154ce86a9b10269d29f2951f010db5c17af88d9ae
 
@@ -212,6 +215,15 @@ fileignoreconfig:
 
 - filename: workflows/flows/housekeeping/clean_nextflow_workdirs.py
   allowed_patterns: [key]
+
+- filename: workflows/flows/housekeeping/sync_samples_with_ena.py
+  allowed_patterns: [key]
+
+- filename: workflows/flows/housekeeping/sync_studies_with_ena.py
+  allowed_patterns: [key]
+
+- filename: workflows/tests/test_flows_utils.py
+  checksum: 7044790c62db033597a0c9391751a32f2db1f88d5ba5a953b6c607d97ff7ed6d
 
 allowed_patterns:
 - cache_key_fn

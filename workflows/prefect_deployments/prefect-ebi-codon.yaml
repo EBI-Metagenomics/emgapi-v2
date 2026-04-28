@@ -148,6 +148,20 @@ deployments:
   work_pool:
     name: slurm
 
+- name: import_primer_identification_for_imported_analyses_deployment
+  description: |-
+    Imports primer-identification outputs for amplicon analyses that already have
+    ANALYSIS_ANNOTATIONS_IMPORTED set.
+
+    The flow scans eligible amplicon analyses and imports any available
+    primer-identification outputs from their results directories.
+
+    :param max_count: Optional safety cap limiting how many analyses to process in one run.
+  entrypoint: workflows/flows/analyse_study_tasks/amplicon/import_primer_identification_for_imported_analyses.py:import_primer_identification_for_imported_analyses
+  schedule: null
+  work_pool:
+    name: slurm
+
 - name: finalize_assembly_study_deployment
   description: |-
     Run the last study level steps on study assembly analysis batches.
@@ -245,6 +259,17 @@ deployments:
   work_pool:
     name: slurm
 
+
+- name: sync_samples_with_ena
+  description: |-
+    This flow will sync samples metadata with ENA.
+    :param accessions: List of sample accessions to sync
+  entrypoint: workflows/flows/housekeeping/sync_samples_with_ena.py:sync_samples_with_ena
+  parameters: {}
+  work_pool:
+    name: slurm
+  schedules: []
+
 - name: update_ena_accession_from_json_flow_deployment
   description: |-
     Traverse per-genome JSON files to update Genome.ena_genome_accession from the
@@ -291,15 +316,29 @@ deployments:
   work_pool:
     name: slurm
 
-- name: import_v5_analyses_deployment
+- name: import_legacy_analyses_deployment
   description: |-
-    This flow will iteratively import analyses (made with MGnify V5 pipeline)
+    This flow will iteratively import analyses (made with MGnify V1-V5 pipelines)
     into the EMG DB.
 
     It connects to the legacy EMG MySQL and Mongo DBs, but not through Django.
 
     :param mgys: accession of the study to import (with its analyses)
-  entrypoint: workflows/flows/legacy/flows/import_v5_analyses.py:import_v5_analyses
+    :param fetch_functions: whether to fetch functional annotatins (slow!)
+  entrypoint: workflows/flows/legacy/flows/import_legacy_analyses.py:import_legacy_analyses
+  work_pool:
+    name: slurm
+
+- name: import_all_legacy_analyses_deployment
+  description: |-
+    This flow will iteratively import analyses (made with MGnify V1-V5 pipelines)
+    into the EMG DB.
+
+    It connects to the legacy EMG MySQL and Mongo DBs, but not through Django.
+
+    :param fetch_functions: whether to fetch functional annotatins (slow!)
+    :param mgys_after: only import studies with mgys > mgys_after
+  entrypoint: workflows/flows/legacy/flows/import_legacy_analyses.py:import_all_legacy_analyses
   work_pool:
     name: slurm
 
@@ -311,6 +350,16 @@ deployments:
     :param scan_depth: How many subdirectory levels to scan (default 1)
     :param max_candidates: Cap on directories collected per run (default 10 000)
   entrypoint: workflows/flows/housekeeping/clean_nextflow_workdirs.py:clean_old_nextflow_workdirs
+  parameters: {}
+  work_pool:
+    name: slurm
+  schedules: []
+
+- name: sync_studies_with_ena
+  description: |-
+    This flow will sync studies metadata with ENA.
+    :param accessions: List of study accessions to sync
+  entrypoint: workflows/flows/housekeeping/sync_studies_with_ena.py:sync_studies_with_ena
   parameters: {}
   work_pool:
     name: slurm

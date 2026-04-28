@@ -28,8 +28,8 @@ from workflows.prefect_utils.flows_utils import django_db_task as task
 
 
 @task(
-    name="Copy V6 Pipeline Results",
-    task_run_name="Copy V6 Pipeline Results for {analysis_accession}",
+    name="Copy Pipeline Results",
+    task_run_name="Copy Pipeline Results for {analysis_accession}",
 )
 def copy_v6_pipeline_results(analysis_accession: str, timeout: int = 14400):
     """
@@ -117,7 +117,7 @@ def copy_v6_pipeline_results(analysis_accession: str, timeout: int = 14400):
     analysis.save()
 
 
-@task(name="Copy V6 Study Summaries")
+@task(name="Copy Study Summaries")
 def copy_v6_study_summaries(
     study_accession: str,
     analysis_type: AnalysisType = AnalysisType.AMPLICON,
@@ -127,7 +127,7 @@ def copy_v6_study_summaries(
     Copy study summaries from a pipeline's results subdirectory to external results dir.
 
     The source directory is computed from ``study.results_dir`` and the pipeline config
-    for the given ``analysis_type``, e.g. ``{results_dir}/amplicon_v6/``.
+    for the given ``analysis_type``, e.g. ``{results_dir}/amplicon_v6.1/``.
     This matches the directory layout produced by :func:`merge_study_summaries`.
 
     :param study_accession: The accession of the study to copy summaries for.

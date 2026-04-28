@@ -19,12 +19,14 @@ def get_analyses_to_attempt(
             analyses.base_models.with_experiment_type_models.WithExperimentTypeModel.ExperimentTypes
         ],
     ],
+    pipeline: analyses.models.Analysis.PipelineVersions | None = None,
     ena_library_strategy_policy: ENALibraryStrategyPolicy = ENALibraryStrategyPolicy.ONLY_IF_CORRECT_IN_ENA,
 ) -> List[Union[str, int]]:
     """
     Determine the list of runs worth trying currently for this study.
     :param study: MGYS study to look for to-be-completed analyses in
     :param for_experiment_type: E.g. AMPLICON or WGS.
+    :param pipeline: Optional pipeline version to limit analyses to.
     :param ena_library_strategy_policy: Optional policy for handling runs in the study that aren't labeled as for_experiment_type.
     :return: List of analysis object IDs
     """
@@ -40,6 +42,8 @@ def get_analyses_to_attempt(
             analyses.models.Analysis.AnalysisStates.ANALYSIS_ANNOTATIONS_IMPORTED,
         ]
     )
+    if pipeline is not None:
+        analyses_worth_trying = analyses_worth_trying.filter(pipeline_version=pipeline)
 
     if ena_library_strategy_policy == ENALibraryStrategyPolicy.ONLY_IF_CORRECT_IN_ENA:
         analyses_worth_trying = analyses_worth_trying.filter(
