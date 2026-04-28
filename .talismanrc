@@ -24,7 +24,7 @@ fileignoreconfig:
   checksum: c4ad998308f09a7017f930604108ada656b68eb3765989e19652824a5ef631ae
 
 - filename: deployment/ebi-wp-k8s-hl/README.md
-  allowed_patterns: [kubectl create secret generic nginx-private-data-config-secret --from-file=private-data-nginx.conf -n emgapiv2-hl-exp, google-maps-key-secret, create secret, google-maps-key, --docker-username=<username>, --docker-password=<password>, containers-pull-secret]
+  checksum: 37b3efe57b374a0b5937a33202e6b365864fdba93a81b3ca48ff98efcb9b002c
 
 - filename: docker-compose.yaml
   allowed_patterns: [EMG_WEBIN__JWT_SECRET_KEY=dummy-key, SECURE_LINK_SECRET=dummy-key]
