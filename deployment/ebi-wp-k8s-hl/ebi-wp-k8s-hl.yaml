@@ -126,7 +126,7 @@ items:
               persistentVolumeClaim:
                 claimName: emgapi-services-volume-claim-1
           containers:
-            - image: quay.io/microbiome-informatics/emgapiv2:ebi-wp-k8s-hl
+            - image: dockerhub.ebi.ac.uk/microbiome-informatics/containers/emgapiv2:ebi-wp-k8s-hl
               imagePullPolicy: Always
               name: emgapi
               envFrom:
@@ -151,7 +151,7 @@ items:
                 - mountPath: "/results"
                   name: emgapi-results-storage
           imagePullSecrets:
-            - name: quay-pull-secret
+            - name: containers-pull-secret
           nodeSelector:
             mgnify.org/ebi-db-pgsql-hlvm-090-open: "true"
   - apiVersion: v1
@@ -439,9 +439,11 @@ items:
             - name: npm-cache
               persistentVolumeClaim:
                 claimName: npm-cache-pvc
+          imagePullSecrets:
+            - name: containers-pull-secret
           containers:
             - name: webclient-app
-              image: quay.io/microbiome-informatics/nginx:1.26
+              image: dockerhub.ebi.ac.uk/microbiome-informatics/containers/nginx:1.30
               imagePullPolicy: IfNotPresent
               ports:
                 - containerPort: 80
@@ -470,7 +472,7 @@ items:
                 periodSeconds: 600
           initContainers:
             - name: webclient-build
-              image: quay.io/microbiome-informatics/node:22
+              image: dockerhub.ebi.ac.uk/microbiome-informatics/containers/node:24
               imagePullPolicy: IfNotPresent
               resources:
                 requests:

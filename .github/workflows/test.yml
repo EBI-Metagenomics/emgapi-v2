@@ -19,13 +19,13 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Build Docker image
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v7
         with:
           context: .
           target: ci
@@ -34,9 +34,10 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
+
       - uses: pre-commit/action@v3.0.1
 
       - name: Check for unmigrated code
@@ -52,7 +53,7 @@ jobs:
           -e DATABASE_URL=postgres://postgres:postgres@host.docker.internal:5432/emg --rm app:latest -c pytest
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@v6
         with:
           files: coverage/coverage.xml
           token: ${{ secrets.CODECOV_TOKEN }}

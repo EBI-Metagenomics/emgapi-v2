@@ -1,6 +1,6 @@
 fileignoreconfig:
 - filename: .github/workflows/release_k8s.yml
-  checksum: 0e93196d244417801fd40ad6bfa01f53a6bf04257371378a1dc3e14cbc7a04d8
+  checksum: c4cdc1f000ca531ea73e69f840afaa0b792776fda62f82e9ef6913c7f3a35642
 
 - filename: ena/models.py
   allowed_patterns: [accession key]
@@ -24,7 +24,7 @@ fileignoreconfig:
   checksum: c4ad998308f09a7017f930604108ada656b68eb3765989e19652824a5ef631ae
 
 - filename: deployment/ebi-wp-k8s-hl/README.md
-  allowed_patterns: [kubectl create secret generic nginx-private-data-config-secret --from-file=private-data-nginx.conf -n emgapiv2-hl-exp, google-maps-key-secret, create secret generic, google-maps-key]
+  allowed_patterns: [kubectl create secret generic nginx-private-data-config-secret --from-file=private-data-nginx.conf -n emgapiv2-hl-exp, google-maps-key-secret, create secret, google-maps-key, --docker-username=<username>, --docker-password=<password>, containers-pull-secret]
 
 - filename: docker-compose.yaml
   allowed_patterns: [EMG_WEBIN__JWT_SECRET_KEY=dummy-key, SECURE_LINK_SECRET=dummy-key]
