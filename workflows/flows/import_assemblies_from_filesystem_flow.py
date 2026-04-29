@@ -20,14 +20,13 @@ from workflows.ena_utils.requestors import ENAAPIRequest
 from workflows.flows.assemble_study_tasks.miassembler_reports import (
     AssembledRunsReport,
     QcFailedRunsReport,
-    read_assembled_runs_report,
-    read_coverage_report,
-    read_qc_failed_runs_report,
+    load_assembled_runs_report,
+    load_coverage_report,
+    load_qc_failed_runs_report,
 )
-from workflows.flows.assemble_study_tasks.miassembler_paths import (
+from workflows.data_io_utils.miassembler_utils import (
     miassembler_run_output_dir,
 )
-from workflows.flows.shared.run_tasks import get_or_import_mgnify_run
 from workflows.flows.shared.study_tasks import get_or_create_mgnify_study
 from workflows.prefect_utils.analyses_models_helpers import (
     mark_assembly_status,
@@ -63,20 +62,20 @@ def validate_assembly_output_dir(nextflow_outdir: str | Path) -> Path:
     return output_dir
 
 
-@task(name="Read assembled runs report")
-def read_assembled_runs(nextflow_outdir: str | Path) -> DataFrame[AssembledRunsReport]:
+@task(name="Load assembled runs report")
+def load_assembled_runs(nextflow_outdir: str | Path) -> DataFrame[AssembledRunsReport]:
     """
     Read and validate the miassembler completed-runs report from an output directory.
     """
     logger = get_run_logger()
     assembled_runs_csv = Path(nextflow_outdir) / "assembled_runs.csv"
-    report = read_assembled_runs_report(assembled_runs_csv)
+    report = load_assembled_runs_report(assembled_runs_csv)
     logger.info(f"Read {len(report)} assembled run records")
     return report
 
 
-@task(name="Read QC failed runs report")
-def read_qc_failed_runs(nextflow_outdir: str | Path) -> DataFrame[QcFailedRunsReport]:
+@task(name="Load QC failed runs report")
+def load_qc_failed_runs(nextflow_outdir: str | Path) -> DataFrame[QcFailedRunsReport]:
     """
     Read and validate the optional miassembler QC-failed runs report.
     """
@@ -87,7 +86,7 @@ def read_qc_failed_runs(nextflow_outdir: str | Path) -> DataFrame[QcFailedRunsRe
         logger.info(f"No QC failed runs report found at {qc_failed_csv}")
         return pd.DataFrame()
 
-    report = read_qc_failed_runs_report(qc_failed_csv)
+    report = load_qc_failed_runs_report(qc_failed_csv)
     logger.info(f"Read {len(report)} QC failed run records")
     return report
 
@@ -195,7 +194,7 @@ def import_completed_assembly(
             / "coverage"
             / f"{assembly.runs_label}_coverage.json"
         )
-        coverage_report = read_coverage_report(coverage_report_path)
+        coverage_report = load_coverage_report(coverage_report_path)
         assembly.update_coverage_metadata_from_report(coverage_report)
 
         mark_assembly_status(
@@ -218,14 +217,14 @@ def import_completed_assembly(
 @task(name="Get study assembly records from ENA")
 def get_study_assembly_records_from_ena(
     study_accession: str,
-    mgnify_study_id: int,
+    mgnify_study_accession: str,
     limit: int,
 ) -> list[dict[str, str]]:
     """
     Fetch ENA assembly records with run accessions for pre-import validation.
     """
     logger = get_run_logger()
-    mgnify_study = analyses.models.Study.objects.get(id=mgnify_study_id)
+    mgnify_study = analyses.models.Study.objects.get(accession=mgnify_study_accession)
     fields = ENAAnalysisFields
     ena_auth = dcc_auth if mgnify_study.is_private else None
 
@@ -334,6 +333,8 @@ def import_assemblies_from_filesystem_flow(
     """
     Import miassembler outputs into Assembly records.
 
+    This flow doesn't support co-assemblies at the moment.
+
     The input directory must be a miassembler/Nextflow output directory containing
     `assembled_runs.csv`. Completed assemblies are imported from that report, using
     the standard per-study/per-run output directory layout.
@@ -348,7 +349,7 @@ def import_assemblies_from_filesystem_flow(
     """
     logger = get_run_logger()
     validated_outdir = validate_assembly_output_dir(nextflow_outdir)
-    assembled_runs_report = read_assembled_runs(validated_outdir)
+    assembled_runs_report = load_assembled_runs(validated_outdir)
     if assembled_runs_report.empty:
         raise ValueError(
             "There are no assemblies to import, the assembled_runs.csv is empty."
@@ -359,7 +360,7 @@ def import_assemblies_from_filesystem_flow(
         assembled_runs_report,
     )
 
-    qc_failed_runs_report = read_qc_failed_runs(validated_outdir)
+    qc_failed_runs_report = load_qc_failed_runs(validated_outdir)
     mgnify_study_id = get_or_create_mgnify_study(study_accession)
     ena_fetch_limit = len(assembled_runs_report)
 
@@ -382,17 +383,15 @@ def import_assemblies_from_filesystem_flow(
     )
     ena_assembly_records = get_study_assembly_records_from_ena(
         mgnify_study.ena_study.accession,
-        mgnify_study_id,
+        mgnify_study.accession,
         ena_fetch_limit,
     )
 
     imported_assembly_ids: list[int] = []
     imported_assemblies: list[dict[str, str | int]] = []
     for record in assembled_runs_report.to_dict("records"):
-        run_id = get_or_import_mgnify_run(
-            record["run_accession"],
-            mgnify_study_id,
-            ena_fetch_limit,
+        run = analyses.models.Run.objects.get(
+            ena_accessions__contains=[record["run_accession"]]
         )
         ena_assembly_record = validate_assembly_exists_in_ena(
             record["run_accession"],
@@ -400,7 +399,7 @@ def import_assemblies_from_filesystem_flow(
         )
         assembly_id = import_completed_assembly(
             mgnify_study_id,
-            run_id,
+            run.id,
             validated_outdir,
             record,
             study_accession,

@@ -4,11 +4,14 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
-from prefect.artifacts import Artifact
+import pandera.pandas as pa
 
 import analyses.models
-from workflows.flows.assemble_study_tasks.miassembler_paths import (
+from workflows.data_io_utils.miassembler_utils import (
     miassembler_run_output_dir,
+)
+from workflows.flows.assemble_study_tasks.miassembler_reports import (
+    load_assembled_runs_report,
 )
 from workflows.flows.import_assemblies_from_filesystem_flow import (
     import_assemblies_from_filesystem_flow,
@@ -113,7 +116,7 @@ def run_import_flow(
 
     def fetch_ena_assembly_records(
         study_accession: str,
-        mgnify_study_id: int,
+        mgnify_study_accession: str,
         limit: int,
     ) -> list[dict[str, str]]:
         return [
@@ -202,7 +205,23 @@ def test_import_assemblies_from_filesystem_imports_completed_and_reports_qc_fail
         {"SRR6180435": "filter_ratio_threshold_exceeded"},
     )
 
-    summary = run_import_flow(output_dir, raw_reads_mgnify_study.ena_study.accession)
+    captured_tables: list[list[dict[str, str]]] = []
+
+    def capture_table_artifact(*args, **kwargs):
+        if "table" in kwargs:
+            captured_tables.append(kwargs["table"])
+        elif len(args) >= 2:
+            captured_tables.append(args[1])
+        else:
+            raise AssertionError("create_table_artifact was called without a table")
+
+    with patch(
+        "workflows.flows.import_assemblies_from_filesystem_flow.create_table_artifact",
+        side_effect=capture_table_artifact,
+    ):
+        summary = run_import_flow(
+            output_dir, raw_reads_mgnify_study.ena_study.accession
+        )
 
     assert len(summary["imported"]) == 1
     assert len(summary["qc_failed"]) == 1
@@ -235,9 +254,8 @@ def test_import_assemblies_from_filesystem_imports_completed_and_reports_qc_fail
         runs__ena_accessions__contains=["SRR6180435"]
     ).exists()
 
-    import_report = Artifact.get("miassembler-filesystem-import-report")
-    assert import_report.type == "table"
-    report_rows = json.loads(import_report.data)
+    assert captured_tables
+    report_rows = captured_tables[0]
     imported_row = next(
         row for row in report_rows if row["run_accession"] == "SRR6180434"
     )
@@ -286,7 +304,7 @@ def test_import_assemblies_from_filesystem_preserves_input_study_accession(
 
 
 @pytest.mark.django_db
-def test_import_assemblies_from_filesystem_imports_missing_run_from_ena(
+def test_import_assemblies_from_filesystem_requires_existing_run(
     prefect_harness,
     raw_reads_mgnify_study,
     raw_read_run,
@@ -294,7 +312,6 @@ def test_import_assemblies_from_filesystem_imports_missing_run_from_ena(
     tmp_path,
 ):
     run = raw_read_run[0]
-    run_sample = run.sample
     run.delete()
     output_dir = make_miassembler_output(
         tmp_path / "miassembler",
@@ -302,64 +319,57 @@ def test_import_assemblies_from_filesystem_imports_missing_run_from_ena(
         [("SRR6180434", "metaspades", "3.15.5")],
     )
 
-    def fetch_ena_assemblies(accession: str, limit: int) -> list[str]:
-        analyses.models.Run.objects.create(
-            ena_accessions=["SRR6180434"],
-            study=raw_reads_mgnify_study,
-            ena_study=raw_reads_mgnify_study.ena_study,
-            sample=run_sample,
-            experiment_type="METAG",
-        )
-        run = analyses.models.Run.objects.get(ena_accessions__contains=["SRR6180434"])
-        assembly, _ = analyses.models.Assembly.objects.get_or_create_for_run_and_sample(
-            run=run,
-            sample=run.sample,
-            reads_study=raw_reads_mgnify_study,
-            ena_study=raw_reads_mgnify_study.ena_study,
-        )
-        assembly.ena_accessions = ["ERZ123456"]
-        assembly.save()
-        return ["ERZ123456"]
-
-    def fetch_ena_assembly_records(
-        study_accession: str,
-        mgnify_study_id: int,
-        limit: int,
-    ) -> list[dict[str, str]]:
-        return [
-            {
-                "run_accession": "SRR6180434",
-                "analysis_alias": "SRR6180434",
-                "analysis_accession": "ERZ123456",
-                "generated_ftp": (
-                    "ftp.sra.ebi.ac.uk/vol1/sequence/ERZ123456/contigs.fa.gz"
-                ),
-            }
-        ]
-
     with (
         patch(
             "workflows.flows.import_assemblies_from_filesystem_flow."
             "get_study_assemblies_from_ena",
-            side_effect=fetch_ena_assemblies,
-        ) as mock_get_study_assemblies_from_ena,
+            return_value=["ERZ000001"],
+        ),
         patch(
             "workflows.flows.import_assemblies_from_filesystem_flow."
             "get_study_assembly_records_from_ena",
-            side_effect=fetch_ena_assembly_records,
+            return_value=[
+                {
+                    "run_accession": "SRR6180434",
+                    "analysis_alias": "SRR6180434",
+                    "analysis_accession": "ERZ000001",
+                    "generated_ftp": (
+                        "ftp.sra.ebi.ac.uk/vol1/sequence/ERZ000001/contigs.fa.gz"
+                    ),
+                }
+            ],
         ),
     ):
-        summary = import_assemblies_from_filesystem_flow(
-            study_accession=raw_reads_mgnify_study.ena_study.accession,
-            nextflow_outdir=output_dir,
-            fetch_read_runs_from_ena=False,
-        )
+        with pytest.raises(analyses.models.Run.DoesNotExist):
+            import_assemblies_from_filesystem_flow(
+                study_accession=raw_reads_mgnify_study.ena_study.accession,
+                nextflow_outdir=output_dir,
+                fetch_read_runs_from_ena=False,
+            )
 
-    assert len(summary["imported"]) == 1
-    mock_get_study_assemblies_from_ena.assert_called_once_with(
-        raw_reads_mgnify_study.ena_study.accession,
-        limit=1,
-    )
+
+@pytest.mark.django_db
+def test_import_assemblies_from_filesystem_rejects_invalid_run_accession_in_report(
+    prefect_harness,
+    raw_reads_mgnify_study,
+    tmp_path,
+):
+    output_dir = tmp_path / "miassembler"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    (output_dir / "assembled_runs.csv").write_text("INVALID,metaspades,3.15.5\n")
+    (output_dir / "qc_failed_runs.csv").write_text("")
+
+    with pytest.raises(pa.errors.SchemaError, match="INVALID"):
+        run_import_flow(output_dir, raw_reads_mgnify_study.ena_study.accession)
+
+
+@pytest.mark.django_db
+def test_load_assembled_runs_report_rejects_invalid_run_accession(tmp_path):
+    report = tmp_path / "assembled_runs.csv"
+    report.write_text("INVALID,metaspades,3.15.5\n")
+
+    with pytest.raises(pa.errors.SchemaError, match="INVALID"):
+        load_assembled_runs_report(report)
 
 
 @pytest.mark.django_db

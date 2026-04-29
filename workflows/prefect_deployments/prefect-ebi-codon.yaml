@@ -148,6 +148,28 @@ deployments:
   work_pool:
     name: slurm
 
+- name: import_assemblies_from_filesystem_flow_deployment
+  description: |-
+    Import miassembler outputs into Assembly records.
+
+    This flow doesn't support co-assemblies at the moment.
+
+    The input directory must be a miassembler/Nextflow output directory containing
+    `assembled_runs.csv`. Completed assemblies are imported from that report, using
+    the standard per-study/per-run output directory layout.
+
+    This flow assumes the assemblies were already uploaded to ENA. ENA Portal is
+    refreshed before import, and each completed run must resolve to an ENA assembly
+    accession returned by that refresh.
+
+    :param study_accession: ENA study accession for the miassembler outputs.
+    :param nextflow_outdir: miassembler/Nextflow output directory to import from.
+    :param fetch_read_runs_from_ena: Whether to refresh read runs from ENA before import.
+  entrypoint: workflows/flows/import_assemblies_from_filesystem_flow.py:import_assemblies_from_filesystem_flow
+  schedule: null
+  work_pool:
+    name: slurm
+
 - name: import_primer_identification_for_imported_analyses_deployment
   description: |-
     Imports primer-identification outputs for amplicon analyses that already have

@@ -6,13 +6,17 @@ import pandas as pd
 import pandera.pandas as pa
 from pandera.typing import DataFrame, Series
 
+from workflows.ena_utils.ena_accession_matching import INSDC_RUN_ACCESSION_REGEX
+
 
 class AssembledRunsReport(pa.DataFrameModel):
     """
     Schema for miassembler rows describing successfully assembled runs.
     """
 
-    run_accession: Series[str] = pa.Field(nullable=False)
+    run_accession: Series[str] = pa.Field(
+        nullable=False, str_matches=INSDC_RUN_ACCESSION_REGEX.pattern, unique=True
+    )
     assembler_name: Series[str] = pa.Field(nullable=False)
     assembler_version: Series[str] = pa.Field(nullable=False)
 
@@ -25,19 +29,21 @@ class QcFailedRunsReport(pa.DataFrameModel):
     Schema for miassembler rows describing runs that failed pre-assembly QC.
     """
 
-    run_accession: Series[str] = pa.Field(nullable=False)
+    run_accession: Series[str] = pa.Field(
+        nullable=False, str_matches=INSDC_RUN_ACCESSION_REGEX.pattern, unique=True
+    )
     reason: Series[str] = pa.Field(nullable=False)
 
     class Config:
         strict = True
 
 
-def read_assembled_runs_report(path: Path) -> DataFrame[AssembledRunsReport]:
+def load_assembled_runs_report(path: Path) -> DataFrame[AssembledRunsReport]:
     """
-    Read and validate miassembler's assembled_runs.csv report.
+    Load and validate miassembler's assembled_runs.csv report.
     """
     try:
-        return AssembledRunsReport.validate(
+        report = AssembledRunsReport.validate(
             pd.read_csv(
                 path,
                 header=None,
@@ -46,17 +52,18 @@ def read_assembled_runs_report(path: Path) -> DataFrame[AssembledRunsReport]:
             )
         )
     except pd.errors.EmptyDataError:
-        return AssembledRunsReport.validate(
+        report = AssembledRunsReport.validate(
             pd.DataFrame(columns=AssembledRunsReport.to_schema().columns)
         )
+    return report
 
 
-def read_qc_failed_runs_report(path: Path) -> DataFrame[QcFailedRunsReport]:
+def load_qc_failed_runs_report(path: Path) -> DataFrame[QcFailedRunsReport]:
     """
-    Read and validate miassembler's qc_failed_runs.csv report.
+    Load and validate miassembler's qc_failed_runs.csv report.
     """
     try:
-        return QcFailedRunsReport.validate(
+        report = QcFailedRunsReport.validate(
             pd.read_csv(
                 path,
                 header=None,
@@ -65,14 +72,15 @@ def read_qc_failed_runs_report(path: Path) -> DataFrame[QcFailedRunsReport]:
             )
         )
     except pd.errors.EmptyDataError:
-        return QcFailedRunsReport.validate(
+        report = QcFailedRunsReport.validate(
             pd.DataFrame(columns=QcFailedRunsReport.to_schema().columns)
         )
+    return report
 
 
-def read_coverage_report(path: Path) -> Any:
+def load_coverage_report(path: Path) -> Any:
     """
-    Read miassembler's assembly coverage JSON report.
+    Load miassembler's assembly coverage JSON report.
     """
     if not path.is_file():
         raise FileNotFoundError(f"Expected miassembler coverage report at {path}")

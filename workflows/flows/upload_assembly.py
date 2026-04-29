@@ -23,7 +23,7 @@ from prefect import flow, get_run_logger, task
 import analyses.models
 import ena.models
 from workflows.flows.assemble_study_tasks.miassembler_reports import (
-    read_coverage_report,
+    load_coverage_report,
 )
 from workflows.prefect_utils.analyses_models_helpers import mark_assembly_status
 from workflows.prefect_utils.slurm_flow import (
@@ -258,7 +258,7 @@ def update_assembly_metadata(
     coverage_report_path = Path(assembly.dir) / Path(
         f"assembly/{assembly.assembler.name.lower()}/{assembly.assembler.version}/coverage/{run_accession}_coverage.json"
     )
-    coverage_report = read_coverage_report(coverage_report_path)
+    coverage_report = load_coverage_report(coverage_report_path)
     assembly.update_coverage_metadata_from_report(coverage_report)
     logger.info(f"Assembly metadata of {assembly} is now {assembly.metadata}")
 

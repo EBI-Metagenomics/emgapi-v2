@@ -25,11 +25,11 @@ from workflows.flows.analyse_study_tasks.cleanup_pipeline_directories import (
     delete_assemble_study_nextflow_workdir,
 )
 from workflows.flows.assemble_study_tasks.miassembler_reports import (
-    read_assembled_runs_report,
-    read_coverage_report,
-    read_qc_failed_runs_report,
+    load_assembled_runs_report,
+    load_coverage_report,
+    load_qc_failed_runs_report,
 )
-from workflows.flows.assemble_study_tasks.miassembler_paths import (
+from workflows.data_io_utils.miassembler_utils import (
     miassembler_run_output_dir,
 )
 
@@ -93,7 +93,7 @@ def update_assembly_metadata(
     coverage_report_path = Path(assembly.dir) / Path(
         f"assembly/{assembly.assembler.name.lower()}/{assembly.assembler.version}/coverage/{run_accession}_coverage.json"
     )
-    coverage_report = read_coverage_report(coverage_report_path)
+    coverage_report = load_coverage_report(coverage_report_path)
     assembly.update_coverage_metadata_from_report(coverage_report)
     logger.info(f"Assembly metadata of {assembly} is now {assembly.metadata}")
 
@@ -248,7 +248,7 @@ def run_assembler_for_samplesheet(
         qc_failed_runs = {}  # Stores {run_accession, qc_fail_reason}
 
         if qc_failed_csv.is_file():
-            qc_failed_runs_report = read_qc_failed_runs_report(qc_failed_csv)
+            qc_failed_runs_report = load_qc_failed_runs_report(qc_failed_csv)
             qc_failed_runs = dict(
                 zip(
                     qc_failed_runs_report["run_accession"],
@@ -267,7 +267,7 @@ def run_assembler_for_samplesheet(
                 f"Missing end of execution assembled runs csv file. Expected path {assembled_runs_csv}."
             )
 
-        assembled_runs_report = read_assembled_runs_report(assembled_runs_csv)
+        assembled_runs_report = load_assembled_runs_report(assembled_runs_csv)
         if assembled_runs_report.empty:
             raise RuntimeError(
                 "miassembler reported no successful assemblies; "
