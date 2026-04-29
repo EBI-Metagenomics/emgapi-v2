@@ -120,7 +120,11 @@ def test_genome_search_network_error(ninja_api_client, genomes, monkeypatch):
 
     monkeypatch.setattr(
         "emgapiv2.api.genome_search.httpx.post",
-        Mock(side_effect=Boom("unreachable", request=hx.Request("POST", "https://backend"))),
+        Mock(
+            side_effect=Boom(
+                "unreachable", request=hx.Request("POST", "https://backend")
+            )
+        ),
     )
 
     resp = ninja_api_client.post("/genome-search/", json={"sequence": "ACGT"})
