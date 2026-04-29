@@ -3,8 +3,9 @@ from __future__ import annotations
 import logging
 import os
 import re
+from collections.abc import Iterable, Mapping
 from pathlib import Path
-from typing import ClassVar, Union, Optional, Iterable, Literal
+from typing import Any, ClassVar, Union, Optional, Literal
 
 from aenum import extend_enum
 from db_file_storage.model_utils import delete_file, delete_file_if_needed
@@ -587,6 +588,31 @@ class Assembly(InferredMetadataMixin, TimeStampedModel, ENADerivedModel):
             / Path(assembler.name.lower())
             / Path(assembler.version)
         )
+
+    def update_coverage_metadata_from_report(
+        self, coverage_report: Mapping[str, Any]
+    ) -> None:
+        """
+        Update coverage metadata from parsed MIAssembler coverage JSON values.
+        """
+        if not isinstance(coverage_report, Mapping):
+            raise ValueError("Coverage report must be a JSON object")
+
+        required_keys = [
+            self.CommonMetadataKeys.COVERAGE,
+            self.CommonMetadataKeys.COVERAGE_DEPTH,
+        ]
+        missing_keys = [key for key in required_keys if key not in coverage_report]
+        if missing_keys:
+            raise ValueError(
+                "Coverage report is missing required metadata keys: "
+                f"{', '.join(missing_keys)}"
+            )
+
+        for key in required_keys:
+            self.metadata[key] = coverage_report[key]
+
+        self.save()
 
     def determine_suitable_assembler(self, save: bool = True) -> Assembler:
         """

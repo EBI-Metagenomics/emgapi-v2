@@ -1,5 +1,3 @@
-import csv
-import json
 from datetime import timedelta
 from pathlib import Path
 from typing import Iterable, Optional
@@ -10,10 +8,7 @@ from prefect import flow, get_run_logger, task
 
 import analyses.models
 from activate_django_first import EMG_CONFIG
-from workflows.data_io_utils.filenames import (
-    accession_prefix_separated_dir_path,
-    file_path_shortener,
-)
+from workflows.data_io_utils.filenames import file_path_shortener
 from workflows.ena_utils.host_metadata_to_reference_genome import (
     get_reference_genome_for_host,
 )
@@ -28,6 +23,14 @@ from workflows.prefect_utils.slurm_policies import (
 )
 from workflows.flows.analyse_study_tasks.cleanup_pipeline_directories import (
     delete_assemble_study_nextflow_workdir,
+)
+from workflows.flows.assemble_study_tasks.miassembler_reports import (
+    read_assembled_runs_report,
+    read_coverage_report,
+    read_qc_failed_runs_report,
+)
+from workflows.flows.assemble_study_tasks.miassembler_paths import (
+    miassembler_run_output_dir,
 )
 
 
@@ -81,10 +84,8 @@ def update_assembly_metadata(
     run_accession = assembly.runs_label
     study_accession = assembly.reads_study.ena_study.accession
 
-    assembly.dir = (
-        nextflow_outdir
-        / accession_prefix_separated_dir_path(study_accession, 7)
-        / accession_prefix_separated_dir_path(run_accession, 7)
+    assembly.dir = str(
+        miassembler_run_output_dir(nextflow_outdir, study_accession, run_accession)
     )
     assembly.save()
     logger.info(f"Assembly directory is {assembly.dir}")
@@ -92,23 +93,9 @@ def update_assembly_metadata(
     coverage_report_path = Path(assembly.dir) / Path(
         f"assembly/{assembly.assembler.name.lower()}/{assembly.assembler.version}/coverage/{run_accession}_coverage.json"
     )
-    if not coverage_report_path.is_file():
-        raise Exception(f"Assembly coverage file not found at {coverage_report_path}")
-
-    with open(coverage_report_path, "r") as json_file:
-        coverage_report = json.load(json_file)
-
-    for key in [
-        assembly.CommonMetadataKeys.COVERAGE,
-        assembly.CommonMetadataKeys.COVERAGE_DEPTH,
-    ]:
-        if key not in coverage_report:
-            logger.warning(f"No '{key}' found in {coverage_report_path}")
-        assembly.metadata[key] = coverage_report.get(key)
-
+    coverage_report = read_coverage_report(coverage_report_path)
+    assembly.update_coverage_metadata_from_report(coverage_report)
     logger.info(f"Assembly metadata of {assembly} is now {assembly.metadata}")
-
-    assembly.save()
 
 
 @task
@@ -232,6 +219,7 @@ def run_assembler_for_samplesheet(
         ]
     )
 
+    assembled_run_accessions: list[str] = []
     try:
         run_cluster_job(
             name=f"Assemble study {mgnify_study.ena_study.accession} via samplesheet {file_path_shortener(samplesheet_csv, 1, 15, True)}",
@@ -260,12 +248,13 @@ def run_assembler_for_samplesheet(
         qc_failed_runs = {}  # Stores {run_accession, qc_fail_reason}
 
         if qc_failed_csv.is_file():
-            with qc_failed_csv.open(mode="r") as file_handle:
-                for row in csv.reader(file_handle, delimiter=","):
-                    run_accession, fail_reason = row
-                    qc_failed_runs[run_accession] = fail_reason
-
-        assembled_runs = set()
+            qc_failed_runs_report = read_qc_failed_runs_report(qc_failed_csv)
+            qc_failed_runs = dict(
+                zip(
+                    qc_failed_runs_report["run_accession"],
+                    qc_failed_runs_report["reason"],
+                )
+            )
 
         if not assembled_runs_csv.is_file():
             for assembly in assemblies:
@@ -278,10 +267,14 @@ def run_assembler_for_samplesheet(
                 f"Missing end of execution assembled runs csv file. Expected path {assembled_runs_csv}."
             )
 
-        with assembled_runs_csv.open(mode="r") as file_handle:
-            for row in csv.reader(file_handle, delimiter=","):
-                run_accession, assembler_software, assembler_version = row
-                assembled_runs.add(run_accession)
+        assembled_runs_report = read_assembled_runs_report(assembled_runs_csv)
+        if assembled_runs_report.empty:
+            raise RuntimeError(
+                "miassembler reported no successful assemblies; "
+                f"refusing to continue with {samplesheet_csv}."
+            )
+        assembled_run_accessions = list(assembled_runs_report["run_accession"])
+        assembled_runs = set(assembled_run_accessions)
 
         for assembly in assemblies:
             if assembly.runs_label in qc_failed_runs:
@@ -308,13 +301,7 @@ def run_assembler_for_samplesheet(
         )
     finally:
         # output list of assembled runs
-        assembled_runs = []
-        if assembled_runs_csv.is_file():
-            with assembled_runs_csv.open(mode="r") as file_handle:
-                for row in csv.reader(file_handle, delimiter=","):
-                    run_accession, assembler_software, assembler_version = row
-                    assembled_runs.append(run_accession)
-        logger.info("Assembled runs: " + ",".join(assembled_runs))
+        logger.info("Assembled runs: " + ",".join(assembled_run_accessions))
 
 
 @flow(flow_run_name="Assemble {samplesheet_csv} without parent", persist_result=True)
