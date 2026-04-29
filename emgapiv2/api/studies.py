@@ -94,7 +94,7 @@ class StudyController(UnauthorisedIsUnfoundController):
         response=NinjaPaginationResponseSchema[MGnifyAnalysis],
         summary="List MGnify Analyses associated with this Study",
         description="MGnify analyses correspond to an individual Run or Assembly within this study,"
-        "analysed by a MGnify Pipelione. ",
+        "analysed by a MGnify Pipeline. ",
         operation_id="list_mgnify_study_analyses",
         tags=[ApiSections.STUDIES, ApiSections.ANALYSES],
         openapi_extra=make_links_section(
