@@ -278,6 +278,7 @@ class ServiceURLsConfig(BaseModel):
         "http://localhost:8080/pub/databases/metagenomics/mgnify_results/"
     )
     private_data_url_root: str = "http://localhost:8081/private-data/"
+    genome_search_proxy: str = "https://cobs-genome-search-01.mgnify.org/search"
 
 
 class MaskReplacement(BaseModel):
