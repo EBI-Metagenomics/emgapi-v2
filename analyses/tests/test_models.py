@@ -473,6 +473,31 @@ def test_inferred_metadata_mixin(raw_read_run):
 
 
 @pytest.mark.django_db
+def test_populate_metadata_from_json(mgnify_assemblies):
+    assembly = mgnify_assemblies[0]
+
+    assembly.populate_metadata_from_json(
+        {"coverage": 0.25, "coverage_depth": 42.5, "fake": 3},
+        required_keys=["coverage", "coverage_depth"],
+    )
+
+    assembly.refresh_from_db()
+    assert assembly.metadata["coverage"] == 0.25
+    assert assembly.metadata["coverage_depth"] == 42.5
+    assert "fake" not in assembly.metadata
+
+    assembly.populate_metadata_from_json(
+        {"coverage": 0.30, "coverage_depth": 44.5, "fake": 3},
+        required_keys=["coverage", "coverage_depth"],
+        optional_keys=["fake"],
+    )
+    assembly.refresh_from_db()
+    assert assembly.metadata["coverage"] == 0.30
+    assert assembly.metadata["coverage_depth"] == 44.5
+    assert assembly.metadata["fake"] == 3
+
+
+@pytest.mark.django_db
 def test_assembly_runs_labels(raw_read_run):
     run: Run = Run.objects.first()
     assembly, _ = Assembly.objects.get_or_create_for_run_and_sample(

@@ -18,6 +18,11 @@ ENA_ASSEMBLY_ACCESSION_REGEX: re.Pattern = re.compile(
 )
 ENA_ASSEMBLY_ACCESSION_GLOB: str = f"[{_INSDC_CENTRE_PREFIXES}]RZ[0-9]*"
 
+INSDC_RUN_ACCESSION_REGEX: re.Pattern = re.compile(
+    f"([{_INSDC_CENTRE_PREFIXES}]RR[0-9]{{6,}})"
+)
+INSDC_RUN_ACCESSION_GLOB: str = f"[{_INSDC_CENTRE_PREFIXES}]RR[0-9]*"
+
 INSDC_BIOSAMPLE_ACCESSION_REGEX: re.Pattern = re.compile(
     f"SAM[{_INSDC_CENTRE_SUFFIXES}][AG]?[0-9]+"
 )  # SAMEA1, SAMEG1, SAMN1, SAMN2 etc – note that the extra prefix are A|G|None
