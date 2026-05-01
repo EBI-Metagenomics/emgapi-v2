@@ -165,7 +165,7 @@ def import_completed_assembly(
     reads_mgnify_study = analyses.models.Study.objects.get(id=reads_mgnify_study_id)
     assembly_submission_mgnify_study = (
         analyses.models.Study.objects.get(id=assembly_submission_mgnify_study_id)
-        if assembly_submission_mgnify_study_id is not None
+        if assembly_submission_mgnify_study_id
         else None
     )
     ena_study = (
