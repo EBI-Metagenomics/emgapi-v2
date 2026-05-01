@@ -14,7 +14,6 @@ from workflows.ena_utils.analysis import ENAAnalysisFields, ENAAnalysisQuery
 from workflows.ena_utils.ena_auth import dcc_auth
 from workflows.ena_utils.ena_api_requests import (
     get_study_readruns_from_ena,
-    get_study_assemblies_from_ena,
 )
 from workflows.ena_utils.requestors import ENAAPIRequest
 from workflows.flows.assemble_study_tasks.miassembler_reports import (
@@ -135,18 +134,48 @@ def validate_completed_assembly_files(
 
 @task(name="Import completed assembly")
 def import_completed_assembly(
-    mgnify_study_id: int,
+    reads_mgnify_study_id: int,
+    tpa_mgnify_study_accession: str | None,
     run_id: int,
     nextflow_outdir: Path,
     record: dict[str, str],
     study_accession: str,
     ena_assembly_record: dict[str, str],
+    overwrite_existing_assemblies: bool = False,
 ) -> int:
     """
     Create or update an Assembly from one completed miassembler report row.
+
+    :param reads_mgnify_study_id: MGnify Study ID for the reads used to produce
+        the assembly.
+    :param tpa_mgnify_study_accession: MGnify Study accession for the separate
+        assembly submission study when importing TPA assemblies. Pass ``None`` for
+        non-TPA imports, where the assembly belongs to the reads study.
+    :param run_id: MGnify Run ID for the assembled read run.
+    :param nextflow_outdir: miassembler/Nextflow output directory containing the
+        run-level assembly files.
+    :param record: Completed row from ``assembled_runs.csv``.
+    :param study_accession: ENA accession used in the miassembler output path.
+    :param ena_assembly_record: ENA analysis record for the uploaded assembly.
+    :param overwrite_existing_assemblies: Allow updating an existing assembly row for
+        the same run/sample pair instead of failing.
+    :return: The created or updated Assembly ID.
     """
     logger = get_run_logger()
-    mgnify_study = analyses.models.Study.objects.get(id=mgnify_study_id)
+    reads_mgnify_study = analyses.models.Study.objects.get(id=reads_mgnify_study_id)
+    assembly_submission_mgnify_study = (
+        analyses.models.Study.objects.get(accession=tpa_mgnify_study_accession)
+        if tpa_mgnify_study_accession is not None
+        else None
+    )
+    ena_study = (
+        assembly_submission_mgnify_study.ena_study
+        if assembly_submission_mgnify_study
+        else reads_mgnify_study.ena_study
+    )
+    # TODO: remove the ena_study branch once ENA study handling no longer depends on
+    # legacy assembly-study objects.
+
     run_accession = record["run_accession"]
     run = analyses.models.Run.objects.get(id=run_id)
 
@@ -155,22 +184,30 @@ def import_completed_assembly(
             name=record["assembler_name"],
             version=record["assembler_version"],
         )
+        # Create the assembly row for this run.
         assembly, created = (
             analyses.models.Assembly.objects.get_or_create_for_run_and_sample(
                 run=run,
                 sample=run.sample,
-                reads_study=mgnify_study,
-                ena_study=mgnify_study.ena_study,
+                reads_study=reads_mgnify_study,
+                ena_study=ena_study,
                 defaults={
                     "is_private": run.is_private,
                     "webin_submitter": run.webin_submitter,
                 },
             )
         )
+        # This bit here to is to prevent overwriting existing assemblies by default.
+        if not created and not overwrite_existing_assemblies:
+            raise ValueError(
+                f"Assembly for run {run_accession} already exists in the database"
+            )
 
         assembly.assembler = assembler
-        assembly.reads_study = mgnify_study
-        assembly.ena_study = mgnify_study.ena_study
+        assembly.reads_study = reads_mgnify_study
+        assembly.assembly_study = assembly_submission_mgnify_study
+        # TPA imports follow the submission study.
+        assembly.ena_study = ena_study
         assembly.is_private = run.is_private
         assembly.webin_submitter = run.webin_submitter
         assembly.dir = str(
@@ -329,6 +366,8 @@ def import_assemblies_from_filesystem_flow(
     study_accession: str,
     nextflow_outdir: str | Path,
     fetch_read_runs_from_ena: bool = True,
+    assembled_study_accession: str | None = None,
+    overwrite_existing_assemblies: bool = False,
 ) -> dict[str, list[int] | list[dict[str, str]]]:
     """
     Import miassembler outputs into Assembly records.
@@ -343,47 +382,70 @@ def import_assemblies_from_filesystem_flow(
     refreshed before import, and each completed run must resolve to an ENA assembly
     accession returned by that refresh.
 
-    :param study_accession: ENA study accession for the miassembler outputs.
+    TPA imports provide a separate `assembled_study_accession`; in that case the
+    imported assemblies are linked to that study through `assembly_study`.
+
+    :param study_accession: ENA accession of the reads study to import from.
+    :param assembled_study_accession: ENA accession of the study that receives the
+        assemblies. For non-TPA imports, leave this one empty.
     :param nextflow_outdir: miassembler/Nextflow output directory to import from.
     :param fetch_read_runs_from_ena: Whether to refresh read runs from ENA before import.
+    :param overwrite_existing_assemblies: Allow importing over existing assembly rows
+        for the same run/sample pair instead of failing.
     """
     logger = get_run_logger()
-    validated_outdir = validate_assembly_output_dir(nextflow_outdir)
+
+    validated_outdir: Path = validate_assembly_output_dir(nextflow_outdir)
+
     assembled_runs_report = load_assembled_runs(validated_outdir)
     if assembled_runs_report.empty:
         raise ValueError(
             "There are no assemblies to import, the assembled_runs.csv is empty."
         )
+
+    qc_failed_runs_report = load_qc_failed_runs(validated_outdir)
+
     validate_completed_assembly_files(
         validated_outdir,
         study_accession,
         assembled_runs_report,
     )
 
-    qc_failed_runs_report = load_qc_failed_runs(validated_outdir)
-    mgnify_study_id = get_or_create_mgnify_study(study_accession)
+    reads_mgnify_study_id = get_or_create_mgnify_study(study_accession)
+    reads_mgnify_study = analyses.models.Study.objects.get(id=reads_mgnify_study_id)
+
+    assembly_submission_mgnify_study = None
+    if assembled_study_accession is not None:
+        assembly_submission_mgnify_id = get_or_create_mgnify_study(
+            assembled_study_accession
+        )
+        assembly_submission_mgnify_study = analyses.models.Study.objects.get(
+            id=assembly_submission_mgnify_id
+        )
+
+    is_tpa = (
+        assembly_submission_mgnify_study is not None
+        and assembly_submission_mgnify_study
+        != reads_mgnify_study  # in case someone provides the same accession here
+    )
+
     ena_fetch_limit = len(assembled_runs_report)
 
     if fetch_read_runs_from_ena:
-        mgnify_study = analyses.models.Study.objects.get(id=mgnify_study_id)
         read_runs = get_study_readruns_from_ena(
-            mgnify_study.first_accession,
+            reads_mgnify_study.first_accession,
             limit=ena_fetch_limit,
             raise_on_empty=False,
         )
         logger.info(f"Fetched or refreshed {len(read_runs)} read runs from ENA")
 
-    mgnify_study = analyses.models.Study.objects.get(id=mgnify_study_id)
-    ena_assembly_accessions = get_study_assemblies_from_ena(
-        mgnify_study.ena_study.accession,
-        limit=ena_fetch_limit,
+    study_containing_assemblies = (
+        assembly_submission_mgnify_study if is_tpa else reads_mgnify_study
     )
-    logger.info(
-        f"Fetched or refreshed {len(ena_assembly_accessions)} assemblies from ENA"
-    )
+
     ena_assembly_records = get_study_assembly_records_from_ena(
-        mgnify_study.ena_study.accession,
-        mgnify_study.accession,
+        study_containing_assemblies.ena_study.accession,
+        study_containing_assemblies.accession,
         ena_fetch_limit,
     )
 
@@ -398,12 +460,14 @@ def import_assemblies_from_filesystem_flow(
             ena_assembly_records,
         )
         assembly_id = import_completed_assembly(
-            mgnify_study_id,
+            reads_mgnify_study_id,
+            assembly_submission_mgnify_study.accession if is_tpa else None,
             run.id,
             validated_outdir,
             record,
             study_accession,
             ena_assembly_record,
+            overwrite_existing_assemblies=overwrite_existing_assemblies,
         )
         imported_assembly_ids.append(assembly_id)
         imported_assemblies.append(
