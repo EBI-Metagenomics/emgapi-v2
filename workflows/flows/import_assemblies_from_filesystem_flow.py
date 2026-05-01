@@ -141,6 +141,7 @@ def import_completed_assembly(
     record: dict[str, str],
     study_accession: str,
     ena_assembly_record: dict[str, str],
+    overwrite_existing_assemblies: bool = False,
 ) -> int:
     """
     Create or update an Assembly from one completed miassembler report row.
@@ -156,6 +157,8 @@ def import_completed_assembly(
     :param record: Completed row from ``assembled_runs.csv``.
     :param study_accession: ENA accession used in the miassembler output path.
     :param ena_assembly_record: ENA analysis record for the uploaded assembly.
+    :param overwrite_existing_assemblies: Allow updating an existing assembly row for
+        the same run/sample pair instead of failing.
     :return: The created or updated Assembly ID.
     """
     logger = get_run_logger()
@@ -192,6 +195,12 @@ def import_completed_assembly(
                 },
             )
         )
+        # This bit here to is to prevent overwriting existing assemblies by default.
+        if not created and not overwrite_existing_assemblies:
+            raise ValueError(
+                f"Assembly for run {run_accession} already exists in the database"
+            )
+
         assembly.assembler = assembler
         assembly.reads_study = reads_mgnify_study
         assembly.assembly_study = assembly_submission_mgnify_study
@@ -356,6 +365,7 @@ def import_assemblies_from_filesystem_flow(
     nextflow_outdir: str | Path,
     fetch_read_runs_from_ena: bool = True,
     assembled_study_accession: str | None = None,
+    overwrite_existing_assemblies: bool = False,
 ) -> dict[str, list[int] | list[dict[str, str]]]:
     """
     Import miassembler outputs into Assembly records.
@@ -375,39 +385,46 @@ def import_assemblies_from_filesystem_flow(
 
     :param study_accession: ENA accession of the reads study to import from.
     :param assembled_study_accession: ENA accession of the study that receives the
-        assemblies. For non-TPA imports, pass the same accession as
-        ``study_accession``.
+        assemblies. For non-TPA imports, leave this one empty.
     :param nextflow_outdir: miassembler/Nextflow output directory to import from.
     :param fetch_read_runs_from_ena: Whether to refresh read runs from ENA before import.
+    :param overwrite_existing_assemblies: Allow importing over existing assembly rows
+        for the same run/sample pair instead of failing.
     """
     logger = get_run_logger()
 
-    validated_outdir = validate_assembly_output_dir(nextflow_outdir)
+    validated_outdir: Path = validate_assembly_output_dir(nextflow_outdir)
+
     assembled_runs_report = load_assembled_runs(validated_outdir)
     if assembled_runs_report.empty:
         raise ValueError(
             "There are no assemblies to import, the assembled_runs.csv is empty."
         )
+
+    qc_failed_runs_report = load_qc_failed_runs(validated_outdir)
+
     validate_completed_assembly_files(
         validated_outdir,
         study_accession,
         assembled_runs_report,
     )
 
-    qc_failed_runs_report = load_qc_failed_runs(validated_outdir)
-
     reads_mgnify_study_id = get_or_create_mgnify_study(study_accession)
     reads_mgnify_study = analyses.models.Study.objects.get(id=reads_mgnify_study_id)
 
     assembly_submission_mgnify_study = None
     if assembled_study_accession is not None:
+        assembly_submission_mgnify_id = get_or_create_mgnify_study(
+            assembled_study_accession
+        )
         assembly_submission_mgnify_study = analyses.models.Study.objects.get(
-            id=get_or_create_mgnify_study(assembled_study_accession)
+            id=assembly_submission_mgnify_id
         )
 
     is_tpa = (
         assembly_submission_mgnify_study is not None
-        and assembly_submission_mgnify_study != reads_mgnify_study
+        and assembly_submission_mgnify_study
+        != reads_mgnify_study  # in case someone provides the same accession here
     )
 
     ena_fetch_limit = len(assembled_runs_report)
@@ -448,6 +465,7 @@ def import_assemblies_from_filesystem_flow(
             record,
             study_accession,
             ena_assembly_record,
+            overwrite_existing_assemblies=overwrite_existing_assemblies,
         )
         imported_assembly_ids.append(assembly_id)
         imported_assemblies.append(

@@ -444,12 +444,44 @@ def test_import_assemblies_from_filesystem_clears_blocked_on_retry(
         output_dir,
         raw_reads_mgnify_study.ena_study.accession,
         assembled_study_accession=raw_reads_mgnify_study.ena_study.accession,
+        overwrite_existing_assemblies=True,
     )
 
     assert second_summary["imported"] == first_summary["imported"]
     assembly.refresh_from_db()
     assert assembly.status[assembly.AssemblyStates.ASSEMBLY_UPLOADED]
     assert not assembly.status[assembly.AssemblyStates.ASSEMBLY_BLOCKED]
+
+
+@pytest.mark.django_db
+def test_import_assemblies_from_filesystem_rejects_existing_assembly_by_default(
+    prefect_harness,
+    raw_reads_mgnify_study,
+    raw_read_run,
+    assemblers,
+    tmp_path,
+):
+    output_dir = make_miassembler_output(
+        tmp_path / "miassembler",
+        raw_reads_mgnify_study.ena_study.accession,
+        [("SRR6180434", "metaspades", "3.15.5")],
+    )
+
+    run_import_flow(
+        output_dir,
+        raw_reads_mgnify_study.ena_study.accession,
+        assembled_study_accession=raw_reads_mgnify_study.ena_study.accession,
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="Assembly for run SRR6180434 already exists in the database",
+    ):
+        run_import_flow(
+            output_dir,
+            raw_reads_mgnify_study.ena_study.accession,
+            assembled_study_accession=raw_reads_mgnify_study.ena_study.accession,
+        )
 
 
 @pytest.mark.django_db
