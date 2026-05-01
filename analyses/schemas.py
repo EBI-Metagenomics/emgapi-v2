@@ -58,6 +58,18 @@ class MGnifyStudy(ModelSchema):
             ).isoformat()
         ],
     )
+    metadata: dict[ENAStudyFields, Any] = Field(
+        ...,
+        examples=[
+            {
+                ENAStudyFields.STUDY_TITLE: "ISS Metagenomes",
+                ENAStudyFields.STUDY_DESCRIPTION: "Dust was taken from a vacuum cleaner on the Internal Space Station.",
+                ENAStudyFields.CENTER_NAME: "NASA",
+            },
+            {ENAStudyFields.STUDY_TITLE: "Healthy stool samples"},
+        ],
+        description="Metadata associated with the study, a partial copy of the ENA Study record.",
+    )
 
     @staticmethod
     def resolve_biome_name(obj: analyses.models.Study):
