@@ -155,6 +155,7 @@ task prefect -- deployment run "Download a study read-runs/realistic_example_dep
 * Use Django/postgres JSONFields liberally (they can save a load of complicated JOINs)
 * Apply a schema to JSONFields, using Enums, default dicts, custom pydantic types... see `WithDownloadsModel` for an example
 * Use class mixins and Django abstract models liberally, to add shared/similar functionality to multiple models
+* Prefer accessions over numeric IDs when both are available, especially in logs, task parameters, and workflow code
 * API list endpoints should not perform many/any JOINs. Prefer to have less information on the endpoint than introduce JOINs (it can be separately indexed for search)
 * API detail endpoints may perform JOINs
 * API action endpoints (e.g. `/analyses/MGYA1/taxonomies`) should be used where a very large dataset (`taxonomies`) is to be returned. This means `taxonomies` is not needed (so can be deferred) on the main analysis detail endpoint.

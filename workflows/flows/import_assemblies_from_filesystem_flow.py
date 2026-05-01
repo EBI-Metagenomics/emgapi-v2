@@ -135,7 +135,7 @@ def validate_completed_assembly_files(
 @task(name="Import completed assembly")
 def import_completed_assembly(
     reads_mgnify_study_id: int,
-    assembly_submission_mgnify_study_id: int | None,
+    tpa_mgnify_study_accession: str | None,
     run_id: int,
     nextflow_outdir: Path,
     record: dict[str, str],
@@ -148,7 +148,7 @@ def import_completed_assembly(
 
     :param reads_mgnify_study_id: MGnify Study ID for the reads used to produce
         the assembly.
-    :param assembly_submission_mgnify_study_id: MGnify Study ID for the separate
+    :param tpa_mgnify_study_accession: MGnify Study accession for the separate
         assembly submission study when importing TPA assemblies. Pass ``None`` for
         non-TPA imports, where the assembly belongs to the reads study.
     :param run_id: MGnify Run ID for the assembled read run.
@@ -164,8 +164,8 @@ def import_completed_assembly(
     logger = get_run_logger()
     reads_mgnify_study = analyses.models.Study.objects.get(id=reads_mgnify_study_id)
     assembly_submission_mgnify_study = (
-        analyses.models.Study.objects.get(id=assembly_submission_mgnify_study_id)
-        if assembly_submission_mgnify_study_id
+        analyses.models.Study.objects.get(accession=tpa_mgnify_study_accession)
+        if tpa_mgnify_study_accession is not None
         else None
     )
     ena_study = (
@@ -173,6 +173,8 @@ def import_completed_assembly(
         if assembly_submission_mgnify_study
         else reads_mgnify_study.ena_study
     )
+    # TODO: remove the ena_study branch once ENA study handling no longer depends on
+    # legacy assembly-study objects.
 
     run_accession = record["run_accession"]
     run = analyses.models.Run.objects.get(id=run_id)
@@ -459,7 +461,7 @@ def import_assemblies_from_filesystem_flow(
         )
         assembly_id = import_completed_assembly(
             reads_mgnify_study_id,
-            assembly_submission_mgnify_study.id if is_tpa else None,
+            assembly_submission_mgnify_study.accession if is_tpa else None,
             run.id,
             validated_outdir,
             record,
