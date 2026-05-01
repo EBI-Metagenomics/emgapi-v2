@@ -429,12 +429,10 @@ def import_assemblies_from_filesystem_flow(
         != reads_mgnify_study  # in case someone provides the same accession here
     )
 
-    ena_fetch_limit = len(assembled_runs_report)
-
     if fetch_read_runs_from_ena:
         read_runs = get_study_readruns_from_ena(
             reads_mgnify_study.first_accession,
-            limit=ena_fetch_limit,
+            limit=500,  # TODO: make this configurable, or to provide the accessions as a parameter
             raise_on_empty=False,
         )
         logger.info(f"Fetched or refreshed {len(read_runs)} read runs from ENA")
@@ -446,7 +444,7 @@ def import_assemblies_from_filesystem_flow(
     ena_assembly_records = get_study_assembly_records_from_ena(
         study_containing_assemblies.ena_study.accession,
         study_containing_assemblies.accession,
-        ena_fetch_limit,
+        len(assembled_runs_report),
     )
 
     imported_assembly_ids: list[int] = []
