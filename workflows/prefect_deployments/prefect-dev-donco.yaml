@@ -225,6 +225,21 @@ deployments:
     name: slurm
   schedules: []
 
+- name: repair_eggnog_tsv_headers_deployment
+  description: |-
+    Scan assembly analyses for EggNOG annotation TSV files with duplicated headers.
+    Set dry_run=True to list affected files only.
+    Set sync_to_ftp=True to re-sync repaired EggNOG results to the FTP/private mirror.
+
+    :param analysis_accessions: Optional list of analysis accessions to limit the scan.
+    :param dry_run: If true, only list affected files and make no changes.
+    :param sync_to_ftp: If true, re-sync repaired files to the FTP/private mirror.
+  entrypoint: workflows/flows/housekeeping/fix_eggnog_tsv_headers.py:repair_eggnog_tsv_headers
+  parameters: {}
+  work_pool:
+    name: slurm
+  schedules: []
+
 - name: import_legacy_analyses_deployment
   description: |-
     This flow will iteratively import analyses (made with MGnify V1-V5 pipelines)
