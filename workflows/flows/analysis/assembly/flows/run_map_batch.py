@@ -184,12 +184,11 @@ def run_map_batch(assembly_analyses_batch_id: uuid.UUID):
                 "-r",
                 EMG_CONFIG.map_pipeline.pipeline_git_revision,
             ),
-            # "-latest", this was causing issues - Cannot lock pack in assembly-analysis-pipeline/.git/objects/pack/pack-e....pack
+            ("-C", EMG_CONFIG.map_pipeline.pipeline_config_file),
             (
                 "-profile",
                 EMG_CONFIG.map_pipeline.pipeline_nf_profile,
             ),
-            ("-config", EMG_CONFIG.map_pipeline.pipeline_config_file),
             "-resume",
             ("-work-dir", nextflow_workdir),
             ("--input", map_samplesheet_path),
