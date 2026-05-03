@@ -450,6 +450,9 @@ def import_assemblies_from_filesystem_flow(
     imported_assembly_ids: list[int] = []
     imported_assemblies: list[dict[str, str | int]] = []
     for record in assembled_runs_report.to_dict("records"):
+
+        logger.info(f"Importing assembly for run {record['run_accession']}")
+
         run = analyses.models.Run.objects.get(
             ena_accessions__contains=[record["run_accession"]]
         )
