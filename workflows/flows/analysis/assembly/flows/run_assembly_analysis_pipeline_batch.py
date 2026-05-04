@@ -160,16 +160,14 @@ def run_assembly_batch(
             [
                 (
                     "nextflow",
+                    "-C",
+                    EMG_CONFIG.assembly_analysis_pipeline.pipeline_config_file,
                     "run",
                     EMG_CONFIG.assembly_analysis_pipeline.pipeline_repo,
                 ),
                 (
                     "-r",
                     EMG_CONFIG.assembly_analysis_pipeline.pipeline_git_revision,
-                ),
-                (
-                    "-C",
-                    EMG_CONFIG.assembly_analysis_pipeline.pipeline_config_file,
                 ),
                 (
                     "-profile",
