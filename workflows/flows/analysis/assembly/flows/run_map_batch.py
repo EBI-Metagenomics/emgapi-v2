@@ -177,10 +177,12 @@ def run_map_batch(assembly_analyses_batch_id: uuid.UUID):
         [
             (
                 "nextflow",
-                "-C",
-                EMG_CONFIG.map_pipeline.pipeline_config_file,
                 "run",
                 EMG_CONFIG.map_pipeline.pipeline_repo,
+            ),
+            (
+                "-c",
+                EMG_CONFIG.map_pipeline.pipeline_config_file,
             ),
             (
                 "-r",
