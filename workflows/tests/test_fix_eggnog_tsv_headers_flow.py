@@ -89,10 +89,7 @@ def test_repair_eggnog_tsv_headers_repairs_creates_backup_and_syncs(
         }
     ]
     mock_collect.return_value = candidates
-
-    result = repair_eggnog_tsv_headers(sync_to_ftp=True)
-
-    assert result == [
+    expected = [
         {
             "analysis_accession": "MGYA00000001",
             "download_alias": "sample_emapper_annotations.tsv.gz",
@@ -102,8 +99,14 @@ def test_repair_eggnog_tsv_headers_repairs_creates_backup_and_syncs(
             "backup_path": str(
                 target.with_name("sample_emapper_annotations.tsv.gz.bak")
             ),
+            "synced_to_ftp": True,
         }
     ]
+    mock_resync.return_value = expected
+
+    result = repair_eggnog_tsv_headers(sync_to_ftp=True)
+
+    assert result == expected
     backup_path = target.with_name("sample_emapper_annotations.tsv.gz.bak")
     assert backup_path.exists()
     with gzip.open(target, "rt") as handle:
@@ -118,7 +121,20 @@ def test_repair_eggnog_tsv_headers_repairs_creates_backup_and_syncs(
             "gene1\tortholog1",
         ]
     mock_collect.assert_called_once_with(None)
-    mock_resync.assert_called_once_with(result)
+    mock_resync.assert_called_once_with(
+        [
+            {
+                "analysis_accession": "MGYA00000001",
+                "download_alias": "sample_emapper_annotations.tsv.gz",
+                "nfs_path": str(target),
+                "external_path": "/tmp/ftp/analyses/MGYA00000001/eggnog/sample_emapper_annotations.tsv.gz",
+                "has_duplicate_header": True,
+                "backup_path": str(
+                    target.with_name("sample_emapper_annotations.tsv.gz.bak")
+                ),
+            }
+        ]
+    )
 
 
 @pytest.mark.django_db
@@ -150,7 +166,7 @@ def test_resync_eggnog_results_to_ftp_uses_rsync(
         "has_duplicate_header": True,
     }
 
-    resync_eggnog_results_to_ftp([candidate])
+    result = resync_eggnog_results_to_ftp([candidate])
 
     mock_run_deployment.assert_called_once()
     call_kwargs = mock_run_deployment.call_args.kwargs
@@ -158,3 +174,51 @@ def test_resync_eggnog_results_to_ftp_uses_rsync(
     assert call_kwargs["parameters"]["source"] == [
         str(analysis_root / "eggnog" / "sample_emapper_annotations.tsv.gz")
     ]
+    assert result == [
+        {
+            **candidate,
+            "synced_to_ftp": True,
+        }
+    ]
+
+
+@pytest.mark.django_db
+@patch("workflows.flows.housekeeping.fix_eggnog_tsv_headers._eggnog_analyses")
+@patch("workflows.flows.housekeeping.fix_eggnog_tsv_headers.run_deployment")
+@patch("workflows.flows.housekeeping.fix_eggnog_tsv_headers.get_run_logger")
+def test_resync_eggnog_results_to_ftp_marks_skipped_candidates(
+    mock_logger,
+    mock_run_deployment,
+    mock_analyses,
+    tmp_path,
+    prefect_harness,
+):
+    mock_logger.return_value = Mock()
+    analysis_root = tmp_path / "results"
+    analysis = Mock(
+        accession="MGYA00000001",
+        results_dir=str(analysis_root),
+        external_results_dir="analyses/MGYA00000001",
+        is_private=False,
+    )
+    mock_analyses.return_value = [analysis]
+
+    candidate = {
+        "analysis_accession": "MGYA00000001",
+        "download_alias": "sample_emapper_annotations.tsv.gz",
+        "nfs_path": str(
+            tmp_path / "other" / "eggnog" / "sample_emapper_annotations.tsv.gz"
+        ),
+        "external_path": "/tmp/ftp/analyses/MGYA00000001/eggnog/sample_emapper_annotations.tsv.gz",
+        "has_duplicate_header": True,
+    }
+
+    result = resync_eggnog_results_to_ftp([candidate])
+
+    assert result == [
+        {
+            **candidate,
+            "synced_to_ftp": False,
+        }
+    ]
+    mock_run_deployment.assert_not_called()

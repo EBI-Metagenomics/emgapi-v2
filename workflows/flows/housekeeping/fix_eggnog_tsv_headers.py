@@ -34,6 +34,7 @@ class EggnogHeaderFixCandidate(TypedDict, total=False):
     external_path: str
     has_duplicate_header: bool
     backup_path: str
+    synced_to_ftp: bool
 
 
 def _analysis_eggnog_annotation_downloads(analysis: Analysis):
@@ -228,18 +229,22 @@ def repair_eggnog_header_files(
 @task(name="Resync EggNOG results to FTP")
 def resync_eggnog_results_to_ftp(
     candidates: list[EggnogHeaderFixCandidate],
-) -> list[str]:
+) -> list[EggnogHeaderFixCandidate]:
     """Re-sync repaired EggNOG TSVs from NFS to the external tree.
 
     :param candidates: Repaired candidate files to sync.
     """
     logger = get_run_logger()
+    synced_candidates = [dict(candidate) for candidate in candidates]
+    for candidate in synced_candidates:
+        candidate["synced_to_ftp"] = False
 
-    synced_analyses: list[str] = []
     analyses = _eggnog_analyses(
-        sorted({candidate["analysis_accession"] for candidate in candidates})
+        sorted({candidate["analysis_accession"] for candidate in synced_candidates})
     )
-    candidate_paths = {Path(candidate["nfs_path"]) for candidate in candidates}
+    candidate_by_path = {
+        Path(candidate["nfs_path"]): candidate for candidate in synced_candidates
+    }
 
     for analysis in analyses:
         if not analysis.results_dir or not analysis.external_results_dir:
@@ -253,9 +258,12 @@ def resync_eggnog_results_to_ftp(
         source_root = Path(analysis.results_dir)
         target_root = Path(mirror_root) / analysis.external_results_dir
         source_files = [
-            path for path in candidate_paths if path.is_relative_to(source_root)
+            path for path in candidate_by_path if path.is_relative_to(source_root)
         ]
         if not source_files:
+            logger.info(
+                f"No EggNOG source files to sync for {analysis.accession}; skipping"
+            )
             continue
 
         logger.info(f"Re-syncing EggNOG results for {analysis.accession}")
@@ -271,12 +279,17 @@ def resync_eggnog_results_to_ftp(
                 "partition": EMG_CONFIG.slurm.datamover_partition,
             },
         )
-        synced_analyses.append(analysis.accession)
+        for path in source_files:
+            candidate_by_path[path]["synced_to_ftp"] = True
 
-    logger.info(
-        f"Re-synced EggNOG results for {len(synced_analyses)} analyfisis/analyses"
+    synced_count = sum(
+        1 for candidate in synced_candidates if candidate["synced_to_ftp"]
     )
-    return synced_analyses
+    logger.info(
+        f"Re-synced EggNOG results for {synced_count} of {len(synced_candidates)} "
+        "candidate(s)"
+    )
+    return synced_candidates
 
 
 @flow(flow_run_name="Repair EggNOG TSV headers")
@@ -316,5 +329,4 @@ def repair_eggnog_tsv_headers(
         logger.info("No repaired analyses to sync to FTP.")
         return []
 
-    resync_eggnog_results_to_ftp(repaired)
-    return repaired
+    return resync_eggnog_results_to_ftp(repaired)
