@@ -265,3 +265,21 @@ deployments:
   entrypoint: workflows/flows/legacy/flows/import_legacy_analyses.py:import_all_legacy_analyses
   work_pool:
     name: slurm
+
+- name: recovery_helper_import_completed_analyses_in_study_deployment
+  version: null
+  tags: []
+  concurrency_limit: null
+  description: |-
+    Helper function for importing completed analyses within a specified study and analysis
+    version. Intended for helping with recovery of failed analysis flows.
+    E.g., if you have manually altered some states of analyses, run this flow to import them.
+    Will import ONLY completed analyses that have not already been imported, from this study and pipeline-version combo.
+
+    :param study_accession: Study accession in which completed analyses are looked for
+    :param analysis_version: Pipeline version of analyses to potentially import
+    :return: None
+  entrypoint: workflows/flows/analyse_study_tasks/amplicon/import_completed_amplicon_analyses.py:recovery_helper_import_completed_analyses_in_study
+  parameters: {}
+  work_pool:
+    name: slurm
