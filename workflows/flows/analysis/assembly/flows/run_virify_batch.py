@@ -159,10 +159,12 @@ def run_virify_batch(assembly_analyses_batch_id: uuid.UUID):
         [
             (
                 "nextflow",
-                "-C",
-                EMG_CONFIG.virify_pipeline.pipeline_config_file,
                 "run",
                 EMG_CONFIG.virify_pipeline.pipeline_repo,
+            ),
+            (
+                "-c",
+                EMG_CONFIG.virify_pipeline.pipeline_config_file,
             ),
             (
                 "-r",
