@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import re
+from collections.abc import Mapping
 from typing import Any, Protocol, TypeVar, Generic, ClassVar
 
 from django.conf import settings
@@ -284,6 +285,41 @@ class InferredMetadataMixin:
     @property
     def metadata_preferring_inferred(self: HasMetadata):
         return InferredMetadataMixin._MetadataDictPreferringInferred(self.metadata)
+
+    def populate_metadata_from_json(
+        self,
+        json_data: Mapping[str, Any],
+        required_keys: list[str],
+        optional_keys: list[str] = None,
+    ) -> None:
+        """
+        Copy selected values from a JSON-like mapping into ``metadata``.
+
+        All ``required_keys`` must be present in ``json_data``. Missing
+        required keys raise ``ValueError``. ``optional_keys`` are copied when
+        present and ignored when missing.
+
+        :param json_data: JSON-like mapping containing metadata values.
+        :param required_keys: Metadata keys that must exist in ``json_data``.
+        :param optional_keys: Metadata keys to copy only when present.
+        """
+        if not isinstance(json_data, Mapping):
+            raise ValueError("JSON data must be a mapping")
+
+        optional_keys = optional_keys or []
+
+        missing_keys = [key for key in required_keys if key not in json_data]
+        if missing_keys:
+            raise ValueError(
+                "JSON data is missing required metadata keys: "
+                f"{', '.join(missing_keys)}"
+            )
+
+        metadata_keys = required_keys + [
+            key for key in optional_keys if key in json_data
+        ]
+        self.metadata.update({key: json_data[key] for key in metadata_keys})
+        self.save()
 
 
 class DbStoredFileField(models.Model):

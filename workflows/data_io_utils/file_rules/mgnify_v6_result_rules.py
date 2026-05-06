@@ -12,7 +12,17 @@ from workflows.data_io_utils.file_rules.rule_factories import (
 class TaxonomyTSVRow(BaseModel):
     otu_id: int = Field(..., alias="OTU ID")
     read_count: Union[float, int] = Field(
-        ..., validation_alias=AliasChoices("SSU", "PR2", "ITSonedb", "UNITE", "LSU")
+        ...,
+        validation_alias=AliasChoices(
+            "SSU",
+            "PR2",
+            "ITSonedb",
+            "ITSoneDB",
+            "UNITE",
+            "LSU",
+            "SILVA-LSU",
+            "SILVA-SSU",
+        ),
     )
     taxonomy: str
     taxid: Optional[int] = Field(None)

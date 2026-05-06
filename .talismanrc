@@ -11,6 +11,9 @@ fileignoreconfig:
 - filename: analyses/base_models/with_status_models.py
   allowed_patterns: [key]
 
+- filename: analyses/models.py
+  allowed_patterns: [key]
+
 - filename: analyses/tests.py
   allowed_patterns: [key]
 
@@ -222,8 +225,14 @@ fileignoreconfig:
 - filename: workflows/flows/housekeeping/sync_studies_with_ena.py
   allowed_patterns: [key]
 
+- filename: workflows/flows/housekeeping/fix_eggnog_tsv_headers.py
+  allowed_patterns: [key]
+
 - filename: workflows/tests/test_flows_utils.py
   checksum: 7044790c62db033597a0c9391751a32f2db1f88d5ba5a953b6c607d97ff7ed6d
+
+- filename: workflows/flows/import_assemblies_from_filesystem_flow.py
+  allowed_patterns: [key]
 
 allowed_patterns:
 - cache_key_fn

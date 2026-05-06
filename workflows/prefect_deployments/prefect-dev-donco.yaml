@@ -123,6 +123,28 @@ deployments:
   work_pool:
     name: slurm
 
+- name: import_assemblies_from_filesystem_flow_deployment
+  description: |-
+    Import miassembler outputs into Assembly records.
+
+    This flow doesn't support co-assemblies at the moment.
+
+    The input directory must be a miassembler/Nextflow output directory containing
+    `assembled_runs.csv`. Completed assemblies are imported from that report, using
+    the standard per-study/per-run output directory layout.
+
+    This flow assumes the assemblies were already uploaded to ENA. ENA Portal is
+    refreshed before import, and each completed run must resolve to an ENA assembly
+    accession returned by that refresh.
+
+    :param study_accession: ENA study accession for the miassembler outputs.
+    :param nextflow_outdir: miassembler/Nextflow output directory to import from.
+    :param fetch_read_runs_from_ena: Whether to refresh read runs from ENA before import.
+  entrypoint: workflows/flows/import_assemblies_from_filesystem_flow.py:import_assemblies_from_filesystem_flow
+  schedule: null
+  work_pool:
+    name: slurm
+
 - name: import_primer_identification_for_imported_analyses_deployment
   description: |-
     Imports primer-identification outputs for amplicon analyses that already have
@@ -203,6 +225,21 @@ deployments:
     name: slurm
   schedules: []
 
+- name: repair_eggnog_tsv_headers_deployment
+  description: |-
+    Scan assembly analyses for EggNOG annotation TSV files with duplicated headers.
+    Set dry_run=True to list affected files only.
+    Set sync_to_ftp=True to re-sync repaired EggNOG results to the FTP/private mirror.
+
+    :param analysis_accessions: Optional list of analysis accessions to limit the scan.
+    :param dry_run: If true, only list affected files and make no changes.
+    :param sync_to_ftp: If true, re-sync repaired files to the FTP/private mirror.
+  entrypoint: workflows/flows/housekeeping/fix_eggnog_tsv_headers.py:repair_eggnog_tsv_headers
+  parameters: {}
+  work_pool:
+    name: slurm
+  schedules: []
+
 - name: import_legacy_analyses_deployment
   description: |-
     This flow will iteratively import analyses (made with MGnify V1-V5 pipelines)
@@ -226,5 +263,23 @@ deployments:
     :param fetch_functions: whether to fetch functional annotatins (slow!)
     :param mgys_after: only import studies with mgys > mgys_after
   entrypoint: workflows/flows/legacy/flows/import_legacy_analyses.py:import_all_legacy_analyses
+  work_pool:
+    name: slurm
+
+- name: recovery_helper_import_completed_analyses_in_study_deployment
+  version: null
+  tags: []
+  concurrency_limit: null
+  description: |-
+    Helper function for importing completed analyses within a specified study and analysis
+    version. Intended for helping with recovery of failed analysis flows.
+    E.g., if you have manually altered some states of analyses, run this flow to import them.
+    Will import ONLY completed analyses that have not already been imported, from this study and pipeline-version combo.
+
+    :param study_accession: Study accession in which completed analyses are looked for
+    :param analysis_version: Pipeline version of analyses to potentially import
+    :return: None
+  entrypoint: workflows/flows/analyse_study_tasks/amplicon/import_completed_amplicon_analyses.py:recovery_helper_import_completed_analyses_in_study
+  parameters: {}
   work_pool:
     name: slurm

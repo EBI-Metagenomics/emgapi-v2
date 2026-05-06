@@ -3,8 +3,9 @@ from __future__ import annotations
 import logging
 import os
 import re
+from collections.abc import Iterable, Mapping
 from pathlib import Path
-from typing import ClassVar, Union, Optional, Iterable, Literal
+from typing import ClassVar, Union, Optional, Literal
 
 from aenum import extend_enum
 from db_file_storage.model_utils import delete_file, delete_file_if_needed
@@ -586,6 +587,21 @@ class Assembly(InferredMetadataMixin, TimeStampedModel, ENADerivedModel):
             / Path("assembly")
             / Path(assembler.name.lower())
             / Path(assembler.version)
+        )
+
+    def update_coverage_metadata_from_report(
+        self, coverage_report: Mapping[str, str | float | None]
+    ) -> None:
+        """
+        Update coverage metadata from parsed MIAssembler coverage JSON values.
+        """
+        required_keys = [
+            self.CommonMetadataKeys.COVERAGE,
+            self.CommonMetadataKeys.COVERAGE_DEPTH,
+        ]
+        self.populate_metadata_from_json(
+            coverage_report,
+            required_keys=required_keys,
         )
 
     def determine_suitable_assembler(self, save: bool = True) -> Assembler:

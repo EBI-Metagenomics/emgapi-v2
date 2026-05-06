@@ -1,5 +1,4 @@
 import gzip
-import json
 import os
 import re
 from datetime import timedelta
@@ -23,6 +22,9 @@ from prefect import flow, get_run_logger, task
 
 import analyses.models
 import ena.models
+from workflows.flows.assemble_study_tasks.miassembler_reports import (
+    load_coverage_report,
+)
 from workflows.prefect_utils.analyses_models_helpers import mark_assembly_status
 from workflows.prefect_utils.slurm_flow import (
     ClusterJobFailedException,
@@ -256,23 +258,9 @@ def update_assembly_metadata(
     coverage_report_path = Path(assembly.dir) / Path(
         f"assembly/{assembly.assembler.name.lower()}/{assembly.assembler.version}/coverage/{run_accession}_coverage.json"
     )
-    if not coverage_report_path.is_file():
-        raise Exception(f"Assembly coverage file not found at {coverage_report_path}")
-
-    with open(coverage_report_path, "r") as json_file:
-        coverage_report = json.load(json_file)
-
-    for key in [
-        assembly.CommonMetadataKeys.COVERAGE,
-        assembly.CommonMetadataKeys.COVERAGE_DEPTH,
-    ]:
-        if key not in coverage_report:
-            logger.warning(f"No '{key}' found in {coverage_report_path}")
-        assembly.metadata[key] = coverage_report.get(key)
-
+    coverage_report = load_coverage_report(coverage_report_path)
+    assembly.update_coverage_metadata_from_report(coverage_report)
     logger.info(f"Assembly metadata of {assembly} is now {assembly.metadata}")
-
-    assembly.save()
 
 
 @task(
