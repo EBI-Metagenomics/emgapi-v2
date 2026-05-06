@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Union, Tuple, List
+from typing import List, Tuple, Union
 
 import click
 from mgnify_pipelines_toolkit.analysis.amplicon import (
@@ -14,10 +14,11 @@ from mgnify_pipelines_toolkit.analysis.rawreads import (
 from prefect import get_run_logger
 
 from activate_django_first import EMG_CONFIG
+
 from analyses.base_models.with_downloads_models import (
     DownloadFile,
-    DownloadType,
     DownloadFileType,
+    DownloadType,
 )
 from analyses.models import Study
 from workflows.data_io_utils.file_rules.common_rules import (
@@ -31,11 +32,13 @@ from workflows.ena_utils.ena_accession_matching import (
     INSDC_STUDY_ACCESSION_GLOB,
 )
 from workflows.flows.analysis import AnalysisType
+from workflows.prefect_utils.dir_context import chdir
 from workflows.prefect_utils.flows_utils import (
     django_db_flow as flow,
+)
+from workflows.prefect_utils.flows_utils import (
     django_db_task as task,
 )
-from workflows.prefect_utils.dir_context import chdir
 
 STUDY_SUMMARY = "_study_summary"
 STUDY_SUMMARY_TSV = STUDY_SUMMARY + ".tsv"

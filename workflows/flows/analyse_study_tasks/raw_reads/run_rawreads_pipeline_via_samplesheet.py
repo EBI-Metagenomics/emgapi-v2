@@ -1,6 +1,6 @@
 from datetime import timedelta
 from pathlib import Path
-from typing import List, Union, Optional
+from typing import List, Optional, Union
 
 from django.conf import settings
 from django.utils.text import slugify
@@ -8,34 +8,34 @@ from django.utils.text import slugify
 from activate_django_first import EMG_CONFIG
 
 import analyses.models
+from workflows.flows.analyse_study_tasks.cleanup_pipeline_directories import (
+    remove_dir,
+)
 from workflows.flows.analyse_study_tasks.raw_reads.import_completed_rawreads_analyses import (
     import_completed_analyses,
 )
 from workflows.flows.analyse_study_tasks.raw_reads.make_samplesheet_rawreads import (
     make_samplesheet_rawreads,
 )
-from workflows.flows.analyse_study_tasks.shared.analysis_states import (
-    mark_analysis_as_started,
-    mark_analysis_as_failed,
-)
 from workflows.flows.analyse_study_tasks.raw_reads.set_rawreads_post_analysis_states import (
     set_post_analysis_states,
 )
-from workflows.flows.analysis import AnalysisType
+from workflows.flows.analyse_study_tasks.shared.analysis_states import (
+    mark_analysis_as_failed,
+    mark_analysis_as_started,
+)
 from workflows.flows.analyse_study_tasks.shared.study_summary import (
     generate_study_summary_for_pipeline_run,
 )
+from workflows.flows.analysis import AnalysisType
+from workflows.nextflow_utils.samplesheets import queryset_hash
 from workflows.prefect_utils.build_cli_command import cli_command
 from workflows.prefect_utils.flows_utils import django_db_flow as flow
 from workflows.prefect_utils.slurm_flow import (
-    run_cluster_job,
     ClusterJobFailedException,
+    run_cluster_job,
 )
 from workflows.prefect_utils.slurm_policies import ResubmitIfFailedPolicy
-from workflows.flows.analyse_study_tasks.cleanup_pipeline_directories import (
-    remove_dir,
-)
-from workflows.nextflow_utils.samplesheets import queryset_hash
 
 
 @flow(name="Run raw-reads analysis pipeline-v6 via samplesheet", log_prints=True)

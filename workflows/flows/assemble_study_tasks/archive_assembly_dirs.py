@@ -5,7 +5,8 @@ from django.db.models import QuerySet
 from prefect import flow, get_run_logger
 
 from activate_django_first import EMG_CONFIG
-from analyses.models import Study, Assembly
+
+from analyses.models import Assembly, Study
 
 
 @flow(

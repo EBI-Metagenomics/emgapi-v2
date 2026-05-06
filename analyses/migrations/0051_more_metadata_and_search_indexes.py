@@ -4,8 +4,8 @@ import django.contrib.postgres.indexes
 import django.contrib.postgres.operations
 import django.db.models.deletion
 from django.conf import settings
-from django.db import migrations, models
 from django.contrib.postgres.operations import AddIndexConcurrently
+from django.db import migrations, models
 
 
 def set_sample_biomes_from_first_study(apps, schema_editor):

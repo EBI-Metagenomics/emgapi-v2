@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 from datetime import datetime
 from pathlib import Path
-from typing import List, Optional, Union, Dict, Any, TypeVar, Generic
+from typing import Any, Dict, Generic, List, Optional, TypeVar, Union
 from urllib.parse import urljoin
 from zoneinfo import ZoneInfo
 

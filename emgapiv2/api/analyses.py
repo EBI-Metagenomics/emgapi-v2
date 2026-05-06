@@ -5,17 +5,17 @@ from ninja_extra.schemas import NinjaPaginationResponseSchema
 import analyses.models
 from analyses.schemas import (
     MGnifyAnalysisDetail,
+    MGnifyAnalysisTypedAnnotation,
     MGnifyAnalysisWithAnnotations,
     MGnifyFunctionalAnalysisAnnotationType,
-    MGnifyAnalysisTypedAnnotation,
 )
 from emgapiv2.api import perms
-from emgapiv2.api.auth import WebinJWTAuth, NoAuth, DjangoSuperUserAuth
+from emgapiv2.api.auth import DjangoSuperUserAuth, NoAuth, WebinJWTAuth
 from emgapiv2.api.perms import UnauthorisedIsUnfoundController
 from emgapiv2.api.schema_utils import (
+    ApiSections,
     make_links_section,
     make_related_detail_link,
-    ApiSections,
 )
 
 

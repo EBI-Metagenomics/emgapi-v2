@@ -8,11 +8,11 @@ from django.core.management import call_command
 from analyses.models import (
     Analysis,
     Assembler,
+    Assembly,
     Biome,
     ComputeResourceHeuristic,
     Run,
     Study,
-    Assembly,
 )
 from ena.models import Study as ENAStudy
 

@@ -35,10 +35,10 @@ class Command(BaseCommand):
             schema.validate_directory_structure(
                 base_path=options["folder_path"], identifier=options["assembly_id"]
             )
-
+            folder_path = options["folder_path"]
             self.stdout.write(
                 self.style.SUCCESS(
-                    f"Validation successful for assembly results in '{options["folder_path"]}'"
+                    f"Validation successful for assembly results in '{folder_path}'"
                 )
             )
 

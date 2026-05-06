@@ -2,10 +2,10 @@ from __future__ import annotations
 
 from operator import attrgetter
 from pathlib import Path
-from typing import List, Optional, Union, Literal, TYPE_CHECKING
+from typing import TYPE_CHECKING, List, Literal, Optional, Union
 
 from django.db import models
-from pydantic import BaseModel, field_validator, Field
+from pydantic import BaseModel, Field, field_validator
 
 from emgapiv2.enum_utils import FutureStrEnum
 from workflows.data_io_utils.file_rules.common_rules import FileExistsRule

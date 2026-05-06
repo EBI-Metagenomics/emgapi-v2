@@ -2,27 +2,27 @@ from textwrap import dedent
 
 from ninja_extra import NinjaExtraAPI
 
-from emgapiv2.api.schema_utils import OpenApiKeywords, ApiSections
+# Avoid circular imports between analyses and genomes apps' schemas by resolving forward references here
+from analyses.schemas import Biome, MGnifyAnalysisDownloadFile  # noqa
+from emgapiv2.api.schema_utils import ApiSections, OpenApiKeywords
+from genomes.schemas import (
+    GenomeCatalogueDetail,
+    GenomeCatalogueList,
+    GenomeDetail,
+    GenomeList,
+)
+
 from .analyses import AnalysisController
+from .assemblies import AssemblyController
 from .biome import BiomeController
+from .genomes import GenomeController
 from .private import MyDataController
 from .publications import PublicationController
+from .runs import AnalysedRunController
 from .samples import SampleController
 from .studies import StudyController
 from .super_studies import SuperStudyController
-from .genomes import GenomeController
-from .assemblies import AssemblyController
 from .token_controller import WebinJwtController
-from .runs import AnalysedRunController
-
-# Avoid circular imports between analyses and genomes apps' schemas by resolving forward references here
-from analyses.schemas import Biome, MGnifyAnalysisDownloadFile  # noqa
-from genomes.schemas import (
-    GenomeDetail,
-    GenomeList,
-    GenomeCatalogueDetail,
-    GenomeCatalogueList,
-)
 
 GenomeList.model_rebuild()
 GenomeDetail.model_rebuild()
@@ -31,8 +31,7 @@ GenomeCatalogueDetail.model_rebuild()
 
 api = NinjaExtraAPI(
     title="MGnify API",
-    description=dedent(
-        """\
+    description=dedent("""\
         **The API for [MGnify](https://www.ebi.ac.uk/metagenomics), EBI’s platform for the submission, analysis, discovery and comparison of metagenomic-derived datasets.**
 
         ## Endpoints
@@ -50,8 +49,7 @@ api = NinjaExtraAPI(
         Most data are public, available without authentication.
         Private data is available only to authenticated users, and the authentication is based on Webin credentials from ENA.
         To use these, a JWT token must be obtained for the Webin credentials, using the `/auth` endpoints.
-    """
-    ),
+    """),
     urls_namespace="api",
     version="2.0.0",
     docs_url="/",
@@ -70,90 +68,70 @@ api = NinjaExtraAPI(
         "tags": [
             {
                 OpenApiKeywords.NAME: ApiSections.STUDIES,
-                OpenApiKeywords.DESCRIPTION: dedent(
-                    """
+                OpenApiKeywords.DESCRIPTION: dedent("""
                     MGnify studies are based on ENA studies/projects, and are collections of samples, runs, assemblies,
                     and analyses associated with a certain set of experiments.
-                    """
-                ),
+                    """),
             },
             {
                 OpenApiKeywords.NAME: ApiSections.SAMPLES,
-                OpenApiKeywords.DESCRIPTION: dedent(
-                    """
+                OpenApiKeywords.DESCRIPTION: dedent("""
                     MGnify samples are based on ENA/BioSamples samples, and represent individual biological samples.
-                    """
-                ),
+                    """),
             },
             {
                 OpenApiKeywords.NAME: ApiSections.RUNS,
-                OpenApiKeywords.DESCRIPTION: dedent(
-                    """
+                OpenApiKeywords.DESCRIPTION: dedent("""
                     Sequencing runs are based on ENA run accessions, and represent individual sequencing runs of a sample.
-                    """
-                ),
+                    """),
             },
             {
                 OpenApiKeywords.NAME: ApiSections.ASSEMBLIES,
-                OpenApiKeywords.DESCRIPTION: dedent(
-                    """
+                OpenApiKeywords.DESCRIPTION: dedent("""
                     MGnify assemblies are equivalent to metagenome assemblies in ENA: the (meta)genome assembly of
                     one or more sequencing runs.
-                    """
-                ),
+                    """),
             },
             {
                 OpenApiKeywords.NAME: ApiSections.ANALYSES,
-                OpenApiKeywords.DESCRIPTION: dedent(
-                    """
+                OpenApiKeywords.DESCRIPTION: dedent("""
                     MGnify analyses are runs of a standard pipeline on an individual sequencing run or assembly.
                     They can include collections of taxonomic and functional annotations.
-                    """
-                ),
+                    """),
             },
             {
                 OpenApiKeywords.NAME: ApiSections.PUBLICATIONS,
-                OpenApiKeywords.DESCRIPTION: dedent(
-                    """
+                OpenApiKeywords.DESCRIPTION: dedent("""
                     Publications (e.g. journal articles) may describe or analyse the content of MGnify Studies
                     or their corresponding datasets in ENA.
-                    """
-                ),
+                    """),
             },
             {
                 OpenApiKeywords.NAME: ApiSections.GENOMES,
-                OpenApiKeywords.DESCRIPTION: dedent(
-                    """
+                OpenApiKeywords.DESCRIPTION: dedent("""
                     MGnify Genomes are annotated draft genomes based on either isolates, or metagenome-assembled genomes (MAGs).
                     They are arranged in biome-specific catalogues.
-                    """
-                ),
+                    """),
             },
             {
                 OpenApiKeywords.NAME: ApiSections.PRIVATE_DATA,
-                OpenApiKeywords.DESCRIPTION: dedent(
-                    """
+                OpenApiKeywords.DESCRIPTION: dedent("""
                     MGnify supports private data, inheriting ENA's data privacy model and public release times.
                     Authentication is required to view private data owned by a Webin account.
-                    """
-                ),
+                    """),
             },
             {
                 OpenApiKeywords.NAME: ApiSections.MISC,
-                OpenApiKeywords.DESCRIPTION: dedent(
-                    """
+                OpenApiKeywords.DESCRIPTION: dedent("""
                     Other miscellaneous endpoints in support of the API.
-                    """
-                ),
+                    """),
             },
             {
                 OpenApiKeywords.NAME: ApiSections.AUTH,
-                OpenApiKeywords.DESCRIPTION: dedent(
-                    """
+                OpenApiKeywords.DESCRIPTION: dedent("""
                     A Token can be obtained using an ENA Webin username and password,
                     to access the Private Data endpoints.
-                    """
-                ),
+                    """),
             },
             # {
             #     OpenApiKeywords.NAME: ApiSections.REQUESTS,

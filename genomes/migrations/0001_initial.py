@@ -2,8 +2,9 @@
 
 import django.contrib.postgres.fields
 import django.db.models.deletion
-import genomes.models.genome
 from django.db import migrations, models
+
+import genomes.models.genome
 
 
 class Migration(migrations.Migration):

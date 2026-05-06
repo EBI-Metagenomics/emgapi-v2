@@ -2,12 +2,13 @@ from __future__ import annotations
 
 import logging
 import re
-from typing import Any, Protocol, TypeVar, Generic, ClassVar
+from typing import Any, ClassVar, Generic, Protocol, TypeVar
 
 from django.conf import settings
 from django.contrib.postgres.fields import ArrayField
-from django.core.exceptions import ObjectDoesNotExist, MultipleObjectsReturned
+from django.core.exceptions import MultipleObjectsReturned, ObjectDoesNotExist
 from django.db import models
+
 import ena.models
 
 

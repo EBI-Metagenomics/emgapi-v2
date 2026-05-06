@@ -8,14 +8,18 @@ import pandas as pd
 from django.db.models import Q
 from prefect import flow, get_run_logger, task
 
-import analyses.models
 from activate_django_first import EMG_CONFIG
+
+import analyses.models
 from workflows.data_io_utils.filenames import (
     accession_prefix_separated_dir_path,
     file_path_shortener,
 )
 from workflows.ena_utils.host_metadata_to_reference_genome import (
     get_reference_genome_for_host,
+)
+from workflows.flows.analyse_study_tasks.cleanup_pipeline_directories import (
+    delete_assemble_study_nextflow_workdir,
 )
 from workflows.prefect_utils.analyses_models_helpers import mark_assembly_status
 from workflows.prefect_utils.build_cli_command import cli_command
@@ -25,9 +29,6 @@ from workflows.prefect_utils.slurm_flow import (
 )
 from workflows.prefect_utils.slurm_policies import (
     ResubmitIfFailedPolicy,
-)
-from workflows.flows.analyse_study_tasks.cleanup_pipeline_directories import (
-    delete_assemble_study_nextflow_workdir,
 )
 
 

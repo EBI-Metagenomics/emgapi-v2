@@ -11,17 +11,17 @@ from workflows.data_io_utils.filenames import (
     accession_prefix_separated_dir_path,
     trailing_slash_ensured_dir,
 )
-from workflows.flows.analysis import AnalysisType
 from workflows.flows.analyse_study_tasks.shared.study_summary import (
-    STUDY_SUMMARY_TSV,
     DWCREADY_CSV,
     PIPELINE_CONFIGS,
+    STUDY_SUMMARY_TSV,
 )
+from workflows.flows.analysis import AnalysisType
 from workflows.models import (
     AssemblyAnalysisBatch,
-    AssemblyAnalysisPipelineStatus,
     AssemblyAnalysisBatchAnalysis,
     AssemblyAnalysisPipeline,
+    AssemblyAnalysisPipelineStatus,
 )
 from workflows.prefect_utils.build_cli_command import cli_command
 from workflows.prefect_utils.flows_utils import django_db_task as task

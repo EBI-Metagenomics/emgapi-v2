@@ -1,15 +1,17 @@
-from typing import Optional
-import pandas as pd
+import sqlite3
 from datetime import datetime
+from typing import Optional
+
+import pandas as pd
 from prefect import flow, get_run_logger
 from prefect.artifacts import create_markdown_artifact
-import sqlite3
+
 from activate_django_first import EMG_CONFIG  # noqa
 
 from workflows.flows.nf_traces.tasks import (
     extract_traces_from_the_database,
-    transform_traces_task,
     summary_stats,
+    transform_traces_task,
 )
 
 

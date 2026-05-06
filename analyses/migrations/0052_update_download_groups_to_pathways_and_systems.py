@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from django.db import migrations
 
-
 SUFFIXES_SHOULD_BE_PATHWAYS_AND_SYSTEMS = {
     "antismash",
     "sanntis",

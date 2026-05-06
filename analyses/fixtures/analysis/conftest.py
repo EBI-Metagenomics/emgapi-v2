@@ -1,5 +1,5 @@
 from pathlib import Path
-from unittest.mock import patch, Mock
+from unittest.mock import Mock, patch
 
 import django
 import pytest
@@ -7,10 +7,10 @@ import pytest
 from analyses.base_models.with_downloads_models import (
     DownloadFile,
     DownloadFileIndexFile,
-    DownloadType,
     DownloadFileType,
+    DownloadType,
 )
-from analyses.models import Run, Analysis
+from analyses.models import Analysis, Run
 from workflows.data_io_utils.mgnify_v6_utils.amplicon import import_qc, import_taxonomy
 from workflows.data_io_utils.mgnify_v6_utils.assembly import AssemblyResultImporter
 from workflows.data_io_utils.schemas import AssemblyResultSchema, MapResultSchema

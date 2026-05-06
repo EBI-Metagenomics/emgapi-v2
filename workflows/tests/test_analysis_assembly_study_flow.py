@@ -14,7 +14,7 @@ from pydantic import BaseModel
 import analyses.models
 import ena.models
 from analyses.base_models.with_downloads_models import DownloadType
-from analyses.models import Study, Analysis
+from analyses.models import Analysis, Study
 from workflows.flows.analysis.assembly.flows.analysis_assembly_study import (
     analysis_assembly_study,
 )
@@ -34,8 +34,8 @@ from workflows.models import (
 )
 from workflows.prefect_utils.slurm_status import SlurmStatus
 from workflows.prefect_utils.testing_utils import (
-    should_not_mock_httpx_requests_to_prefect_server,
     generate_assembly_v6_pipeline_results,
+    should_not_mock_httpx_requests_to_prefect_server,
 )
 
 EMG_CONFIG = settings.EMG_CONFIG

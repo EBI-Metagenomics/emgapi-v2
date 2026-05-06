@@ -1,14 +1,14 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Dict, Optional
-import json
-
-from activate_django_first import EMG_CONFIG
 
 from django.db import transaction
 from django.db.models import QuerySet
 from prefect import flow, get_run_logger
+
+from activate_django_first import EMG_CONFIG
 
 from genomes.models import Genome
 

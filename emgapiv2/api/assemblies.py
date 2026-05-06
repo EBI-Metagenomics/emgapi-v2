@@ -4,20 +4,20 @@ from ninja_extra.schemas import NinjaPaginationResponseSchema
 
 import analyses.models
 from analyses.schemas import (
+    AdditionalContainedGenomeSchema,
     Assembly,
     AssemblyDetail,
-    MGnifyAnalysis,
     GenomeAssemblyLinkSchema,
-    AdditionalContainedGenomeSchema,
+    MGnifyAnalysis,
 )
 from emgapiv2.api.perms import UnauthorisedIsUnfoundController
 from emgapiv2.api.schema_utils import (
+    ApiSections,
+    make_child_link,
     make_links_section,
     make_related_detail_link,
-    make_child_link,
-    ApiSections,
 )
-from genomes.models import GenomeAssemblyLink, AdditionalContainedGenomes
+from genomes.models import AdditionalContainedGenomes, GenomeAssemblyLink
 
 
 @api_controller("assemblies", tags=[ApiSections.ASSEMBLIES])

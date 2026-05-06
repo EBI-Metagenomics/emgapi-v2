@@ -7,9 +7,9 @@ import pendulum
 import pytest
 
 from workflows.flows.housekeeping.clean_nextflow_workdirs import (
-    youngest_mtime_in_dir,
     collect_old_workdir_candidates,
     delete_workdirs,
+    youngest_mtime_in_dir,
 )
 
 

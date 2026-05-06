@@ -1,28 +1,27 @@
 import json
 
-from django.contrib import admin
+from django.contrib import admin, messages
 from django.contrib.admin.views.decorators import staff_member_required
 from django.db import models
 from django.db.models import Count
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse_lazy
 from django.utils.html import format_html
-from django.contrib import messages
 from unfold.admin import ModelAdmin
 from unfold.decorators import action, display
 
 from analyses.admin.analysis import AnalysisStatusListFilter
 from analyses.admin.base import (
+    CanonicalizeAccessionViewMixin,
     ENABrowserLinkMixin,
     JSONFieldWidgetOverridesMixin,
     StudyFilter,
     TabularInlinePaginatedWithTabSupport,
-    CanonicalizeAccessionViewMixin,
 )
 from analyses.admin.publication import StudyPublicationInline
-from workflows.models import AssemblyAnalysisPipelineStatus
 from analyses.models import Analysis, Assembly, Run, Study
 from emgapiv2.widgets import StatusPathwayWidget
+from workflows.models import AssemblyAnalysisPipelineStatus
 
 
 class StudyRunsInline(TabularInlinePaginatedWithTabSupport):

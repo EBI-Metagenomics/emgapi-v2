@@ -15,9 +15,9 @@ from workflows.models import (
     AssemblyAnalysisPipelineStatus,
 )
 from workflows.nextflow_utils.samplesheets import (
+    SamplesheetColumnSource,
     queryset_hash,
     queryset_to_samplesheet,
-    SamplesheetColumnSource,
 )
 from workflows.prefect_utils.cache_control import context_agnostic_task_input_hash
 from workflows.prefect_utils.flows_utils import django_db_task as task

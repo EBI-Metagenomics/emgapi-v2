@@ -3,11 +3,11 @@ import logging
 from django.core.management.base import BaseCommand
 from sqlalchemy import select
 
-from analyses.models import Study, Publication
+from analyses.models import Publication, Study
 from workflows.data_io_utils.legacy_emg_dbs import (
-    legacy_emg_db_session,
     LegacyPublication,
     LegacyStudyPublication,
+    legacy_emg_db_session,
 )
 
 logger = logging.getLogger(__name__)

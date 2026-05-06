@@ -1,10 +1,10 @@
 import logging
-from typing import Union, Protocol
+from typing import Protocol, Union
 
 from django.http import HttpRequest
-from ninja_extra import permissions, ControllerBase
+from ninja_extra import ControllerBase, permissions
 from ninja_extra.exceptions import NotFound
-from ninja_extra.permissions import IsAdminUser, BasePermission, AsyncBasePermission
+from ninja_extra.permissions import AsyncBasePermission, BasePermission, IsAdminUser
 
 from analyses.base_models.base_models import VisibilityControlledModel
 

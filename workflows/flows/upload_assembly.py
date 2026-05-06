@@ -9,27 +9,24 @@ from typing import Optional
 
 from assembly_uploader import assembly_manifest, study_xmls, submit_study
 from Bio import SeqIO
+from django.core.exceptions import MultipleObjectsReturned, ObjectDoesNotExist
+from prefect import flow, get_run_logger, task
 from prefect.tasks import task_input_hash
 
 from activate_django_first import EMG_CONFIG
-from workflows.ena_utils.ena_accession_matching import ENA_ASSEMBLY_ACCESSION_REGEX
-from workflows.prefect_utils.build_cli_command import cli_command
-
-from workflows.prefect_utils.env_context import TemporaryEnv, UNSET
-from workflows.prefect_utils.slurm_policies import ResubmitIfFailedPolicy
-
-from django.core.exceptions import MultipleObjectsReturned, ObjectDoesNotExist
-from prefect import flow, get_run_logger, task
 
 import analyses.models
 import ena.models
+from workflows import ena_utils
+from workflows.ena_utils.ena_accession_matching import ENA_ASSEMBLY_ACCESSION_REGEX
 from workflows.prefect_utils.analyses_models_helpers import mark_assembly_status
+from workflows.prefect_utils.build_cli_command import cli_command
+from workflows.prefect_utils.env_context import UNSET, TemporaryEnv
 from workflows.prefect_utils.slurm_flow import (
     ClusterJobFailedException,
     run_cluster_job,
 )
-from workflows import ena_utils
-
+from workflows.prefect_utils.slurm_policies import ResubmitIfFailedPolicy
 
 OPTIONAL_SPADES_FILES = [
     ".assembly_graph.fastg.gz",

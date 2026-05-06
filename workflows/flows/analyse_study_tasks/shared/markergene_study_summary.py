@@ -10,18 +10,18 @@ from prefect import get_run_logger
 
 from activate_django_first import EMG_CONFIG
 
-from analyses.models import Study, Analysis
+from analyses.models import Analysis, Study
 from workflows.data_io_utils.file_rules.common_rules import (
     DirectoryExistsRule,
     FileExistsRule,
     FileIsNotEmptyRule,
 )
 from workflows.data_io_utils.file_rules.nodes import Directory, File
-from workflows.prefect_utils.flows_utils import django_db_flow as flow
 from workflows.flows.analysis.pipeline_versions import (
     get_current_pipeline_version_for_experiment_type,
 )
 from workflows.prefect_utils.dir_context import chdir
+from workflows.prefect_utils.flows_utils import django_db_flow as flow
 
 STUDY_SUMMARY = "study_summary"
 STUDY_SUMMARY_TSV = STUDY_SUMMARY + ".tsv"

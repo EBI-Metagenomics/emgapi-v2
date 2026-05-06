@@ -9,10 +9,16 @@ from prefect.runtime import flow_run
 
 from activate_django_first import EMG_CONFIG
 
-from analyses.models import Study, Analysis
+from analyses.models import Analysis, Study
+from workflows.flows.analyse_study_tasks.cleanup_pipeline_directories import (
+    remove_dir,
+)
 from workflows.flows.analysis.assembly.flows.import_map_batch import import_map_batch
 from workflows.flows.analysis.assembly.tasks.make_samplesheet_assembly import (
     make_samplesheet_for_map,
+)
+from workflows.flows.analysis.assembly.utils.status_update_hooks import (
+    update_batch_status_counts,
 )
 from workflows.models import (
     AssemblyAnalysisBatch,
@@ -22,16 +28,10 @@ from workflows.models import (
 from workflows.prefect_utils.build_cli_command import cli_command
 from workflows.prefect_utils.flows_utils import django_db_flow as flow
 from workflows.prefect_utils.slurm_flow import (
-    run_cluster_job,
     ClusterJobFailedException,
+    run_cluster_job,
 )
 from workflows.prefect_utils.slurm_policies import ResubmitAlwaysPolicy
-from workflows.flows.analysis.assembly.utils.status_update_hooks import (
-    update_batch_status_counts,
-)
-from workflows.flows.analyse_study_tasks.cleanup_pipeline_directories import (
-    remove_dir,
-)
 
 
 @flow(
