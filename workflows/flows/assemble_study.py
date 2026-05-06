@@ -1,30 +1,30 @@
 from enum import Enum
-from textwrap import dedent
-from typing import Optional, List
 from pathlib import Path
+from textwrap import dedent
+from typing import List, Optional
 
 from django.urls import reverse_lazy
 from prefect import get_run_logger, suspend_flow_run
 from prefect.events import emit_event
 from prefect.input import RunInput
-from prefect.runtime import flow_run, deployment
+from prefect.runtime import deployment, flow_run
 from pydantic import Field
 from pydantic_core import PydanticUndefined
-
-from workflows.views import encode_samplesheet_path
-
-from emgapiv2.enum_utils import FutureStrEnum
 
 from activate_django_first import EMG_CONFIG
 
 import analyses.models
 import ena.models
+from emgapiv2.enum_utils import FutureStrEnum
 from workflows.ena_utils.ena_api_requests import (
+    ENALibraryStrategyPolicy,
     get_study_from_ena,
     get_study_readruns_from_ena,
-    ENALibraryStrategyPolicy,
 )
 from workflows.ena_utils.webin_owner_utils import validate_and_set_webin_owner
+from workflows.flows.analyse_study_tasks.cleanup_pipeline_directories import (
+    delete_assemble_study_nextflow_workdir,
+)
 from workflows.flows.assemble_study_tasks.assemble_samplesheets import (
     run_assembler_for_samplesheet,
 )
@@ -36,13 +36,11 @@ from workflows.flows.assemble_study_tasks.make_samplesheets import (
 )
 from workflows.flows.assemble_study_tasks.upload_assemblies import upload_assemblies
 from workflows.prefect_utils.analyses_models_helpers import (
-    get_users_as_choices,
     add_study_watchers,
-)
-from workflows.flows.analyse_study_tasks.cleanup_pipeline_directories import (
-    delete_assemble_study_nextflow_workdir,
+    get_users_as_choices,
 )
 from workflows.prefect_utils.flows_utils import django_db_flow as flow
+from workflows.views import encode_samplesheet_path
 
 
 class AssemblerChoices(FutureStrEnum):
@@ -141,8 +139,7 @@ def assemble_study(
     assemble_study_input: AssembleStudyInput = suspend_flow_run(
         wait_for_input=AssembleStudyInput.with_initial_data(
             assembler=AssemblerChoices.pipeline_default,
-            description=dedent(
-                f"""\
+            description=dedent(f"""\
                 **MI-Assembler**
                 This will assemble all {len(read_runs)} read-runs of study {ena_study.accession} \
                 using [MI-Assembler](https://www.github.com/ebi-metagenomics/mi-assembler).
@@ -158,8 +155,7 @@ def assemble_study(
                 **Webin owner**
                 If the study is private, the webin account owner is needed so that assemblies can be brokered into \
                 the reads study they own.
-                """
-            ),
+                """),
         )
     )
 
@@ -214,8 +210,7 @@ def assemble_study(
         for samplesheet_path, _ in samplesheets:
             edit_urls += f"* [Edit samplesheet {samplesheet_path.name}]({EMG_CONFIG.service_urls.app_root}/workflows/edit-samplesheet/fetch/{encode_samplesheet_path(samplesheet_path)})\n"
 
-        suspend_message = dedent(
-            f"""\
+        suspend_message = dedent(f"""\
             ## Samplesheets are ready for editing
 
             The following samplesheets have been created and are ready for editing:
@@ -224,8 +219,7 @@ def assemble_study(
 
             **Please edit the samplesheets as needed and then resume ("Submit") this flow.**
             The flow will fail after {EMG_CONFIG.assembler.suspend_timeout_for_editing_samplesheets_secs / 3600} hours if not resumed.
-            """
-        ).format(EDIT_URLS=edit_urls)
+            """).format(EDIT_URLS=edit_urls)
 
         class ResumeAfterSamplesheetEditingInput(RunInput):
             okay: bool = Field(

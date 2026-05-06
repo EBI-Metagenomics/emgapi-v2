@@ -4,8 +4,8 @@ import pytest
 from analyses.base_models.with_downloads_models import (
     DownloadFile,
     DownloadFileIndexFile,
-    DownloadType,
     DownloadFileType,
+    DownloadType,
 )
 from workflows.data_io_utils.filenames import accession_prefix_separated_dir_path
 from workflows.ena_utils.study import ENAStudyFields

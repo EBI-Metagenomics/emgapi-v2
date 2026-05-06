@@ -1,12 +1,13 @@
 import pytest
 from django.core.management import call_command
-from analyses.models import Study, Analysis
-from analyses.base_models.with_experiment_type_models import WithExperimentTypeModel
+
 from analyses.base_models.with_downloads_models import (
     DownloadFile,
-    DownloadType,
     DownloadFileType,
+    DownloadType,
 )
+from analyses.base_models.with_experiment_type_models import WithExperimentTypeModel
+from analyses.models import Analysis, Study
 
 
 @pytest.mark.django_db

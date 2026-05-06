@@ -1,7 +1,7 @@
-from prefect import task, get_run_logger
+from prefect import get_run_logger, task
 
 import ena.models
-from analyses.models import Study, Sample
+from analyses.models import Sample, Study
 from workflows.data_io_utils.legacy_emg_dbs import LegacySample
 
 

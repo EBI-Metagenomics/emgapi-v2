@@ -6,7 +6,6 @@ from textwrap import dedent
 from typing import TypedDict
 
 import pendulum
-
 from prefect import flow, get_run_logger, suspend_flow_run, task
 from prefect.artifacts import create_table_artifact
 from prefect.input import RunInput
@@ -203,15 +202,13 @@ def clean_old_nextflow_workdirs(
         logger.info(f"Deleted {deleted_count} of {len(candidates)} directories.")
         return
 
-    description = dedent(
-        f"""\
+    description = dedent(f"""\
         Found {len(candidates)} directories under {path}
         not modified in the last {min_age_days} days.
 
         Review the 'old-nextflow-workdirs' table artifact above before confirming.
         Set confirm_deletion=True to proceed with deletion.
-        """
-    )
+        """)
 
     class ConfirmDeletionInput(RunInput):
         """Input model for confirming deletion of old Nextflow work directories."""

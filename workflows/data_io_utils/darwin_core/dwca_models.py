@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, date
+from datetime import date, datetime
 from typing import List, Optional
 
 from pydantic import EmailStr

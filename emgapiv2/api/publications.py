@@ -1,6 +1,6 @@
 from typing import Literal, Optional
 
-from ninja import Query, FilterSchema, Field
+from ninja import Field, FilterSchema, Query
 from ninja_extra import api_controller, http_get, paginate
 from ninja_extra.schemas import NinjaPaginationResponseSchema
 

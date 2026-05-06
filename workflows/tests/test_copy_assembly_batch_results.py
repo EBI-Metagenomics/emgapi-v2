@@ -2,6 +2,7 @@ from unittest.mock import patch
 
 import pytest
 
+from analyses.models import Analysis
 from workflows.flows.analyse_study_tasks.shared.copy_v6_pipeline_results import (
     copy_assembly_batch_results,
 )
@@ -10,7 +11,6 @@ from workflows.models import (
     AssemblyAnalysisBatchAnalysis,
     AssemblyAnalysisPipelineStatus,
 )
-from analyses.models import Analysis
 
 
 @pytest.mark.django_db

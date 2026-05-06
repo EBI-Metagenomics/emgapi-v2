@@ -1,9 +1,9 @@
 import pytest
 
+from analyses.models import Analysis
 from workflows.flows.analyse_study_tasks.shared.dwca_generator import (
     convert_dwcr_to_dwca,
 )
-from analyses.models import Analysis
 
 
 @pytest.mark.django_db(transaction=True)

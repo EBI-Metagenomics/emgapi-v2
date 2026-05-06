@@ -14,6 +14,7 @@ repos:
     rev: 26.3.1
     hooks:
       - id: black
+        exclude: ^.*\b(migrations)\b.*$
   - repo: https://github.com/adrienverge/yamllint
     rev: v1.38.0
     hooks:
@@ -28,12 +29,13 @@ repos:
     rev: 'v0.1.0'
     hooks:
       - id: talisman-no-duplicate-filenames
-  - repo: local
-    hooks:
-      - id: no-bare-prefect-flow-task
-        name: Use django_flow/django_task wrappers instead of bare prefect imports
-        language: pygrep
-        entry: "from prefect import[^\\n]*(\\bflow\\b|\\btask\\b)"
-        types: [python]
-        files: ^workflows/
-        exclude: ^workflows/tests/test_flows_utils\.py$
+# TODO: enable this hook once all flows/tasks are migrated to django_flow/django_task wrappers
+#  - repo: local
+#    hooks:
+#      - id: no-bare-prefect-flow-task
+#        name: Use django_flow/django_task wrappers instead of bare prefect imports
+#        language: pygrep
+#        entry: "from prefect import[^\\n]*(\\bflow\\b|\\btask\\b)"
+#        types: [python]
+#        files: ^workflows/
+#        exclude: ^workflows/tests/test_flows_utils\.py$

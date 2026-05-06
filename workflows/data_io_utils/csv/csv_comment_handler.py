@@ -1,5 +1,5 @@
 import csv
-from typing import Iterable, Hashable, Optional
+from typing import Hashable, Iterable, Optional
 
 from emgapiv2.enum_utils import FutureStrEnum
 

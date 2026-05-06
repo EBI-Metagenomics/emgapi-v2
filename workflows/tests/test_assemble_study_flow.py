@@ -1,10 +1,10 @@
 import glob
 import json
+import logging
 import os
 import shutil
-import logging
 from pathlib import Path
-from typing import Optional, List, Union
+from typing import List, Optional, Union
 from unittest.mock import patch
 
 import pandas as pd
@@ -15,27 +15,26 @@ from pydantic import BaseModel
 
 import analyses.models
 import ena.models
-from workflows.ena_utils.ena_api_requests import ENALibraryStrategyPolicy
 from workflows.data_io_utils.file_rules.base_rules import GlobRule
 from workflows.data_io_utils.file_rules.nodes import Directory
+from workflows.ena_utils.ena_api_requests import ENALibraryStrategyPolicy
+from workflows.flows.analyse_study_tasks.cleanup_pipeline_directories import (
+    # delete_study_results_dir,
+    delete_assemble_study_nextflow_workdir,
+)
 from workflows.flows.assemble_study import AssemblerChoices, assemble_study
 from workflows.flows.assemble_study_tasks.assemble_samplesheets import (
     get_reference_genome,
     update_assemblers_and_contaminant_ref_of_assemblies_from_samplesheet,
 )
 from workflows.flows.assemble_study_tasks.make_samplesheets import (
-    make_samplesheets_for_runs_to_assemble,
     make_samplesheet,
+    make_samplesheets_for_runs_to_assemble,
 )
 from workflows.prefect_utils.analyses_models_helpers import mark_assembly_status
-
 from workflows.prefect_utils.testing_utils import (
-    should_not_mock_httpx_requests_to_prefect_server,
     combine_caplog_records,
-)
-from workflows.flows.analyse_study_tasks.cleanup_pipeline_directories import (
-    # delete_study_results_dir,
-    delete_assemble_study_nextflow_workdir,
+    should_not_mock_httpx_requests_to_prefect_server,
 )
 
 EMG_CONFIG = settings.EMG_CONFIG

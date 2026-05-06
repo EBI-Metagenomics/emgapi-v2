@@ -2,8 +2,8 @@ import uuid
 from datetime import timedelta
 from pathlib import Path
 
-from django.utils.text import slugify
 from django.db import transaction
+from django.utils.text import slugify
 from prefect import get_run_logger
 from prefect.runtime import flow_run
 
@@ -24,6 +24,9 @@ from workflows.flows.analysis.assembly.tasks.assembly_analysis_pipeline_batch_st
 from workflows.flows.analysis.assembly.tasks.make_samplesheet_assembly import (
     make_samplesheet_assembly,
 )
+from workflows.flows.analysis.assembly.utils.status_update_hooks import (
+    update_batch_status_counts,
+)
 from workflows.models import (
     AssemblyAnalysisBatch,
     AssemblyAnalysisPipeline,
@@ -32,13 +35,10 @@ from workflows.models import (
 from workflows.prefect_utils.build_cli_command import cli_command
 from workflows.prefect_utils.flows_utils import django_db_flow as flow
 from workflows.prefect_utils.slurm_flow import (
-    run_cluster_job,
     ClusterJobFailedException,
+    run_cluster_job,
 )
 from workflows.prefect_utils.slurm_policies import ResubmitAlwaysPolicy
-from workflows.flows.analysis.assembly.utils.status_update_hooks import (
-    update_batch_status_counts,
-)
 
 
 @flow(

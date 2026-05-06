@@ -1,29 +1,28 @@
-from emgapiv2.api.schema_utils import (
-    make_child_link,
-    make_links_section,
-    make_related_detail_link,
-)
+from typing import Optional
+
+from django.db.models import Q
+from ninja import FilterSchema, Query
 from ninja_extra import api_controller, http_get
+from ninja_extra.exceptions import NotFound
 from ninja_extra.pagination import paginate
 from ninja_extra.schemas import NinjaPaginationResponseSchema
-from ninja_extra.exceptions import NotFound
-from ninja import FilterSchema
+from pydantic import Field
 
 import analyses.models
 from analyses.schemas import (
     AnalysedRun,
     AnalysedRunDetail,
-    MGnifyAnalysis,
     AssemblyDetail,
+    MGnifyAnalysis,
 )
-from emgapiv2.api import ApiSections
-from emgapiv2.api import perms
-from emgapiv2.api.auth import WebinJWTAuth, DjangoSuperUserAuth, NoAuth
+from emgapiv2.api import ApiSections, perms
+from emgapiv2.api.auth import DjangoSuperUserAuth, NoAuth, WebinJWTAuth
 from emgapiv2.api.perms import UnauthorisedIsUnfoundController
-from typing import Optional
-from pydantic import Field
-from django.db.models import Q
-from ninja import Query
+from emgapiv2.api.schema_utils import (
+    make_child_link,
+    make_links_section,
+    make_related_detail_link,
+)
 
 
 class RunListFilters(FilterSchema):

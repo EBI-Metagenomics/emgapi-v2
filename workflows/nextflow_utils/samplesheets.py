@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any, Callable, Optional, Union
 
 from django.conf import settings
-from django.db.models import QuerySet, Model
+from django.db.models import Model, QuerySet
 from prefect.client.schemas import FlowRun
 from prefect.deployments import run_deployment
 from pydantic import BaseModel, Field

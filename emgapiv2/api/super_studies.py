@@ -1,12 +1,12 @@
-from ninja_extra import api_controller, http_get, paginate, ControllerBase
+from ninja_extra import ControllerBase, api_controller, http_get, paginate
 from ninja_extra.schemas import NinjaPaginationResponseSchema
 
 import analyses.models
 from analyses.schemas import SuperStudy, SuperStudyDetail
 from emgapiv2.api.schema_utils import (
+    ApiSections,
     make_links_section,
     make_related_detail_link,
-    ApiSections,
 )
 
 

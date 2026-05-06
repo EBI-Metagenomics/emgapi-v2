@@ -7,8 +7,8 @@ import analyses.models
 import ena.models
 import workflows.models
 from workflows.ena_utils.ena_api_requests import (
-    get_study_from_ena,
     get_study_assemblies_from_ena,
+    get_study_from_ena,
 )
 
 logger = logging.getLogger(__name__)

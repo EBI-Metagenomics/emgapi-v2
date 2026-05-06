@@ -1,21 +1,18 @@
+import logging
 import uuid
 from typing import List
-import logging
 
 from prefect import get_run_logger
 
 import activate_django_first  # noqa
 
-from workflows.prefect_utils.flows_utils import django_db_task as task
-
 from analyses.models import Analysis
-
 from workflows.data_io_utils.mgnify_v6_utils.assembly import AssemblyResultImporter
 from workflows.data_io_utils.schemas import (
-    MapResultSchema,
-    VirifyResultSchema,
     AssemblyResultSchema,
+    MapResultSchema,
     PipelineValidationError,
+    VirifyResultSchema,
 )
 from workflows.data_io_utils.schemas.assembly import ImportResult
 from workflows.models import (
@@ -23,6 +20,7 @@ from workflows.models import (
     AssemblyAnalysisPipeline,
     AssemblyAnalysisPipelineStatus,
 )
+from workflows.prefect_utils.flows_utils import django_db_task as task
 
 
 def clear_pipeline_downloads(
