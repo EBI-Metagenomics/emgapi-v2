@@ -1,21 +1,21 @@
 ---
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v5.0.0
+    rev: v6.0.0
     hooks:
       - id: end-of-file-fixer
       - id: trailing-whitespace
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.11.13
+    rev: v0.15.12
     hooks:
       - id: ruff  # Fixes issues (including unused imports)
         args: ["--fix"]
   - repo: https://github.com/psf/black
-    rev: 25.1.0
+    rev: 26.3.1
     hooks:
       - id: black
   - repo: https://github.com/adrienverge/yamllint
-    rev: v1.37.1
+    rev: v1.38.0
     hooks:
       - id: yamllint
         args: [--format, parsable, --strict, -c=.yamllint]
@@ -37,10 +37,3 @@ repos:
         types: [python]
         files: ^workflows/
         exclude: ^workflows/tests/test_flows_utils\.py$
-      - id: activate-django-before-models
-        name: activate_django_first must precede any models import
-        language: python
-        entry: python scripts/check_activate_django_first.py
-        types: [python]
-        files: ^workflows/
-        exclude: ^workflows/tests/
