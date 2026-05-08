@@ -8,11 +8,11 @@ from ninja_jwt.tokens import SlidingToken
 
 from emgapiv2.api import ApiSections
 from emgapiv2.api.auth import (
-    authenticate_webin_user,
-    WebinUser,
+    WebinTokenRefreshRequest,
     WebinTokenRequest,
     WebinTokenResponse,
-    WebinTokenRefreshRequest,
+    WebinUser,
+    authenticate_webin_user,
 )
 
 logger = logging.getLogger(__name__)

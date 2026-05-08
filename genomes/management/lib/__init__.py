@@ -1,10 +1,9 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
-import os
-import logging
-
 import csv
+import logging
+import os
 
 from django.core.management.base import BaseCommand
 from django.db.models import Q

@@ -3,20 +3,18 @@ from unittest.mock import Mock, patch
 import pytest
 
 from analyses.models import Analysis
+from workflows.data_io_utils.filenames import accession_prefix_separated_dir_path
+from workflows.data_io_utils.schemas import PipelineValidationError
 from workflows.flows.analyse_study_tasks.shared.copy_v6_pipeline_results import (
     _copy_single_analysis_results,
 )
-from workflows.data_io_utils.filenames import accession_prefix_separated_dir_path
-from workflows.data_io_utils.schemas import PipelineValidationError
+from workflows.flows.analysis.assembly.tasks.assembly_analysis_batch_results_importer import (
+    ImportResult,
+    assembly_analysis_batch_results_importer,
+    clear_pipeline_downloads,
+)
 from workflows.flows.analysis.assembly.tasks.process_import_results import (
     process_import_results,
-)
-from workflows.flows.analysis.assembly.tasks.assembly_analysis_batch_results_importer import (
-    assembly_analysis_batch_results_importer,
-    ImportResult,
-)
-from workflows.flows.analysis.assembly.tasks.assembly_analysis_batch_results_importer import (
-    clear_pipeline_downloads,
 )
 from workflows.models import (
     AssemblyAnalysisBatch,

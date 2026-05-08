@@ -1,5 +1,5 @@
-from django.db import models
 from django.conf import settings
+from django.db import models
 
 from analyses.base_models.base_models import TimeStampedModel
 from analyses.base_models.with_downloads_models import WithDownloadsModel

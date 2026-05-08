@@ -1,4 +1,4 @@
-from typing import Optional, ClassVar
+from typing import ClassVar, Optional
 
 from ninja import Query
 from ninja_extra import api_controller, http_get, paginate

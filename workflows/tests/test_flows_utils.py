@@ -2,7 +2,7 @@ import time
 from unittest.mock import MagicMock, patch
 
 import pytest
-from django.db import connection, OperationalError
+from django.db import OperationalError, connection
 from prefect import task
 from prefect.flows import Flow
 from prefect.tasks import Task

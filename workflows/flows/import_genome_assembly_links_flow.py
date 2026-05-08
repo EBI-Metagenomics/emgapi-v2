@@ -1,9 +1,11 @@
+import sys
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
-from activate_django_first import EMG_CONFIG
 
 from django.db import transaction
-from prefect import flow, task, get_run_logger
+from prefect import flow, get_run_logger, task
+
+from activate_django_first import EMG_CONFIG
 
 # Import Django models
 from analyses.models import Assembly
@@ -17,7 +19,6 @@ from workflows.data_io_utils.file_rules.common_rules import (
     FileIsNotEmptyRule,
 )
 from workflows.data_io_utils.file_rules.nodes import File
-import sys
 
 genome_config = EMG_CONFIG.genomes
 

@@ -5,10 +5,12 @@ from typing import List
 
 import httpx
 from prefect import flow, get_run_logger, suspend_flow_run, task
+from prefect.artifacts import create_markdown_artifact
 from prefect.input import RunInput
 from prefect.task_runners import ThreadPoolTaskRunner
-from prefect.artifacts import create_markdown_artifact
+
 from activate_django_first import EMG_CONFIG
+
 from ena.models import Sample, Study
 
 
@@ -136,14 +138,12 @@ def alternative_realistic_example(accession: str):
     download_options: DownloadOptionsInput = suspend_flow_run(
         wait_for_input=DownloadOptionsInput.with_initial_data(
             samples_limit=10,
-            description=_(
-                f"""\
+            description=_(f"""\
                 **ENA Downloader**
                 This will download read-runs from ENA.
 
                 Please pick how many samples (the max limit) to download for the study {study.accession}.
-            """
-            ),
+            """),
         )
     )
 

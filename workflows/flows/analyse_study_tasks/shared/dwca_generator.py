@@ -4,27 +4,27 @@ from urllib.parse import urljoin
 from prefect import get_run_logger
 
 from activate_django_first import EMG_CONFIG
+
 from analyses.models import Analysis, Study
 from workflows.data_io_utils.darwin_core.dwca_models import (
-    Abstract,
-    IntellectualRights,
-    License,
-    Dataset,
-    Eml,
     GBIF_GMP_XSD,
+    Abstract,
+    Contact,
+    Creator,
+    Dataset,
+    Distribution,
+    DistributionOnline,
+    Eml,
+    IntellectualRights,
+    KeywordSet,
+    License,
+    MetadataProvider,
     Methods,
     MethodStep,
     Sampling,
-    KeywordSet,
-    Distribution,
-    DistributionOnline,
-    Creator,
-    Contact,
-    MetadataProvider,
 )
 from workflows.ena_utils.study import ENAStudyFields
 from workflows.prefect_utils.flows_utils import django_db_task as task
-
 
 # from dwca import DarwinCoreArchive
 # from eml.types import ResponsibleParty, IndividualName

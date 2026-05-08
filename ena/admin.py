@@ -1,7 +1,8 @@
 from django.contrib import admin
 from unfold.admin import ModelAdmin
 
-from analyses.admin.base import JSONFieldWidgetOverridesMixin, ENABrowserLinkMixin
+from analyses.admin.base import ENABrowserLinkMixin, JSONFieldWidgetOverridesMixin
+
 from .models import Sample, Study
 
 

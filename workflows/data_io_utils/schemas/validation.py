@@ -2,6 +2,7 @@ from pathlib import Path
 from typing import Type
 
 from workflows.data_io_utils.file_rules.nodes import Directory
+
 from .base import PipelineResultSchema
 from .exceptions import PipelineValidationError
 

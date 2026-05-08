@@ -7,13 +7,12 @@ from ninja.testing import TestClient
 
 from analyses.base_models.with_downloads_models import (
     DownloadFile,
+    DownloadFileIndexFile,
     DownloadFileType,
     DownloadType,
-    DownloadFileIndexFile,
 )
 from analyses.models import Analysis, Sample
-
-from genomes.models import GenomeAssemblyLink, AdditionalContainedGenomes
+from genomes.models import AdditionalContainedGenomes, GenomeAssemblyLink
 
 R = TypeVar("R")
 

@@ -1,7 +1,7 @@
 from pathlib import Path
 
-from django.db import transaction
 import pandas as pd
+from django.db import transaction
 from pandera.typing import DataFrame
 from prefect import get_run_logger
 from prefect.artifacts import create_table_artifact
@@ -9,12 +9,15 @@ from prefect.artifacts import create_table_artifact
 import activate_django_first  # noqa
 
 import analyses.models
+from workflows.data_io_utils.miassembler_utils import (
+    miassembler_run_output_dir,
+)
 from workflows.ena_utils.abstract import ENAPortalResultType
 from workflows.ena_utils.analysis import ENAAnalysisFields, ENAAnalysisQuery
-from workflows.ena_utils.ena_auth import dcc_auth
 from workflows.ena_utils.ena_api_requests import (
     get_study_readruns_from_ena,
 )
+from workflows.ena_utils.ena_auth import dcc_auth
 from workflows.ena_utils.requestors import ENAAPIRequest
 from workflows.flows.assemble_study_tasks.miassembler_reports import (
     AssembledRunsReport,
@@ -23,15 +26,14 @@ from workflows.flows.assemble_study_tasks.miassembler_reports import (
     load_coverage_report,
     load_qc_failed_runs_report,
 )
-from workflows.data_io_utils.miassembler_utils import (
-    miassembler_run_output_dir,
-)
 from workflows.flows.shared.study_tasks import get_or_create_mgnify_study
 from workflows.prefect_utils.analyses_models_helpers import (
     mark_assembly_status,
 )
 from workflows.prefect_utils.flows_utils import (
     django_db_flow as flow,
+)
+from workflows.prefect_utils.flows_utils import (
     django_db_task as task,
 )
 

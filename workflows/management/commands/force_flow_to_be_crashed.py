@@ -1,10 +1,9 @@
 import logging
 
 from django.core.management.base import BaseCommand, CommandError
-from prefect import get_client, State
+from prefect import State, get_client
 from prefect.exceptions import ObjectNotFound
 from prefect.server.schemas.states import StateType
-
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)

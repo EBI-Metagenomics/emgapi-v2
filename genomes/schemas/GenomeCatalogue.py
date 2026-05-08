@@ -1,6 +1,7 @@
-from ninja import Schema, Field
-from typing import Optional, Dict, Literal, TYPE_CHECKING
 from datetime import datetime
+from typing import TYPE_CHECKING, Dict, Literal, Optional
+
+from ninja import Field, Schema
 
 if TYPE_CHECKING:
     from analyses.schemas import Biome

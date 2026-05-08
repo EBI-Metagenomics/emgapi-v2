@@ -22,7 +22,11 @@ from workflows.nextflow_utils.tower import get_nextflow_tower_url
 from workflows.nextflow_utils.trace import maybe_get_nextflow_trace_df
 from workflows.prefect_utils.flows_utils import (
     close_stale_connections,
+)
+from workflows.prefect_utils.flows_utils import (
     django_db_flow as flow,
+)
+from workflows.prefect_utils.flows_utils import (
     django_db_task as task,
 )
 from workflows.prefect_utils.prefect_worker_utils import (
@@ -104,16 +108,12 @@ def check_cluster_job(
         with open(job_log_path, "r", encoding="utf-8", errors="ignore") as job_log:
             full_log = job_log.readlines()
             log = "\n".join(full_log[-EMG_CONFIG.slurm.job_log_tail_lines :])
-            logger.info(
-                _(
-                    f"""\
+            logger.info(_(f"""\
                     Slurm Job Stdout Log (last {EMG_CONFIG.slurm.job_log_tail_lines} lines of {len(full_log)}):
                     ----------
                     <<LOG>>
                     ----------
-                    """
-                ).replace("<<LOG>>", safe(log))
-            )
+                    """).replace("<<LOG>>", safe(log)))
 
             orchestrated_cluster_job.cluster_log = log
     else:
@@ -211,13 +211,11 @@ def start_or_attach_cluster_job(
     logger.info(f"Will use {job_workdir=}")
 
     ### Prepare job submission description
-    script = _(
-        f"""\
+    script = _(f"""\
         #!/bin/bash
         set -euo pipefail
         {command}
-        """
-    )
+        """)
     logger.info(f"Will run the script ```{safe(script)}```")
     kwargs["environment"] = make_environment(kwargs.get("environment", None))
     job_submit_description = OrchestratedClusterJob.SlurmJobSubmitDescription(
@@ -299,8 +297,7 @@ def start_or_attach_cluster_job(
 
     create_markdown_artifact(
         key="slurm-job-submission",
-        markdown=_(
-            f"""\
+        markdown=_(f"""\
             # Slurm job {job_id}
             [Orchestrated Cluster Job {ocj.id}]({EMG_CONFIG.service_urls.app_root}/{reverse("admin:workflows_orchestratedclusterjob_change", kwargs={"object_id": ocj.id})})
             Submitted a script to Slurm cluster:
@@ -310,8 +307,7 @@ def start_or_attach_cluster_job(
             It will be terminated by Slurm if not done in {slurm_timedelta(expected_time)}.
             Slurm working dir is {job_workdir}.
             {nf_link_markdown}
-            """
-        ).replace("<<SCRIPT>>", safe(script)),
+            """).replace("<<SCRIPT>>", safe(script)),
     )
 
     return ocj
@@ -371,12 +367,10 @@ def run_subprocess(
     logger.info(f"Will use {job_workdir=}")
 
     ### Prepare job submission description
-    script = _(
-        f"""\
+    script = _(f"""\
         set -euo pipefail
         {command}
-        """
-    )
+        """)
 
     logger.info(f"Will run the script ```{safe(script)}```")
     job_submit_description = OrchestratedClusterJob.SlurmJobSubmitDescription(
@@ -463,8 +457,7 @@ def run_subprocess(
 
     create_markdown_artifact(
         key="slurm-job-submission",
-        markdown=_(
-            f"""\
+        markdown=_(f"""\
             # Subprocess with pid {process.pid}
             [Orchestrated Cluster Job {ocj.id}]({EMG_CONFIG.service_urls.app_root}/{reverse("admin:workflows_orchestratedclusterjob_change", kwargs={"object_id": ocj.id})})
             Submitted a script as a subprocess:
@@ -474,8 +467,7 @@ def run_subprocess(
             It will be terminated if not done in {slurm_timedelta(expected_time)}.
             Working dir is {job_workdir}.
             {nf_link_markdown}
-            """
-        ).replace("<<SCRIPT>>", safe(script)),
+            """).replace("<<SCRIPT>>", safe(script)),
     )
 
     try:

@@ -5,9 +5,9 @@ from unfold.decorators import action
 from unfold.enums import ActionVariant
 
 from analyses.admin.base import (
+    AutoCompleteInlineForm,
     JSONFieldWidgetOverridesMixin,
     TabularInlinePaginatedWithTabSupport,
-    AutoCompleteInlineForm,
     detail_action_error,
 )
 from analyses.models import Publication, StudyPublication

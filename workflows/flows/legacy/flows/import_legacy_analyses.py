@@ -7,6 +7,7 @@ from prefect.artifacts import create_table_artifact
 from sqlalchemy import select
 
 import activate_django_first  # noqa
+
 from analyses.base_models.with_downloads_models import (
     DownloadFile,
     DownloadFileType,
@@ -17,16 +18,16 @@ from workflows.data_io_utils.filenames import accession_prefix_separated_dir_pat
 from workflows.data_io_utils.legacy_emg_dbs import (
     LEGACY_DOWNLOAD_TYPE_MAP,
     LEGACY_FILE_FORMATS_MAP,
+    LEGACY_PIPELINE_ID_MAP,
     LegacyStudy,
+    get_functions_from_api_v1_mongo,
     get_taxonomy_from_api_v1_mongo,
     legacy_emg_db_session,
-    get_functions_from_api_v1_mongo,
-    LEGACY_PIPELINE_ID_MAP,
 )
 from workflows.ena_utils.ena_api_requests import (
     sync_privacy_state_of_ena_study_and_derived_objects,
-    sync_study_metadata_from_ena,
     sync_sample_metadata_from_ena,
+    sync_study_metadata_from_ena,
 )
 from workflows.flows.legacy.tasks.make_assembly_from_legacy_emg_db import (
     make_assembly_from_legacy_emg_db,

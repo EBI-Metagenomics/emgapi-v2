@@ -1,20 +1,34 @@
 from pathlib import Path
 from textwrap import dedent as _
-from typing import Optional, List
+from typing import List, Optional
 
 from prefect import get_run_logger, suspend_flow_run
 from prefect.events import emit_event
 from prefect.input import RunInput
-from prefect.runtime import flow_run, deployment
+from prefect.runtime import deployment, flow_run
 from pydantic import Field
 
 from activate_django_first import EMG_CONFIG
 
 import analyses.base_models.with_experiment_type_models
+import analyses.models
+import ena.models
+from workflows.ena_utils.ena_api_requests import (
+    ENALibraryStrategyPolicy,
+    get_study_from_ena,
+    get_study_readruns_from_ena,
+    library_strategy_policy_to_filter,
+)
+from workflows.ena_utils.webin_owner_utils import validate_and_set_webin_owner
+from workflows.flows.analyse_study_tasks.amplicon.run_amplicon_pipeline_via_samplesheet import (
+    run_amplicon_pipeline_via_samplesheet,
+)
+from workflows.flows.analyse_study_tasks.cleanup_pipeline_directories import (
+    delete_study_nextflow_workdir,
+)
 from workflows.flows.analyse_study_tasks.shared.copy_v6_pipeline_results import (
     copy_v6_study_summaries,
 )
-
 from workflows.flows.analyse_study_tasks.shared.create_analyses import create_analyses
 from workflows.flows.analyse_study_tasks.shared.dwcr_generator import (
     add_dwcr_summaries_to_downloads,
@@ -23,36 +37,20 @@ from workflows.flows.analyse_study_tasks.shared.dwcr_generator import (
 from workflows.flows.analyse_study_tasks.shared.get_analyses_to_attempt import (
     get_analyses_to_attempt,
 )
-from workflows.flows.analyse_study_tasks.amplicon.run_amplicon_pipeline_via_samplesheet import (
-    run_amplicon_pipeline_via_samplesheet,
+from workflows.flows.analyse_study_tasks.shared.study_summary import (
+    add_study_summaries_to_downloads,
+    merge_study_summaries,
 )
-
-import analyses.models
-import ena.models
-from workflows.ena_utils.ena_api_requests import (
-    get_study_from_ena,
-    get_study_readruns_from_ena,
-    library_strategy_policy_to_filter,
-    ENALibraryStrategyPolicy,
-)
-from workflows.ena_utils.webin_owner_utils import validate_and_set_webin_owner
 from workflows.flows.analysis import AnalysisType
 from workflows.flows.analysis.pipeline_versions import (
     get_current_pipeline_version_for_experiment_type,
     get_v6_family_pipeline_versions_for_experiment_type,
 )
-from workflows.flows.analyse_study_tasks.shared.study_summary import (
-    merge_study_summaries,
-    add_study_summaries_to_downloads,
-)
 from workflows.flows.assemble_study import get_biomes_as_choices
 from workflows.prefect_utils.analyses_models_helpers import (
+    add_study_watchers,
     chunk_list,
     get_users_as_choices,
-    add_study_watchers,
-)
-from workflows.flows.analyse_study_tasks.cleanup_pipeline_directories import (
-    delete_study_nextflow_workdir,
 )
 from workflows.prefect_utils.flows_utils import django_db_flow as flow
 
@@ -123,8 +121,7 @@ def analysis_amplicon_study(study_accession: str):
 
     analyse_study_input: AnalyseStudyInput = suspend_flow_run(
         wait_for_input=AnalyseStudyInput.with_initial_data(
-            description=_(
-                f"""\
+            description=_(f"""\
                 **Amplicon {amplicon_pipeline_version.label}**
                 This will analyse all {len(read_runs)} amplicon read-runs of study {ena_study.accession} \
                 using [Amplicon Pipeline {amplicon_pipeline_version.label.upper()}](https://github.com/ebi-metagenomics/amplicon-pipeline).
@@ -139,8 +136,7 @@ def analysis_amplicon_study(study_accession: str):
 
                 **Webin owner**
                 If the study is private, the webin account owner is needed so that the user can view the study they own.
-                """
-            ),
+                """),
         )
     )
 

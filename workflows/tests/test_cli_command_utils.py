@@ -1,8 +1,9 @@
 from importlib.resources import files
 
 from activate_django_first import EMG_CONFIG
-from workflows.prefect_utils.build_cli_command import cli_command
+
 from workflows import ena_utils
+from workflows.prefect_utils.build_cli_command import cli_command
 
 
 def test_cli_command_generator():

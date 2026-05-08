@@ -1,42 +1,44 @@
 from enum import Enum
 from pathlib import Path
-from typing import Optional, List
+from typing import List, Optional
 
 # Maybe we should put these in a separate schema with stuff
 from mgnify_pipelines_toolkit.schemas.dataframes import (
-    InterProSummarySchema,
-    PFAMSummarySchema,
-    GOSummarySchema,
-    KOSummarySchema,
     AntismashSummarySchema,
-    SanntisSummarySchema,
+    GOSummarySchema,
+    InterProSummarySchema,
     KEGGModulesSummarySchema,
+    KOSummarySchema,
+    PFAMSummarySchema,
+    SanntisSummarySchema,
 )
 from pydantic import BaseModel, Field
 
 from activate_django_first import EMG_CONFIG
+
 import analyses.models
 from analyses.base_models.with_downloads_models import (
+    DownloadFileIndexFileMetadata,
     DownloadFileType,
     DownloadType,
-    DownloadFileIndexFileMetadata,
 )
 from analyses.models import Analysis
 from workflows.data_io_utils.file_rules.common_rules import (
     DirectoryExistsRule,
     FileExistsRule,
-    FileIsNotEmptyRule,
     FileIfExistsIsNotEmptyRule,
+    FileIsNotEmptyRule,
 )
 from workflows.data_io_utils.file_rules.mgnify_v6_result_rules import (
     GlobOfTaxonomyFolderHasHtmlAndKronaTxtRule,
 )
+
 from .base import (
-    PipelineFileSchema,
-    PipelineDirectorySchema,
-    PipelineResultSchema,
     DownloadFileMetadata,
     ImportConfig,
+    PipelineDirectorySchema,
+    PipelineFileSchema,
+    PipelineResultSchema,
 )
 
 # TODO: move this to pipeline-versioned directory (very v6 specific)

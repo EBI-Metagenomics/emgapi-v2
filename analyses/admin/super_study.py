@@ -2,10 +2,10 @@ from django.contrib import admin
 from unfold.admin import ModelAdmin
 
 from analyses.admin.base import (
-    TabularInlinePaginatedWithTabSupport,
     AutoCompleteInlineForm,
+    TabularInlinePaginatedWithTabSupport,
 )
-from analyses.models import SuperStudy, SuperStudyStudy, SuperStudyGenomeCatalogue
+from analyses.models import SuperStudy, SuperStudyGenomeCatalogue, SuperStudyStudy
 
 
 class SuperStudyStudyInlineForm(AutoCompleteInlineForm):

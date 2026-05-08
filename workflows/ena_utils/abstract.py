@@ -1,5 +1,5 @@
 from datetime import date
-from typing import Union, TypeVar
+from typing import TypeVar, Union
 
 from pydantic import BaseModel, Field, computed_field
 
