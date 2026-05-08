@@ -5,3 +5,27 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+    groups:
+      django-patches:
+        applies-to: version-updates
+        patterns:
+          - "dj*"
+        update-types:
+          - "minor"
+          - "patch"
+      prefect-patches:
+        applies-to: version-updates
+        patterns:
+          - "prefect*"
+        update-types:
+          - "minor"
+          - "patch"
+      other-patches:
+        applies-to: version-updates
+        patterns:
+          - "*"
+        exclude-patterns:
+          - "dj*"
+          - "prefect*"
+        update-types:
+          - "patch"
