@@ -179,10 +179,13 @@ def collect_eggnog_header_fix_candidates(
     :param analysis_accessions: Optional accession filter.
     """
     logger = get_run_logger()
-    candidates: list[EggnogHeaderFixCandidate] = [
-        _build_candidate_rows(analysis)
-        for analysis in _eggnog_analyses(analysis_accessions)
-    ]
+    candidates: list[EggnogHeaderFixCandidate] = []
+    for analysis in _eggnog_analyses(analysis_accessions):
+        candidates.extend(_build_candidate_rows(analysis))
+
+    if not candidates:
+        logger.info("No EggNOG files need repairing.")
+        return []
 
     create_table_artifact(
         key="eggnog-header-fix-candidates",
@@ -311,7 +314,6 @@ def repair_eggnog_tsv_headers(
     candidates = collect_eggnog_header_fix_candidates(analysis_accessions)
 
     if not candidates:
-        logger.info("No EggNOG files need repairing.")
         return []
 
     if dry_run:
