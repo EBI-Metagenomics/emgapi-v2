@@ -1,11 +1,11 @@
-from typing import Any
 from datetime import datetime
-import pandas as pd
+from typing import Any
+
 import numpy as np
+import pandas as pd
 import pandera.pandas as pa
 from pandera.typing import Series
 from parse import search
-
 
 # Resource metric mapping from raw Nextflow trace names to schema-friendly names
 NEXTFLOW_FIELD_MAP = {

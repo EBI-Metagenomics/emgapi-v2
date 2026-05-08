@@ -14,8 +14,8 @@ from workflows.data_io_utils.file_rules.common_rules import (
 
 if TYPE_CHECKING:
     from workflows.data_io_utils.schemas import (
-        PipelineResultSchema,
         PipelineDirectorySchema,
+        PipelineResultSchema,
     )
 
 logger = logging.getLogger(__name__)

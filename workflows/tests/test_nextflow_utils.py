@@ -5,16 +5,15 @@ from pathlib import Path
 
 import pytest
 
-
 import analyses.models
 import ena.models
-from workflows.prefect_utils.slurm_flow import run_cluster_job
-from workflows.prefect_utils.slurm_policies import ResubmitAlwaysPolicy
 from workflows.nextflow_utils.samplesheets import (
     SamplesheetColumnSource,
     queryset_hash,
     queryset_to_samplesheet,
 )
+from workflows.prefect_utils.slurm_flow import run_cluster_job
+from workflows.prefect_utils.slurm_policies import ResubmitAlwaysPolicy
 from workflows.prefect_utils.slurm_status import SlurmStatus
 
 

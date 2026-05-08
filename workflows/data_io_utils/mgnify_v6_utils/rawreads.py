@@ -1,5 +1,5 @@
-import json
 import gzip
+import json
 import logging
 from pathlib import Path
 from typing import List, Optional, Tuple
@@ -24,12 +24,12 @@ from workflows.data_io_utils.file_rules.common_rules import (
     FileIsNotEmptyRule,
 )
 from workflows.data_io_utils.file_rules.mgnify_v6_result_rules import (
-    FileConformsToRawReadsTaxonomyTSVSchemaRule,
-    FileConformsToRawReadsMotusTaxonomyTSVSchemaRule,
     FileConformsToFunctionalTSVSchemaRule,
+    FileConformsToRawReadsMotusTaxonomyTSVSchemaRule,
+    FileConformsToRawReadsTaxonomyTSVSchemaRule,
     GlobOfRawReadsQcFolderHasFastpAndMultiqc,
-    GlobOfTaxonomyFolderHasTxtGzRule,
     GlobOfTaxonomyFolderHasKronaHtmlRule,
+    GlobOfTaxonomyFolderHasTxtGzRule,
 )
 from workflows.data_io_utils.file_rules.nodes import Directory, File
 

@@ -4,17 +4,17 @@ from django.core.management import call_command
 from django.db import connection
 
 import ena.models
-from analyses.models import Biome, Study, SuperStudy, SuperStudyStudy, Publication
+from analyses.models import Biome, Publication, Study, SuperStudy, SuperStudyStudy
 from workflows.data_io_utils.legacy_emg_dbs import (
+    LegacyPublication,
     LegacyStudy,
+    LegacyStudyPublication,
     LegacySuperStudy,
     LegacySuperStudyStudy,
-    LegacyPublication,
-    LegacyStudyPublication,
 )
 from workflows.prefect_utils.testing_utils import (
-    should_not_mock_httpx_requests_to_prefect_server,
     combine_caplog_records,
+    should_not_mock_httpx_requests_to_prefect_server,
 )
 
 

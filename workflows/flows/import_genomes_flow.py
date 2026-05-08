@@ -2,7 +2,7 @@ import os
 import re
 from pathlib import Path
 
-from prefect import task, flow, get_run_logger
+from prefect import flow, get_run_logger, task
 
 from activate_django_first import EMG_CONFIG
 
@@ -10,20 +10,20 @@ genome_config = EMG_CONFIG.genomes
 
 from analyses.models import Biome
 from genomes.management.lib.genome_util import (
-    find_genome_results,
-    sanity_check_genome_output_proks,
-    sanity_check_catalogue_dir,
     apparent_accession_of_genome_dir,
-    sanity_check_genome_output_euks,
-    read_json,
+    find_genome_results,
     get_genome_result_path,
+    read_json,
+    sanity_check_catalogue_dir,
+    sanity_check_genome_output_euks,
+    sanity_check_genome_output_proks,
+    upload_antismash_geneclusters,
     upload_cog_results,
+    upload_genome_files,
     upload_kegg_class_results,
     upload_kegg_module_results,
-    upload_antismash_geneclusters,
-    upload_genome_files,
 )
-from genomes.models import GenomeCatalogue, Genome
+from genomes.models import Genome, GenomeCatalogue
 
 
 def validate_pipeline_version(version: str) -> int:
@@ -191,8 +191,8 @@ def upload_genome_downloads(genome, genome_dir, has_pangenome):
     logger = get_run_logger()
     from analyses.base_models.with_downloads_models import (
         DownloadFile,
-        DownloadType,
         DownloadFileType,
+        DownloadType,
     )
 
     genome_file_specs = [
@@ -289,8 +289,8 @@ def upload_catalogue_files(catalogue, catalogue_dir):
     logger = get_run_logger()
     from analyses.base_models.with_downloads_models import (
         DownloadFile,
-        DownloadType,
         DownloadFileType,
+        DownloadType,
     )
 
     summary_path = Path(catalogue_dir) / "phylo_tree.json"

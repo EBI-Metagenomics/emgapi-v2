@@ -1,6 +1,6 @@
 from typing import Optional, Union
 
-from pydantic import BaseModel, ConfigDict, Field, AliasChoices
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 
 from workflows.data_io_utils.csv.csv_comment_handler import CSVDelimiter
 from workflows.data_io_utils.file_rules.base_rules import GlobRule

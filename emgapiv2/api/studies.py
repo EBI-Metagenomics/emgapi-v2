@@ -8,21 +8,21 @@ from pydantic import Field
 
 import analyses.models
 from analyses.schemas import (
-    MGnifyStudyDetail,
-    MGnifyStudy,
     MGnifyAnalysis,
     MGnifyPublication,
-    OrderByFilter,
     MGnifySampleWithMetadata,
+    MGnifyStudy,
+    MGnifyStudyDetail,
+    OrderByFilter,
 )
 from emgapiv2.api import perms
-from emgapiv2.api.auth import WebinJWTAuth, DjangoSuperUserAuth, NoAuth
+from emgapiv2.api.auth import DjangoSuperUserAuth, NoAuth, WebinJWTAuth
 from emgapiv2.api.perms import UnauthorisedIsUnfoundController
 from emgapiv2.api.schema_utils import (
+    ApiSections,
+    BiomeFilter,
     make_links_section,
     make_related_detail_link,
-    BiomeFilter,
-    ApiSections,
 )
 
 

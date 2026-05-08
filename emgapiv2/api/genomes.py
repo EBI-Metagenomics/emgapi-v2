@@ -4,13 +4,13 @@ from ninja_extra.schemas import NinjaPaginationResponseSchema
 
 from emgapiv2.api.perms import UnauthorisedIsUnfoundController
 from emgapiv2.api.schema_utils import (
+    ApiSections,
     make_links_section,
     make_related_detail_link,
-    ApiSections,
 )
 from genomes.models import Genome, GenomeCatalogue
 from genomes.schemas import GenomeDetail, GenomeList, GenomeWithAnnotations
-from genomes.schemas.GenomeCatalogue import GenomeCatalogueList, GenomeCatalogueDetail
+from genomes.schemas.GenomeCatalogue import GenomeCatalogueDetail, GenomeCatalogueList
 
 
 @api_controller("genomes", tags=[ApiSections.GENOMES])

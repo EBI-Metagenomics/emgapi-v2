@@ -14,10 +14,9 @@ from sqlalchemy.orm import (
     sessionmaker,
 )
 
+import analyses.models
 from analyses.base_models.with_downloads_models import DownloadFileType, DownloadType
 from analyses.base_models.with_experiment_type_models import WithExperimentTypeModel
-
-import analyses.models
 
 
 class LegacyEMGBase(DeclarativeBase):

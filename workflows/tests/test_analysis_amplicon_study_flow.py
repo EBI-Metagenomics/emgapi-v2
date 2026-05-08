@@ -1,16 +1,16 @@
+import glob
 import json
 import logging
 import os
 import re
 import shutil
-import glob
 from pathlib import Path
-import responses
 from textwrap import dedent
 from typing import List, Optional, Union
 from unittest.mock import Mock, patch
 
 import pytest
+import responses
 from django.conf import settings
 from django.db.models import Q
 from prefect.artifacts import Artifact
@@ -21,23 +21,23 @@ from workflows.data_io_utils.file_rules.base_rules import FileRule, GlobRule
 from workflows.data_io_utils.file_rules.common_rules import GlobHasFilesCountRule
 from workflows.data_io_utils.file_rules.nodes import Directory
 from workflows.ena_utils.ena_api_requests import ENALibraryStrategyPolicy
+from workflows.flows.analyse_study_tasks.cleanup_pipeline_directories import (
+    # delete_study_results_dir,
+    delete_study_nextflow_workdir,
+)
 from workflows.flows.analyse_study_tasks.shared.dwcr_generator import (
     add_dwcr_summaries_to_downloads,
 )
 from workflows.flows.analyse_study_tasks.shared.study_summary import (
-    merge_study_summaries,
-    STUDY_SUMMARY_TSV,
     DWCREADY_CSV,
+    STUDY_SUMMARY_TSV,
+    merge_study_summaries,
 )
 from workflows.flows.analysis_amplicon_study import analysis_amplicon_study
 from workflows.prefect_utils.testing_utils import (
-    should_not_mock_httpx_requests_to_prefect_server,
     run_flow_and_capture_logs,
+    should_not_mock_httpx_requests_to_prefect_server,
     write_empty_fasta_file,
-)
-from workflows.flows.analyse_study_tasks.cleanup_pipeline_directories import (
-    # delete_study_results_dir,
-    delete_study_nextflow_workdir,
 )
 
 EMG_CONFIG = settings.EMG_CONFIG
@@ -137,18 +137,14 @@ def generate_fake_pipeline_all_results(amplicon_run_folder: Path, run):
         / f"{run}_DADA2-SILVA_asv_tax.tsv",
         "w",
     ) as fw:
-        fw.write(
-            dedent(
-                """\
+        fw.write(dedent("""\
         ASV	Superkingdom	Kingdom	Phylum	Class	Order	Family	Genus	Species
         seq_1	sk__Bacteria	k__	p__Actinomycetota	c__Actinomycetes	o__Kitasatosporales	f__Streptomycetaceae	g__Streptomyces NA
         seq_2	sk__Bacteria	k__	p__Actinomycetota	c__Actinomycetes	o__Micrococcales	f__Microbacteriaceae    NA  NA
         seq_3	sk__Bacteria	k__	p__Actinomycetota	c__Actinomycetes	o__Micrococcales	f__Micrococcaceae	g__Arthrobacter NA
         seq_4	sk__Bacteria	k__	p__Actinomycetota	c__Actinomycetes	o__Micrococcales	f__Micrococcaceae	g__Pseudarthrobacter    NA
         seq_5	sk__Bacteria	k__	p__Actinomycetota	c__Actinomycetes	o__Propionibacteriales	f__Nocardioidaceae	g__Aeromicrobium    NA
-                """
-            )
-        )
+                """))
 
     with open(
         amplicon_run_folder
@@ -156,18 +152,14 @@ def generate_fake_pipeline_all_results(amplicon_run_folder: Path, run):
         / f"{run}_DADA2-PR2_asv_tax.tsv",
         "w",
     ) as fw:
-        fw.write(
-            dedent(
-                """\
+        fw.write(dedent("""\
         ASV	Domain	Supergroup	Division	Subdivision	Class	Order	Family	Genus	Species
         seq_1	d__Bacteria	sg__FCB	dv__Bacteroidetes	sdv__Bacteroidetes_X	c__Bacteroidia	o__Chitinophagales	f__Chitinophagaceae	g__Chitinophaga	s__Chitinophaga_sp.
         seq_2	d__Bacteria	sg__FCB	dv__Bacteroidetes	sdv__Bacteroidetes_X	c__Bacteroidia	o__Cytophagales	f__Spirosomaceae	g__Dyadobacter	s__Dyadobacter_sp.
         seq_3	d__Bacteria	sg__FCB	dv__Bacteroidetes	sdv__Bacteroidetes_X	c__Bacteroidia	o__Flavobacteriales	f__Flavobacteriaceae	g__Flavobacterium	s__Flavobacterium_sp.
         seq_4	d__Bacteria	sg__FCB	dv__Bacteroidetes	sdv__Bacteroidetes_X	c__Bacteroidia	o__Sphingobacteriales	f__Sphingobacteriaceae	g__Pedobacter	s__Pedobacter_sp.
         seq_5	d__Bacteria	sg__PANNAM	dv__Proteobacteria	sdv__Proteobacteria_X	c__Alphaproteobacteria	o__Caulobacterales	f__Caulobacteraceae	g__Caulobacter	s__Caulobacter_sp.
-                """
-            )
-        )
+                """))
 
     with open(
         amplicon_run_folder
@@ -175,9 +167,7 @@ def generate_fake_pipeline_all_results(amplicon_run_folder: Path, run):
         / f"{run}_asv_seqs.fasta",
         "w",
     ) as fw:
-        fw.write(
-            dedent(
-                """\
+        fw.write(dedent("""\
         >seq_1
         TGGGGAATATTGGACAATGGGCGCAAGCCTGATCCA
         >seq_2
@@ -188,9 +178,7 @@ def generate_fake_pipeline_all_results(amplicon_run_folder: Path, run):
         TCGAGAATTTTTCTCAATGGGGGAAACCCTGAAGGA
         >seq_5
         TGGGGAATCTTGCACAATGGACGAAAGTCTGATGCA
-                """
-            )
-        )
+                """))
 
     (
         amplicon_run_folder
@@ -219,16 +207,12 @@ def generate_fake_pipeline_all_results(amplicon_run_folder: Path, run):
         ).open("w") as v3v4_tsv,
     ):
         for tsv in [v9_tsv, v3v4_tsv]:
-            tsv.write(
-                dedent(
-                    """\
+            tsv.write(dedent("""\
                     asv	count
                     seq_1	886
                     seq_10	1011
                     seq_100	160
-                    """
-                )
-            )
+                    """))
 
     # SEQUENCE CATEGORISATION
     (
@@ -255,14 +239,10 @@ def generate_fake_pipeline_all_results(amplicon_run_folder: Path, run):
         / EMG_CONFIG.amplicon_pipeline.sequence_categorisation_folder
         / f"{run}_SSU_rRNA_bacteria.RF00177.fa"
     ).open("w") as ssu_rna_fasta:
-        ssu_rna_fasta.write(
-            dedent(
-                f"""\
+        ssu_rna_fasta.write(dedent(f"""\
                 >{run}.100-SSU_rRNA_archaea/5-421 100/1 merged_251_171
                 ACTCGGTCTAAAGGGTCCGTAGCCGGTCCAGTAAGTCCCTGCTTAAATCCTACGGCTTAA
-                """
-            )
-        )
+                """))
 
     # TAXONOMY SUMMARY
     (amplicon_run_folder / EMG_CONFIG.amplicon_pipeline.taxonomy_summary_folder).mkdir(
@@ -319,9 +299,7 @@ def generate_fake_pipeline_all_results(amplicon_run_folder: Path, run):
     (pr2_dir / f"{run}_PR2.mseq").touch()
     (pr2_dir / f"{run}_PR2.tsv").touch()
     with ((pr2_dir / f"{run}_PR2.txt").open("w") as pr2_tax,):
-        pr2_tax.write(
-            dedent(
-                """\
+        pr2_tax.write(dedent("""\
         7	d__Bacteria
         2	d__Bacteria	sg__CCD
         1	d__Bacteria	sg__CCD	dv__Chloroflexi	sdv__Chloroflexi_X	c__Anaerolineae	o__Anaerolineales
@@ -332,9 +310,7 @@ def generate_fake_pipeline_all_results(amplicon_run_folder: Path, run):
         1	d__Bacteria	sg__CCD	dv__Patescibacteria	sdv__Patescibacteria_X	c__Parcubacteria	o__Candidatus_Kaiserbacteria
         8	d__Bacteria	sg__CCD	dv__Patescibacteria	sdv__Patescibacteria_X	c__Saccharimonadia	o__Saccharimonadales
         19	d__Bacteria	sg__CCD	dv__Patescibacteria	sdv__Patescibacteria_X	c__Saccharimonadia	o__Saccharimonadales	f__Saccharimonadales_X
-        """
-            )
-        )
+        """))
     dada2_silva_dir = (
         amplicon_run_folder
         / EMG_CONFIG.amplicon_pipeline.taxonomy_summary_folder
@@ -360,44 +336,32 @@ def generate_fake_pipeline_all_results(amplicon_run_folder: Path, run):
             dada2_18s_krona_count,
             dada2_concat_krona_count,
         ]:
-            file.write(
-                dedent(
-                    """\
+            file.write(dedent("""\
             54	sk__Bacteria	k__	p__Actinomycetota	c__Actinomycetes	o__Kitasatosporales	f__Streptomycetaceae	g__Streptomyces
             20	sk__Bacteria	k__	p__Actinomycetota	c__Actinomycetes	o__Micrococcales	f__Microbacteriaceae
             9	sk__Bacteria	k__	p__Actinomycetota	c__Actinomycetes	o__Micrococcales	f__Micrococcaceae	g__Arthrobacter
             28	sk__Bacteria	k__	p__Actinomycetota	c__Actinomycetes	o__Micrococcales	f__Micrococcaceae	g__Pseudarthrobacter
             100	sk__Bacteria	k__	p__Actinomycetota	c__Actinomycetes	o__Propionibacteriales	f__Nocardioidaceae	g__Aeromicrobium
-            """
-                )
-            )
+            """))
     with open(dada2_silva_dir / f"{run}_16S-V3-V4_DADA2-SILVA.mseq", "w") as fw:
-        fw.write(
-            dedent(
-                """\
+        fw.write(dedent("""\
         #query	dbhit	bitscore	identity	matches	mismatches	gaps	query_start	query_end	dbhit_start	dbhit_end	strand		SILVA
         seq_1	EF019080.1.1347	400	0.9975124597549438	401	1	0	0	402	331	733	+	sk__Bacteria;k__;p__Actinomycetota;c__Actinomycetes;o__Kitasatosporales;f__Streptomycetaceae;g__Streptomyces
         seq_2	HE818674.1.1466	402	1	402	0	0	0	402	284	686	+	sk__Bacteria;k__;p__Actinomycetota;c__Actinomycetes;o__Micrococcales;f__Microbacteriaceae
         seq_3	GQ339135.1.1517	424	0.9953271150588989	426	2	0	0	428	360	788	+	sk__Bacteria;k__;p__Actinomycetota;c__Actinomycetes;o__Micrococcales;f__Micrococcaceae;g__Arthrobacter
         seq_4	LN563935.1.1317	400	0.9975124597549438	401	1	0	0	402	298	700	+	sk__Bacteria;k__;p__Actinomycetota;c__Actinomycetes;o__Micrococcales;f__Micrococcaceae;g__Pseudarthrobacter
         seq_5	EF018928.1.1401	424	0.9953271150588989	426	2	0	0	428	358	786	+	sk__Bacteria;k__;p__Actinomycetota;c__Actinomycetes;o__Propionibacteriales;f__Nocardioidaceae;g__Aeromicrobium
-                """
-            )
-        )
+                """))
 
     with open(dada2_silva_dir / f"{run}_18S-V9_DADA2-SILVA.mseq", "w") as fw:
-        fw.write(
-            dedent(
-                """\
+        fw.write(dedent("""\
         #query	dbhit	bitscore	identity	matches	mismatches	gaps	query_start	query_end	dbhit_start	dbhit_end	strand		SILVA
         seq_1	EF019080.1.1347	400	0.9975124597549438	401	1	0	0	402	331	733	+	sk__Bacteria;k__;p__Actinomycetota;c__Actinomycetes;o__Kitasatosporales;f__Streptomycetaceae;g__Streptomyces
         seq_2	HE818674.1.1466	402	1	402	0	0	0	402	284	686	+	sk__Bacteria;k__;p__Actinomycetota;c__Actinomycetes;o__Micrococcales;f__Microbacteriaceae
         seq_3	GQ339135.1.1517	424	0.9953271150588989	426	2	0	0	428	360	788	+	sk__Bacteria;k__;p__Actinomycetota;c__Actinomycetes;o__Micrococcales;f__Micrococcaceae;g__Arthrobacter
         seq_4	LN563935.1.1317	400	0.9975124597549438	401	1	0	0	402	298	700	+	sk__Bacteria;k__;p__Actinomycetota;c__Actinomycetes;o__Micrococcales;f__Micrococcaceae;g__Pseudarthrobacter
         seq_5	EF018928.1.1401	424	0.9953271150588989	426	2	0	0	428	358	786	+	sk__Bacteria;k__;p__Actinomycetota;c__Actinomycetes;o__Propionibacteriales;f__Nocardioidaceae;g__Aeromicrobium
-                """
-            )
-        )
+                """))
 
     dada2_pr2_dir = (
         amplicon_run_folder
@@ -424,44 +388,32 @@ def generate_fake_pipeline_all_results(amplicon_run_folder: Path, run):
             dada2_18s_pr2_krona_count,
             dada2_concat_pr2_krona_count,
         ]:
-            file.write(
-                dedent(
-                    """\
+            file.write(dedent("""\
             2776	d__Bacteria	sg__FCB	dv__Bacteroidetes	sdv__Bacteroidetes_X	c__Bacteroidia	o__Chitinophagales	f__Chitinophagaceae	g__Chitinophaga	s__Chitinophaga_sp.
             1566	d__Bacteria	sg__FCB	dv__Bacteroidetes	sdv__Bacteroidetes_X	c__Bacteroidia	o__Cytophagales	f__Spirosomaceae	g__Dyadobacter	s__Dyadobacter_sp.
             135696	d__Bacteria	sg__FCB	dv__Bacteroidetes	sdv__Bacteroidetes_X	c__Bacteroidia	o__Flavobacteriales	f__Flavobacteriaceae	g__Flavobacterium	s__Flavobacterium_sp.
             10847	d__Bacteria	sg__FCB	dv__Bacteroidetes	sdv__Bacteroidetes_X	c__Bacteroidia	o__Sphingobacteriales	f__Sphingobacteriaceae	g__Pedobacter	s__Pedobacter_sp.
             192	d__Bacteria	sg__PANNAM	dv__Proteobacteria	sdv__Proteobacteria_X	c__Alphaproteobacteria	o__Caulobacterales	f__Caulobacteraceae	g__Caulobacter	s__Caulobacter_sp.
-            """
-                )
-            )
+            """))
     with open(dada2_pr2_dir / f"{run}_16S-V3-V4_DADA2-PR2.mseq", "w") as fw:
-        fw.write(
-            dedent(
-                """\
+        fw.write(dedent("""\
         #query	dbhit	bitscore	identity	matches	mismatches	gaps	query_start	query_end	dbhit_start	dbhit_end	strand		SILVA
         seq_1	EF019080.1.1347	400	0.9975124597549438	401	1	0	0	402	331	733	+	d__Bacteria;sg__FCB;dv__Bacteroidetes;sdv__Bacteroidetes_X;c__Bacteroidia;o__Chitinophagales;f__Chitinophagaceae;g__Chitinophaga;s__Chitinophaga_sp.
         seq_2	HE818674.1.1466	402	1	402	0	0	0	402	284	686	+	d__Bacteria;sg__FCB;dv__Bacteroidetes;sdv__Bacteroidetes_X;c__Bacteroidia;o__Cytophagales;f__Spirosomaceae;g__Dyadobacter;s__Dyadobacter_sp.
         seq_3	GQ339135.1.1517	424	0.9953271150588989	426	2	0	0	428	360	788	+	d__Bacteria;sg__FCB;dv__Bacteroidetes;sdv__Bacteroidetes_X;c__Bacteroidia;o__Flavobacteriales;f__Flavobacteriaceae;g__Flavobacterium;s__Flavobacterium_sp.
         seq_4	LN563935.1.1317	400	0.9975124597549438	401	1	0	0	402	298	700	+	d__Bacteria;sg__FCB;dv__Bacteroidetes;sdv__Bacteroidetes_X;c__Bacteroidia;o__Sphingobacteriales;f__Sphingobacteriaceae;g__Pedobacter;s__Pedobacter_sp.
         seq_5	EF018928.1.1401	424	0.9953271150588989	426	2	0	0	428	358	786	+	d__Bacteria;sg__PANNAM;dv__Proteobacteria;sdv__Proteobacteria_X;c__Alphaproteobacteria;o__Caulobacterales;f__Caulobacteraceae;g__Caulobacter;s__Caulobacter_sp.
-                """
-            )
-        )
+                """))
 
     with open(dada2_pr2_dir / f"{run}_18S-V9_DADA2-PR2.mseq", "w") as fw:
-        fw.write(
-            dedent(
-                """\
+        fw.write(dedent("""\
         #query	dbhit	bitscore	identity	matches	mismatches	gaps	query_start	query_end	dbhit_start	dbhit_end	strand		SILVA
         seq_1	EF019080.1.1347	400	0.9975124597549438	401	1	0	0	402	331	733	+	d__Bacteria;sg__FCB;dv__Bacteroidetes;sdv__Bacteroidetes_X;c__Bacteroidia;o__Chitinophagales;f__Chitinophagaceae;g__Chitinophaga;s__Chitinophaga_sp.
         seq_2	HE818674.1.1466	402	1	402	0	0	0	402	284	686	+	d__Bacteria;sg__FCB;dv__Bacteroidetes;sdv__Bacteroidetes_X;c__Bacteroidia;o__Cytophagales;f__Spirosomaceae;g__Dyadobacter;s__Dyadobacter_sp.
         seq_3	GQ339135.1.1517	424	0.9953271150588989	426	2	0	0	428	360	788	+	d__Bacteria;sg__FCB;dv__Bacteroidetes;sdv__Bacteroidetes_X;c__Bacteroidia;o__Flavobacteriales;f__Flavobacteriaceae;g__Flavobacterium;s__Flavobacterium_sp.
         seq_4	LN563935.1.1317	400	0.9975124597549438	401	1	0	0	402	298	700	+	d__Bacteria;sg__FCB;dv__Bacteroidetes;sdv__Bacteroidetes_X;c__Bacteroidia;o__Sphingobacteriales;f__Sphingobacteriaceae;g__Pedobacter;s__Pedobacter_sp.
         seq_5	EF018928.1.1401	424	0.9953271150588989	426	2	0	0	428	358	786	+	d__Bacteria;sg__PANNAM;dv__Proteobacteria;sdv__Proteobacteria_X;c__Alphaproteobacteria;o__Caulobacterales;f__Caulobacteraceae;g__Caulobacter;s__Caulobacter_sp.
-                """
-            )
-        )
+                """))
 
 
 def generate_fake_pipeline_no_asvs(amplicon_run_folder, run):
@@ -516,14 +468,10 @@ def generate_fake_pipeline_no_asvs(amplicon_run_folder, run):
             "w",
         ) as fasta,
     ):
-        fasta.write(
-            dedent(
-                f"""\
+        fasta.write(dedent(f"""\
                 >{run}.100-SSU_rRNA_archaea/5-421 100/1 merged_251_171
                 ACTCGGTCTAAAGGGTCCGTAGCCGGTCCAGTAAGTCCCTGCTTAAATCCTACGGCTTAA
-                """
-            )
-        )
+                """))
 
     # TAXONOMY SUMMARY
     os.makedirs(
@@ -1142,9 +1090,7 @@ def test_prefect_analyse_amplicon_flow(
             "w",
         ) as dada2_silva_txt,
     ):
-        dada2_silva_txt.write(
-            dedent(
-                """\
+        dada2_silva_txt.write(dedent("""\
         54	sk__Bacteria	k__	p__Actinomycetota	c__Actinomycetes	o__Kitasatosporales	f__Streptomycetaceae	g__Streptomyces
         20	sk__Bacteria	k__	p__Actinomycetota	c__Actinomycetes	o__Micrococcales	f__Microbacteriaceae
         9	sk__Bacteria	k__	p__Actinomycetota	c__Actinomycetes	o__Micrococcales	f__Micrococcaceae	g__Arthrobacter
@@ -1155,9 +1101,7 @@ def test_prefect_analyse_amplicon_flow(
         2776	sk__Bacteria	k__	p__Bacteroidota	c__Chitinophagia	o__Chitinophagales	f__Chitinophagaceae	g__Chitinophaga
         1566	sk__Bacteria	k__	p__Bacteroidota	c__Cytophagia	o__Cytophagales	f__Spirosomataceae	g__Dyadobacter
         135696	sk__Bacteria	k__	p__Bacteroidota	c__Flavobacteriia	o__Flavobacteriales	f__Flavobacteriaceae	g__Flavobacterium
-        """
-            )
-        )
+        """))
 
     ## Pretend that a human resumed the flow with the biome picker.
     def suspend_side_effect(wait_for_input=None):

@@ -1,7 +1,6 @@
 from pathlib import Path
 
-
-from workflows.data_io_utils.schemas.assembly import StudySummary, AssemblyStudySummary
+from workflows.data_io_utils.schemas.assembly import AssemblyStudySummary, StudySummary
 
 
 class TestStudySummary:

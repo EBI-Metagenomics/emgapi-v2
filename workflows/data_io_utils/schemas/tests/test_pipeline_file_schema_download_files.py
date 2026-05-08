@@ -1,11 +1,11 @@
 import pytest
 
 from analyses.base_models.with_downloads_models import (
+    DownloadFile,
+    DownloadFileIndexFileMetadata,
     DownloadFileMetadata,
     DownloadFileType,
     DownloadType,
-    DownloadFileIndexFileMetadata,
-    DownloadFile,
 )
 from analyses.models import Analysis
 from workflows.data_io_utils.file_rules.common_rules import FileExistsRule

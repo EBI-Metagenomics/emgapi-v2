@@ -1,15 +1,14 @@
-import os
 import json
-import tempfile
+import os
 import shutil
+import tempfile
 from unittest.mock import patch
 
 import pytest
-
+from django.conf import settings
 
 from analyses.models import Biome
-from genomes.models import GenomeCatalogue, Genome
-from django.conf import settings
+from genomes.models import Genome, GenomeCatalogue
 
 genome_config = settings.EMG_CONFIG.genomes
 
@@ -88,11 +87,11 @@ def mock_genome_directory():
 
 
 from workflows.flows.import_genomes_flow import (
-    import_genomes_flow,
-    validate_pipeline_version,
-    parse_options,
-    get_catalogue,
     gather_genome_dirs,
+    get_catalogue,
+    import_genomes_flow,
+    parse_options,
+    validate_pipeline_version,
 )
 from workflows.prefect_utils.testing_utils import run_flow_and_capture_logs
 

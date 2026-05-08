@@ -1,18 +1,18 @@
 import uuid
 from pathlib import Path
-from typing import Union, List
+from typing import List, Union
 
 import click
+from mgnify_pipelines_toolkit.analysis.assembly import study_summary_generator
 from prefect import get_run_logger
 
-from mgnify_pipelines_toolkit.analysis.assembly import study_summary_generator
 from activate_django_first import EMG_CONFIG
 
 from workflows.data_io_utils.file_rules.nodes import Directory
 from workflows.flows.analyse_study_tasks.shared.study_summary import STUDY_SUMMARY_TSV
 from workflows.models import AssemblyAnalysisBatch, AssemblyAnalysisPipeline
-from workflows.prefect_utils.flows_utils import django_db_task as task
 from workflows.prefect_utils.dir_context import chdir
+from workflows.prefect_utils.flows_utils import django_db_task as task
 
 
 @task()
