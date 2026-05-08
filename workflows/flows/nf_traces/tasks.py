@@ -1,11 +1,11 @@
-from typing import Any, Dict, Optional
-import pandas as pd
-import numpy as np
 from datetime import datetime
-from prefect import task, get_run_logger
-from prefect.artifacts import create_markdown_artifact
+from typing import Any, Dict, Optional
 
+import numpy as np
+import pandas as pd
 from django.db.models import Q
+from prefect import get_run_logger, task
+from prefect.artifacts import create_markdown_artifact
 
 from activate_django_first import EMG_CONFIG  # noqa
 

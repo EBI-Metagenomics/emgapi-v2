@@ -1,5 +1,6 @@
-import pytest
 from pathlib import Path
+
+import pytest
 
 import analyses.models
 import workflows.models

@@ -6,15 +6,16 @@ from typing import List, Optional, Union
 from django.conf import settings
 from django.contrib.postgres.indexes import GinIndex
 from django.db import models
-from django.utils import timezone
-from django.db.models import Count, Q, Exists, OuterRef
+from django.db.models import Count, Exists, OuterRef, Q
 from django.db.models.signals import pre_save
 from django.dispatch import receiver
+from django.utils import timezone
 from django.utils.timezone import now
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from analyses.models import TimeStampedModel, Analysis, Study
+from analyses.models import Analysis, Study, TimeStampedModel
 from emgapiv2.model_utils import JSONFieldWithSchema
+
 from .prefect_utils.slurm_policies import _SlurmResubmitPolicy
 from .prefect_utils.slurm_status import SlurmStatus
 from .signals import ready

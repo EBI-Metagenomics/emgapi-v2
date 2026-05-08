@@ -14,11 +14,13 @@ from prefect.deployments import run_deployment
 from activate_django_first import EMG_CONFIG  # noqa: F401
 
 from analyses.models import Analysis
+from workflows.prefect_utils.build_cli_command import cli_command
 from workflows.prefect_utils.flows_utils import (
     django_db_flow as flow,
+)
+from workflows.prefect_utils.flows_utils import (
     django_db_task as task,
 )
-from workflows.prefect_utils.build_cli_command import cli_command
 
 EGGNOG_FOLDER = "eggnog"
 EGGNOG_ANNOTATIONS_SUFFIX = "_emapper_annotations.tsv.gz"

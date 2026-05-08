@@ -3,8 +3,8 @@ import json
 from pathlib import Path
 from unittest.mock import patch
 
-import pytest
 import pandera.pandas as pa
+import pytest
 
 import analyses.models
 from workflows.data_io_utils.miassembler_utils import (

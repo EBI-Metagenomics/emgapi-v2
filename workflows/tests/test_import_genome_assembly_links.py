@@ -7,15 +7,16 @@ from django.core.exceptions import ObjectDoesNotExist
 from prefect import flow
 
 from analyses.models import Assembly, Biome, Run, Sample, Study
-from ena.models import Study as ENAStudy, Sample as ENASample
+from ena.models import Sample as ENASample
+from ena.models import Study as ENAStudy
 from genomes.models import Genome, GenomeAssemblyLink, GenomeCatalogue
 from workflows.flows.import_genome_assembly_links_flow import (
-    import_genome_assembly_links_flow,
-    validate_tsv_file,
-    read_tsv_file,
-    process_tsv_records,
-    find_objects,
     create_links,
+    find_objects,
+    import_genome_assembly_links_flow,
+    process_tsv_records,
+    read_tsv_file,
+    validate_tsv_file,
 )
 from workflows.prefect_utils.testing_utils import run_flow_and_capture_logs
 

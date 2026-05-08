@@ -1,11 +1,11 @@
-from typing import Optional
 from pathlib import Path
+from typing import Optional
 
 import pytest
 
 import analyses.models
-from workflows.prefect_utils.testing_utils import run_flow_and_capture_logs
 import workflows.flows.analyse_study_tasks.amplicon.import_primer_identification_for_imported_analyses as flow_module
+from workflows.prefect_utils.testing_utils import run_flow_and_capture_logs
 
 
 class FakeAnalysis:

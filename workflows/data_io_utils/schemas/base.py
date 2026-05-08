@@ -9,19 +9,20 @@ import pandera.pandas as pa
 from pydantic import BaseModel, Field
 
 from analyses.base_models.with_downloads_models import (
-    DownloadFileMetadata,
-    DownloadFileIndexFileMetadata,
     DownloadFileIndexFile,
+    DownloadFileIndexFileMetadata,
+    DownloadFileMetadata,
 )
 from workflows.data_io_utils.file_rules.base_rules import (
-    FileRule,
     DirectoryRule,
+    FileRule,
     GlobRule,
 )
 from workflows.data_io_utils.file_rules.common_rules import (
     FileExistsRule,
 )
 from workflows.data_io_utils.file_rules.nodes import Directory, File
+
 from .exceptions import PipelineValidationError
 
 logger = logging.getLogger(__name__)

@@ -6,8 +6,8 @@ from django.conf import settings
 from django.core.management import call_command
 from django.utils.timezone import now
 
-from analyses.models import Study, Assembly
 import ena.models as ena_models
+from analyses.models import Assembly, Study
 from workflows.flows.assemble_study_tasks.archive_assembly_dirs import (
     archive_assembly_dirs,
 )

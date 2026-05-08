@@ -1,4 +1,5 @@
 import pytest
+
 from workflows.models import AssemblyAnalysisBatch
 
 

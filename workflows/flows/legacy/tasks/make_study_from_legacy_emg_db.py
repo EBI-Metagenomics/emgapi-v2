@@ -1,9 +1,9 @@
-from prefect import task, get_run_logger
+from prefect import get_run_logger, task
 
 import ena.models
-from analyses.models import Study, Biome
+from analyses.models import Biome, Study
 from workflows.data_io_utils.filenames import accession_prefix_separated_dir_path
-from workflows.data_io_utils.legacy_emg_dbs import LegacyStudy, LegacyBiome
+from workflows.data_io_utils.legacy_emg_dbs import LegacyBiome, LegacyStudy
 
 
 @task

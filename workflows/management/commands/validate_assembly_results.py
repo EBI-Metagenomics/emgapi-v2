@@ -38,7 +38,7 @@ class Command(BaseCommand):
 
             self.stdout.write(
                 self.style.SUCCESS(
-                    f"Validation successful for assembly results in '{options["folder_path"]}'"
+                    f"Validation successful for assembly results in '{options['folder_path']}'"
                 )
             )
 

@@ -1,6 +1,6 @@
 from pathlib import Path
 from textwrap import dedent as _
-from typing import Optional, List
+from typing import List, Optional
 
 from prefect import get_run_logger, suspend_flow_run
 from prefect.deployments import run_deployment
@@ -13,18 +13,18 @@ import analyses.models
 import ena.models
 import workflows.models
 from workflows.ena_utils.ena_api_requests import (
-    get_study_from_ena,
     get_study_assemblies_from_ena,
+    get_study_from_ena,
 )
+from workflows.ena_utils.webin_owner_utils import validate_and_set_webin_owner
 from workflows.flows.analysis.assembly.tasks.create_analyses_for_assemblies import (
     create_analyses_for_assemblies,
 )
 from workflows.flows.assemble_study import get_biomes_as_choices
 from workflows.prefect_utils.analyses_models_helpers import (
-    get_users_as_choices,
     add_study_watchers,
+    get_users_as_choices,
 )
-from workflows.ena_utils.webin_owner_utils import validate_and_set_webin_owner
 from workflows.prefect_utils.flows_utils import django_db_flow as flow
 
 
@@ -99,8 +99,7 @@ def analysis_assembly_study(
         analyse_study_input: AnalyseStudyInput = suspend_flow_run(
             wait_for_input=AnalyseStudyInput.with_initial_data(
                 **initial_data,
-                description=_(
-                    f"""\
+                description=_(f"""\
                         **Assembly Analysis V6**
                         This will analyse all {len(assemblies_accessions)} assemblies of study {ena_study.accession} \
                         using [Assembly Analysis Pipeline V6](https://github.com/EBI-Metagenomics/assembly-analysis-pipeline).
@@ -108,8 +107,7 @@ def analysis_assembly_study(
                         {"**Biome tagger** Please select a Biome for the entire study " + f"[{ena_study.accession}: {ena_study.title}](https://www.ebi.ac.uk/ena/browser/view/{ena_study.accession})." if needs_biome else f"Biome is already set to {mgnify_study.biome} — change here if needed."}
 
                         {"**Webin owner** The study is private. Please provide the Webin account ID of the study owner so they can view their study." if needs_webin else ""}
-                        """
-                ),
+                        """),
             )
         )
 

@@ -25,9 +25,9 @@ from workflows.data_io_utils.file_rules.common_rules import (
 )
 from workflows.data_io_utils.file_rules.mgnify_v6_result_rules import (
     FileConformsToTaxonomyTSVSchemaRule,
+    GlobOfAsvFolderHasRegionFolders,
     GlobOfQcFolderHasFastpAndMultiqc,
     GlobOfTaxonomyFolderHasHtmlAndMseqRule,
-    GlobOfAsvFolderHasRegionFolders,
 )
 from workflows.data_io_utils.file_rules.nodes import Directory, File
 

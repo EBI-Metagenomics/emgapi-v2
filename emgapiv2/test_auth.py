@@ -1,5 +1,4 @@
 import pytest
-
 from ninja_jwt.tokens import SlidingToken
 
 from emgapiv2.api.auth import (

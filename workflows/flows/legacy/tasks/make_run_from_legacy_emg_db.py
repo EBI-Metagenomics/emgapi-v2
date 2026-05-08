@@ -1,7 +1,7 @@
-from prefect import task, get_run_logger
+from prefect import get_run_logger, task
 
-from analyses.models import Study, Run, Sample
-from workflows.data_io_utils.legacy_emg_dbs import LegacyRun, LEGACY_EXPERIMENT_TYPE_MAP
+from analyses.models import Run, Sample, Study
+from workflows.data_io_utils.legacy_emg_dbs import LEGACY_EXPERIMENT_TYPE_MAP, LegacyRun
 
 
 @task

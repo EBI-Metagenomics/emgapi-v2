@@ -5,10 +5,10 @@ from activate_django_first import EMG_CONFIG  # noqa
 
 import analyses.models
 from workflows.data_io_utils.mgnify_v6_utils.amplicon import (
-    import_qc,
-    import_taxonomy,
     import_asv,
     import_primer_identification,
+    import_qc,
+    import_taxonomy,
 )
 from workflows.flows.analyse_study_tasks.shared.analysis_states import AnalysisStates
 from workflows.flows.analyse_study_tasks.shared.copy_v6_pipeline_results import (
@@ -16,8 +16,10 @@ from workflows.flows.analyse_study_tasks.shared.copy_v6_pipeline_results import 
 )
 from workflows.prefect_utils.analyses_models_helpers import mark_analysis_status
 from workflows.prefect_utils.flows_utils import (
-    django_db_task as task,
     django_db_flow as flow,
+)
+from workflows.prefect_utils.flows_utils import (
+    django_db_task as task,
 )
 
 

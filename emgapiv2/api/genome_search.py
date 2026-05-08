@@ -1,11 +1,11 @@
-import logging
-from typing import List, Optional, Dict, Any, Tuple
 import json
+import logging
 from json import JSONDecodeError
+from typing import Any, Dict, List, Optional, Tuple
 
 import httpx
 from django.conf import settings
-from ninja import Schema, Field
+from ninja import Field, Schema
 from ninja.errors import HttpError
 from ninja_extra import api_controller, http_post
 

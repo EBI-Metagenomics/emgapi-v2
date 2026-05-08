@@ -1,8 +1,7 @@
 import logging
 from typing import Iterable
 
-from django.contrib import admin
-from django.contrib import messages
+from django.contrib import admin, messages
 from django.db.models import QuerySet
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404

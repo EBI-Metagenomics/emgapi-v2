@@ -91,16 +91,12 @@ def nextflow_hello_world_command():
             trace_timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
 
             # Write the configuration to the file
-            nf_config.write_text(
-                _(
-                    f"""
+            nf_config.write_text(_(f"""
                 trace {{
                     enabled = true
                     file    = "{workdir}/pipeline_info/execution_trace_{trace_timestamp}.txt"
                 }}
-                """
-                )
-            )
+                """))
 
             command += f" -c {nf_config}"
 

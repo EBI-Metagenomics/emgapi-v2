@@ -1,13 +1,13 @@
-from textwrap import dedent
-import json
+import glob
 import gzip
+import json
 import logging
 import os
 import re
 import shutil
-import glob
 from enum import Enum
 from pathlib import Path
+from textwrap import dedent
 from typing import List, Optional, Union
 from unittest.mock import Mock, patch
 
@@ -16,27 +16,25 @@ from django.conf import settings
 from prefect.artifacts import Artifact
 from pydantic import BaseModel
 
-from workflows.data_io_utils.file_rules.base_rules import GlobRule
-
-import analyses.models
 import analyses.base_models.with_experiment_type_models
-from workflows.data_io_utils.file_rules.base_rules import FileRule
+import analyses.models
+from workflows.data_io_utils.file_rules.base_rules import FileRule, GlobRule
 from workflows.data_io_utils.file_rules.common_rules import GlobHasFilesCountRule
 from workflows.data_io_utils.file_rules.nodes import Directory
 from workflows.ena_utils.ena_api_requests import ENALibraryStrategyPolicy
+from workflows.flows.analyse_study_tasks.cleanup_pipeline_directories import (
+    # delete_study_results_dir,
+    delete_study_nextflow_workdir,
+)
 from workflows.flows.analyse_study_tasks.shared.study_summary import (
-    merge_study_summaries,
     STUDY_SUMMARY_TSV,
+    merge_study_summaries,
 )
 from workflows.flows.analysis_rawreads_study import analysis_rawreads_study
 from workflows.prefect_utils.analyses_models_helpers import get_users_as_choices
 from workflows.prefect_utils.testing_utils import (
-    should_not_mock_httpx_requests_to_prefect_server,
     run_flow_and_capture_logs,
-)
-from workflows.flows.analyse_study_tasks.cleanup_pipeline_directories import (
-    # delete_study_results_dir,
-    delete_study_nextflow_workdir,
+    should_not_mock_httpx_requests_to_prefect_server,
 )
 
 EMG_CONFIG = settings.EMG_CONFIG
@@ -62,18 +60,14 @@ def generate_fake_rawreads_pipeline_results(
     # Create multiqc directory and subdirectories
     logger.info(f"Creating dummy study multiqc results at {results_dir}")
     with open(f"{results_dir}/study_multiqc_report.html", "wt") as f:
-        f.write(
-            dedent(
-                """\
+        f.write(dedent("""\
                 <html>
                 <body>
                 <h1>MultiQC report</h1>
                 Looks good to me!
                 </body>
                 </html>
-                """
-            )
-        )
+                """))
 
     # Create function-summary directory and subdirectories
     if make_functional:
@@ -82,9 +76,7 @@ def generate_fake_rawreads_pipeline_results(
         pfam_dir = f"{func_dir}/pfam"
         os.makedirs(pfam_dir, exist_ok=True)
         with gzip.open(f"{pfam_dir}/{sample_accession}_pfam.txt.gz", "wb") as f:
-            f.write(
-                dedent(
-                    """\
+            f.write(dedent("""\
                     # function	read_count	coverage_depth	coverage_breadth
                     PF21175.2	1	0.9583333333333334	0.9583333333333334
                     PF10418.14	1	0.926829268292683	0.926829268292683
@@ -149,9 +141,7 @@ def generate_fake_rawreads_pipeline_results(
                     PF13597.11	1	0.060498220640569395	0.060498220640569395
                     PF02901.20	1	0.06027820710973725	0.06027820710973725
                     PF09586.16	1	0.045508982035928146	0.045508982035928146
-                    """
-                ).encode()
-            )
+                    """).encode())
         os.makedirs(f"{pfam_dir}", exist_ok=True)
         with open(f"{pfam_dir}/{sample_accession}_pfam.stats.json", "wt") as f:
             f.write(r'{"reads_mapped": 67, "hmm_count": 63, "read_hit_count": 67}')
@@ -164,17 +154,13 @@ def generate_fake_rawreads_pipeline_results(
     motus_dir = f"{tax_dir}/motus"
     os.makedirs(motus_dir, exist_ok=True)
     with gzip.open(f"{motus_dir}/{sample_accession}_motus.txt.gz", "wb") as f:
-        f.write(
-            dedent(
-                """\
+        f.write(dedent("""\
                 # Count	Kingdom	Phylum	Class	Order	Family	Genus	Species
                 1.0	k__Bacteria	p__Firmicutes	c__Bacilli	o__Lactobacillales	f__Lactobacillaceae	g__Lactobacillus	s__Lactobacillus gasseri
                 2.0	k__Bacteria	p__Actinobacteria	c__Actinobacteria	o__Bifidobacteriales	f__Bifidobacteriaceae	g__Bifidobacterium	s__Bifidobacterium longum [Bifidobacterium longum CAG:69/Bifidobacterium longum]
                 1.0	k__Bacteria	p__Bacteroidetes	c__Bacteroidia	o__Bacteroidales	f__Bacteroidaceae	g__Bacteroides	s__Bacteroides thetaiotaomicron
                 2.0	unassigned
-                """
-            ).encode()
-        )
+                """).encode())
     with open(f"{motus_dir}/{sample_accession}_motus.html", "w"):
         pass
 
@@ -182,9 +168,7 @@ def generate_fake_rawreads_pipeline_results(
     silvassu_dir = f"{tax_dir}/silva-ssu"
     os.makedirs(silvassu_dir, exist_ok=True)
     with gzip.open(f"{silvassu_dir}/{sample_accession}_silva-ssu.txt.gz", "wb") as f:
-        f.write(
-            dedent(
-                """\
+        f.write(dedent("""\
                 # Count	Superkingdom	Kingdom	Phylum	Class	Order	Family	Genus	Species
                 1	sk__Bacteria	k__	p__Actinomycetota
                 1	sk__Bacteria	k__	p__Actinomycetota	c__Actinomycetes
@@ -203,9 +187,7 @@ def generate_fake_rawreads_pipeline_results(
                 1	sk__Bacteria	k__	p__Bacteroidota	c__Bacteroidia	o__Bacteroidales	f__Prevotellaceae
                 2	sk__Bacteria	k__	p__Pseudomonadota	c__Gammaproteobacteria	o__Enterobacterales
                 2	sk__Bacteria	k__	p__Pseudomonadota	c__Gammaproteobacteria	o__Enterobacterales	f__Enterobacteriaceae
-                """
-            ).encode()
-        )
+                """).encode())
     with open(f"{silvassu_dir}/{sample_accession}_silva-ssu.html", "w"):
         pass
 
@@ -213,9 +195,7 @@ def generate_fake_rawreads_pipeline_results(
     silvalsu_dir = f"{tax_dir}/silva-lsu"
     os.makedirs(silvalsu_dir, exist_ok=True)
     with gzip.open(f"{silvalsu_dir}/{sample_accession}_silva-lsu.txt.gz", "wb") as f:
-        f.write(
-            dedent(
-                """\
+        f.write(dedent("""\
                 # Count	Superkingdom	Kingdom	Phylum	Class	Order	Family	Genus	Species
                 12	sk__Bacteria
                 1	sk__Bacteria	k__	p__Bacillota	c__Bacilli	o__Lactobacillales	f__Streptococcaceae	g__Streptococcus	s__Streptococcus_pneumoniae
@@ -227,9 +207,7 @@ def generate_fake_rawreads_pipeline_results(
                 5	sk__Eukaryota	k__Metazoa
                 5	sk__Eukaryota	k__Viridiplantae
                 1	sk__Eukaryota	k__Viridiplantae	p__Streptophyta	c__Magnoliopsida	o__Fabales
-                """
-            ).encode()
-        )
+                """).encode())
     with open(f"{silvalsu_dir}/{sample_accession}_silva-lsu.html", "w"):
         pass
 
@@ -238,9 +216,7 @@ def generate_fake_rawreads_pipeline_results(
     logger.info(f"Creating dummy QC results at {qc_dir}")
     os.makedirs(qc_dir, exist_ok=True)
     with open(f"{qc_dir}/{sample_accession}_decontamination.fastp.json", "wt") as f:
-        f.write(
-            dedent(
-                """\
+        f.write(dedent("""\
                 {
                     "summary": {
                         "fastp_version": "0.24.0",
@@ -277,14 +253,10 @@ def generate_fake_rawreads_pipeline_results(
                         "too_long_reads": 0
                     }
                 }
-                """
-            )
-        )
+                """))
 
     with open(f"{qc_dir}/{sample_accession}_qc.fastp.json", "wt") as f:
-        f.write(
-            dedent(
-                """\
+        f.write(dedent("""\
                 {
                     "summary": {
                         "fastp_version": "0.24.0",
@@ -320,23 +292,17 @@ def generate_fake_rawreads_pipeline_results(
                         "too_long_reads": 0
                     }
                 }
-                """
-            )
-        )
+                """))
 
     with open(f"{qc_dir}/{sample_accession}_multiqc_report.html", "wt") as f:
-        f.write(
-            dedent(
-                """\
+        f.write(dedent("""\
                 <html>
                 <body>
                 <h1>MultiQC report</h1>
                 Looks good to me!
                 </body>
                 </html>
-                """
-            )
-        )
+                """))
 
 
 def simulate_copy_results(
@@ -1270,7 +1236,7 @@ def test_prefect_analyse_rawreads_flow_private_data(
     )
 
     # need to log the directory contents
-    logging.info(f"Contents of {(summary_dir / "summaries")}:")
+    logging.info(f"Contents of {(summary_dir / 'summaries')}:")
     for fp in (summary_dir / "summaries").glob("*"):
         logging.info(fp)
 

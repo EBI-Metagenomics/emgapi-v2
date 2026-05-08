@@ -1,4 +1,4 @@
-from ninja_extra import api_controller, ControllerBase, http_get, paginate
+from ninja_extra import ControllerBase, api_controller, http_get, paginate
 from ninja_extra.schemas import NinjaPaginationResponseSchema
 
 import analyses.models

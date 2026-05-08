@@ -1,8 +1,8 @@
-import os
-import glob
-import logging
-import json
 import csv
+import glob
+import json
+import logging
+import os
 
 from analyses.base_models.with_downloads_models import DownloadFileIndexFile
 
@@ -701,8 +701,8 @@ def prepare_downloadable_file(
     """
     from analyses.base_models.with_downloads_models import (
         DownloadFile,
-        DownloadType,
         DownloadFileType,
+        DownloadType,
     )
 
     # File type mapping

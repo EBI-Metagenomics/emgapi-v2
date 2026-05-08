@@ -1,11 +1,13 @@
-import pytest
 from unittest.mock import MagicMock, patch
+
+import pytest
+
 from analyses.models import Analysis
 from workflows.flows.analysis import AnalysisType
-from workflows.models import AssemblyAnalysisBatch
 from workflows.flows.analysis.assembly.flows.finalize_assembly_study import (
     finalize_assembly_study,
 )
+from workflows.models import AssemblyAnalysisBatch
 
 
 @pytest.mark.django_db
