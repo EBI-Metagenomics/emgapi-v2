@@ -5,11 +5,11 @@ from typing import List
 from prefect import get_run_logger
 
 from analyses.models import Analysis
+from workflows.flows.analyse_study_tasks.shared.analysis_states import AnalysisStates
 from workflows.models import (
     AssemblyAnalysisBatchAnalysis,
     AssemblyAnalysisPipelineStatus,
 )
-from workflows.flows.analyse_study_tasks.shared.analysis_states import AnalysisStates
 from workflows.prefect_utils.flows_utils import django_db_task as task
 
 

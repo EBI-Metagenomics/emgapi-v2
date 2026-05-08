@@ -137,6 +137,7 @@ def test_genome_search_forwards_seq_key_to_backend(
 ):
     """The COBS backend expects 'seq', not 'sequence'. Verify the translation happens."""
     import io
+
     from django.http import QueryDict
 
     captured = {}

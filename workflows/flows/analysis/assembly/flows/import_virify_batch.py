@@ -1,4 +1,5 @@
 import uuid
+
 from prefect import get_run_logger
 
 from activate_django_first import EMG_CONFIG  # noqa
@@ -9,11 +10,10 @@ from workflows.flows.analysis.assembly.tasks.assembly_analysis_batch_results_imp
 from workflows.flows.analysis.assembly.tasks.process_import_results import (
     process_import_results,
 )
-
 from workflows.models import (
+    AssemblyAnalysisBatch,
     AssemblyAnalysisPipeline,
     AssemblyAnalysisPipelineStatus,
-    AssemblyAnalysisBatch,
 )
 from workflows.prefect_utils.flows_utils import django_db_flow as flow
 

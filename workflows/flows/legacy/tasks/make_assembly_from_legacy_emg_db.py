@@ -1,13 +1,13 @@
-from prefect import task, get_run_logger
+from prefect import get_run_logger, task
 from sqlalchemy import select
 
-from analyses.models import Study, Sample, Assembly
+from analyses.models import Assembly, Sample, Study
 from workflows.data_io_utils.legacy_emg_dbs import (
     LegacyAssembly,
-    LegacySample,
+    LegacyAssemblyRun,
     LegacyAssemblySample,
     LegacyRun,
-    LegacyAssemblyRun,
+    LegacySample,
 )
 from workflows.ena_utils.ena_api_requests import sync_sample_metadata_from_ena
 from workflows.flows.legacy.tasks.make_run_from_legacy_emg_db import (

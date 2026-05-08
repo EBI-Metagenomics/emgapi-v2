@@ -1,14 +1,14 @@
-import pytest
-from django.core.management import call_command
-from django.db.models import Count
-from django.contrib.postgres.aggregates import ArrayAgg
-
 import logging
 
-from analyses.models import Study as MGnifyStudy
+import pytest
+from django.contrib.postgres.aggregates import ArrayAgg
+from django.core.management import call_command
+from django.db.models import Count
+
 from analyses.models import Assembly, Run, Sample
-from ena.models import Study as ENAStudy
+from analyses.models import Study as MGnifyStudy
 from ena.models import Sample as ENASample
+from ena.models import Study as ENAStudy
 from workflows.prefect_utils.testing_utils import combine_caplog_records
 
 

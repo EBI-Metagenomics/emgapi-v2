@@ -1,6 +1,7 @@
 from django.core.management.base import BaseCommand
-from analyses.models import Study, Analysis
+
 from analyses.base_models.with_experiment_type_models import WithExperimentTypeModel
+from analyses.models import Analysis, Study
 
 
 class Command(BaseCommand):

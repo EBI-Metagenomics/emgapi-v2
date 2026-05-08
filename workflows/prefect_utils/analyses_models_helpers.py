@@ -1,12 +1,11 @@
 import logging
 from enum import Enum
-from typing import List, TypeVar, Type
+from typing import List, Type, TypeVar
 
 from django.contrib.auth.models import User
 from prefect import task
 
 from analyses.models import Analysis, Assembly, Study
-
 
 logger = logging.getLogger(__name__)
 

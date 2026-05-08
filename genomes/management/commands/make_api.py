@@ -1,7 +1,7 @@
-from django.core.management.base import BaseCommand
 import os
 import re
 
+from django.core.management.base import BaseCommand
 
 # TODO: move to separate app and perform tests
 

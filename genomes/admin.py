@@ -2,7 +2,7 @@ from django.contrib import admin
 from unfold.admin import ModelAdmin
 
 from analyses.admin.base import JSONFieldWidgetOverridesMixin
-from genomes.models import GenomeCatalogue, Genome
+from genomes.models import Genome, GenomeCatalogue
 
 
 @admin.register(GenomeCatalogue)

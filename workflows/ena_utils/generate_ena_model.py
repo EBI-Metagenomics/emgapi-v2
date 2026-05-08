@@ -16,6 +16,7 @@ https://www.ebi.ac.uk/ena/portal/api/searchFields?dataPortal=metagenome&result=a
 and an ENAAnalysisFields enum based on the fields returned by
 https://www.ebi.ac.uk/ena/portal/api/returnFields?dataPortal=metagenome&result=analysis.
 """
+
 import argparse
 import sys
 from datetime import date

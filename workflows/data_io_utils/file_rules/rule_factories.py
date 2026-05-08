@@ -1,7 +1,7 @@
-import logging
 import gzip
+import logging
 from pathlib import Path
-from typing import Type, Iterable, Hashable
+from typing import Hashable, Iterable, Type
 
 from pydantic import BaseModel, ValidationError
 

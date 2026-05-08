@@ -1,4 +1,4 @@
-from typing import Optional, Literal
+from typing import Literal, Optional
 
 from ninja import Field, Query
 from ninja_extra import api_controller, http_get, paginate
@@ -13,13 +13,13 @@ from analyses.schemas import (
     OrderByFilter,
 )
 from emgapiv2.api import perms
-from emgapiv2.api.auth import WebinJWTAuth, NoAuth, DjangoSuperUserAuth
+from emgapiv2.api.auth import DjangoSuperUserAuth, NoAuth, WebinJWTAuth
 from emgapiv2.api.perms import UnauthorisedIsUnfoundController
 from emgapiv2.api.schema_utils import (
-    make_links_section,
-    make_related_detail_link,
     ApiSections,
     BiomeFilter,
+    make_links_section,
+    make_related_detail_link,
 )
 
 

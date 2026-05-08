@@ -7,7 +7,7 @@ from prefect import flow
 from activate_django_first import EMG_CONFIG
 
 from workflows.prefect_utils.slurm_flow import run_cluster_job
-from workflows.prefect_utils.slurm_policies import _SlurmResubmitPolicy, ANYTHING
+from workflows.prefect_utils.slurm_policies import ANYTHING, _SlurmResubmitPolicy
 
 
 @flow(

@@ -234,6 +234,9 @@ fileignoreconfig:
 - filename: workflows/flows/import_assemblies_from_filesystem_flow.py
   allowed_patterns: [key]
 
+- filename: .git-blame-ignore-revs
+  ignore_detectors: [filecontent]
+
 allowed_patterns:
 - cache_key_fn
 - CommonMetadataKeys

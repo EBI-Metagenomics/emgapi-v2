@@ -1,16 +1,17 @@
 from pathlib import Path
 from typing import Optional
 
-from workflows.prefect_utils.flows_utils import (
-    django_db_flow as flow,
-    django_db_task as task,
-)
-
 from activate_django_first import EMG_CONFIG  # noqa: F401  # Ensure Django is setup
 
 import analyses.models
 from workflows.data_io_utils.mgnify_v6_utils.amplicon import (
     import_primer_identification,
+)
+from workflows.prefect_utils.flows_utils import (
+    django_db_flow as flow,
+)
+from workflows.prefect_utils.flows_utils import (
+    django_db_task as task,
 )
 
 

@@ -1,13 +1,14 @@
+import sys
 from pathlib import Path
-from typing import Dict, Iterable, List, Optional, Tuple, Set
+from typing import Dict, Iterable, List, Optional, Set, Tuple
 
 from django.db import transaction
-from prefect import flow, task, get_run_logger
+from prefect import flow, get_run_logger, task
 
 from activate_django_first import EMG_CONFIG
 
 from analyses.models import Assembly, Run
-from genomes.models import Genome, AdditionalContainedGenomes
+from genomes.models import AdditionalContainedGenomes, Genome
 from workflows.data_io_utils.csv.csv_comment_handler import (
     CommentAwareDictReader,
     CSVDelimiter,
@@ -17,7 +18,6 @@ from workflows.data_io_utils.file_rules.common_rules import (
     FileIsNotEmptyRule,
 )
 from workflows.data_io_utils.file_rules.nodes import File
-import sys
 
 genome_config = EMG_CONFIG.genomes
 

@@ -5,7 +5,7 @@ from uuid import UUID
 from django.core.management.base import BaseCommand
 from django.utils.timezone import now
 from pendulum import DateTime
-from prefect import get_client, State
+from prefect import State, get_client
 from prefect.client.orchestration import SyncPrefectClient
 from prefect.server.schemas.states import StateType
 
@@ -14,7 +14,6 @@ from workflows.prefect_utils.find_parent_flow_run import (
     find_parent_flow_runs_recursively,
 )
 from workflows.prefect_utils.slurm_status import SlurmStatus
-
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)

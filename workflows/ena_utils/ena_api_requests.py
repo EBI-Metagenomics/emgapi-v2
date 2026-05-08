@@ -2,7 +2,7 @@ import logging
 import operator
 from datetime import timedelta
 from functools import reduce
-from typing import List, Optional, Type, Union, Literal
+from typing import List, Literal, Optional, Type, Union
 
 from django.conf import settings
 from httpx import Auth
@@ -23,7 +23,7 @@ from workflows.ena_utils.ena_auth import dcc_auth
 from workflows.ena_utils.read_run import ENAReadRunFields, ENAReadRunQuery
 from workflows.ena_utils.requestors import ENAAPIRequest, ENAAvailabilityException
 from workflows.ena_utils.sample import ENASampleFields, ENASampleQuery
-from workflows.ena_utils.study import ENAStudyQuery, ENAStudyFields
+from workflows.ena_utils.study import ENAStudyFields, ENAStudyQuery
 
 ALLOWED_LIBRARY_SOURCE: list = ["METAGENOMIC", "METATRANSCRIPTOMIC"]
 SINGLE_END_LIBRARY_LAYOUT: str = "SINGLE"

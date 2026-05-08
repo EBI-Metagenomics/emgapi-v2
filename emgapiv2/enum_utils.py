@@ -1,5 +1,4 @@
 import aenum
-
 from django.utils.version import PY311
 
 # Define StrEnum for Python3.10, to work like 3.11+

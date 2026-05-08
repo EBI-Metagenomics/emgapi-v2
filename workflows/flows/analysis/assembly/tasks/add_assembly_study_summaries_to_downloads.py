@@ -6,8 +6,8 @@ from activate_django_first import EMG_CONFIG
 
 from analyses.base_models.with_downloads_models import (
     DownloadFile,
-    DownloadType,
     DownloadFileType,
+    DownloadType,
 )
 from analyses.models import Study
 from workflows.data_io_utils.schemas.assembly import AssemblyStudySummary

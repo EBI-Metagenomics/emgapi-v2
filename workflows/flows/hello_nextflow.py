@@ -7,8 +7,8 @@ from prefect import flow
 
 from activate_django_first import EMG_CONFIG
 
-from workflows.prefect_utils.slurm_policies import ResubmitAlwaysPolicy
 from workflows.prefect_utils.slurm_flow import run_cluster_job
+from workflows.prefect_utils.slurm_policies import ResubmitAlwaysPolicy
 
 
 @flow(
@@ -31,16 +31,12 @@ def hello_nextflow(with_trace_flag: bool = True):
         trace_timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
 
         # Write the configuration to the file
-        nf_config.write_text(
-            _(
-                f"""
+        nf_config.write_text(_(f"""
             trace {{
                 enabled = true
                 file    = "{workdir}/pipeline_info/execution_trace_{trace_timestamp}.txt"
             }}
-            """
-            )
-        )
+            """))
 
         command += f" -c {nf_config}"
 

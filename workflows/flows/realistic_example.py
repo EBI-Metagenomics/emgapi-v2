@@ -9,14 +9,13 @@ from prefect.input import RunInput
 
 from activate_django_first import EMG_CONFIG
 
-from workflows.prefect_utils.slurm_policies import (
-    ResubmitWithCleanedNextflowIfFailedPolicy,
-)
-
 from ena.models import Sample, Study
 from workflows.prefect_utils.slurm_flow import (
     ClusterJobFailedException,
     run_cluster_job,
+)
+from workflows.prefect_utils.slurm_policies import (
+    ResubmitWithCleanedNextflowIfFailedPolicy,
 )
 
 
@@ -94,14 +93,12 @@ def realistic_example(accession: str):
     download_options: DownloadOptionsInput = suspend_flow_run(
         wait_for_input=DownloadOptionsInput.with_initial_data(
             samples_limit=10,
-            description=dedent(
-                f"""\
+            description=dedent(f"""\
                 **ENA Downloader**
                 This will download read-runs from ENA.
 
                 Please pick how many samples (the max limit) to download for the study {study.accession}.
-            """
-            ),
+            """),
         )
     )
 

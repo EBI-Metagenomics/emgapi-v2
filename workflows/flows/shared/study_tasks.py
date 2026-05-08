@@ -1,7 +1,7 @@
 from prefect import get_run_logger
 
-from analyses.models import Study
 import ena.models
+from analyses.models import Study
 from workflows.ena_utils.ena_api_requests import get_study_from_ena
 from workflows.prefect_utils.flows_utils import django_db_task as task
 

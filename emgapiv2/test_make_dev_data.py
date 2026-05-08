@@ -1,10 +1,10 @@
 from pathlib import Path
-from unittest.mock import patch, Mock
+from unittest.mock import Mock, patch
 
 import pytest
 from django.core.management import call_command
 
-from analyses.models import Biome, Run, Analysis
+from analyses.models import Analysis, Biome, Run
 from workflows.data_io_utils.mgnify_v6_utils.assembly import AssemblyResultImporter
 from workflows.data_io_utils.schemas import AssemblyResultSchema, MapResultSchema
 from workflows.flows.analyse_study_tasks.amplicon.import_completed_amplicon_analyses import (

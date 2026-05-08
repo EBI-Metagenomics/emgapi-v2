@@ -4,19 +4,19 @@ import pymongo
 import pytest
 from sqlalchemy import select
 
-from analyses.models import Analysis, Study, Sample
 import ena.models
-from workflows.flows.legacy.tasks.make_sample_from_legacy_emg_db import (
-    make_sample_from_legacy_emg_db,
-)
+from analyses.models import Analysis, Sample, Study
 from workflows.data_io_utils.legacy_emg_dbs import (
-    LegacyStudy,
     LegacySample,
+    LegacyStudy,
     legacy_emg_db_session,
 )
 from workflows.flows.legacy.flows.import_legacy_analyses import (
-    import_legacy_analyses,
     import_all_legacy_analyses,
+    import_legacy_analyses,
+)
+from workflows.flows.legacy.tasks.make_sample_from_legacy_emg_db import (
+    make_sample_from_legacy_emg_db,
 )
 from workflows.prefect_utils.testing_utils import (
     run_flow_and_capture_logs,

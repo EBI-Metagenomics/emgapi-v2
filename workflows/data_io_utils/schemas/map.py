@@ -2,20 +2,21 @@ from activate_django_first import EMG_CONFIG
 
 import analyses.models
 from analyses.base_models.with_downloads_models import (
+    DownloadFileIndexFileMetadata,
     DownloadFileType,
     DownloadType,
-    DownloadFileIndexFileMetadata,
 )
 from workflows.data_io_utils.file_rules.common_rules import (
     DirectoryExistsRule,
     FileExistsRule,
     FileIsNotEmptyRule,
 )
+
 from .base import (
-    PipelineFileSchema,
-    PipelineDirectorySchema,
-    PipelineResultSchema,
     DownloadFileMetadata,
+    PipelineDirectorySchema,
+    PipelineFileSchema,
+    PipelineResultSchema,
 )
 
 
