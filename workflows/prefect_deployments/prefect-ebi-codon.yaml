@@ -68,6 +68,7 @@ deployments:
     :raises Exception: For any unexpected errors encountered during the pipeline execution.
   entrypoint: workflows/flows/analysis/assembly/flows/run_assembly_analysis_pipeline_batch.py:run_assembly_batch
   schedule: null
+  concurrency_limit: 5
   work_pool:
     name: slurm
 
@@ -90,6 +91,7 @@ deployments:
     :raises Exception: For any unexpected errors during pipeline execution.
   entrypoint: workflows/flows/analysis/assembly/flows/run_virify_batch.py:run_virify_batch
   schedule: null
+  concurrency_limit: 5
   work_pool:
     name: slurm
 
@@ -112,6 +114,7 @@ deployments:
     :param raise_on_failure: Raise an exception if the MAP pipeline fails
   entrypoint: workflows/flows/analysis/assembly/flows/run_map_batch.py:run_map_batch
   schedule: null
+  concurrency_limit: 5
   work_pool:
     name: slurm
 
