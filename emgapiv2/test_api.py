@@ -288,6 +288,45 @@ def test_api_genome_catalogues(ninja_api_client, genomes, genome_catalogues):
 
 
 @pytest.mark.django_db
+def test_api_genome_catalogue_downloads(ninja_api_client, genome_catalogues):
+    # Arrange: ensure the selected catalogue has a result_directory and one download
+    cat = next(c for c in genome_catalogues if c.catalogue_id == "human-gut-prokaryotes")
+    cat.result_directory = "genomes/catalogues/human-gut-prokaryotes"
+    # Persist a download using the model helper so JSON shape matches production
+    dl = DownloadFile(
+        path="catalogue_meta/summary.tsv",
+        alias="summary.tsv",
+        download_type=DownloadType.OTHER,
+        file_type=DownloadFileType.TSV,
+        short_description="Summary table",
+        long_description="Overall catalogue summary",
+    )
+    # Save result_directory first so URL resolver has it available when endpoint serializes
+    cat.save()
+    cat.add_download(dl)
+
+    # Act: fetch the catalogue detail
+    data = call_endpoint_and_get_data(
+        ninja_api_client, f"/genomes/catalogues/{cat.catalogue_id}", getter=_whole_object
+    )
+
+    # Assert: downloads are exposed with computed URL and without internal fields
+    assert "downloads" in data
+    assert isinstance(data["downloads"], list)
+    assert len(data["downloads"]) >= 1
+
+    entry = next((d for d in data["downloads"] if d.get("alias") == "summary.tsv"), data["downloads"][0])
+    assert "url" in entry
+    assert entry["url"] is not None
+    # URL should be rooted at transfer service and include the result_directory + relative path
+    assert entry["url"].startswith(EMG_CONFIG.service_urls.transfer_services_url_root)
+    assert "genomes/catalogues/human-gut-prokaryotes/catalogue_meta/summary.tsv" in entry["url"]
+    # Internal fields must not leak into the API
+    assert "path" not in entry
+    assert "parent_identifier" not in entry
+
+
+@pytest.mark.django_db
 def test_publication_annotations(ninja_api_client, publication, httpx_mock):
     httpx_mock.add_response(
         url=f"{EMG_CONFIG.europe_pmc.annotations_endpoint}?articleIds=MED:{publication.pubmed_id}&provider={EMG_CONFIG.europe_pmc.annotations_provider}",
