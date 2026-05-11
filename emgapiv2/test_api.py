@@ -619,6 +619,29 @@ def test_list_sample_runs(ninja_api_client, raw_reads_mgnify_sample, raw_read_ru
 
 
 @pytest.mark.django_db
+def test_list_sample_assemblies(
+    ninja_api_client, raw_reads_mgnify_sample, mgnify_assemblies_with_ena
+):
+    sample: Sample = raw_reads_mgnify_sample[0]
+
+    # Check that sample actually has assemblies in the fixture
+    assert sample.assemblies.count() > 0, "Sample should have assemblies in fixtures"
+
+    items: list = call_endpoint_and_get_data(
+        ninja_api_client,
+        f"/samples/{sample.ena_accessions[0]}/assemblies/",
+        count=sample.assemblies.count(),
+    )
+
+    for assembly in items:
+        assert assembly["accession"] in [
+            a.first_accession for a in sample.assemblies.all()
+        ]
+        assert "sample_accession" in assembly
+        assert assembly["sample_accession"] == sample.ena_sample.accession
+
+
+@pytest.mark.django_db
 def test_runs_assemblies_list(
     ninja_api_client, raw_read_run, mgnify_assemblies_with_ena
 ):
