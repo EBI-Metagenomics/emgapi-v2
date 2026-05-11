@@ -14,11 +14,13 @@ repos:
     rev: 26.3.1
     hooks:
       - id: black
+        language_version: python3.11
         exclude: ^.*\b(migrations)\b.*$
   - repo: https://github.com/adrienverge/yamllint
     rev: v1.38.0
     hooks:
       - id: yamllint
+        language_version: python3.11
         args: [--format, parsable, --strict, -c=.yamllint]
   - repo: https://github.com/thoughtworks/talisman
     rev: 'v1.37.0'

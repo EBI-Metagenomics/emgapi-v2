@@ -1,8 +1,11 @@
 from datetime import datetime
 from typing import TYPE_CHECKING, Dict, Literal, Optional
-from genomes.schemas.MGnifyGenomeCatalogueDownloadFile import MGnifyGenomeCatalogueDownloadFile
 
 from ninja import Field, Schema
+
+from genomes.schemas.MGnifyGenomeCatalogueDownloadFile import (
+    MGnifyGenomeCatalogueDownloadFile,
+)
 
 if TYPE_CHECKING:
     from analyses.schemas import Biome
