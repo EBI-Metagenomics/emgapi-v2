@@ -1,23 +1,23 @@
 import pandas as pd
-import pytest
 import pandera.pandas as pa
+import pytest
 from pandera.typing import Series
 
-from workflows.data_io_utils.file_rules.common_rules import (
-    FileExistsRule,
-    FileIfExistsIsNotEmptyRule,
-)
-from workflows.data_io_utils.schemas.base import (
-    PipelineFileSchema,
-    PipelineDirectorySchema,
-    PipelineResultSchema,
-)
-from workflows.data_io_utils.schemas.exceptions import PipelineValidationError
 from analyses.base_models.with_downloads_models import (
     DownloadFileMetadata,
     DownloadFileType,
     DownloadType,
 )
+from workflows.data_io_utils.file_rules.common_rules import (
+    FileExistsRule,
+    FileIfExistsIsNotEmptyRule,
+)
+from workflows.data_io_utils.schemas.base import (
+    PipelineDirectorySchema,
+    PipelineFileSchema,
+    PipelineResultSchema,
+)
+from workflows.data_io_utils.schemas.exceptions import PipelineValidationError
 
 
 class SimpleContentValidator(pa.DataFrameModel):

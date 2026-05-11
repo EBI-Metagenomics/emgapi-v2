@@ -5,11 +5,11 @@ from typing import List
 from prefect.tasks import task_input_hash
 
 from activate_django_first import EMG_CONFIG
-from workflows.flows.analyse_study_tasks.shared.analysis_states import AnalysisStates
 
 from workflows.flows.analyse_study_tasks.amplicon.sanity_check_amplicon_results import (
     sanity_check_amplicon_results,
 )
+from workflows.flows.analyse_study_tasks.shared.analysis_states import AnalysisStates
 from workflows.prefect_utils.analyses_models_helpers import mark_analysis_status
 from workflows.prefect_utils.flows_utils import django_db_task as task
 

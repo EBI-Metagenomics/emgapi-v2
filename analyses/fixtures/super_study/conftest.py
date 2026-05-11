@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 from django.core.files.uploadedfile import SimpleUploadedFile
 
-from analyses.models import SuperStudy, SuperStudyStudy, SuperStudyGenomeCatalogue
+from analyses.models import SuperStudy, SuperStudyGenomeCatalogue, SuperStudyStudy
 
 
 @pytest.fixture

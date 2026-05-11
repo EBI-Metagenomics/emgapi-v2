@@ -3,14 +3,14 @@ from django.urls import reverse
 from django.utils.html import format_html
 from unfold.admin import ModelAdmin, TabularInline
 from unfold.contrib.filters.admin import AutocompleteSelectMultipleFilter
-from unfold.decorators import display, action
+from unfold.decorators import action, display
 
 from analyses.admin.base import JSONFieldWidgetOverridesMixin
 from workflows.models import (
     AssemblyAnalysisBatch,
     AssemblyAnalysisBatchAnalysis,
-    AssemblyAnalysisPipelineStatus,
     AssemblyAnalysisPipeline,
+    AssemblyAnalysisPipelineStatus,
 )
 
 

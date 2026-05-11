@@ -2,7 +2,6 @@ from pathlib import Path
 
 from workflows.data_io_utils.filenames import accession_prefix_separated_dir_path
 
-
 MIASSEMBLER_ACCESSION_PREFIX_LENGTH = 7
 
 

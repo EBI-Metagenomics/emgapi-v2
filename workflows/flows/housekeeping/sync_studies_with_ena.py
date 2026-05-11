@@ -7,6 +7,8 @@ import ena.models
 from workflows.ena_utils.ena_api_requests import sync_study_metadata_from_ena
 from workflows.prefect_utils.flows_utils import (
     django_db_flow as flow,
+)
+from workflows.prefect_utils.flows_utils import (
     django_db_task as task,
 )
 

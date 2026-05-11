@@ -1,22 +1,22 @@
+import sqlite3
 import uuid
+from datetime import datetime
 
 import pandas as pd
 import pytest
-from datetime import datetime
-import sqlite3
 
+from workflows.flows.nf_traces.flows import nextflow_trace_etl_flow
 from workflows.flows.nf_traces.tasks import (
     extract_traces_from_the_database,
-    transform_traces_task,
-    transform_trace_records,
     summary_stats,
+    transform_trace_records,
+    transform_traces_task,
 )
-from workflows.flows.nf_traces.flows import nextflow_trace_etl_flow
 from workflows.flows.nf_traces.utils import (
-    NextflowTraceSchema,
-    parse_time_to_seconds,
-    parse_memory_to_mb,
     NEXTFLOW_FIELD_MAP,
+    NextflowTraceSchema,
+    parse_memory_to_mb,
+    parse_time_to_seconds,
 )
 from workflows.models import OrchestratedClusterJob
 

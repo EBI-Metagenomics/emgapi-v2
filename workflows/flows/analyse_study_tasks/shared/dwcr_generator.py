@@ -1,42 +1,38 @@
 from pathlib import Path
+
 import click
+from mgnify_pipelines_toolkit.analysis.shared.dwc_summary_generator import (
+    generate_dwcready_summaries,
+    merge_dwcr_summaries,
+)
+from prefect import get_run_logger
 
 from activate_django_first import EMG_CONFIG
 
-from prefect import get_run_logger
+from analyses.base_models.with_downloads_models import (
+    DownloadFile,
+    DownloadFileType,
+    DownloadType,
+)
 from analyses.models import Study
-
 from workflows.data_io_utils.file_rules.common_rules import (
     DirectoryExistsRule,
     FileExistsRule,
     FileIsNotEmptyRule,
 )
 from workflows.data_io_utils.file_rules.nodes import Directory, File
-
 from workflows.ena_utils.ena_accession_matching import (
     INSDC_PROJECT_ACCESSION_GLOB,
     INSDC_STUDY_ACCESSION_GLOB,
 )
-
 from workflows.flows.analyse_study_tasks.shared.study_summary import DWCREADY_CSV
-
-from analyses.base_models.with_downloads_models import (
-    DownloadFile,
-    DownloadType,
-    DownloadFileType,
-)
-
-
-from mgnify_pipelines_toolkit.analysis.shared.dwc_summary_generator import (
-    generate_dwcready_summaries,
-    merge_dwcr_summaries,
-)
-
+from workflows.prefect_utils.dir_context import chdir
 from workflows.prefect_utils.flows_utils import (
     django_db_flow as flow,
+)
+from workflows.prefect_utils.flows_utils import (
     django_db_task as task,
 )
-from workflows.prefect_utils.dir_context import chdir
 
 
 @flow()

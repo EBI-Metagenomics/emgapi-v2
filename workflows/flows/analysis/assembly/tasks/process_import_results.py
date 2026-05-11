@@ -1,13 +1,12 @@
 import uuid
+from typing import List
+
 from prefect import get_run_logger
 
 from activate_django_first import EMG_CONFIG  # noqa
 
 from analyses.models import Analysis
 from workflows.data_io_utils.schemas.assembly import ImportResult
-
-from typing import List
-
 from workflows.models import (
     AssemblyAnalysisBatch,
     AssemblyAnalysisPipeline,

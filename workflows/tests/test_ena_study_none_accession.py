@@ -1,5 +1,7 @@
-import pytest
 import logging
+
+import pytest
+
 import analyses.models
 import ena.models
 

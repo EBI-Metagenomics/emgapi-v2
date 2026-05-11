@@ -4,32 +4,32 @@ from prefect import State
 
 import analyses.models
 import ena.models
+from workflows.ena_utils.abstract import (
+    ENAPortalDataPortal,
+    ENAPortalResultType,
+    ENAQueryClause,
+    ENAQueryOperators,
+    ENAQueryPair,
+)
 from workflows.ena_utils.ena_accession_matching import (
     extract_all_accessions,
     extract_study_accession_from_study_title,
 )
 from workflows.ena_utils.ena_api_requests import (
+    ENALibraryStrategyPolicy,
     get_study_from_ena,
     get_study_readruns_from_ena,
     is_ena_study_available_privately,
     is_ena_study_public,
-    sync_privacy_state_of_ena_study_and_derived_objects,
     library_strategy_policy_to_filter,
-    ENALibraryStrategyPolicy,
+    sync_privacy_state_of_ena_study_and_derived_objects,
 )
 from workflows.ena_utils.requestors import (
-    ENAAPIRequest,
     ENAAccessException,
+    ENAAPIRequest,
     ENAAvailabilityException,
 )
-from workflows.ena_utils.study import ENAStudyQuery, ENAStudyFields
-from workflows.ena_utils.abstract import (
-    ENAPortalResultType,
-    ENAQueryOperators,
-    ENAQueryClause,
-    ENAQueryPair,
-    ENAPortalDataPortal,
-)
+from workflows.ena_utils.study import ENAStudyFields, ENAStudyQuery
 from workflows.prefect_utils.testing_utils import (
     should_not_mock_httpx_requests_to_prefect_server,
 )

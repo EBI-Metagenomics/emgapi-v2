@@ -1,24 +1,23 @@
 from json import JSONDecodeError
-from typing import Union, List, Optional, Literal, Type, Dict, Any
+from typing import Any, Dict, List, Literal, Optional, Type, Union
 
-from django.conf import settings
 import httpx
+from django.conf import settings
 from httpx import Auth
-from pydantic import BaseModel, Field, model_validator, field_serializer
+from pydantic import BaseModel, Field, field_serializer, model_validator
 
 from workflows.ena_utils.abstract import (
+    ENAPortalDataPortal,
     ENAPortalResultType,
-    ENAQuerySetType,
     ENAQueryClause,
     ENAQueryPair,
+    ENAQuerySetType,
     _ENAQueryConditions,
-    ENAPortalDataPortal,
 )
+from workflows.ena_utils.analysis import ENAAnalysisFields, ENAAnalysisQuery
 from workflows.ena_utils.read_run import ENAReadRunFields, ENAReadRunQuery
 from workflows.ena_utils.sample import ENASampleFields, ENASampleQuery
 from workflows.ena_utils.study import ENAStudyFields, ENAStudyQuery
-from workflows.ena_utils.analysis import ENAAnalysisFields, ENAAnalysisQuery
-
 
 EMG_CONFIG = settings.EMG_CONFIG
 

@@ -4,18 +4,20 @@ from pathlib import Path
 from textwrap import dedent as _
 from typing import List, Union
 
-from prefect import task, get_run_logger
+from prefect import get_run_logger, task
 from prefect.artifacts import create_table_artifact
 from prefect.cache_policies import DEFAULT
 from prefect.tasks import task_input_hash
 
 from activate_django_first import EMG_CONFIG
 
+import analyses.models
+from workflows.flows.assemble_study_tasks.assemble_samplesheets import (
+    get_reference_genome,
+)
 from workflows.flows.assemble_study_tasks.get_assemblies_to_attempt import (
     get_assemblies_to_attempt,
 )
-
-import analyses.models
 from workflows.nextflow_utils.samplesheets import (
     SamplesheetColumnSource,
     queryset_hash,
@@ -23,9 +25,6 @@ from workflows.nextflow_utils.samplesheets import (
 )
 from workflows.prefect_utils.analyses_models_helpers import chunk_list
 from workflows.views import encode_samplesheet_path
-from workflows.flows.assemble_study_tasks.assemble_samplesheets import (
-    get_reference_genome,
-)
 
 
 @task(
@@ -150,14 +149,12 @@ def make_samplesheet(
     create_table_artifact(
         key="miassembler-initial-sample-sheet",
         table=table,
-        description=_(
-            f"""\
+        description=_(f"""\
             Sample sheet created for run of MIAssembler.
             Saved to `{sample_sheet_tsv}`
             **Warning!** This table is the *initial* content of the samplesheet, when it was first made. Any edits made since are not shown here.
             [Edit it]({EMG_CONFIG.service_urls.app_root}/workflows/edit-samplesheet/fetch/{encode_samplesheet_path(sample_sheet_tsv)})
-            """
-        ),
+            """),
     )
     return sample_sheet_tsv, ss_hash
 

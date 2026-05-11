@@ -1,5 +1,5 @@
 import shlex
-from typing import Optional, List, Union
+from typing import List, Optional, Union
 
 
 def cli_command(parts: List[Optional[Union[str, tuple[str]]]]) -> str:

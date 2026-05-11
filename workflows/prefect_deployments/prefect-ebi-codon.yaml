@@ -68,6 +68,7 @@ deployments:
     :raises Exception: For any unexpected errors encountered during the pipeline execution.
   entrypoint: workflows/flows/analysis/assembly/flows/run_assembly_analysis_pipeline_batch.py:run_assembly_batch
   schedule: null
+  concurrency_limit: 5
   work_pool:
     name: slurm
 
@@ -90,6 +91,7 @@ deployments:
     :raises Exception: For any unexpected errors during pipeline execution.
   entrypoint: workflows/flows/analysis/assembly/flows/run_virify_batch.py:run_virify_batch
   schedule: null
+  concurrency_limit: 5
   work_pool:
     name: slurm
 
@@ -112,6 +114,7 @@ deployments:
     :param raise_on_failure: Raise an exception if the MAP pipeline fails
   entrypoint: workflows/flows/analysis/assembly/flows/run_map_batch.py:run_map_batch
   schedule: null
+  concurrency_limit: 5
   work_pool:
     name: slurm
 
@@ -292,6 +295,21 @@ deployments:
     name: slurm
   schedules: []
 
+- name: repair_eggnog_tsv_headers_deployment
+  description: |-
+    Scan assembly analyses for EggNOG annotation TSV files with duplicated headers.
+    Set dry_run=True to list affected files only.
+    Set sync_to_ftp=True to re-sync repaired EggNOG results to the FTP/private mirror.
+
+    :param analysis_accessions: Optional list of analysis accessions to limit the scan.
+    :param dry_run: If true, only list affected files and make no changes.
+    :param sync_to_ftp: If true, re-sync repaired files to the FTP/private mirror.
+  entrypoint: workflows/flows/housekeeping/fix_eggnog_tsv_headers.py:repair_eggnog_tsv_headers
+  parameters: {}
+  work_pool:
+    name: slurm
+  schedules: []
+
 - name: update_ena_accession_from_json_flow_deployment
   description: |-
     Traverse per-genome JSON files to update Genome.ena_genome_accession from the
@@ -386,3 +404,21 @@ deployments:
   work_pool:
     name: slurm
   schedules: []
+
+- name: recovery_helper_import_completed_analyses_in_study_deployment
+  version: null
+  tags: []
+  concurrency_limit: null
+  description: |-
+    Helper function for importing completed analyses within a specified study and analysis
+    version. Intended for helping with recovery of failed analysis flows.
+    E.g., if you have manually altered some states of analyses, run this flow to import them.
+    Will import ONLY completed analyses that have not already been imported, from this study and pipeline-version combo.
+
+    :param study_accession: Study accession in which completed analyses are looked for
+    :param analysis_version: Pipeline version of analyses to potentially import
+    :return: None
+  entrypoint: workflows/flows/analyse_study_tasks/amplicon/import_completed_amplicon_analyses.py:recovery_helper_import_completed_analyses_in_study
+  parameters: {}
+  work_pool:
+    name: slurm

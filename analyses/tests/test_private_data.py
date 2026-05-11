@@ -1,4 +1,4 @@
-from urllib.parse import urlparse, parse_qs
+from urllib.parse import parse_qs, urlparse
 
 import pytest
 from django.conf import settings
@@ -6,14 +6,14 @@ from django.conf import settings
 from analyses.base_models.with_downloads_models import (
     DownloadFile,
     DownloadFileIndexFile,
-    DownloadType,
     DownloadFileType,
+    DownloadType,
 )
 from analyses.schemas import (
-    MGnifyStudyDownloadFile,
-    MGnifyAnalysisDownloadFile,
     MGnifyAnalysisDetail,
+    MGnifyAnalysisDownloadFile,
     MGnifyStudyDetail,
+    MGnifyStudyDownloadFile,
 )
 
 

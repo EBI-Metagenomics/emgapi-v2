@@ -5,7 +5,7 @@ import os
 import re
 from collections.abc import Iterable, Mapping
 from pathlib import Path
-from typing import ClassVar, Union, Optional, Literal
+from typing import ClassVar, Literal, Optional, Union
 
 from aenum import extend_enum
 from db_file_storage.model_utils import delete_file, delete_file_if_needed
@@ -14,7 +14,7 @@ from django.contrib.postgres.indexes import GinIndex
 from django.core.exceptions import MultipleObjectsReturned, ObjectDoesNotExist
 from django.core.files.storage import storages
 from django.db import models
-from django.db.models import JSONField, Q, Func, Value, Count
+from django.db.models import Count, Func, JSONField, Q, Value
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 from django.utils.text import Truncator
@@ -23,25 +23,25 @@ from pydantic import BaseModel, ConfigDict, Field
 
 import ena.models
 from analyses.base_models.base_models import (
+    DbStoredFileField,
     ENADerivedManager,
     ENADerivedModel,
+    InferredMetadataMixin,
     PrivacyFilterManagerMixin,
     TimeStampedModel,
     VisibilityControlledModel,
-    InferredMetadataMixin,
-    DbStoredFileField,
 )
 from analyses.base_models.mgnify_accessioned_models import MGnifyAccessionField
 from analyses.base_models.with_downloads_models import WithDownloadsModel
 from analyses.base_models.with_experiment_type_models import WithExperimentTypeModel
 from analyses.base_models.with_status_models import SelectByStatusManagerMixin
 from analyses.base_models.with_watchers_models import WithWatchersModel
-from emgapiv2.enum_utils import FutureStrEnum, DjangoChoicesCompatibleStrEnum
+from emgapiv2.enum_utils import DjangoChoicesCompatibleStrEnum, FutureStrEnum
 from emgapiv2.model_utils import JSONFieldWithSchema
 from workflows.ena_utils.ena_accession_matching import (
-    INSDC_STUDY_ACCESSION_REGEX,
-    INSDC_BIOSAMPLE_ACCESSION_REGEX,
     ENA_ASSEMBLY_ACCESSION_REGEX,
+    INSDC_BIOSAMPLE_ACCESSION_REGEX,
+    INSDC_STUDY_ACCESSION_REGEX,
 )
 from workflows.ena_utils.read_run import ENAReadRunFields
 from workflows.ena_utils.sample import ENASampleFields

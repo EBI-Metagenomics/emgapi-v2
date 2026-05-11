@@ -4,14 +4,14 @@ from django.urls import reverse
 from django.utils.html import format_html
 from unfold.admin import ModelAdmin
 from unfold.contrib.filters.admin import AutocompleteSelectMultipleFilter
-from unfold.decorators import display, action
+from unfold.decorators import action, display
 
 from workflows.admin.utils import STATUS_LABELS
 from workflows.models import (
-    AssemblyAnalysisBatchAnalysis,
-    AssemblyAnalysisPipelineStatus,
-    AssemblyAnalysisPipeline,
     AssemblyAnalysisBatch,
+    AssemblyAnalysisBatchAnalysis,
+    AssemblyAnalysisPipeline,
+    AssemblyAnalysisPipelineStatus,
 )
 
 

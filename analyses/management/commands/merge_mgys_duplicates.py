@@ -1,7 +1,8 @@
 import logging
+
+from django.contrib.postgres.aggregates import ArrayAgg
 from django.core.management.base import BaseCommand
 from django.db.models import Count
-from django.contrib.postgres.aggregates import ArrayAgg
 
 from analyses.models import Assembly as MGAssembly
 from analyses.models import Study as MGStudy

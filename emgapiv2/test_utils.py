@@ -4,7 +4,7 @@ from django.db import models
 from pydantic import BaseModel
 
 from emgapiv2.async_utils import anysync_property
-from emgapiv2.dict_utils import some, add
+from emgapiv2.dict_utils import add, some
 from emgapiv2.enum_utils import FutureStrEnum
 from emgapiv2.log_utils import mask_sensitive_data
 from emgapiv2.model_utils import JSONFieldWithSchema
@@ -60,13 +60,10 @@ def test_log_masking():
     ./run-command subcommand1 -flag=okay -password=verysecret"
     ./run-command subcommand2 -flag=okay -password=alsoverysecret"
     """
-    assert (
-        mask_sensitive_data(script)
-        == """
+    assert mask_sensitive_data(script) == """
     ./run-command subcommand1 -flag=okay -password=*****
     ./run-command subcommand2 -flag=okay -password=*****
     """
-    )
 
     script = "./run-command subcommand -flag=okay -password verysecret"
     assert (

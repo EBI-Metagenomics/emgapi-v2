@@ -1,5 +1,6 @@
 import json
 from typing import Optional
+
 import pytest
 
 from analyses.models import Biome

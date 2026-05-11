@@ -4,13 +4,13 @@ import pytest
 
 from analyses.models import Analysis, Run
 from workflows.data_io_utils.legacy_emg_dbs import (
-    LegacyStudy,
-    LegacySample,
-    LegacyRun,
     LegacyAnalysisJob,
     LegacyAssembly,
     LegacyAssemblyRun,
     LegacyAssemblySample,
+    LegacyRun,
+    LegacySample,
+    LegacyStudy,
 )
 from workflows.flows.legacy.flows.import_legacy_analyses import import_legacy_analyses
 from workflows.prefect_utils.testing_utils import (

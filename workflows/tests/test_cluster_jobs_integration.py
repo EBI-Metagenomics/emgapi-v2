@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from django.db import connection
-from prefect import flow, task, runtime
+from prefect import flow, runtime, task
 from prefect.runtime import flow_run
 
 from workflows.models import OrchestratedClusterJob

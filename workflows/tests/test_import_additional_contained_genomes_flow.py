@@ -2,8 +2,9 @@ import pytest
 from prefect import flow
 
 from analyses.models import Assembly, Biome, Run, Sample, Study
-from ena.models import Study as ENAStudy, Sample as ENASample
-from genomes.models import Genome, GenomeCatalogue, AdditionalContainedGenomes
+from ena.models import Sample as ENASample
+from ena.models import Study as ENAStudy
+from genomes.models import AdditionalContainedGenomes, Genome, GenomeCatalogue
 from workflows.flows.import_additional_contained_genomes_flow import (
     import_additional_contained_genomes_flow,
     validate_csv_file,
