@@ -128,6 +128,7 @@ class SampleController(UnauthorisedIsUnfoundController):
     @paginate()
     def list_sample_runs(self, accession: str):
         sample = analyses.models.Sample.objects.get_by_accession(accession)
+        self.check_object_permissions(sample)
         return sample.runs.all()
 
     @http_get(
@@ -157,4 +158,5 @@ class SampleController(UnauthorisedIsUnfoundController):
     @paginate()
     def list_sample_assemblies(self, accession: str):
         sample = analyses.models.Sample.objects.get_by_accession(accession)
+        self.check_object_permissions(sample)
         return sample.assemblies.all()
