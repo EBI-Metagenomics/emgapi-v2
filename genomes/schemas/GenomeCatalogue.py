@@ -3,6 +3,10 @@ from typing import TYPE_CHECKING, Dict, Literal, Optional
 
 from ninja import Field, Schema
 
+from genomes.schemas.MGnifyGenomeCatalogueDownloadFile import (
+    MGnifyGenomeCatalogueDownloadFile,
+)
+
 if TYPE_CHECKING:
     from analyses.schemas import Biome
 
@@ -31,6 +35,9 @@ class GenomeCatalogueBase(Schema):
         ..., examples=[{"Total proteins": "12,345,678"}]
     )
     biome: Optional["Biome"] = None
+    downloads: list["MGnifyGenomeCatalogueDownloadFile"] = Field(
+        ..., alias="downloads_as_objects"
+    )
 
 
 class GenomeCatalogueDetail(GenomeCatalogueBase): ...
