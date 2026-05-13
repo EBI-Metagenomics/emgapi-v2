@@ -69,6 +69,21 @@ def _eggnog_analyses(analysis_accessions: list[str] | None = None):
     return analyses
 
 
+def analysis_results_root(analysis: Analysis) -> Path:
+    """Return the local root directory that contains this analysis' downloads.
+
+    Assembly batch-managed analyses currently store ``results_dir`` as the base
+    batch workspace, while ASA files live under ``asa/<assembly_accession>``.
+    Other analysis types keep ``results_dir`` pointing directly at the analysis
+    root, so we fall back to that unchanged.
+    """
+    results_root = Path(analysis.results_dir)
+    batch_layout_root = results_root / "asa" / analysis.assembly.first_accession
+    if batch_layout_root.is_dir():
+        return batch_layout_root
+    return results_root
+
+
 def _build_candidate_rows(analysis: Analysis) -> list[EggnogHeaderFixCandidate]:
     """Build review rows for EggNOG annotation files with repeated headers.
 
@@ -77,7 +92,7 @@ def _build_candidate_rows(analysis: Analysis) -> list[EggnogHeaderFixCandidate]:
     if not analysis.results_dir:
         return []
 
-    results_root = Path(analysis.results_dir)
+    results_root = analysis_results_root(analysis)
 
     downloads = _analysis_eggnog_annotation_downloads(analysis)
     if not downloads:
@@ -260,7 +275,7 @@ def resync_eggnog_results_to_ftp(
         else:
             mirror_root = EMG_CONFIG.slurm.ftp_results_dir
 
-        source_root = Path(analysis.results_dir)
+        source_root = analysis_results_root(analysis)
         target_root = Path(mirror_root) / analysis.external_results_dir
         source_files = [
             path for path in candidate_by_path if path.is_relative_to(source_root)

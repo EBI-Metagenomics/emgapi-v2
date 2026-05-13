@@ -5,8 +5,10 @@ from pathlib import Path
 from unittest.mock import Mock, patch
 
 import pytest
+from django.conf import settings
 
 from workflows.flows.housekeeping.fix_eggnog_tsv_headers import (
+    _build_candidate_rows,
     repair_eggnog_tsv_headers,
     resync_eggnog_results_to_ftp,
 )
@@ -16,6 +18,51 @@ def _write_gzipped_tsv(path: Path, lines: list[str]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with gzip.open(path, "wt") as handle:
         handle.writelines(lines)
+
+
+def test_build_candidate_rows_supports_batch_root_results_dir():
+    analysis = Mock(
+        accession="MGYA00000001",
+        results_dir="/tmp/batch-root",
+        external_results_dir="analyses/MGYA00000001",
+        is_private=False,
+        assembly=Mock(first_accession="ERZ000001"),
+        downloads_as_objects=[
+            Mock(
+                path="eggnog/sample_emapper_annotations.tsv.gz",
+                alias="sample_emapper_annotations.tsv.gz",
+            )
+        ],
+    )
+
+    with (
+        patch(
+            "workflows.flows.housekeeping.fix_eggnog_tsv_headers.Path.is_dir",
+            return_value=True,
+        ),
+        patch(
+            "workflows.flows.housekeeping.fix_eggnog_tsv_headers.Path.is_file",
+            return_value=True,
+        ),
+        patch(
+            "workflows.flows.housekeeping.fix_eggnog_tsv_headers.has_duplicated_header_lines",
+            return_value=True,
+        ),
+    ):
+        rows = _build_candidate_rows(analysis)
+
+    assert rows == [
+        {
+            "analysis_accession": "MGYA00000001",
+            "download_alias": "sample_emapper_annotations.tsv.gz",
+            "nfs_path": "/tmp/batch-root/asa/ERZ000001/eggnog/sample_emapper_annotations.tsv.gz",
+            "external_path": (
+                f"{settings.EMG_CONFIG.slurm.ftp_results_dir}/"
+                "analyses/MGYA00000001/eggnog/sample_emapper_annotations.tsv.gz"
+            ),
+            "has_duplicate_header": True,
+        }
+    ]
 
 
 @pytest.mark.django_db
@@ -155,6 +202,7 @@ def test_resync_eggnog_results_to_ftp_uses_rsync(
         results_dir=str(analysis_root),
         external_results_dir="analyses/MGYA00000001",
         is_private=False,
+        assembly=Mock(first_accession="ERZ000001"),
     )
     mock_analyses.return_value = [analysis]
 
@@ -200,6 +248,7 @@ def test_resync_eggnog_results_to_ftp_marks_skipped_candidates(
         results_dir=str(analysis_root),
         external_results_dir="analyses/MGYA00000001",
         is_private=False,
+        assembly=Mock(first_accession="ERZ000001"),
     )
     mock_analyses.return_value = [analysis]
 

@@ -725,6 +725,7 @@ def test_prefect_analyse_assembly_flow(
             assembly_test_scenario.assembly_accession_success
         ]
     )
+    assert analysis_with_status.results_dir == str(batch.workspace_dir)
     batch_analysis_relation = batch.batch_analyses.get(analysis=analysis_with_status)
     assert (
         batch_analysis_relation.asa_status == AssemblyAnalysisPipelineStatus.COMPLETED
