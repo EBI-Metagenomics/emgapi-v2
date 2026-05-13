@@ -142,7 +142,7 @@ def setup_map_output_helpers(map_outdir: Path, assembly_accession: str):
 @patch("workflows.flows.analysis.assembly.flows.run_virify_batch.run_cluster_job")
 @patch("workflows.flows.analysis.assembly.flows.run_map_batch.run_cluster_job")
 @patch(
-    "workflows.flows.analysis.assembly.flows.run_assembly_analysis_pipeline_batch.copy_assembly_batch_results"
+    "workflows.flows.analysis.assembly.flows.run_assembly_analysis_pipeline_batch.sync_assembly_batch_results"
 )
 def test_full_chain_success(
     mock_run_deployment,
@@ -265,7 +265,7 @@ def test_full_chain_success(
     "workflows.flows.analysis.assembly.flows.run_assembly_analysis_pipeline_batch.generate_assembly_analysis_pipeline_batch_summary"
 )
 @patch(
-    "workflows.flows.analysis.assembly.flows.run_assembly_analysis_pipeline_batch.copy_assembly_batch_results"
+    "workflows.flows.analysis.assembly.flows.run_assembly_analysis_pipeline_batch.sync_assembly_batch_results"
 )
 def test_asa_failure_stops_chain(
     mock_copy_assembly_batch_results,
@@ -343,7 +343,7 @@ def test_asa_failure_stops_chain(
 @patch("workflows.flows.analysis.assembly.flows.run_map_batch.run_cluster_job")
 @patch("workflows.flows.analysis.assembly.flows.run_virify_batch.run_cluster_job")
 @patch(
-    "workflows.flows.analysis.assembly.flows.run_assembly_analysis_pipeline_batch.copy_assembly_batch_results"
+    "workflows.flows.analysis.assembly.flows.run_assembly_analysis_pipeline_batch.sync_assembly_batch_results"
 )
 def test_virify_failure_partial_results(
     mock_copy_assembly_batch_results,
@@ -458,7 +458,7 @@ def test_virify_failure_partial_results(
     "workflows.flows.analysis.assembly.flows.run_assembly_analysis_pipeline_batch.generate_assembly_analysis_pipeline_batch_summary"
 )
 @patch(
-    "workflows.flows.analysis.assembly.flows.run_assembly_analysis_pipeline_batch.copy_assembly_batch_results"
+    "workflows.flows.analysis.assembly.flows.run_assembly_analysis_pipeline_batch.sync_assembly_batch_results"
 )
 def test_asa_not_ready_for_virify(
     mock_copy_assembly_batch_results,

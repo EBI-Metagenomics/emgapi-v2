@@ -10,13 +10,13 @@ from prefect.runtime import flow_run
 from activate_django_first import EMG_CONFIG
 
 from analyses.models import Study
-from workflows.flows.analyse_study_tasks.shared.copy_v6_pipeline_results import (
-    copy_assembly_batch_results,
-)
 from workflows.flows.analysis.assembly.flows.import_asa_batch import import_asa_batch
 from workflows.flows.analysis.assembly.flows.run_map_batch import run_map_batch
 from workflows.flows.analysis.assembly.flows.run_virify_batch import (
     run_virify_batch,
+)
+from workflows.flows.analysis.assembly.flows.sync_assembly_batch_results import (
+    copy_assembly_batch_results,
 )
 from workflows.flows.analysis.assembly.tasks.assembly_analysis_pipeline_batch_study_summary_generator import (
     generate_assembly_analysis_pipeline_batch_summary,
@@ -265,7 +265,5 @@ def run_assembly_batch(
             "No successfully imported ASA analyses, skipping study summary generation"
         )
 
-    #######################################
-    # === Sync results for the batch === #
-    #######################################
+    # Sync the files to NFS and the FTP server
     copy_assembly_batch_results(assembly_analyses_batch_id)

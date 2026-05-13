@@ -591,12 +591,6 @@ class AssemblyAnalysisBatchManager(models.Manager):
                     for aid in new_analysis_ids
                 ]
             )
-            Analysis.objects.filter(id__in=new_analysis_ids).update(
-                results_dir=batch.workspace_dir
-            )
-            logger.info(
-                f"Set results_dir to batch workspace for {len(new_analysis_ids)} analyses"
-            )
             logger.info(
                 f"Linked {len(new_analysis_ids)} new analyses to batch {batch.id}"
             )

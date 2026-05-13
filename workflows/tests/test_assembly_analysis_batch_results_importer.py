@@ -6,7 +6,7 @@ from analyses.models import Analysis
 from workflows.data_io_utils.filenames import accession_prefix_separated_dir_path
 from workflows.data_io_utils.schemas import PipelineValidationError
 from workflows.flows.analyse_study_tasks.shared.copy_v6_pipeline_results import (
-    _copy_single_analysis_results,
+    copy_single_analysis_results,
 )
 from workflows.flows.analysis.assembly.tasks.assembly_analysis_batch_results_importer import (
     ImportResult,
@@ -1199,13 +1199,11 @@ class TestIdempotentImports:
 
         # Copy results using actual function
         target_root = tmp_path / "ftp"
-        logger = Mock()
-        _copy_single_analysis_results(
+        copy_single_analysis_results(
             analysis=analysis,
-            batch_analysis_relation=batch_analysis,
+            batch_analysis_job=batch_analysis,
             batch=batch,
-            target_root=str(target_root),
-            logger=logger,
+            destination_root=target_root,
         )
 
         # Verify run_deployment was called once (only ASA is COMPLETED)

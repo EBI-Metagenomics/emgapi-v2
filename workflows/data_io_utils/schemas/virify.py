@@ -32,6 +32,9 @@ class VirifyResultSchema(PipelineResultSchema):
         # Main viral annotation directory
         viral_annotation_dir = PipelineDirectorySchema(
             folder_name=EMG_CONFIG.virify_pipeline.final_gff_folder,
+            external_folder_name=(
+                f"virify/{EMG_CONFIG.virify_pipeline.final_gff_folder}"
+            ),
             validation_rules=[DirectoryExistsRule],
             files=[
                 PipelineFileSchema(

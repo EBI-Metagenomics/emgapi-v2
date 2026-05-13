@@ -101,7 +101,6 @@ def test_get_or_create_batches_for_study_with_valid_analyses(
     for analysis in analyses_list:
         analysis.refresh_from_db()
         assert analysis in batch.analyses.all()
-        assert analysis.results_dir == batch.workspace_dir
 
 
 @pytest.mark.django_db(transaction=True)
