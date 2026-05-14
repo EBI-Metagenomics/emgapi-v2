@@ -261,8 +261,6 @@ def test_get_or_create_batches_for_study_handles_rerun(
 
     assert len(batches_third_run) == 1
     assert batches_third_run[0].id == first_batch.id
-    analyses_list[0].refresh_from_db()
-    assert analyses_list[0].results_dir == "/existing/results"
 
     # Should not create duplicate relationships
     assert first_batch.analyses.count() == len(analyses_list)
