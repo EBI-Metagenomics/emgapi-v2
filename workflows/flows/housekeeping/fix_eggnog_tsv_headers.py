@@ -70,18 +70,8 @@ def _eggnog_analyses(analysis_accessions: list[str] | None = None):
 
 
 def analysis_results_root(analysis: Analysis) -> Path:
-    """Return the local root directory that contains this analysis' downloads.
-
-    Assembly batch-managed analyses currently store ``results_dir`` as the base
-    batch workspace, while ASA files live under ``asa/<assembly_accession>``.
-    Other analysis types keep ``results_dir`` pointing directly at the analysis
-    root, so we fall back to that unchanged.
-    """
-    results_root = Path(analysis.results_dir)
-    batch_layout_root = results_root / "asa" / analysis.assembly.first_accession
-    if batch_layout_root.is_dir():
-        return batch_layout_root
-    return results_root
+    """Return the local analysis root directory that contains this analysis' downloads."""
+    return Path(analysis.results_dir)
 
 
 def _build_candidate_rows(analysis: Analysis) -> list[EggnogHeaderFixCandidate]:
