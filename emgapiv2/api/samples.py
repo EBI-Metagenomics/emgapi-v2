@@ -8,6 +8,7 @@ from ninja_extra.schemas import NinjaPaginationResponseSchema
 import analyses.models
 from analyses.schemas import (
     AnalysedRun,
+    AssemblyDetail,
     MGnifySample,
     MGnifySampleDetail,
     OrderByFilter,
@@ -18,6 +19,7 @@ from emgapiv2.api.perms import UnauthorisedIsUnfoundController
 from emgapiv2.api.schema_utils import (
     ApiSections,
     BiomeFilter,
+    make_child_link,
     make_links_section,
     make_related_detail_link,
 )
@@ -41,14 +43,28 @@ class SampleController(UnauthorisedIsUnfoundController):
         operation_id="get_mgnify_sample",
         auth=[WebinJWTAuth(), DjangoSuperUserAuth(), NoAuth()],
         openapi_extra=make_links_section(
-            make_related_detail_link(
-                related_detail_operation_id="get_mgnify_study",
-                related_object_name="study",
-                self_object_name="sample",
-                related_id_in_response="accession",
-                from_list_to_detail=True,
-                from_list_at_path="studies/",
-            )
+            {
+                **make_related_detail_link(
+                    related_detail_operation_id="get_mgnify_study",
+                    related_object_name="study",
+                    self_object_name="sample",
+                    related_id_in_response="accession",
+                    from_list_to_detail=True,
+                    from_list_at_path="studies/",
+                ),
+                **make_child_link(
+                    operation_id="list_sample_runs",
+                    child_name="runs",
+                    self_object_name="sample",
+                    description="Runs associated with this sample",
+                ),
+                **make_child_link(
+                    operation_id="list_sample_assemblies",
+                    child_name="assemblies",
+                    self_object_name="sample",
+                    description="Assemblies associated with this sample",
+                ),
+            }
         ),
         permissions=[
             perms.IsPublic | perms.IsWebinOwner | perms.IsAdminUserWithObjectPerms
@@ -112,4 +128,35 @@ class SampleController(UnauthorisedIsUnfoundController):
     @paginate()
     def list_sample_runs(self, accession: str):
         sample = analyses.models.Sample.objects.get_by_accession(accession)
+        self.check_object_permissions(sample)
         return sample.runs.all()
+
+    @http_get(
+        "/{accession}/assemblies/",
+        response=NinjaPaginationResponseSchema[AssemblyDetail],
+        summary="List assemblies associated with this sample",
+        description=(
+            "Samples may be associated with one or more assemblies. "
+            "Assemblies are collections of contigs generated from sequencing reads."
+        ),
+        operation_id="list_sample_assemblies",
+        tags=[ApiSections.SAMPLES, ApiSections.ASSEMBLIES],
+        openapi_extra=make_links_section(
+            make_related_detail_link(
+                related_detail_operation_id="get_assembly",
+                self_object_name="sample",
+                related_object_name="assembly",
+                related_id_in_response="accession",
+                from_list_to_detail=True,
+            )
+        ),
+        auth=[WebinJWTAuth(), DjangoSuperUserAuth(), NoAuth()],
+        permissions=[
+            perms.IsPublic | perms.IsWebinOwner | perms.IsAdminUserWithObjectPerms
+        ],
+    )
+    @paginate()
+    def list_sample_assemblies(self, accession: str):
+        sample = analyses.models.Sample.objects.get_by_accession(accession)
+        self.check_object_permissions(sample)
+        return sample.assemblies.all()

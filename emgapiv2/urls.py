@@ -28,6 +28,11 @@ from .api import api
 
 BASE_URL = settings.BASE_URL
 
+
+def sentry_debug(request):
+    raise Exception("Sentry debug test exception")
+
+
 urlpatterns = [
     path(
         f"{BASE_URL}admin/latest_study",
@@ -44,6 +49,7 @@ urlpatterns = [
         study_refresh_batch_counts_admin,
         name="admin_refresh_study_assembly_analysis_counts",
     ),
+    *([path(f"{BASE_URL}sentry-debug/", sentry_debug)] if settings.DEBUG else []),
     path(f"{BASE_URL}admin/", admin.site.urls),
     path(f"{BASE_URL}__debug__/", include("debug_toolbar.urls")),
     path(f"{BASE_URL}fieldfiles/", include("db_file_storage.urls")),

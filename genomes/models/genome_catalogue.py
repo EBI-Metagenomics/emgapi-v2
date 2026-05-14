@@ -9,6 +9,7 @@ EMG_CONFIG = settings.EMG_CONFIG
 
 
 class GenomeCatalogue(WithDownloadsModel, TimeStampedModel):
+    DOWNLOAD_PARENT_IDENTIFIER_ATTR = "catalogue_id"
     catalogue_id = models.SlugField(
         db_column="catalogue_id", max_length=100, primary_key=True
     )
