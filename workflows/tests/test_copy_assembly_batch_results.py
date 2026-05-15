@@ -1,4 +1,4 @@
-from pathlib import Path
+from typing import List
 from unittest.mock import patch
 
 import pytest
@@ -7,10 +7,10 @@ from activate_django_first import EMG_CONFIG
 
 from analyses.models import Analysis
 from workflows.data_io_utils.file_rules.common_rules import DirectoryExistsRule
+from workflows.data_io_utils.filenames import accession_prefix_separated_dir_path
 from workflows.data_io_utils.schemas.base import PipelineDirectorySchema
 from workflows.flows.analyse_study_tasks.shared.copy_v6_pipeline_results import (
     BatchCopyResult,
-    CopyError,
     copy_assembly_batch_results_to_destination_folder,
     copy_schema_directory,
 )
@@ -164,51 +164,30 @@ class TestCopyAssemblyBatchResults:
         )
         return batch, analysis, batch_analysis_relation
 
-    @patch(
-        "workflows.flows.analyse_study_tasks.shared.copy_v6_pipeline_results.copy_single_analysis_results"
-    )
     def test_copy_failed_returns_result(
         self,
-        mock_copy_single,
         setup_batch_and_analysis,
         prefect_harness,
         tmp_path,
     ):
-        """Test that copy failures are returned without updating analysis status."""
-        batch, analysis, _batch_analysis_relation = setup_batch_and_analysis
+        """Test that analyses missing imported optional outputs are skipped."""
+        batch, analysis, batch_analysis_relation = setup_batch_and_analysis
 
-        copy_result = BatchCopyResult(
-            analysis_id=analysis.id,
-            destination_folder=tmp_path / "ftp" / "analysis",
-            success=False,
-            errors=[
-                CopyError(
-                    pipeline_name="asa",
-                    source=tmp_path / "workspace" / "asa",
-                    message="Copy failed!",
-                )
-            ],
-        )
-        mock_copy_single.return_value = copy_result
+        batch_analysis_relation.asa_status = AssemblyAnalysisPipelineStatus.FAILED
+        batch_analysis_relation.save()
 
-        results = copy_assembly_batch_results_to_destination_folder(
-            batch.id,
-            destination_root=tmp_path / "ftp",
+        result: List[BatchCopyResult] = (
+            copy_assembly_batch_results_to_destination_folder(
+                batch.id,
+                destination_root=tmp_path / "ftp",
+            )[0]
         )
 
         analysis.refresh_from_db()
-        assert results == [copy_result]
+        assert result.success is False
         assert not analysis.status[
             Analysis.AnalysisStates.ANALYSIS_ANNOTATIONS_IMPORTED
         ]
-        assert (
-            mock_copy_single.call_args.kwargs["batch_analysis_job"].virify_status
-            != AssemblyAnalysisPipelineStatus.COMPLETED
-        )
-        assert (
-            mock_copy_single.call_args.kwargs["batch_analysis_job"].map_status
-            != AssemblyAnalysisPipelineStatus.COMPLETED
-        )
 
     @patch(
         "workflows.flows.analyse_study_tasks.shared.copy_v6_pipeline_results.copy_single_analysis_results"
@@ -312,9 +291,15 @@ class TestCopyAssemblyBatchResults:
         assert mock_copy_batch_results.call_args_list[1].kwargs["destination_root"] == (
             tmp_path / "results"
         )
+        expected_study_prefix = accession_prefix_separated_dir_path(
+            batch.study.first_accession, -3
+        )
         mock_update_external_results_dirs.assert_called_once_with(
             [external_copy_result],
-            destination_root=Path(expected_external_results_root),
+            study_prefix=expected_study_prefix,
         )
         mock_update_analysis_statuses.assert_called_once_with([external_copy_result])
-        mock_update_results_dirs.assert_called_once_with([nfs_copy_result])
+        mock_update_results_dirs.assert_called_once_with(
+            [nfs_copy_result],
+            study_results_dir=tmp_path / "results" / expected_study_prefix,
+        )

@@ -69,11 +69,6 @@ def _eggnog_analyses(analysis_accessions: list[str] | None = None):
     return analyses
 
 
-def analysis_results_root(analysis: Analysis) -> Path:
-    """Return the local analysis root directory that contains this analysis' downloads."""
-    return Path(analysis.results_dir)
-
-
 def _build_candidate_rows(analysis: Analysis) -> list[EggnogHeaderFixCandidate]:
     """Build review rows for EggNOG annotation files with repeated headers.
 
@@ -82,7 +77,7 @@ def _build_candidate_rows(analysis: Analysis) -> list[EggnogHeaderFixCandidate]:
     if not analysis.results_dir:
         return []
 
-    results_root = analysis_results_root(analysis)
+    results_root = Path(analysis.results_dir)
 
     downloads = _analysis_eggnog_annotation_downloads(analysis)
     if not downloads:
@@ -265,7 +260,7 @@ def resync_eggnog_results_to_ftp(
         else:
             mirror_root = EMG_CONFIG.slurm.ftp_results_dir
 
-        source_root = analysis_results_root(analysis)
+        source_root = Path(analysis.results_dir)
         target_root = Path(mirror_root) / analysis.external_results_dir
         source_files = [
             path for path in candidate_by_path if path.is_relative_to(source_root)

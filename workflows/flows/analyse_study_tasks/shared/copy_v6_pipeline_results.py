@@ -87,7 +87,15 @@ def copy_v6_pipeline_results(analysis_accession: str, timeout: int = 14400):
         else EMG_CONFIG.slurm.ftp_results_dir
     )
 
-    destination = f"{destination_root}/{accession_prefix_separated_dir_path(study.first_accession, -3)}/{accession_prefix_separated_dir_path(analysis.assembly_or_run.first_accession, -3)}/{analysis.pipeline_version}/{experiment_type_label}"
+    destination = str(
+        Path(destination_root)
+        / accession_prefix_separated_dir_path(study.first_accession, -3)
+        / accession_prefix_separated_dir_path(
+            analysis.assembly_or_run.first_accession, -3
+        )
+        / analysis.pipeline_version
+        / experiment_type_label
+    )
     logger.info(
         f"Will copy results for {analysis_accession} from {analysis.results_dir} to {destination}"
     )
@@ -216,7 +224,7 @@ def copy_v6_study_summaries(
 
 
 @task(
-    description="Copy an Assembly Batch Results",
+    description="Copy an Assembly Batch's Results",
     task_run_name="Copy Assembly Batch Results for batch {batch_id} to {destination_root}",
 )
 def copy_assembly_batch_results_to_destination_folder(
@@ -243,18 +251,8 @@ def copy_assembly_batch_results_to_destination_folder(
     batch = AssemblyAnalysisBatch.objects.get(id=batch_id)
     destination_root = Path(destination_root)
 
-    # Only copy results for analyses where ASA completed successfully
-    asa_completed_batch_jobs = batch.batch_analyses.filter(
-        asa_status=AssemblyAnalysisPipelineStatus.COMPLETED
-    ).select_related("analysis", "analysis__assembly")
-
-    logger.info(
-        f"Copying results for batch {batch_id} ({asa_completed_batch_jobs.count()} ASA-completed analyses "
-        f"out of {batch.total_analyses} total) to {destination_root}"
-    )
-
     copy_results: list[BatchCopyResult] = []
-    for batch_analysis_job in asa_completed_batch_jobs:
+    for batch_analysis_job in batch.batch_analyses.all():
         copy_results.append(
             copy_single_analysis_results(
                 analysis=batch_analysis_job.analysis,
@@ -279,7 +277,9 @@ def copy_single_analysis_results(
     timeout: int = 14400,
 ) -> BatchCopyResult:
     """
-    Copy results for a single analysis from the batch workspace to external results.
+    Copy results for a single assembly analysis from the batch workspace to external results.
+
+    This only considers the batch analysis what that are COMPLETED (as pre the status in the batch analysis).
 
     :param analysis: The analysis to copy results for
     :param batch_analysis_job: The batch relation containing per-pipeline statuses
@@ -309,14 +309,36 @@ def copy_single_analysis_results(
 
     copy_errors: list[CopyError] = []
 
-    asa_copy_success, asa_copy_errors = copy_schema_directories(
-        schema=AssemblyResultSchema(),
-        source_base=batch.get_pipeline_workspace(AssemblyAnalysisPipeline.ASA)
-        / assembly_accession,
-        destination_base=destination_base,
-        timeout=timeout,
-    )
-    copy_errors.extend(asa_copy_errors)
+    if batch_analysis_job.asa_status == AssemblyAnalysisPipelineStatus.COMPLETED:
+        asa_copy_success, asa_copy_errors = copy_schema_directories(
+            schema=AssemblyResultSchema(),
+            source_base=batch.get_pipeline_workspace(AssemblyAnalysisPipeline.ASA)
+            / assembly_accession,
+            destination_base=destination_base,
+            timeout=timeout,
+        )
+        if not asa_copy_success:
+            logger.error(
+                f"ASA {analysis.accession} copy for {assembly_accession} failed"
+            )
+        copy_errors.extend(asa_copy_errors)
+    else:
+        logger.error(
+            f"Analysis {analysis.accession} files cannot be synced because ASA is not completed"
+        )
+        return BatchCopyResult(
+            analysis_id=analysis.id,
+            destination_folder=destination_base,
+            success=False,
+            errors=[
+                CopyError(
+                    source=batch.get_pipeline_workspace(AssemblyAnalysisPipeline.ASA)
+                    / assembly_accession,
+                    message=f"Analysis {analysis.accession} files cannot be synced because ASA is not completed",
+                    pipeline_name=AssemblyAnalysisPipeline.ASA.value,
+                )
+            ],
+        )
 
     # VIRIfy and MAP results are "optional", these pipelines may not render any results
 
@@ -329,12 +351,16 @@ def copy_single_analysis_results(
             / assembly_accession
         )
         if virify_source_base.exists():
-            _virify_copy_success, virify_copy_errors = copy_schema_directories(
+            virify_copy_success, virify_copy_errors = copy_schema_directories(
                 schema=VirifyResultSchema(),
                 source_base=virify_source_base,
                 destination_base=destination_base,
                 timeout=timeout,
             )
+            if not virify_copy_success:
+                logger.error(
+                    f"VIRIfy for {analysis.accession} copy for {assembly_accession} failed"
+                )
             copy_errors.extend(virify_copy_errors)
         else:
             logger.info(
@@ -349,12 +375,16 @@ def copy_single_analysis_results(
             / assembly_accession
         )
         if map_source_base.exists():
-            _map_copy_success, map_copy_errors = copy_schema_directories(
+            map_copy_success, map_copy_errors = copy_schema_directories(
                 schema=MapResultSchema(),
                 source_base=map_source_base,
                 destination_base=destination_base,
                 timeout=timeout,
             )
+            if not map_copy_success:
+                logger.error(
+                    f"MAP for {analysis.accession} copy for {assembly_accession} failed"
+                )
             copy_errors.extend(map_copy_errors)
         else:
             logger.info(

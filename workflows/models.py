@@ -346,7 +346,12 @@ class AssemblyAnalysisBatchAnalysisManager(models.Manager):
         :return: QuerySet of enabled AssemblyAnalysisBatchAnalysis records
         :rtype: QuerySet
         """
-        return super().get_queryset().filter(disabled=False)
+        return (
+            super()
+            .get_queryset()
+            .select_related("analysis", "analysis__assembly")
+            .filter(disabled=False)
+        )
 
 
 class AssemblyAnalysisBatchAnalysis(

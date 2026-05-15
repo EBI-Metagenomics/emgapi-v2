@@ -5,7 +5,8 @@ from pydantic import BaseModel
 
 from activate_django_first import EMG_CONFIG
 
-from analyses.models import Analysis, Study
+from analyses.models import Analysis
+from workflows.data_io_utils.filenames import accession_prefix_separated_dir_path
 from workflows.flows.analyse_study_tasks.shared.copy_v6_pipeline_results import (
     BatchCopyResult,
     copy_assembly_batch_results_to_destination_folder,
@@ -13,6 +14,7 @@ from workflows.flows.analyse_study_tasks.shared.copy_v6_pipeline_results import 
 from workflows.models import (
     AssemblyAnalysisBatch,
 )
+from workflows.prefect_utils.analyses_models_helpers import mark_analysis_status
 from workflows.prefect_utils.flows_utils import django_db_flow as flow
 
 
@@ -40,12 +42,27 @@ def copy_assembly_batch_results(
     )
     mgnify_study = assembly_analysis_batch.study
 
+    # Batch analysis results live under:
+    #   {root}/{ena_study_prefix}/{ena_assembly_prefix}/{pipeline_version}/assembly
+    # For example:
+    #   PRJEB105/PRJEB105754/ERZ28775/ERZ28775516/V6/assembly
+    # The study-level directory is the shared ENA study prefix parent for all analyses
+    # in this batch.
+    study_prefix = accession_prefix_separated_dir_path(mgnify_study.first_accession, -3)
+    nfs_results_root = Path(assembly_analysis_batch.workspace_dir) / "results"
+
     # Copy the files to the FTP server (external_results)
     external_results_root = (
         EMG_CONFIG.slurm.private_results_dir
         if mgnify_study.is_private
         else EMG_CONFIG.slurm.ftp_results_dir
     )
+    # Store the study roots up front. Individual Analysis rows will later point deeper
+    # into the ENA-derived tree at
+    # {ena_study_prefix}/{ena_assembly_prefix}/{pipeline_version}/assembly.
+    mgnify_study.external_results_dir = str(study_prefix)
+    mgnify_study.save(update_fields=["external_results_dir"])
+
     external_copy_results = list(
         copy_assembly_batch_results_to_destination_folder(
             assembly_analyses_batch_id,
@@ -54,7 +71,7 @@ def copy_assembly_batch_results(
     )
     update_external_results_dirs_from_copy_results(
         external_copy_results,
-        destination_root=Path(external_results_root),
+        study_prefix=study_prefix,
     )
     update_analysis_statuses_from_copy_results(external_copy_results)
 
@@ -62,10 +79,13 @@ def copy_assembly_batch_results(
     nfs_copy_results = list(
         copy_assembly_batch_results_to_destination_folder(
             assembly_analyses_batch_id,
-            destination_root=Path(assembly_analysis_batch.workspace_dir) / "results",
+            destination_root=nfs_results_root,
         )
     )
-    update_results_dirs_from_copy_results(nfs_copy_results)
+    update_results_dirs_from_copy_results(
+        nfs_copy_results,
+        study_results_dir=nfs_results_root / study_prefix,
+    )
 
     return AssemblyBatchSyncResult(
         external_copy_results=external_copy_results,
@@ -77,34 +97,29 @@ def update_analysis_statuses_from_copy_results(
     copy_results: list[BatchCopyResult],
 ) -> None:
     """Update analysis import status flags from external copy results."""
-    if not copy_results:
+    successful_results = [result for result in copy_results if result.success]
+    if not successful_results:
         return
 
-    analyses = {
-        analysis.id: analysis
-        for analysis in Analysis.objects.filter(
-            id__in=[result.analysis_id for result in copy_results]
-        )
-    }
+    analyses = Analysis.objects.filter(
+        id__in=[result.analysis_id for result in successful_results]
+    )
 
-    for result in copy_results:
-        analysis = analyses[result.analysis_id]
-        analysis.status[Analysis.AnalysisStates.ANALYSIS_ANNOTATIONS_IMPORTED] = (
-            result.success
+    for analysis in analyses:
+        mark_analysis_status(
+            analysis,
+            status=Analysis.AnalysisStates.ANALYSIS_ANNOTATIONS_IMPORTED,
+            unset_statuses=[
+                Analysis.AnalysisStates.ANALYSIS_QC_FAILED,
+                Analysis.AnalysisStates.ANALYSIS_POST_SANITY_CHECK_FAILED,
+                Analysis.AnalysisStates.ANALYSIS_BLOCKED,
+            ],
         )
-        if result.success:
-            analysis.status[Analysis.AnalysisStates.ANALYSIS_QC_FAILED] = False
-            analysis.status[
-                Analysis.AnalysisStates.ANALYSIS_POST_SANITY_CHECK_FAILED
-            ] = False
-            analysis.status[Analysis.AnalysisStates.ANALYSIS_BLOCKED] = False
-
-    Analysis.objects.bulk_update(analyses.values(), ["status"])
 
 
 def update_external_results_dirs_from_copy_results(
     copy_results: list[BatchCopyResult],
-    destination_root: Path,
+    study_prefix: Path,
 ) -> None:
     """Set external_results_dir for analyses successfully copied to external storage."""
     successful_results = [result for result in copy_results if result.success]
@@ -113,27 +128,27 @@ def update_external_results_dirs_from_copy_results(
 
     analyses = {
         analysis.id: analysis
-        for analysis in Analysis.objects.select_related("study").filter(
+        for analysis in Analysis.objects.select_related("study", "assembly").filter(
             id__in=[result.analysis_id for result in successful_results]
         )
     }
-    studies_to_update: dict[int, Study] = {}
 
     for result in successful_results:
         analysis = analyses[result.analysis_id]
-        destination = Path(result.destination_folder)
-        analysis.external_results_dir = destination.relative_to(destination_root)
-        analysis.study.external_results_dir = destination.parent.relative_to(
-            destination_root
+        analysis.external_results_dir = str(
+            study_prefix
+            / accession_prefix_separated_dir_path(
+                analysis.assembly_or_run.first_accession, -3
+            )
+            / analysis.pipeline_version
+            / Analysis.ExperimentTypes.ASSEMBLY.label.lower()
         )
-        studies_to_update[analysis.study_id] = analysis.study
-
-    Analysis.objects.bulk_update(analyses.values(), ["external_results_dir"])
-    Study.objects.bulk_update(studies_to_update.values(), ["external_results_dir"])
+        analysis.save()
 
 
 def update_results_dirs_from_copy_results(
     copy_results: list[BatchCopyResult],
+    study_results_dir: Path,
 ) -> None:
     """Set results_dir for analyses successfully copied to the NFS mirror."""
     successful_results = [result for result in copy_results if result.success]
@@ -142,12 +157,18 @@ def update_results_dirs_from_copy_results(
 
     analyses = {
         analysis.id: analysis
-        for analysis in Analysis.objects.filter(
+        for analysis in Analysis.objects.select_related("assembly").filter(
             id__in=[result.analysis_id for result in successful_results]
         )
     }
-
     for result in successful_results:
-        analyses[result.analysis_id].results_dir = str(result.destination_folder)
-
-    Analysis.objects.bulk_update(analyses.values(), ["results_dir"])
+        analysis = analyses[result.analysis_id]
+        analysis.results_dir = str(
+            study_results_dir
+            / accession_prefix_separated_dir_path(
+                analysis.assembly_or_run.first_accession, -3
+            )
+            / analysis.pipeline_version
+            / Analysis.ExperimentTypes.ASSEMBLY.label.lower()
+        )
+        analysis.save()
