@@ -23,10 +23,12 @@ def _write_gzipped_tsv(path: Path, lines: list[str]) -> None:
 ASSEMBLY_EXTERNAL_RESULTS_DIR = "PRJEB105/PRJEB105754/ERZ28775/ERZ28775516/V6/assembly"
 
 
-def test_build_candidate_rows_supports_mirrored_nfs_results_dir():
+def test_build_candidate_rows_supports_mirrored_nfs_results_dir(tmp_path):
+    nfs_root = tmp_path / "nfs"
+
     analysis = Mock(
         accession="MGYA00000001",
-        results_dir=f"/tmp/nfs/{ASSEMBLY_EXTERNAL_RESULTS_DIR}",
+        results_dir=str(nfs_root / ASSEMBLY_EXTERNAL_RESULTS_DIR),
         external_results_dir=ASSEMBLY_EXTERNAL_RESULTS_DIR,
         is_private=False,
         assembly=Mock(first_accession="ERZ000001"),
@@ -55,7 +57,7 @@ def test_build_candidate_rows_supports_mirrored_nfs_results_dir():
             "analysis_accession": "MGYA00000001",
             "download_alias": "sample_emapper_annotations.tsv.gz",
             "nfs_path": (
-                f"/tmp/nfs/{ASSEMBLY_EXTERNAL_RESULTS_DIR}/"
+                f"{nfs_root}/{ASSEMBLY_EXTERNAL_RESULTS_DIR}/"
                 "eggnog/sample_emapper_annotations.tsv.gz"
             ),
             "external_path": (
