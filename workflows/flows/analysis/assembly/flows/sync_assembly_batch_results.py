@@ -57,11 +57,6 @@ def copy_assembly_batch_results(
         if mgnify_study.is_private
         else EMG_CONFIG.slurm.ftp_results_dir
     )
-    # Store the study roots up front. Individual Analysis rows will later point deeper
-    # into the ENA-derived tree at
-    # {ena_study_prefix}/{ena_assembly_prefix}/{pipeline_version}/assembly.
-    mgnify_study.external_results_dir = str(study_prefix)
-    mgnify_study.save(update_fields=["external_results_dir"])
 
     external_copy_results = list(
         copy_assembly_batch_results_to_destination_folder(
@@ -86,6 +81,12 @@ def copy_assembly_batch_results(
         nfs_copy_results,
         study_results_dir=nfs_results_root / study_prefix,
     )
+
+    # Store the study roots up front. Individual Analysis rows will later point deeper
+    # into the ENA-derived tree at
+    # {ena_study_prefix}/{ena_assembly_prefix}/{pipeline_version}/assembly.
+    mgnify_study.external_results_dir = str(study_prefix)
+    mgnify_study.save(update_fields=["external_results_dir"])
 
     return AssemblyBatchSyncResult(
         external_copy_results=external_copy_results,
