@@ -279,7 +279,7 @@ def copy_single_analysis_results(
     """
     Copy results for a single assembly analysis from the batch workspace to external results.
 
-    This only considers the batch analysis what that are COMPLETED (as pre the status in the batch analysis).
+    This only considers the batch analysis that are COMPLETED (as pre the status in the batch analysis).
 
     :param analysis: The analysis to copy results for
     :param batch_analysis_job: The batch relation containing per-pipeline statuses
