@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import TYPE_CHECKING, Optional
 
 from ninja import Schema
@@ -24,6 +25,8 @@ class GenomeBase(Schema):
     completeness: float
     contamination: float
     catalogue_id: str
+    taxon_lineage: str = Field(..., serialization_alias="taxon-lineage")
+    updated_at: datetime
     geographic_origin: Optional[str]
     geographic_range: Optional[list[str]] = []
     biome: Optional["Biome"] = None
