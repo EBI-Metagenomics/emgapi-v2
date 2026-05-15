@@ -228,11 +228,17 @@ fileignoreconfig:
 - filename: workflows/flows/housekeeping/fix_eggnog_tsv_headers.py
   allowed_patterns: [key]
 
-- filename: workflows/tests/test_flows_utils.py
-  checksum: 7044790c62db033597a0c9391751a32f2db1f88d5ba5a953b6c607d97ff7ed6d
+- filename: workflows/flows/housekeeping/backfill_assembly_analysis_results_dirs.py
+  allowed_patterns: [key]
 
 - filename: workflows/flows/import_assemblies_from_filesystem_flow.py
   allowed_patterns: [key]
+
+- filename: workflows/tests/test_backfill_assembly_analysis_results_dirs_flow.py
+  allowed_patterns: [key]
+
+- filename: workflows/tests/test_flows_utils.py
+  checksum: 7044790c62db033597a0c9391751a32f2db1f88d5ba5a953b6c607d97ff7ed6d
 
 - filename: .git-blame-ignore-revs
   ignore_detectors: [filecontent]
