@@ -125,9 +125,7 @@ class UpdateOrCreateByAccessionManagerMixin(Generic[T_ENADerivedModel]):
         # Two-step process needed (first get, then update/create).
         # This is because __overlap cannot be used with default django update_or_create.
         try:
-            obj = self.get_queryset().get(
-                ena_accessions__overlap=known_accessions, **kwargs
-            )
+            obj = self.get_queryset().get(ena_accessions__overlap=known_accessions)
         except ObjectDoesNotExist:
             obj = None
 

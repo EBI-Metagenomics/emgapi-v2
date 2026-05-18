@@ -219,6 +219,12 @@ fileignoreconfig:
 - filename: workflows/flows/housekeeping/clean_nextflow_workdirs.py
   allowed_patterns: [key]
 
+- filename: workflows/flows/housekeeping/deduplicate_studies.py
+  allowed_patterns: [key]
+
+- filename: workflows/flows/housekeeping/deduplicate_runs.py
+  allowed_patterns: [key]
+
 - filename: workflows/flows/housekeeping/sync_samples_with_ena.py
   allowed_patterns: [key]
 
