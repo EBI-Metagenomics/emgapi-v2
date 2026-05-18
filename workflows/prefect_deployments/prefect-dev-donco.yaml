@@ -237,6 +237,30 @@ deployments:
     name: slurm
   schedules: []
 
+- name: deduplicate_studies_deployment
+  description: |-
+    Deduplicate MGnify Study rows and emit a Prefect artifact summary.
+
+    :param accessions: Optional MGYS or ENA accessions are used to limit processing to those matching this list.
+    :param dry_run: If True, report intended changes and roll back each group transaction.
+  entrypoint: workflows/flows/housekeeping/deduplicate_studies.py:deduplicate_studies
+  parameters: {}
+  work_pool:
+    name: slurm
+  schedules: []
+
+- name: deduplicate_runs_deployment
+  description: |-
+    Deduplicate MGnify Run rows and emit a Prefect artifact summary.
+
+    :param accessions: Optional ENA accessions used to limit processing to matching groups.
+    :param dry_run: If True, report intended changes without persisting them.
+  entrypoint: workflows/flows/housekeeping/deduplicate_runs.py:deduplicate_runs
+  parameters: {}
+  work_pool:
+    name: slurm
+  schedules: []
+
 - name: repair_eggnog_tsv_headers_deployment
   description: |-
     Scan assembly analyses for EggNOG annotation TSV files with duplicated headers.
