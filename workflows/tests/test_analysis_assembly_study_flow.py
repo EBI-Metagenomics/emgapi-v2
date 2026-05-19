@@ -15,6 +15,7 @@ import analyses.models
 import ena.models
 from analyses.base_models.with_downloads_models import DownloadType
 from analyses.models import Analysis, Study
+from workflows.data_io_utils.filenames import accession_prefix_separated_dir_path
 from workflows.flows.analysis.assembly.flows.analysis_assembly_study import (
     analysis_assembly_study,
 )
@@ -725,6 +726,17 @@ def test_prefect_analyse_assembly_flow(
             assembly_test_scenario.assembly_accession_success
         ]
     )
+    expected_nfs_results_dir = (
+        Path(batch.workspace_dir)
+        / "results"
+        / accession_prefix_separated_dir_path(study.first_accession, -3)
+        / accession_prefix_separated_dir_path(
+            assembly_test_scenario.assembly_accession_success, -3
+        )
+        / analysis_with_status.pipeline_version
+        / Analysis.ExperimentTypes.ASSEMBLY.label.lower()
+    )
+    assert analysis_with_status.results_dir == str(expected_nfs_results_dir)
     batch_analysis_relation = batch.batch_analyses.get(analysis=analysis_with_status)
     assert (
         batch_analysis_relation.asa_status == AssemblyAnalysisPipelineStatus.COMPLETED

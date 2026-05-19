@@ -251,6 +251,17 @@ def test_get_or_create_batches_for_study_handles_rerun(
     assert len(batches_second_run) == 1
     assert batches_second_run[0].id == first_batch.id
 
+    batches_third_run = (
+        workflows.models.AssemblyAnalysisBatch.objects.get_or_create_batches_for_study(
+            study=study,
+            pipeline=analyses.models.Analysis.PipelineVersions.v6,
+            workspace_dir=tmp_path,
+        )
+    )
+
+    assert len(batches_third_run) == 1
+    assert batches_third_run[0].id == first_batch.id
+
     # Should not create duplicate relationships
     assert first_batch.analyses.count() == len(analyses_list)
 

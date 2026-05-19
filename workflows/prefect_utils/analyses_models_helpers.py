@@ -71,7 +71,6 @@ def mark_analysis_status(
             f"Invalid status '{status}'. Must be one of the predefined AnalysisStates."
         )
     analysis.refresh_from_db()
-    print(f"Analysis {analysis} status is {status} now.")
     analysis.mark_status(status, reason=reason)
     for unset_status in unset_statuses or []:
         if analysis.status.get(unset_status, None):

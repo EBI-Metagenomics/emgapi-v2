@@ -151,6 +151,19 @@ deployments:
   work_pool:
     name: slurm
 
+- name: sync_assembly_batch_results_deployment
+  description: |-
+    Copy the results from an assembly batch to external storage and the NFS mirror.
+
+    After copying the files it updates the external_results_dir and results_dir for the analyses.
+
+    :param assembly_analyses_batch_id: The ID of the assembly analysis batch to sync.
+  entrypoint: workflows/flows/analysis/assembly/flows/sync_assembly_batch_results.py:copy_assembly_batch_results
+  schedule: null
+  concurrency_limit: 5
+  work_pool:
+    name: slurm
+
 - name: import_assemblies_from_filesystem_flow_deployment
   description: |-
     Import miassembler outputs into Assembly records.
