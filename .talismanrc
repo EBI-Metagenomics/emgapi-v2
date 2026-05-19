@@ -14,6 +14,12 @@ fileignoreconfig:
 - filename: analyses/models.py
   allowed_patterns: [key]
 
+- filename: analyses/management/commands/merge_runs_duplicates.py
+  checksum: ba11faabb0b0890d4bec373d086ea6ebb416c21047d6d1568062b88b15636c2d
+
+- filename: analyses/management/commands/merge_mgys_duplicates.py
+  checksum: 1d9ec962dd81a8453027fd16c4918044f4f03c368859a11885b8126734ea3581
+
 - filename: analyses/tests.py
   allowed_patterns: [key]
 
@@ -217,12 +223,6 @@ fileignoreconfig:
   allowed_patterns: [key]
 
 - filename: workflows/flows/housekeeping/clean_nextflow_workdirs.py
-  allowed_patterns: [key]
-
-- filename: workflows/flows/housekeeping/deduplicate_studies.py
-  allowed_patterns: [key]
-
-- filename: workflows/flows/housekeeping/deduplicate_runs.py
   allowed_patterns: [key]
 
 - filename: workflows/flows/housekeeping/sync_samples_with_ena.py

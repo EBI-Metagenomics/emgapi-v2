@@ -104,14 +104,19 @@ class UpdateOrCreateByAccessionManagerMixin(Generic[T_ENADerivedModel]):
         **kwargs,
     ) -> tuple[T_ENADerivedModel, bool]:
         """
-        Like django update_or_create, but with handling for multiple accessions.
-        I.e., will select the model based on ena_accessions field containing any of the given accessions,
-        and will set the ena_accessions to the union of provided known_accessions and any existing accessions.
-        :param known_accessions: List of accessions to match on and set as ena_accessions.
+        Update or create a model by matching any known accession.
+
+        Existing objects are selected only by overlap between `known_accessions` and
+        the model's `ena_accessions` field. `defaults` and `kwargs` are not used
+        to identify duplicate records.
+        `kwargs` are only applied when a new object is created. After update or creation,
+        `ena_accessions` is set to include the union of provided and existing accessions.
+
+        :param known_accessions: Accessions to match against ``ena_accessions`` and preserve on the object.
         :param defaults: Fields to update.
         :param create_defaults: Fields to set if the object is created.
         :param include_update_defaults_in_create_defaults: If true, the defaults dict will be merged with create_defaults for creation.
-        :param kwargs: other matchers
+        :param kwargs: Extra fields to apply only when creating a new object.
         :return: Tuple of object, created.
         """
         defaults = defaults or {}
