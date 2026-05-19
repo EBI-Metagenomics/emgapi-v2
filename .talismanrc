@@ -186,6 +186,9 @@ fileignoreconfig:
 - filename: workflows/tests/test_analysis_rawreads_study_flow.py
   checksum: 211d4cfcd3e1b0dbe6e8b92683f6160661c50a17429d470ea0651daa41f5c3f8
 
+- filename: workflows/tests/flows/analyse_study_tasks/amplicon/test_import_primer_identification_for_imported_analyses.py
+  checksum: 8ad9be595fec33682cd1c23db036ac27453692e0a2b71bf80b104117f0bfbd6f
+
 - filename: workflows/flows/upload_assembly.py
   allowed_patterns: [key]
 
