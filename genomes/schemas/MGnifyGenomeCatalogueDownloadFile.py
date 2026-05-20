@@ -8,7 +8,7 @@ from typing_extensions import Annotated
 
 from analyses.base_models.with_downloads_models import DownloadFile
 from genomes import models as genome_models
-from genomes.schemas.url_utils import build_transfer_service_public_url
+from genomes.schemas.url_utils import build_public_url
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +40,9 @@ class MGnifyGenomeCatalogueDownloadFile(Schema, DownloadFile):
 
         if not catalogue.result_directory:
             # Without a results directory, we cannot form a URL
+            logger.warning(
+                "Catalogue result directory not found for catalogue id %s for download URL resolution",
+            )
             return None
 
-        return build_transfer_service_public_url(catalogue.result_directory, obj.path)
+        return build_public_url(catalogue.result_directory, obj.path)
