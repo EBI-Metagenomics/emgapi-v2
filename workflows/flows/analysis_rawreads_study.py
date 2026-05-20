@@ -21,7 +21,6 @@ from workflows.ena_utils.ena_api_requests import (
 from workflows.ena_utils.webin_owner_utils import validate_and_set_webin_owner
 from workflows.flows.analyse_study_tasks.cleanup_pipeline_directories import (
     delete_study_nextflow_workdir,
-    # delete_study_results_dir,
 )
 from workflows.flows.analyse_study_tasks.raw_reads.run_rawreads_pipeline_via_samplesheet import (
     run_rawreads_pipeline_via_samplesheet,
