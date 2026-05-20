@@ -249,6 +249,40 @@ def test_merge_mgys_duplicates_rewires_relations(tmp_path, study_pair):
 
 
 @pytest.mark.django_db
+def test_merge_mgys_duplicates_accepts_partial_ena_accession_aliases(tmp_path):
+    canonical_ena_study = ena.models.Study.objects.create(
+        accession="PRJEB20002",
+        additional_accessions=["ERP200002"],
+        title="Canonical ENA",
+    )
+    duplicate_ena_study = ena.models.Study.objects.create(
+        accession="PRJEB20002A",
+        additional_accessions=["ERP200002"],
+        title="Duplicate ENA with partial aliases",
+    )
+    canonical_study = Study.objects.create(
+        ena_accessions=["PRJEB20002", "ERP200002"],
+        ena_study=canonical_ena_study,
+        title="Canonical study",
+    )
+    duplicate_study = Study.objects.create(
+        ena_accessions=["ERP200002"],
+        ena_study=duplicate_ena_study,
+        title="Duplicate study",
+    )
+
+    call_command(
+        "merge_mgys_duplicates",
+        "--output-csv",
+        str(tmp_path / "partial-alias-report.csv"),
+    )
+
+    canonical_study.refresh_from_db()
+    assert not Study.objects.filter(id=duplicate_study.id).exists()
+    assert sorted(canonical_study.ena_accessions) == ["ERP200002", "PRJEB20002"]
+
+
+@pytest.mark.django_db
 def test_merge_mgys_duplicates_accession_filter_limits_groups(tmp_path, study_pair):
     target_old, target_new, _ = study_pair
     other_ena_study = ena.models.Study.objects.create(

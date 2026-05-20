@@ -54,6 +54,15 @@ class Command(BaseCommand):
         "Deduplicate MGnify studies that share ENA accessions and write a CSV summary."
     )
 
+    @staticmethod
+    def known_ena_accessions(study: Study) -> set[str]:
+        """Collect known ENA aliases from the MGnify Study and linked ENA Study."""
+        accessions = set(study.ena_accessions or [])
+        if study.ena_study:
+            accessions.add(study.ena_study.accession)
+            accessions.update(study.ena_study.additional_accessions or [])
+        return {accession for accession in accessions if accession}
+
     def add_arguments(self, parser):
         parser.add_argument(
             "--dry-run",
@@ -398,14 +407,23 @@ class Command(BaseCommand):
             status="dry_run" if dry_run else "applied",
         )
 
-        ena_study_accessions = set(study.ena_study.accession for study in studies)
-        if len(ena_study_accessions) > 1:
+        canonical_ena_accessions = self.known_ena_accessions(canonical_study)
+        different_ena_studies = {}
+        for study in studies:
+            study_ena_accessions = self.known_ena_accessions(study)
+            if not canonical_ena_accessions.intersection(study_ena_accessions):
+                different_ena_studies[study.accession] = sorted(study_ena_accessions)
+
+        if different_ena_studies:
             raise ValueError(
-                f"Duplicated study {canonical_study} is connected to different ENA studies: {ena_study_accessions}"
+                f"Duplicated study {canonical_study} is connected to different ENA studies: "
+                f"canonical={sorted(canonical_ena_accessions)}, duplicates={different_ena_studies}"
             )
 
         canonical_ena_study = canonical_study.ena_study
-        result.canonical_ena_study = canonical_ena_study.accession
+        result.canonical_ena_study = (
+            canonical_ena_study.accession if canonical_ena_study else None
+        )
 
         if dry_run:
             self.stdout.write(
