@@ -5,8 +5,10 @@ from pathlib import Path
 from unittest.mock import Mock, patch
 
 import pytest
+from django.conf import settings
 
 from workflows.flows.housekeeping.fix_eggnog_tsv_headers import (
+    _build_candidate_rows,
     repair_eggnog_tsv_headers,
     resync_eggnog_results_to_ftp,
 )
@@ -16,6 +18,55 @@ def _write_gzipped_tsv(path: Path, lines: list[str]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with gzip.open(path, "wt") as handle:
         handle.writelines(lines)
+
+
+ASSEMBLY_EXTERNAL_RESULTS_DIR = "PRJEB105/PRJEB105754/ERZ28775/ERZ28775516/V6/assembly"
+
+
+def test_build_candidate_rows_supports_mirrored_nfs_results_dir(tmp_path):
+    nfs_root = tmp_path / "nfs"
+
+    analysis = Mock(
+        accession="MGYA00000001",
+        results_dir=str(nfs_root / ASSEMBLY_EXTERNAL_RESULTS_DIR),
+        external_results_dir=ASSEMBLY_EXTERNAL_RESULTS_DIR,
+        is_private=False,
+        assembly=Mock(first_accession="ERZ000001"),
+        downloads_as_objects=[
+            Mock(
+                path="eggnog/sample_emapper_annotations.tsv.gz",
+                alias="sample_emapper_annotations.tsv.gz",
+            )
+        ],
+    )
+
+    with (
+        patch(
+            "workflows.flows.housekeeping.fix_eggnog_tsv_headers.Path.is_file",
+            return_value=True,
+        ),
+        patch(
+            "workflows.flows.housekeeping.fix_eggnog_tsv_headers.has_duplicated_header_lines",
+            return_value=True,
+        ),
+    ):
+        rows = _build_candidate_rows(analysis)
+
+    assert rows == [
+        {
+            "analysis_accession": "MGYA00000001",
+            "download_alias": "sample_emapper_annotations.tsv.gz",
+            "nfs_path": (
+                f"{nfs_root}/{ASSEMBLY_EXTERNAL_RESULTS_DIR}/"
+                "eggnog/sample_emapper_annotations.tsv.gz"
+            ),
+            "external_path": (
+                f"{settings.EMG_CONFIG.slurm.ftp_results_dir}/"
+                f"{ASSEMBLY_EXTERNAL_RESULTS_DIR}/eggnog/sample_emapper_annotations.tsv.gz"
+            ),
+            "has_duplicate_header": True,
+        }
+    ]
 
 
 @pytest.mark.django_db
@@ -153,8 +204,9 @@ def test_resync_eggnog_results_to_ftp_uses_rsync(
     analysis = Mock(
         accession="MGYA00000001",
         results_dir=str(analysis_root),
-        external_results_dir="analyses/MGYA00000001",
+        external_results_dir=ASSEMBLY_EXTERNAL_RESULTS_DIR,
         is_private=False,
+        assembly=Mock(first_accession="ERZ000001"),
     )
     mock_analyses.return_value = [analysis]
 
@@ -162,7 +214,10 @@ def test_resync_eggnog_results_to_ftp_uses_rsync(
         "analysis_accession": "MGYA00000001",
         "download_alias": "sample_emapper_annotations.tsv.gz",
         "nfs_path": str(analysis_root / "eggnog" / "sample_emapper_annotations.tsv.gz"),
-        "external_path": "/tmp/ftp/analyses/MGYA00000001/eggnog/sample_emapper_annotations.tsv.gz",
+        "external_path": (
+            f"/tmp/ftp/{ASSEMBLY_EXTERNAL_RESULTS_DIR}/"
+            "eggnog/sample_emapper_annotations.tsv.gz"
+        ),
         "has_duplicate_header": True,
     }
 
@@ -198,8 +253,9 @@ def test_resync_eggnog_results_to_ftp_marks_skipped_candidates(
     analysis = Mock(
         accession="MGYA00000001",
         results_dir=str(analysis_root),
-        external_results_dir="analyses/MGYA00000001",
+        external_results_dir=ASSEMBLY_EXTERNAL_RESULTS_DIR,
         is_private=False,
+        assembly=Mock(first_accession="ERZ000001"),
     )
     mock_analyses.return_value = [analysis]
 
@@ -209,7 +265,10 @@ def test_resync_eggnog_results_to_ftp_marks_skipped_candidates(
         "nfs_path": str(
             tmp_path / "other" / "eggnog" / "sample_emapper_annotations.tsv.gz"
         ),
-        "external_path": "/tmp/ftp/analyses/MGYA00000001/eggnog/sample_emapper_annotations.tsv.gz",
+        "external_path": (
+            f"/tmp/ftp/{ASSEMBLY_EXTERNAL_RESULTS_DIR}/"
+            "eggnog/sample_emapper_annotations.tsv.gz"
+        ),
         "has_duplicate_header": True,
     }
 

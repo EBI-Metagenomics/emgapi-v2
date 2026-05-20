@@ -48,7 +48,7 @@ def generate_assembly_analysis_pipeline_batch_summary(
     asa_workspace = assembly_batch.get_pipeline_workspace(AssemblyAnalysisPipeline.ASA)
     logger.info(f"Expecting to find analysis results in {asa_workspace}")
 
-    # Ensure the study has a results_dir to write summaries to
+    # Ensure the study has a canonical results_dir to write summaries to.
     study.set_results_dir_default()
 
     pipeline_config = EMG_CONFIG.assembly_analysis_pipeline

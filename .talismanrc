@@ -57,7 +57,7 @@ fileignoreconfig:
   checksum: 3afe465b36e4e141124bd84c8459c5aa81332eedf49b691eff22c74df63a0f18
 
 - filename: emgapiv2/settings.py
-  checksum: 4113e9045da277c139530cbf71de334dc83b49a4f93a570b559e694bdd5cb0c8
+  checksum: 83a113079b31fa3d07ce523e4a76378c97916823c53554148a1b815c34ab6b42
 
 - filename: emgapiv2/settings_test.py
   checksum: ded898400b4eda7e3cf75694af1b66235975a85eb5b8f49f3a2c708163a7aad4
@@ -228,11 +228,17 @@ fileignoreconfig:
 - filename: workflows/flows/housekeeping/fix_eggnog_tsv_headers.py
   allowed_patterns: [key]
 
-- filename: workflows/tests/test_flows_utils.py
-  checksum: 7044790c62db033597a0c9391751a32f2db1f88d5ba5a953b6c607d97ff7ed6d
+- filename: workflows/flows/housekeeping/backfill_assembly_analysis_results_dirs.py
+  allowed_patterns: [key]
 
 - filename: workflows/flows/import_assemblies_from_filesystem_flow.py
   allowed_patterns: [key]
+
+- filename: workflows/tests/test_backfill_assembly_analysis_results_dirs_flow.py
+  allowed_patterns: [key]
+
+- filename: workflows/tests/test_flows_utils.py
+  checksum: 7044790c62db033597a0c9391751a32f2db1f88d5ba5a953b6c607d97ff7ed6d
 
 - filename: .git-blame-ignore-revs
   ignore_detectors: [filecontent]
