@@ -450,6 +450,28 @@ def test_update_or_create_by_accession(raw_reads_mgnify_study):
 
 
 @pytest.mark.django_db
+def test_get_or_create_should_not_create_duplicate_run_with_conflicting_kwargs(
+    raw_read_run, raw_reads_mgnify_sample
+):
+    run = raw_read_run[0]
+    other_sample = raw_reads_mgnify_sample[1]
+    assert other_sample != run.sample
+
+    returned_run, created = Run.objects.update_or_create_by_accession(
+        known_accessions=run.ena_accessions,
+        study=run.study,
+        ena_study=run.ena_study,
+        sample=other_sample,
+    )
+
+    assert created is False
+    assert returned_run.pk == run.pk
+    assert returned_run.study == run.study
+    assert returned_run.sample == run.sample
+    assert Run.objects.filter(ena_accessions__overlap=run.ena_accessions).count() == 1
+
+
+@pytest.mark.django_db
 def test_inferred_metadata_mixin(raw_read_run):
     run = Run.objects.first()
     run.metadata = {}

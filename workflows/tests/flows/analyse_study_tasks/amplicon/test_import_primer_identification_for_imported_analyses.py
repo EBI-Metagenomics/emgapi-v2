@@ -136,7 +136,7 @@ def patch_import_fn(monkeypatch):
 
 
 def test_flow_processes_only_valid_amplicon_analyses_and_logs(
-    monkeypatch, patch_analysis_objects, patch_import_fn
+    monkeypatch, patch_analysis_objects, patch_import_fn, prefect_harness
 ):
     # Run without max_count to process all valid items (2 will be processed successfully; 3 others skipped)
     logged = run_flow_and_capture_logs(
@@ -166,7 +166,7 @@ def test_flow_processes_only_valid_amplicon_analyses_and_logs(
     assert all(arg[2] is True for arg in patch_import_fn["args"])  # type: ignore[index]
 
 
-def test_flow_respects_max_count(monkeypatch, fake_objects):
+def test_flow_respects_max_count(monkeypatch, fake_objects, prefect_harness):
     # Restrict to first 1 analysis after ordering by id
     monkeypatch.setattr(
         analyses.models.Analysis, "objects", fake_objects, raising=False
