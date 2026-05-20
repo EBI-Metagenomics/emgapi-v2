@@ -2,18 +2,15 @@ from __future__ import annotations
 
 import logging
 from typing import Union
-from urllib.parse import urljoin
 
-from django.conf import settings
 from ninja import Field, Schema
 from typing_extensions import Annotated
 
 from analyses.base_models.with_downloads_models import DownloadFile
 from genomes import models as genome_models
-from workflows.data_io_utils.filenames import trailing_slash_ensured_dir
+from genomes.schemas.url_utils import build_public_url
 
 logger = logging.getLogger(__name__)
-EMG_CONFIG = settings.EMG_CONFIG
 
 
 class MGnifyGenomeCatalogueDownloadFile(Schema, DownloadFile):
@@ -43,9 +40,9 @@ class MGnifyGenomeCatalogueDownloadFile(Schema, DownloadFile):
 
         if not catalogue.result_directory:
             # Without a results directory, we cannot form a URL
+            logger.warning(
+                "Catalogue result directory not found for catalogue id %s for download URL resolution",
+            )
             return None
 
-        return urljoin(
-            EMG_CONFIG.service_urls.transfer_services_url_root,
-            urljoin(trailing_slash_ensured_dir(catalogue.result_directory), obj.path),
-        )
+        return build_public_url(catalogue.result_directory, obj.path)
