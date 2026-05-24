@@ -153,6 +153,8 @@ class Genome(WithDownloadsModel, TimeStampedModel):
         genome_data.pop("genome_accession", None)
         genome_data.pop("pangenome", None)
         genome_data.pop("study_accession", None)
+        if "rna_5.8s" in genome_data:
+            genome_data.pop("rna_5.8s", None)
 
         return genome_data
 
