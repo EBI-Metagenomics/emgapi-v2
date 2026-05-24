@@ -118,6 +118,7 @@ def process_genome_dir(catalogue, genome_dir):
 
     genome_data = Genome.clean_data(genome_data)
     genome_data = Genome.clean_data(genome_data)
+    logger.info(f"UPDATED Writing genome data: {genome_data}")
 
     genome, _ = Genome.objects.update_or_create(
         accession=accession, defaults=genome_data
