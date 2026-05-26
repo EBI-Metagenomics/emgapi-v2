@@ -8,6 +8,21 @@ from genomes.schemas.MGnifyGenomeDownloadFile import MGnifyGenomeDownloadFile
 
 
 class GenomeDetail(GenomeBase):
+    # Additional fields to expose on the genome detail endpoint
+    rna_5s: Optional[float] = None
+    rna_5_8s: Optional[float] = None
+    rna_16s: Optional[float] = None
+    rna_18s: Optional[float] = None
+    rna_23s: Optional[float] = None
+    rna_28s: Optional[float] = None
+    trnas: Optional[float] = None
+    nc_rnas: Optional[float] = None
+    eggnog_coverage: Optional[float] = None
+    ipr_coverage: Optional[float] = None
+
+    num_genomes_total: Optional[int] = None
+    num_proteins: Optional[int] = None
+
     downloads: list["MGnifyGenomeDownloadFile"] = Field(
         ..., alias="downloads_as_objects"
     )

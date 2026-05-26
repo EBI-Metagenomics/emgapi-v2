@@ -146,13 +146,31 @@ class Genome(WithDownloadsModel, TimeStampedModel):
     def clean_data(cls, genome_data):
         """
         Clean genome data by removing unnecessary fields and ensuring required fields are present.
+        - Extract selected nested fields from exporter structures (e.g. pangenome) into model fields.
+        - Drop keys that do not belong to the model (basic known drops retained for safety).
         """
+        # Remove fields that are not stored as-is
         genome_data.pop("gold_biome", None)
+        genome_data.pop("genome_accession", None)
+        genome_data.pop("study_accession", None)
+
+        # Map nested pangenome fields if present
+        pangenome = genome_data.get("pangenome")
+        if isinstance(pangenome, dict):
+            # Store total number of genomes in the pangenome, if provided
+            if (
+                "num_genomes_total" in pangenome
+                and "num_genomes_total" not in genome_data
+            ):
+                genome_data["num_genomes_total"] = pangenome.get("num_genomes_total")
+        # Remove the nested pangenome blob from defaults passed to ORM
+        genome_data.pop("pangenome", None)
+
+        # Normalise annotations container
         if "annotations" not in genome_data:
             genome_data["annotations"] = cls.default_annotations()
-        genome_data.pop("genome_accession", None)
-        genome_data.pop("pangenome", None)
-        genome_data.pop("study_accession", None)
+
+        # Normalise rRNA key variation that sometimes appears in exporter JSON
         if "rna_5.8s" in genome_data:
             genome_data.pop("rna_5.8s", None)
 
