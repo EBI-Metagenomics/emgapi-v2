@@ -163,6 +163,7 @@ class Genome(WithDownloadsModel, TimeStampedModel):
                 and "num_genomes_total" not in genome_data
             ):
                 genome_data["num_genomes_total"] = pangenome.get("num_genomes_total")
+        genome_data.setdefault("num_genomes_total", 1)
         # Remove the nested pangenome blob from defaults passed to ORM
         genome_data.pop("pangenome", None)
 
