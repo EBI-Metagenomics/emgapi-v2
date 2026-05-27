@@ -1,11 +1,6 @@
 ---
 version: '3'
 
-includes:
-  ebi-wp-k8s-hl:
-    taskfile: ./deployment/ebi-wp-k8s-hl/Taskfile.yaml
-    dir: ./deployment/ebi-wp-k8s-hl
-
 tasks:
   prefect:
     desc: "Run a command on the prefect CLI. E.g. task prefect -- deployment"
