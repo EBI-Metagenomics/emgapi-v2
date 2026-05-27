@@ -108,7 +108,8 @@ def analysis_assembly_study(
 
                         {"**Webin owner** The study is private. Please provide the Webin account ID of the study owner so they can view their study." if needs_webin else ""}
                         """),
-            )
+            ),
+            timeout=EMG_CONFIG.slurm.default_flow_suspend_awaiting_input_timeout_secs,
         )
 
         biome = analyses.models.Biome.objects.get(path=analyse_study_input.biome.name)

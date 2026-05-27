@@ -584,7 +584,7 @@ def test_prefect_analyse_assembly_flow(
     )
 
     # Pretend that a human resumed the flow with the biome picker
-    def suspend_side_effect(wait_for_input=None):
+    def suspend_side_effect(wait_for_input=None, **kwargs):
         if wait_for_input.__name__ == "AnalyseStudyInput":
             return analyse_study_input_mocker(
                 biome=biome_choices[assembly_test_scenario.biome_path],
@@ -957,7 +957,7 @@ def test_prefect_analyse_assembly_flow_missing_directory(
     )
 
     # Mock biome picker
-    def suspend_side_effect(wait_for_input=None):
+    def suspend_side_effect(wait_for_input=None, **kwargs):
         if wait_for_input.__name__ == "AnalyseStudyInput":
             return analyse_study_input_mocker(
                 biome=biome_choices[scenario.biome_path],
@@ -1136,7 +1136,7 @@ def test_prefect_analyse_assembly_flow_invalid_schema(
     )
 
     # Mock biome picker
-    def suspend_side_effect(wait_for_input=None):
+    def suspend_side_effect(wait_for_input=None, **kwargs):
         if wait_for_input.__name__ == "AnalyseStudyInput":
             return analyse_study_input_mocker(
                 biome=biome_choices[scenario.biome_path],
@@ -1225,7 +1225,7 @@ def test_private_assembly_study_requests_webin(
     mock_run_deployment.return_value = Mock(id="mock-flow-run-id")
 
     # Simulate a human resuming the flow and providing the webin_owner
-    def suspend_side_effect(wait_for_input=None):
+    def suspend_side_effect(wait_for_input=None, **kwargs):
         """Return webin_owner when the flow suspends."""
         if wait_for_input.__name__ == "AnalyseStudyInput":
             return analyse_study_input_mocker(

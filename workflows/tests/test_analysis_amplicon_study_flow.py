@@ -1104,7 +1104,7 @@ def test_prefect_analyse_amplicon_flow(
         """))
 
     ## Pretend that a human resumed the flow with the biome picker.
-    def suspend_side_effect(wait_for_input=None):
+    def suspend_side_effect(wait_for_input=None, **kwargs):
         if wait_for_input.__name__ == "AnalyseStudyInput":
             return analysis_study_input_mocker(
                 biome=biome_choices["root.engineered"],
@@ -1638,7 +1638,7 @@ def test_prefect_analyse_amplicon_flow_private_data(
     )
 
     ## Pretend that a human resumed the flow with the biome picker.
-    def suspend_side_effect(wait_for_input=None):
+    def suspend_side_effect(wait_for_input=None, **kwargs):
         if wait_for_input.__name__ == "AnalyseStudyInput":
             return analysis_study_input_mocker(
                 biome=biome_choices["root.engineered"],
