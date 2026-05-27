@@ -73,6 +73,7 @@ def genomes(top_level_biomes, genome_catalogues, geographic_locations):
             "biome": top_level_biomes[3],  # Human biome
             "length": 1000000,
             "num_contigs": 100,
+            "num_genomes_total": 1,
             "n_50": 10000,
             "gc_content": 0.5,
             "type": Genome.GenomeType.MAG,
@@ -92,6 +93,7 @@ def genomes(top_level_biomes, genome_catalogues, geographic_locations):
             "biome": top_level_biomes[3],  # Human biome
             "length": 2000000,
             "num_contigs": 200,
+            "num_genomes_total": 2,
             "n_50": 20000,
             "gc_content": 0.6,
             "type": Genome.GenomeType.MAG,
@@ -111,6 +113,7 @@ def genomes(top_level_biomes, genome_catalogues, geographic_locations):
             "biome": top_level_biomes[0],  # Root biome
             "length": 3000000,
             "num_contigs": 300,
+            "num_genomes_total": 30,
             "n_50": 30000,
             "gc_content": 0.7,
             "type": Genome.GenomeType.ISOLATE,
