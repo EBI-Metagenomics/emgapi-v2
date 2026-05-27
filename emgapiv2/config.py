@@ -58,6 +58,9 @@ class SlurmConfig(BaseModel):
     preparation_command_job_memory_gb: int = 2
     # memory for jobs like `nextflow clean ...` or `rm -r ./work` that are run before bigger jobs
 
+    default_flow_suspend_awaiting_input_timeout_secs: int = 172800  # 2 days
+    # if a flow does suspend_flow_run(wait_for_input...), how long do we wait for it to be resumed before giving up?
+
 
 class MGnifyPipelineConfig(BaseModel):
     """

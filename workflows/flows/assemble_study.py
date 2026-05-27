@@ -156,7 +156,8 @@ def assemble_study(
                 If the study is private, the webin account owner is needed so that assemblies can be brokered into \
                 the reads study they own.
                 """),
-        )
+        ),
+        timeout=EMG_CONFIG.slurm.default_flow_suspend_awaiting_input_timeout_secs,
     )
 
     validate_and_set_webin_owner(ena_study, assemble_study_input.webin_owner)

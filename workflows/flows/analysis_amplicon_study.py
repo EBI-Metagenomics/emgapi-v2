@@ -137,7 +137,8 @@ def analysis_amplicon_study(study_accession: str):
                 **Webin owner**
                 If the study is private, the webin account owner is needed so that the user can view the study they own.
                 """),
-        )
+        ),
+        timeout=EMG_CONFIG.slurm.default_flow_suspend_awaiting_input_timeout_secs,
     )
 
     ena_study, __ = validate_and_set_webin_owner(
