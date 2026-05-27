@@ -23,6 +23,10 @@ def _whole_object(j):
     return j
 
 
+def _first_item(j):
+    return j["items"][0]
+
+
 def call_endpoint_and_get_data(
     client: TestClient,
     endpoint: str,
@@ -262,8 +266,26 @@ def test_api_super_study_detail(
 
 @pytest.mark.django_db
 def test_api_genome_list(ninja_api_client, genomes):
-    all_genomes = call_endpoint_and_get_data(ninja_api_client, "/genomes/", count=3)
-    assert all_genomes[0]["accession"].startswith("MGYG")
+    first_of_all_genomes = call_endpoint_and_get_data(
+        ninja_api_client, "/genomes/", count=3, getter=_first_item
+    )
+    assert first_of_all_genomes["accession"].startswith("MGYG")
+
+    first_of_searched_genomes = call_endpoint_and_get_data(
+        ninja_api_client, "/genomes/?search=Gamma", count=1, getter=_first_item
+    )
+    assert (
+        first_of_searched_genomes["taxon_lineage"]
+        == "Bacteria;Proteobacteria;Gammaproteobacteria"
+    )
+
+    first_ordered_genome = call_endpoint_and_get_data(
+        ninja_api_client,
+        "/genomes/?order=-length&search=human",
+        count=2,
+        getter=_first_item,
+    )
+    assert first_ordered_genome["length"] == 2000000
 
 
 @pytest.mark.django_db

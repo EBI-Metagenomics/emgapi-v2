@@ -1,12 +1,17 @@
 import logging
+from typing import Literal, Optional
 
 from django.shortcuts import get_object_or_404
+from ninja import Query
 from ninja_extra import api_controller, http_get, paginate
 from ninja_extra.schemas import NinjaPaginationResponseSchema
+from pydantic import Field
 
+from analyses.schemas import OrderByFilter
 from emgapiv2.api.perms import UnauthorisedIsUnfoundController
 from emgapiv2.api.schema_utils import (
     ApiSections,
+    BiomeFilter,
     make_links_section,
     make_related_detail_link,
 )
@@ -18,6 +23,33 @@ from kvstore.models import KeyValueStore
 from kvstore.schemas import CogCategories, KeggClasses
 
 logger = logging.getLogger(__name__)
+
+
+class GenomeFilters(BiomeFilter):
+    search: Optional[str] = Field(
+        None,
+        description="Search with genome taxonomies and accessions",
+        q=[
+            "accession",
+            "taxon_lineage__icontains",
+            "catalogue__catalogue_id__icontains",
+        ],
+    )
+
+
+GENOME_ORDERING_OPTIONS = Literal[
+    "accession",
+    "-accession",
+    "length",
+    "-length",
+    "completeness",
+    "-completeness",
+    "contamination",
+    "-contamination",
+    "num_genomes_total",
+    "-num_genomes_total",
+    "",
+]
 
 
 @api_controller("genomes", tags=[ApiSections.GENOMES])
@@ -90,8 +122,13 @@ class GenomeController(UnauthorisedIsUnfoundController):
     @paginate()
     def list_genomes(
         self,
+        order: OrderByFilter[GENOME_ORDERING_OPTIONS] = Query(...),
+        filters: GenomeFilters = Query(...),
     ):
-        return Genome.objects.select_related("biome", "catalogue")
+        qs = Genome.objects.select_related("biome", "catalogue")
+        qs = order.order_by(qs)
+        qs = filters.filter(qs)
+        return qs
 
     @http_get(
         "/catalogues/",
@@ -125,8 +162,17 @@ class GenomeController(UnauthorisedIsUnfoundController):
         operation_id="get_genome_catalogue_genomes",
     )
     @paginate()
-    def get_catalogue_genomes(self, request, catalogue_id: str):
+    def get_catalogue_genomes(
+        self,
+        request,
+        catalogue_id: str,
+        order: OrderByFilter[GENOME_ORDERING_OPTIONS] = Query(...),
+        filters: GenomeFilters = Query(...),
+    ):
         catalogue = get_object_or_404(
             GenomeCatalogue.objects.select_related("biome"), catalogue_id=catalogue_id
         )
-        return catalogue.genomes.all()
+        qs = catalogue.genomes.all()
+        qs = order.order_by(qs)
+        qs = filters.filter(qs)
+        return qs
