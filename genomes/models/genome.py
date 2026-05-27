@@ -173,6 +173,7 @@ class Genome(WithDownloadsModel, TimeStampedModel):
 
         # Normalise rRNA key variation that sometimes appears in exporter JSON
         if "rna_5.8s" in genome_data:
+            genome_data["rna_5_8s"] = genome_data["rna_5.8s"]
             genome_data.pop("rna_5.8s", None)
 
         return genome_data
