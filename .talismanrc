@@ -66,7 +66,7 @@ fileignoreconfig:
   checksum: 3afe465b36e4e141124bd84c8459c5aa81332eedf49b691eff22c74df63a0f18
 
 - filename: emgapiv2/settings.py
-  checksum: 83a113079b31fa3d07ce523e4a76378c97916823c53554148a1b815c34ab6b42
+  checksum: c6b5a727cf8a2638879787d5670b7f198574be0c31878a6bc92e652ce298af70
 
 - filename: emgapiv2/settings_test.py
   checksum: ded898400b4eda7e3cf75694af1b66235975a85eb5b8f49f3a2c708163a7aad4
@@ -76,6 +76,21 @@ fileignoreconfig:
 
 - filename: emgapiv2/widgets.py
   allowed_patterns: [key]
+
+- filename: kvstore/admin.py
+  checksum: 6b7aaaf47569a4e81acab3b714ce8896a2ec470dd60d7d834852fc80ee56d798
+
+- filename: kvstore/fixtures/cog_categories.yaml
+  ignore_detectors: [filecontent]
+
+- filename: kvstore/migrations/0001_initial.py
+  allowed_patterns: [key]
+
+- filename: kvstore/models.py
+  checksum: 0b14ee6c60bc8a82ca1148fcd1eb97e556ddfc0b736331096d250520b53bf544
+
+- filename: kvstore/tests.py
+  allowed_patterns: [key, test_key, update_key]
 
 - filename: pyproject.toml
   allowed_patterns: [Config key]
@@ -271,3 +286,4 @@ allowed_patterns:
 - pass_whole_object
 - dictionary key
 - OpenApiKeywords
+- KeyValueStore

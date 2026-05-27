@@ -32,6 +32,7 @@ pytest_plugins = [
     "workflows.fixtures.ena_utils.conftest",
     "workflows.fixtures.assembly_analysis.conftest",
     "genomes.fixtures.genome.conftest",
+    "kvstore.fixtures.conftest",
 ]
 
 

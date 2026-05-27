@@ -4,7 +4,7 @@ import pytest
 django.setup()
 
 from analyses.models import Biome
-from genomes.models.genome import Genome
+from genomes.models.genome import COG_CATEGORIES, KEGG_CLASSES, Genome
 from genomes.models.genome_catalogue import GenomeCatalogue
 
 
@@ -87,6 +87,17 @@ def genomes(top_level_biomes, genome_catalogues, geographic_locations):
             "taxon_lineage": "Bacteria;Proteobacteria;Gammaproteobacteria",
             "catalogue": genome_catalogues[0],  # Human Gut Prokaryotes
             "geographic_origin": geographic_locations[0],  # Europe
+            "annotations": {
+                COG_CATEGORIES: [
+                    {"name": "C", "count": 10},
+                    {"name": "J", "count": 20},
+                    {"name": "X", "count": 5},
+                ],
+                KEGG_CLASSES: [
+                    {"class_id": "09102", "count": 81},
+                    {"class_id": "09100", "count": 50},
+                ],
+            },
         },
         {
             "accession": "MGYG000000002",
