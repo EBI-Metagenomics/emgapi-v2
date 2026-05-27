@@ -70,6 +70,9 @@ def genomes(top_level_biomes, genome_catalogues, geographic_locations):
     genomes_list = [
         {
             "accession": "MGYG000000001",
+            "ena_sample_accession": "SAMEA1",
+            "ena_genome_accession": "GCA1",
+            "ena_study_accession": "ERP1",
             "biome": top_level_biomes[3],  # Human biome
             "length": 1000000,
             "num_contigs": 100,
@@ -101,6 +104,7 @@ def genomes(top_level_biomes, genome_catalogues, geographic_locations):
         },
         {
             "accession": "MGYG000000002",
+            "ncbi_study_accession": "SRP1",
             "biome": top_level_biomes[3],  # Human biome
             "length": 2000000,
             "num_contigs": 200,
