@@ -65,7 +65,6 @@ class GenomeController(UnauthorisedIsUnfoundController):
                     cog["description"] = cog_desc_map.get(cog.get("name"), "")
             except (KeyValueStore.DoesNotExist, Exception):
                 logger.exception("Failed to load COG category descriptions")
-                pass
 
         # Augment KEGG classes with descriptions from KVStore
         if KEGG_CLASSES in genome.annotations:
@@ -78,7 +77,6 @@ class GenomeController(UnauthorisedIsUnfoundController):
                     kegg["description"] = kegg_desc_map.get(kegg.get("class_id"), "")
             except (KeyValueStore.DoesNotExist, Exception):
                 logger.exception("Failed to load KEGG class descriptions")
-                pass
 
         return genome
 
