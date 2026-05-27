@@ -96,6 +96,7 @@ INSTALLED_APPS = [
     "analyses",
     "workflows",
     "genomes",
+    "kvstore",
 ]
 
 MIDDLEWARE = [

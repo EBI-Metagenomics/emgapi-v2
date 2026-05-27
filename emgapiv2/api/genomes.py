@@ -1,3 +1,5 @@
+import logging
+
 from django.shortcuts import get_object_or_404
 from ninja_extra import api_controller, http_get, paginate
 from ninja_extra.schemas import NinjaPaginationResponseSchema
@@ -9,8 +11,13 @@ from emgapiv2.api.schema_utils import (
     make_related_detail_link,
 )
 from genomes.models import Genome, GenomeCatalogue
+from genomes.models.genome import COG_CATEGORIES, KEGG_CLASSES
 from genomes.schemas import GenomeDetail, GenomeList, GenomeWithAnnotations
 from genomes.schemas.GenomeCatalogue import GenomeCatalogueDetail, GenomeCatalogueList
+from kvstore.models import KeyValueStore
+from kvstore.schemas import CogCategories, KeggClasses
+
+logger = logging.getLogger(__name__)
 
 
 @api_controller("genomes", tags=[ApiSections.GENOMES])
@@ -46,6 +53,31 @@ class GenomeController(UnauthorisedIsUnfoundController):
     )
     def get_genome_annotations(self, accession: str):
         genome = get_object_or_404(Genome.objects_and_annotations, accession=accession)
+
+        # Augment COG categories with descriptions from KVStore
+        if COG_CATEGORIES in genome.annotations:
+            try:
+                cog_kv = KeyValueStore.get_model(
+                    "cog_category_description_map", CogCategories
+                )
+                cog_desc_map = cog_kv.root
+                for cog in genome.annotations[COG_CATEGORIES]:
+                    cog["description"] = cog_desc_map.get(cog.get("name"), "")
+            except (KeyValueStore.DoesNotExist, Exception):
+                logger.exception("Failed to load COG category descriptions")
+
+        # Augment KEGG classes with descriptions from KVStore
+        if KEGG_CLASSES in genome.annotations:
+            try:
+                kegg_kv = KeyValueStore.get_model(
+                    "kegg_class_description_map", KeggClasses
+                )
+                kegg_desc_map = kegg_kv.root
+                for kegg in genome.annotations[KEGG_CLASSES]:
+                    kegg["description"] = kegg_desc_map.get(kegg.get("class_id"), "")
+            except (KeyValueStore.DoesNotExist, Exception):
+                logger.exception("Failed to load KEGG class descriptions")
+
         return genome
 
     @http_get(
