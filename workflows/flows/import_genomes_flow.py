@@ -61,9 +61,7 @@ def get_catalogue(options):
     catalogue_dirname = os.path.basename(
         os.path.dirname(os.path.normpath(options["results_directory"]))
     )
-    results_path_to_save = (
-        f"/genomes/{catalogue_dirname}/{options['catalogue_version']}"
-    )
+    results_path_to_save = f"/{genome_config.genomes_ftp_results_subpath}/{catalogue_dirname}/{options['catalogue_version']}"
     catalogue_id = f"{options['catalogue_name'].replace(' ', '-')}-v{options['catalogue_version'].replace('.', '-')}".lower()
 
     catalogue, _ = GenomeCatalogue.objects.get_or_create(

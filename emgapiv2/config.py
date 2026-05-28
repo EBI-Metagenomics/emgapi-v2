@@ -308,6 +308,7 @@ class GenomeConfig(BaseModel):
     )
     latest_mags_pipeline_tag: str = "v1.2.1"
     results_directory_root: str = "/nfs/donco/results"
+    genomes_ftp_results_subpath: str = "mgnify_genomes"
 
 
 class EuropePMCConfig(BaseModel):
