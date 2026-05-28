@@ -124,7 +124,7 @@ class Genome(WithDownloadsModel, TimeStampedModel):
     catalogue = models.ForeignKey(
         "GenomeCatalogue",
         db_column="genome_catalogue",
-        on_delete=models.PROTECT,
+        on_delete=models.CASCADE,
         related_name="genomes",
     )
 
