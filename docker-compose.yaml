@@ -117,6 +117,8 @@ services:
       - DATABASE_URL=postgres://postgres:postgres@app-database:5432/emg
       - EMG_WEBIN__JWT_SECRET_KEY=dummy-key
       - EMG_WEBIN__AUTH_ENDPOINT=http://httpbin/status/200
+      - EMG_WEBIN__TOKEN_ENDPOINT=http://httpbin/status/200
+      - EMG_WEBIN__ACCOUNT_DETAILS_ENDPOINT=http://httpbin/status/200
       - PRIVATE_DATA_SECURE_LINK_SECRET_KEY=dummy-key
       - DJANGO_DEBUG=1
     volumes:

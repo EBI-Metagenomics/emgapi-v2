@@ -1,5 +1,6 @@
 import logging
 import re
+from json import JSONDecodeError
 from typing import Optional
 
 import httpx
@@ -21,6 +22,8 @@ __all__ = [
     "WebinUser",
     "WebinTokenRefreshRequest",
 ]
+
+from pydantic import BaseModel, ConfigDict, Field
 
 DjangoSuperUserAuth = SessionAuthSuperUser
 
@@ -128,6 +131,52 @@ def authenticate_webin_user(username: str, password: str) -> Optional[str]:
         return None
     except httpx.RequestError:
         return None
+
+
+class WebinAccountDetails(BaseModel):
+    email_address: str = Field(alias="emailAddress")
+    first_name: Optional[str] = Field(default=None, alias="firstName")
+    surname: Optional[str] = None
+    main_contact: bool = Field(alias="mainContact")
+    consortium: Optional[str] = None
+
+    model_config = ConfigDict(extra="ignore")
+
+
+def get_webin_account_details(
+    username: str, password: str
+) -> list[WebinAccountDetails] | None:
+    config = settings.EMG_CONFIG.webin
+
+    data = {
+        "authRealms": ["ENA", "EGA"],
+        "username": username,
+        "password": password,
+    }
+    try:
+        token_response = httpx.post(str(config.token_endpoint), json=data)
+        if not token_response.status_code == 200:
+            logger.error(f"Error fetching token for {username}: {token_response.text}")
+            return None
+
+        token = token_response.text
+        accounts_response = httpx.get(
+            str(config.account_details_endpoint),
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        if not accounts_response.status_code == 200:
+            logger.error(
+                f"Error fetching account details for {username}: {accounts_response.text}"
+            )
+            return None
+
+        accounts = accounts_response.json()
+        submission_contacts = accounts.get("submissionContacts")
+    except (httpx.RequestError, JSONDecodeError) as e:
+        logger.error(f"Error fetching account details: {e}")
+        return None
+
+    return submission_contacts
 
 
 class NoAuth(AuthBase):
