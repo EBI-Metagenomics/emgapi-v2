@@ -143,7 +143,7 @@ def test_get_catalogue():
         assert catalogue.version == "1.0"
         assert catalogue.name == "Sheep rumen v1.0"
         assert catalogue.biome == biome
-        assert catalogue.result_directory == "/genomes/sheep-rumen/1.0"
+        assert catalogue.result_directory == "/mgnify_genomes/sheep-rumen/1.0"
         assert catalogue.pipeline_version_tag == "v3.0.0dev"
         assert catalogue.catalogue_biome_label == "Sheep Rumen"
         assert catalogue.catalogue_type == "prokaryotes"
