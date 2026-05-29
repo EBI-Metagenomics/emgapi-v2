@@ -45,7 +45,7 @@ fileignoreconfig:
   allowed_patterns: [OpenApiKeywords]
 
 - filename: emgapiv2/api/auth.py
-  checksum: 4968f630cac6166df2fbda26febc4c36ba11033cda82b6fca6f1b894f7e47bc7
+  checksum: 5d028587b866b9dd2ac7aa0c4279441cc0d495e4df9338729db30ac583e49299
 
 - filename: emgapiv2/api/storage.py
   checksum: be76261cc58f5ccea9a0b0d9179894ff3260cb5672aa69a4cfc66732200fed0d

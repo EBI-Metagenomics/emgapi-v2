@@ -11,19 +11,21 @@ from ninja import Schema
 from ninja.security import SessionAuthSuperUser
 from ninja.security.base import AuthBase
 from ninja_jwt.authentication import JWTStatelessUserAuthentication
+from pydantic import BaseModel, ConfigDict, Field, computed_field
 
 __all__ = [
     "WebinJWTAuth",
     "DjangoSuperUserAuth",
     "authenticate_webin_user",
     "validate_webin_username",
+    "get_webin_account_details",
+    "get_webin_account_details_via_broker",
+    "WebinAccountDetails",
     "WebinTokenRequest",
     "WebinTokenResponse",
     "WebinUser",
     "WebinTokenRefreshRequest",
 ]
-
-from pydantic import BaseModel, ConfigDict, Field
 
 DjangoSuperUserAuth = SessionAuthSuperUser
 
@@ -142,10 +144,24 @@ class WebinAccountDetails(BaseModel):
 
     model_config = ConfigDict(extra="ignore")
 
+    @computed_field
+    @property
+    def requester_name(self) -> str:
+        return (
+            f"{self.first_name} {self.surname}".strip() or self.consortium or "Unknown"
+        )
+
 
 def get_webin_account_details(
     username: str, password: str
 ) -> list[WebinAccountDetails] | None:
+    """
+    Get account details (submission account contact details) for a Webin user, from ENA.
+    Requires two steps: authenticate and fetch a Webin token, and then use token to fetch account details.
+    :param username: e.g. Webin-1
+    :param password: Webin password
+    :return:
+    """
     config = settings.EMG_CONFIG.webin
 
     data = {
@@ -176,7 +192,23 @@ def get_webin_account_details(
         logger.error(f"Error fetching account details: {e}")
         return None
 
-    return submission_contacts
+    return [
+        WebinAccountDetails.model_validate(contact) for contact in submission_contacts
+    ]
+
+
+def get_webin_account_details_via_broker(
+    username: str,
+) -> list[WebinAccountDetails] | None:
+    """
+    Wrapper on get_webin_account_details, to use a broker account prefix/password to get webin details.
+    :param username: E.g. Webin-1
+    """
+    config = settings.EMG_CONFIG.webin
+    broker_prefix = config.broker_prefix
+    return get_webin_account_details(
+        f"{broker_prefix}{username}", config.broker_password
+    )
 
 
 class NoAuth(AuthBase):

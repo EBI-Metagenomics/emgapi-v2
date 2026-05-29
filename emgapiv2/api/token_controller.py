@@ -69,6 +69,7 @@ class WebinJwtController(NinjaJWTSlidingController):
         url_name="account_details",
         operation_id="account_details",
         summary="Fetch Webin account details.",
+        include_in_schema=False,
     )
     def account_details(self, user_token: WebinTokenRequest):
         username = user_token.username

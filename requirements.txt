@@ -55,3 +55,4 @@ sentry-sdk[django]~=2.25.1
 requests~=2.32.4
 httpx~=0.28.1
 parse==1.21.1
+rt~=3.6.0  # Request Tracker helpdesk

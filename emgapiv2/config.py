@@ -335,6 +335,12 @@ class DarwinCoreArchiveConfig(BaseModel):
     )
 
 
+class RequestTrackerConfig(BaseModel):
+    rt_requests_queue: str = Field("emg_queue")
+    url: AnyHttpUrl = Field("https://example.org/REST/2.0/")
+    token: str = Field(None)
+
+
 class EMGConfig(BaseSettings):
     amplicon_pipeline: AmpliconPipelineConfig = AmpliconPipelineConfig()
     rawreads_pipeline: RawReadsPipelineConfig = RawReadsPipelineConfig()
@@ -354,6 +360,7 @@ class EMGConfig(BaseSettings):
     europe_pmc: EuropePMCConfig = EuropePMCConfig()
     genomes: GenomeConfig = GenomeConfig()
     darwin_core_archive: DarwinCoreArchiveConfig = DarwinCoreArchiveConfig()
+    rt: RequestTrackerConfig = RequestTrackerConfig()
     sentry_dsn: str = ""
 
     model_config = SettingsConfigDict(
