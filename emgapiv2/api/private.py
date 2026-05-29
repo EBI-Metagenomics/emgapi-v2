@@ -29,7 +29,7 @@ logger = logging.getLogger(__name__)
 
 class AnalysisRequest(Schema):
     study_accession: str
-    analysis_type: Literal["Analysis", "Assembly+Analysis"]
+    analysis_type: str
     request_type: Literal["Public", "Private"]
     comments: str = Field(None)
 
