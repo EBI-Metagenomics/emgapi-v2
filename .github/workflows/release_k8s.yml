@@ -14,27 +14,26 @@ jobs:
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v6
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Build Docker Image
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: ./deployment/ebi-wp-k8s-hl/Dockerfile
-          load: true
-          push: false
-          tags: |
-            quay.io/microbiome-informatics/emgapiv2:ebi-wp-k8s-hl
+        uses: docker/setup-buildx-action@v4
 
       - name: Login to Quay.io
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
-          registry: quay.io
-          username: ${{ secrets.QUAY_USERNAME }}
-          password: ${{ secrets.QUAY_PASSWORD }}
+          registry: dockerhub.ebi.ac.uk
+          username: ${{ secrets.GITLAB_CONTAINERS_USERNAME }}
+          password: ${{ secrets.GITLAB_CONTAINERS_PASSWORD }}
 
-      - name: Push
-        run: docker push quay.io/microbiome-informatics/emgapiv2:ebi-wp-k8s-hl
+      - name: Build Docker Image
+        uses: docker/build-push-action@v7
+        with:
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          provenance: false
+          context: .
+          file: ./deployment/ebi-wp-k8s-hl/Dockerfile
+          push: true
+          tags: |
+            dockerhub.ebi.ac.uk/microbiome-informatics/containers/emgapiv2:ebi-wp-k8s-hl

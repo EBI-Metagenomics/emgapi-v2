@@ -31,10 +31,9 @@ Make the secrets
 `kubectl create secret generic google-maps-key-secret --from-literal=google-maps-key='<...get it from the google maps api dashboard...>' -n emgapiv2-hl-exp`
 (The `google-maps-key-secret` is only needed for the web client deployment to have working maps. It can be missing otherwise.)
 
-### Create Quay.io pull secrets
-* Get authentication credentials for quay.io (the built image is private). You can get a Kubernetes secrets yaml file from your Quay.io user settings, in the "CLI Password" section.
-* Download the secrets yaml and name the secret `name: quay-pull-secret` in the metadata section. Give it the right namespace. Put it into this folder.
-* `kubectl apply -f secrets-quayio.yml`
+### Create container registry pull secrets
+* Get authentication credentials for EBI's dockerhub (the built image is private). See Gitlab group > settings > repository.
+* `kubectl create secret docker-registry containers-pull-secret -n emgapiv2-hl-exp --docker-server=dockerhub.ebi.ac.uk --docker-username=<username> --docker-password=<password>`
 
 ### Deploy
 `kubectl apply -f ebi-wp-k8s-hl.yaml`
