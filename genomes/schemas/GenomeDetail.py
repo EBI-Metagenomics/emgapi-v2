@@ -22,6 +22,9 @@ class GenomeDetail(GenomeBase):
 
     num_genomes_total: Optional[int] = None
     num_proteins: Optional[int] = None
+    pangenome_size: Optional[int] = None
+    pangenome_core_size: Optional[int] = None
+    pangenome_accessory_size: Optional[int] = None
 
     downloads: list["MGnifyGenomeDownloadFile"] = Field(
         ..., alias="downloads_as_objects"
