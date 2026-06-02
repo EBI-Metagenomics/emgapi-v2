@@ -57,6 +57,14 @@ def mock_genome_directory():
                 "taxon_lineage": "d__Bacteria;p__Firmicutes;c__Bacilli;o__Lactobacillales;f__Lactobacillaceae;g__Lactobacillus;s__Lactobacillus_gasseri",
                 "trnas": 40.0,
                 "type": "mag",
+                "pangenome": {
+                    "geographic_range": ["Europe", "Africa"],
+                    "num_genomes_non_redundant": 5,  # is deprecated
+                    "num_genomes_total": 6,
+                    "pangenome_accessory_size": 1576,
+                    "pangenome_core_size": 3041,
+                    "pangenome_size": 4617,
+                },
             }
 
             with open(os.path.join(genome_dir, f"{accession}.json"), "w") as f:
@@ -220,6 +228,13 @@ def test_import_genomes_flow_with_mock_directory(
     accessions = [g.accession for g in genomes]
     assert "MGYG000000001" in accessions
     assert "MGYG000000002" in accessions
+
+    genome = Genome.objects.get(accession="MGYG000000001")
+    assert genome.num_genomes_total == 6
+    assert genome.pangenome_size == 4617
+    assert genome.pangenome_core_size == 3041
+    assert genome.pangenome_accessory_size == 1576
+    assert genome.geographic_range == ["Europe", "Africa"]
 
 
 def get_default_options(
