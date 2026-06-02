@@ -1,3 +1,5 @@
+from typing import Any
+
 from django.contrib.postgres.fields import ArrayField
 from django.db import models
 
@@ -111,10 +113,12 @@ class Genome(WithDownloadsModel, TimeStampedModel):
     ipr_coverage = models.FloatField()
     taxon_lineage = models.CharField(max_length=400)
 
-    num_genomes_total = models.IntegerField(null=True, blank=True)
-    pangenome_size = models.IntegerField(null=True, blank=True)
-    pangenome_core_size = models.IntegerField(null=True, blank=True)
-    pangenome_accessory_size = models.IntegerField(null=True, blank=True)
+    geographic_origin = models.CharField(
+        max_length=80,
+        blank=True,
+        null=True,
+        help_text="Geographic origin of this genome",
+    )
 
     annotations = models.JSONField(default=default_annotations)
     default_annotations = staticmethod(default_annotations)
@@ -128,6 +132,11 @@ class Genome(WithDownloadsModel, TimeStampedModel):
         related_name="genomes",
     )
 
+    # pangenome
+    num_genomes_total = models.IntegerField(null=True, blank=True)
+    pangenome_size = models.IntegerField(null=True, blank=True)
+    pangenome_core_size = models.IntegerField(null=True, blank=True)
+    pangenome_accessory_size = models.IntegerField(null=True, blank=True)
     geographic_range = ArrayField(
         models.CharField(max_length=80),
         blank=True,
@@ -135,15 +144,8 @@ class Genome(WithDownloadsModel, TimeStampedModel):
         help_text="Array of geographic locations where this genome is found",
     )
 
-    geographic_origin = models.CharField(
-        max_length=80,
-        blank=True,
-        null=True,
-        help_text="Geographic origin of this genome",
-    )
-
     @classmethod
-    def clean_data(cls, genome_data):
+    def clean_data(cls, genome_data: dict[str, Any]):
         """
         Clean genome data by removing unnecessary fields and ensuring required fields are present.
         - Extract selected nested fields from exporter structures (e.g. pangenome) into model fields.
@@ -163,6 +165,13 @@ class Genome(WithDownloadsModel, TimeStampedModel):
                 and "num_genomes_total" not in genome_data
             ):
                 genome_data["num_genomes_total"] = pangenome.get("num_genomes_total")
+
+            genome_data["geographic_range"] = pangenome.get("geographic_range")
+            genome_data["pangenome_size"] = pangenome.get("pangenome_size")
+            genome_data["pangenome_core_size"] = pangenome.get("pangenome_core_size")
+            genome_data["pangenome_accessory_size"] = pangenome.get(
+                "pangenome_accessory_size"
+            )
         genome_data.setdefault("num_genomes_total", 1)
         # Remove the nested pangenome blob from defaults passed to ORM
         genome_data.pop("pangenome", None)
