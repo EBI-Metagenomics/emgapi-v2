@@ -65,6 +65,7 @@ class GenomeCatalogueAdmin(JSONFieldWidgetOverridesMixin, ModelAdmin):
                     "rna_28s",
                     "trnas",
                     "nc_rnas",
+                    "num_proteins",
                 ],
             },
         ),
