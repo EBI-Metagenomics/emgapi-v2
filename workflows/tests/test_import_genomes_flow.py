@@ -2,6 +2,7 @@ import json
 import os
 import shutil
 import tempfile
+from pathlib import Path
 from unittest.mock import patch
 
 import pytest
@@ -22,21 +23,20 @@ def mock_genome_directory():
     temp_dir = tempfile.mkdtemp()
 
     try:
-        catalogue_dir = os.path.join(temp_dir, "website")
-        os.makedirs(catalogue_dir)
+        catalogue_dir = Path(temp_dir) / "sheep-rumen" / "1.0" / "website"
+        catalogue_dir.mkdir(parents=True, exist_ok=True)
 
-        with open(os.path.join(catalogue_dir, "phylo_tree.json"), "w") as f:
+        with (catalogue_dir / "phylo_tree.json").open("w") as f:
             json.dump({"tree": "mock_tree_data"}, f)
 
-        with open(os.path.join(catalogue_dir, "catalogue_summary.json"), "w") as f:
+        with (catalogue_dir / "catalogue_summary.json").open("w") as f:
             json.dump({"summary": "mock_summary_data"}, f)
 
         genome_accessions = ["MGYG000000001", "MGYG000000002"]
         for accession in genome_accessions:
-            genome_dir = os.path.join(catalogue_dir, accession)
-            os.makedirs(genome_dir)
-
-            os.makedirs(os.path.join(genome_dir, "genome"))
+            genome_dir = catalogue_dir / accession
+            genome_dir.mkdir(parents=True, exist_ok=True)
+            (genome_dir / "genome").mkdir(parents=True, exist_ok=True)
 
             json_data = {
                 "accession": accession,
@@ -67,7 +67,7 @@ def mock_genome_directory():
                 },
             }
 
-            with open(os.path.join(genome_dir, f"{accession}.json"), "w") as f:
+            with (genome_dir / f"{accession}.json").open("w") as f:
                 json.dump(json_data, f)
 
             genome_subdir = os.path.join(genome_dir, "genome")
@@ -88,8 +88,8 @@ def mock_genome_directory():
             for file in required_files:
                 with open(os.path.join(genome_subdir, file), "w") as f:
                     f.write(f"Mock content for {file}")
-
-        yield temp_dir
+        parent = str(Path(catalogue_dir).parent)
+        yield parent
     finally:
         shutil.rmtree(temp_dir)
 
@@ -235,6 +235,8 @@ def test_import_genomes_flow_with_mock_directory(
     assert genome.pangenome_core_size == 3041
     assert genome.pangenome_accessory_size == 1576
     assert genome.geographic_range == ["Europe", "Africa"]
+    assert catalogue.result_directory == "/mgnify_genomes/sheep-rumen/1.0"
+    assert genome.result_directory == "/mgnify_genomes/sheep-rumen/1.0/MGYG000000001"
 
 
 def get_default_options(

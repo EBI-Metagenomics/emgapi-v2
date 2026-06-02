@@ -12,7 +12,6 @@ from analyses.models import Biome
 from genomes.management.lib.genome_util import (
     apparent_accession_of_genome_dir,
     find_genome_results,
-    get_genome_result_path,
     read_json,
     sanity_check_catalogue_dir,
     sanity_check_genome_output_euks,
@@ -108,9 +107,8 @@ def process_genome_dir(catalogue, genome_dir):
     path = Biome.lineage_to_path(genome_data["gold_biome"])
 
     genome_data["catalogue"] = catalogue
-    genome_results_path = get_genome_result_path(genome_dir)
 
-    genome_data["result_directory"] = f"{genome_results_path.replace('/website/', '/')}"
+    genome_data["result_directory"] = Path(catalogue.result_directory) / accession
 
     genome_data["biome"] = Biome.objects.filter(path=path).first()
 
