@@ -342,7 +342,7 @@ items:
                     port:
                       number: 8000
 
-  #### Website
+  #### Website (early access)
   - apiVersion: v1
     kind: ConfigMap
     metadata:
@@ -540,6 +540,206 @@ items:
                 backend:
                   service:
                     name: webclient
+                    port:
+                      number: 80
+  #### Website
+  - apiVersion: v1
+    kind: ConfigMap
+    metadata:
+      name: webclient-stable-nginx-config
+      namespace: emgapiv2-hl-exp
+    data:
+      nginx.conf: >-
+        events {
+          worker_connections 1024;
+        }
+        http {
+          include       /etc/nginx/mime.types;
+          default_type  application/octet-stream;
+          server {
+            listen 80;
+            server_name _;
+            root /usr/share/nginx/html;
+            index index.html;
+
+            # Gzip compression
+            gzip on;
+            gzip_types text/plain text/css application/json application/javascript text/xml application/xml application/xml+rss text/javascript;
+
+            # Security headers
+            add_header X-Frame-Options "SAMEORIGIN";
+            add_header X-XSS-Protection "1; mode=block";
+            add_header X-Content-Type-Options "nosniff";
+
+            # Health check endpoint
+            location /health {
+              access_log off;
+              return 200 "healthy\n";
+            }
+
+            # Handle React routing
+            location /metagenomics {
+              alias /usr/share/nginx/html;
+              try_files $uri $uri/ /index.html;
+            }
+            location ~ ^/metagenomics/.*/((?:css|js|static)/(.+))$ {
+              alias /usr/share/nginx/html/$1;
+            }
+          }
+        }
+  - apiVersion: v1
+    kind: ConfigMap
+    metadata:
+      name: webclient-stable-config
+      namespace: emgapiv2-hl-exp
+    data:
+      config.private.json: >-
+        {
+          "api": "https://www.ebi.ac.uk/metagenomics/api/v1/",
+          "api_v2": "https://www.ebi.ac.uk/metagenomics/api/v2/",
+          "api_branchwater": "https://www.ebi.ac.uk/metagenomics/api/v2/services/branchwater",
+          "website": "https://www.ebi.ac.uk/metagenomics/",
+          "basename": "/metagenomics"
+        }
+  - apiVersion: v1
+    kind: PersistentVolumeClaim
+    metadata:
+      name: npm-cache-pvc-stable
+      namespace: emgapiv2-hl-exp
+    spec:
+      accessModes:
+        - ReadWriteOnce
+      resources:
+        requests:
+          storage: "8Gi"
+  - apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      name: webclient-stable-deployment
+      namespace: emgapiv2-hl-exp
+    spec:
+      replicas: 1
+      selector:
+        matchLabels:
+          app: webclient-stable-app
+      template:
+        metadata:
+          labels:
+            app: webclient-stable-app
+        spec:
+          volumes:
+            - name: webclient-storage
+              emptyDir: {}
+            - name: nginx-config-volume
+              configMap:
+                name: webclient-stable-nginx-config
+            - name: webclient-config-volume
+              configMap:
+                name: webclient-stable-config
+            - name: npm-cache
+              persistentVolumeClaim:
+                claimName: npm-cache-pvc-stable
+          containers:
+            - name: webclient-app
+              image: quay.io/microbiome-informatics/nginx:1.26
+              imagePullPolicy: IfNotPresent
+              ports:
+                - containerPort: 80
+              resources:
+                requests:
+                  cpu: "500m"
+                  memory: "256Mi"
+                limits:
+                  cpu: "1"
+                  memory: "1Gi"
+              volumeMounts:
+                - name: webclient-storage
+                  mountPath: /usr/share/nginx/html
+                  subPath: html
+                - name: nginx-config-volume
+                  mountPath: /etc/nginx/nginx.conf
+                  subPath: nginx.conf
+                - name: webclient-config-volume
+                  mountPath: /var/config.private.json
+                  subPath: config.private.json
+              livenessProbe:
+                httpGet:
+                  path: /
+                  port: http
+                initialDelaySeconds: 60
+                periodSeconds: 600
+          initContainers:
+            - name: webclient-build
+              image: quay.io/microbiome-informatics/node:22
+              imagePullPolicy: IfNotPresent
+              resources:
+                requests:
+                  cpu: "2"
+                  memory: "2Gi"
+              volumeMounts:
+                - name: webclient-storage
+                  mountPath: /usr/share/nginx/html
+                  subPath: html
+                - name: webclient-config-volume
+                  mountPath: /var/config.private.json
+                  subPath: config.private.json
+                - name: npm-cache
+                  mountPath: /root/.npm
+              envFrom:
+                - configMapRef:
+                    name: proxy-config
+                    optional: true
+                - configMapRef:
+                    name: webclient-stable-nginx-config
+              env:
+                - name: VITE_BASE_URL
+                  value: "/metagenomics"
+                - name: VITE_GOOGLE_MAPS_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: google-maps-key-secret
+                      key: google-maps-key
+              command: ["/bin/sh"]
+              args:
+                - -c
+                - >-
+                  rm -rf v6-early-access &&
+                  git clone -b v6-early-access --single-branch https://github.com/EBI-Metagenomics/ebi-metagenomics-client.git && cd ebi-metagenomics-client &&
+                  cp /var/config.private.json . &&
+                  npm ci && npm run build &&
+                  cp -r dist/* /usr/share/nginx/html
+  - apiVersion: v1
+    kind: Service
+    metadata:
+      name: webclient-stable
+      namespace: emgapiv2-hl-exp
+      labels:
+        app: webclient-stable-app
+    spec:
+      type: NodePort
+      selector:
+        app: webclient-stable-app
+      ports:
+        - port: 80
+          targetPort: 80
+          protocol: TCP
+  - apiVersion: networking.k8s.io/v1
+    kind: Ingress
+    metadata:
+      name: emg-stable-webclient-ingress
+      namespace: emgapiv2-hl-exp
+      annotations:
+        kubernetes.io/ingress.class: "nginx"
+    spec:
+      rules:
+        - host: "www.ebi.ac.uk"
+          http:
+            paths:
+              - path: /metagenomics
+                pathType: Prefix
+                backend:
+                  service:
+                    name: webclient-stable
                     port:
                       number: 80
   ###############################

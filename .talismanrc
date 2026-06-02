@@ -33,7 +33,7 @@ fileignoreconfig:
   allowed_patterns: [password="password123"]
 
 - filename: deployment/ebi-wp-k8s-hl/ebi-wp-k8s-hl.yaml
-  checksum: c4ad998308f09a7017f930604108ada656b68eb3765989e19652824a5ef631ae
+  checksum: 5b5fee63f59bcf5779cea584d87a043b21b22f6d10a67a0a1957f186fbfc490b
 
 - filename: deployment/ebi-wp-k8s-hl/README.md
   allowed_patterns: [kubectl create secret generic nginx-private-data-config-secret --from-file=private-data-nginx.conf -n emgapiv2-hl-exp, google-maps-key-secret, create secret generic, google-maps-key]
