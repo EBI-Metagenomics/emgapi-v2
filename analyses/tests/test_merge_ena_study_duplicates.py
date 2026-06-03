@@ -52,7 +52,6 @@ def test_merge_ena_study_duplicates_dry_run_leaves_data_unchanged(
 
     call_command(
         "merge_ena_study_duplicates",
-        "--dry-run",
         "--output-csv",
         str(report_path),
     )
@@ -111,7 +110,9 @@ def test_merge_ena_study_duplicates_rewires_relations_and_deletes_duplicate(
     )
     report_path = tmp_path / "applied-report.csv"
 
-    call_command("merge_ena_study_duplicates", "--output-csv", str(report_path))
+    call_command(
+        "merge_ena_study_duplicates", "--apply", "--output-csv", str(report_path)
+    )
 
     canonical_ena_study.refresh_from_db()
     mg_study.refresh_from_db()

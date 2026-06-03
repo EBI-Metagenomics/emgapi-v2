@@ -73,7 +73,6 @@ def test_merge_runs_duplicates_dry_run_leaves_data_unchanged(
 
     call_command(
         "merge_runs_duplicates",
-        "--dry-run",
         "--output-csv",
         str(report_path),
     )
@@ -113,7 +112,7 @@ def test_merge_runs_duplicates_rewires_relations(
     )
     report_path = tmp_path / "applied-report.csv"
 
-    call_command("merge_runs_duplicates", "--output-csv", str(report_path))
+    call_command("merge_runs_duplicates", "--apply", "--output-csv", str(report_path))
 
     analysis.refresh_from_db()
     assembly.refresh_from_db()

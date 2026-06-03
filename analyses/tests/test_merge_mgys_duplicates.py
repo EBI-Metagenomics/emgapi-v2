@@ -133,7 +133,6 @@ def test_merge_mgys_duplicates_dry_run_leaves_data_unchanged(tmp_path, study_pai
 
     call_command(
         "merge_mgys_duplicates",
-        "--dry-run",
         "--output-csv",
         str(report_path),
     )
@@ -215,7 +214,7 @@ def test_merge_mgys_duplicates_rewires_relations(tmp_path, study_pair):
     SuperStudyStudy.objects.create(study=study_new, super_study=super_study)
     report_path = tmp_path / "applied-report.csv"
 
-    call_command("merge_mgys_duplicates", "--output-csv", str(report_path))
+    call_command("merge_mgys_duplicates", "--apply", "--output-csv", str(report_path))
 
     study_old.refresh_from_db()
     mg_sample.refresh_from_db()
@@ -273,6 +272,7 @@ def test_merge_mgys_duplicates_accepts_partial_ena_accession_aliases(tmp_path):
 
     call_command(
         "merge_mgys_duplicates",
+        "--apply",
         "--output-csv",
         str(tmp_path / "partial-alias-report.csv"),
     )
@@ -298,6 +298,7 @@ def test_merge_mgys_duplicates_accession_filter_limits_groups(tmp_path, study_pa
 
     call_command(
         "merge_mgys_duplicates",
+        "--apply",
         "--accession",
         target_old.first_accession,
         "--output-csv",
@@ -336,6 +337,7 @@ def test_merge_mgys_duplicates_reconciles_overlapping_runs(tmp_path, study_pair)
 
     call_command(
         "merge_mgys_duplicates",
+        "--apply",
         "--output-csv",
         str(tmp_path / "overlapping-runs-report.csv"),
     )
