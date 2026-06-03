@@ -108,7 +108,6 @@ def test_merge_assemblies_duplicates_dry_run_leaves_data_unchanged(
 
     call_command(
         "merge_assemblies_duplicates",
-        "--dry-run",
         "--output-csv",
         str(report_path),
     )
@@ -160,7 +159,9 @@ def test_merge_assemblies_duplicates_rewires_relations_and_merges_fields(
     )
     report_path = tmp_path / "applied-report.csv"
 
-    call_command("merge_assemblies_duplicates", "--output-csv", str(report_path))
+    call_command(
+        "merge_assemblies_duplicates", "--apply", "--output-csv", str(report_path)
+    )
 
     assembly_old.refresh_from_db()
     analysis.refresh_from_db()
@@ -212,6 +213,7 @@ def test_merge_assemblies_duplicates_accession_filter_limits_groups(
 
     call_command(
         "merge_assemblies_duplicates",
+        "--apply",
         "--accession",
         target_old.first_accession,
         "--output-csv",

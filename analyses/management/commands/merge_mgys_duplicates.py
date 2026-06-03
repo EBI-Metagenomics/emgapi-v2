@@ -64,9 +64,19 @@ class Command(BaseCommand):
         return {accession for accession in accessions if accession}
 
     def add_arguments(self, parser):
-        parser.add_argument(
+        mode_group = parser.add_mutually_exclusive_group()
+        mode_group.add_argument(
             "--dry-run",
             action="store_true",
+            dest="dry_run",
+            default=True,
+            help="Report intended changes without modifying the database (default).",
+        )
+        mode_group.add_argument(
+            "--apply",
+            action="store_false",
+            dest="dry_run",
+            help="Apply deduplication changes to the database.",
         )
         parser.add_argument(
             "--accession",
