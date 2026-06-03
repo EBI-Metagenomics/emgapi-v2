@@ -14,6 +14,9 @@ fileignoreconfig:
 - filename: analyses/models.py
   allowed_patterns: [key]
 
+- filename: analyses/management/commands/merge_assemblies_duplicates.py
+  checksum: 88d8816aedddb6d0303df338854a283092fbc2d697fc08d37f5838d3423814af
+
 - filename: analyses/management/commands/merge_ena_study_duplicates.py
   checksum: cbec9df9d7d9c07cceb95bd620bfd15fa7b7d938af0a1e67c68f6954be477389
 
