@@ -84,23 +84,32 @@ def analyses_for_primer_identification_import(
 @patch(
     "workflows.management.commands.import_primer_identification_for_imported_analyses.import_primer_identification"
 )
+@pytest.mark.django_db(transaction=True)
 def test_command_processes_only_valid_amplicon_analyses_and_logs(
     mock_import_primer_identification, analyses_for_primer_identification_import
 ):
     stdout = StringIO()
+    expected_imported_accessions = [
+        analyses_for_primer_identification_import[0].accession,
+        analyses_for_primer_identification_import[1].accession,
+    ]
+    expected_skipped_accession = analyses_for_primer_identification_import[4].accession
 
     call_command("import_primer_identification_for_imported_analyses", stdout=stdout)
 
     logs = stdout.getvalue()
     assert "Found 3 amplicon analyses with ANALYSIS_ANNOTATIONS_IMPORTED" in logs
-    assert "[MGYA00000001] primer-identification import done" in logs
-    assert "[MGYA00000002] primer-identification import done" in logs
+    assert logs.count("primer-identification import done (if files present)") == 2
     assert (
-        "[MGYA00000005] skipped/failed: results_dir is not set for this analysis"
-        in logs
+        f"[{expected_skipped_accession}] skipped/failed: "
+        "results_dir is not set for this analysis" in logs
     )
     assert "Successes=2, Failures/Skipped=1" in logs
     assert mock_import_primer_identification.call_count == 2
+    assert [
+        call.args[0].accession
+        for call in mock_import_primer_identification.call_args_list
+    ] == expected_imported_accessions
     assert all(
         call.kwargs["allow_non_exist"] is True
         for call in mock_import_primer_identification.call_args_list
@@ -110,10 +119,13 @@ def test_command_processes_only_valid_amplicon_analyses_and_logs(
 @patch(
     "workflows.management.commands.import_primer_identification_for_imported_analyses.import_primer_identification"
 )
+@pytest.mark.django_db(transaction=True)
 def test_command_respects_max_count(
     mock_import_primer_identification, analyses_for_primer_identification_import
 ):
     stdout = StringIO()
+    expected_imported_accession = analyses_for_primer_identification_import[0].accession
+    excluded_accession = analyses_for_primer_identification_import[1].accession
 
     call_command(
         "import_primer_identification_for_imported_analyses",
@@ -123,6 +135,10 @@ def test_command_respects_max_count(
 
     logs = stdout.getvalue()
     assert "Found 1 amplicon analyses with ANALYSIS_ANNOTATIONS_IMPORTED" in logs
-    assert "[MGYA00000001] primer-identification import done" in logs
-    assert "MGYA00000002" not in logs
+    assert logs.count("primer-identification import done (if files present)") == 1
+    assert excluded_accession not in logs
     assert mock_import_primer_identification.call_count == 1
+    assert (
+        mock_import_primer_identification.call_args_list[0].args[0].accession
+        == expected_imported_accession
+    )
