@@ -24,6 +24,7 @@ def analyses_for_primer_identification_import(
             "accession": "MGYA00000002",
             "run_accession": "SRR00000002",
             "experiment_type": Analysis.ExperimentTypes.AMPLICON,
+            "pipeline_version": Analysis.PipelineVersions.v6_1,
             "annotations_imported": True,
             "results_dir": "/tmp/r2",
         },
@@ -31,6 +32,7 @@ def analyses_for_primer_identification_import(
             "accession": "MGYA00000003",
             "run_accession": "SRR00000003",
             "experiment_type": Analysis.ExperimentTypes.METAGENOMIC,
+            "pipeline_version": Analysis.PipelineVersions.v6,
             "annotations_imported": True,
             "results_dir": "/tmp/r3",
         },
@@ -38,6 +40,7 @@ def analyses_for_primer_identification_import(
             "accession": "MGYA00000004",
             "run_accession": "SRR00000004",
             "experiment_type": Analysis.ExperimentTypes.AMPLICON,
+            "pipeline_version": Analysis.PipelineVersions.v6,
             "annotations_imported": False,
             "results_dir": "/tmp/r4",
         },
@@ -45,8 +48,17 @@ def analyses_for_primer_identification_import(
             "accession": "MGYA00000005",
             "run_accession": "SRR00000005",
             "experiment_type": Analysis.ExperimentTypes.AMPLICON,
+            "pipeline_version": Analysis.PipelineVersions.v6,
             "annotations_imported": True,
             "results_dir": None,
+        },
+        {
+            "accession": "MGYA00000006",
+            "run_accession": "SRR00000006",
+            "experiment_type": Analysis.ExperimentTypes.AMPLICON,
+            "pipeline_version": Analysis.PipelineVersions.v5,
+            "annotations_imported": True,
+            "results_dir": "/tmp/r6",
         },
     ]
 
@@ -70,6 +82,9 @@ def analyses_for_primer_identification_import(
             experiment_type=analysis_kwargs["experiment_type"],
             sample=run.sample,
             run=run,
+            pipeline_version=analysis_kwargs.get(
+                "pipeline_version", Analysis.PipelineVersions.v6
+            ),
             results_dir=analysis_kwargs["results_dir"],
         )
 
@@ -94,16 +109,18 @@ def test_command_processes_only_valid_amplicon_analyses_and_logs(
         analyses_for_primer_identification_import[1].accession,
     ]
     expected_skipped_accession = analyses_for_primer_identification_import[4].accession
+    excluded_v5_accession = analyses_for_primer_identification_import[5].accession
 
     call_command("import_primer_identification_for_imported_analyses", stdout=stdout)
 
     logs = stdout.getvalue()
-    assert "Found 3 amplicon analyses with ANALYSIS_ANNOTATIONS_IMPORTED" in logs
+    assert "Found 3 v6+ amplicon analyses with ANALYSIS_ANNOTATIONS_IMPORTED" in logs
     assert logs.count("primer-identification import done (if files present)") == 2
     assert (
         f"[{expected_skipped_accession}] skipped/failed: "
         "results_dir is not set for this analysis" in logs
     )
+    assert excluded_v5_accession not in logs
     assert "Successes=2, Failures/Skipped=1" in logs
     assert mock_import_primer_identification.call_count == 2
     assert [
@@ -134,7 +151,7 @@ def test_command_respects_max_count(
     )
 
     logs = stdout.getvalue()
-    assert "Found 1 amplicon analyses with ANALYSIS_ANNOTATIONS_IMPORTED" in logs
+    assert "Found 1 v6+ amplicon analyses with ANALYSIS_ANNOTATIONS_IMPORTED" in logs
     assert logs.count("primer-identification import done (if files present)") == 1
     assert excluded_accession not in logs
     assert mock_import_primer_identification.call_count == 1
