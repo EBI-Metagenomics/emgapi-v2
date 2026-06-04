@@ -67,6 +67,7 @@ class Command(BaseCommand):
         :param args: Positional command arguments, unused.
         :param options: Parsed command options.
         """
+        assert Path(EMG_CONFIG.slurm.default_workdir).exists()
         max_count = options["max_count"]
         q = (
             analyses.models.Analysis.objects.select_related("run")
