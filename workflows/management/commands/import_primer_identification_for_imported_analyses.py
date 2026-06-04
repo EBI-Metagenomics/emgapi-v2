@@ -1,6 +1,7 @@
 from pathlib import Path
 from typing import Optional
 
+from django.conf import settings
 from django.core.management.base import BaseCommand
 
 import analyses.models
@@ -67,7 +68,7 @@ class Command(BaseCommand):
         :param args: Positional command arguments, unused.
         :param options: Parsed command options.
         """
-        assert Path(EMG_CONFIG.slurm.default_workdir).exists()
+        assert Path(settings.EMG_CONFIG.slurm.default_workdir).exists()
         max_count = options["max_count"]
         q = (
             analyses.models.Analysis.objects.select_related("run")
