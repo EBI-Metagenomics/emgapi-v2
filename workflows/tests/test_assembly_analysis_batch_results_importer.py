@@ -3,20 +3,21 @@ from unittest.mock import Mock, patch
 import pytest
 
 from analyses.models import Analysis
-from workflows.flows.analyse_study_tasks.shared.copy_v6_pipeline_results import (
-    _copy_single_analysis_results,
-)
 from workflows.data_io_utils.filenames import accession_prefix_separated_dir_path
-from workflows.data_io_utils.schemas import PipelineValidationError
+from workflows.data_io_utils.schemas import (
+    AssemblyResultSchema,
+    PipelineValidationError,
+)
+from workflows.flows.analyse_study_tasks.shared.copy_v6_pipeline_results import (
+    copy_single_analysis_results,
+)
+from workflows.flows.analysis.assembly.tasks.assembly_analysis_batch_results_importer import (
+    ImportResult,
+    assembly_analysis_batch_results_importer,
+    clear_pipeline_downloads,
+)
 from workflows.flows.analysis.assembly.tasks.process_import_results import (
     process_import_results,
-)
-from workflows.flows.analysis.assembly.tasks.assembly_analysis_batch_results_importer import (
-    assembly_analysis_batch_results_importer,
-    ImportResult,
-)
-from workflows.flows.analysis.assembly.tasks.assembly_analysis_batch_results_importer import (
-    clear_pipeline_downloads,
 )
 from workflows.models import (
     AssemblyAnalysisBatch,
@@ -1201,29 +1202,24 @@ class TestIdempotentImports:
 
         # Copy results using actual function
         target_root = tmp_path / "ftp"
-        logger = Mock()
-        _copy_single_analysis_results(
+        result = copy_single_analysis_results(
             analysis=analysis,
-            batch_analysis_relation=batch_analysis,
+            batch_analysis_job=batch_analysis,
             batch=batch,
-            target_root=str(target_root),
-            logger=logger,
+            destination_root=target_root,
         )
 
-        # Verify run_deployment was called once (only ASA is COMPLETED)
-        assert mock_run_deployment.call_count == 1
+        # ASA results are copied once per mapped top-level schema directory.
+        assert mock_run_deployment.call_count == len(AssemblyResultSchema().directories)
 
-        # Verify external_results_dir was set correctly
-        analysis.refresh_from_db()
-        assert analysis.external_results_dir
+        assert result.success is True
+        destination_folder = str(result.destination_folder)
 
-        # Verify no duplicate assembly identifier in external_results_dir
-        assert f"/{assembly_id}/{assembly_id}/" not in str(
-            analysis.external_results_dir
-        )
+        # Verify no duplicate assembly identifier in the published destination path
+        assert f"/{assembly_id}/{assembly_id}/" not in destination_folder
 
         # Verify V6/assembly is in the path
-        assert "/V6/assembly" in str(analysis.external_results_dir)
+        assert "/V6/assembly" in destination_folder
 
         # Verify the expected path structure
         study_accession = raw_reads_mgnify_study.first_accession
@@ -1234,4 +1230,5 @@ class TestIdempotentImports:
             / "V6"
             / "assembly"
         )
+        assert result.destination_folder == expected_base
         assert f"/{assembly_id}/{assembly_id}/" not in str(expected_base)

@@ -1,43 +1,47 @@
 from enum import Enum
 from pathlib import Path
-from typing import Optional, List
+from typing import List, Optional
 
 # Maybe we should put these in a separate schema with stuff
 from mgnify_pipelines_toolkit.schemas.dataframes import (
-    InterProSummarySchema,
-    PFAMSummarySchema,
-    GOSummarySchema,
-    KOSummarySchema,
     AntismashSummarySchema,
-    SanntisSummarySchema,
+    GOSummarySchema,
+    InterProSummarySchema,
     KEGGModulesSummarySchema,
+    KOSummarySchema,
+    PFAMSummarySchema,
+    SanntisSummarySchema,
 )
 from pydantic import BaseModel, Field
 
 from activate_django_first import EMG_CONFIG
+
 import analyses.models
 from analyses.base_models.with_downloads_models import (
+    DownloadFileIndexFileMetadata,
     DownloadFileType,
     DownloadType,
-    DownloadFileIndexFileMetadata,
 )
 from analyses.models import Analysis
 from workflows.data_io_utils.file_rules.common_rules import (
     DirectoryExistsRule,
     FileExistsRule,
-    FileIsNotEmptyRule,
     FileIfExistsIsNotEmptyRule,
+    FileIsNotEmptyRule,
 )
 from workflows.data_io_utils.file_rules.mgnify_v6_result_rules import (
     GlobOfTaxonomyFolderHasHtmlAndKronaTxtRule,
 )
+
 from .base import (
-    PipelineFileSchema,
-    PipelineDirectorySchema,
-    PipelineResultSchema,
     DownloadFileMetadata,
     ImportConfig,
+    PipelineDirectorySchema,
+    PipelineFileSchema,
+    PipelineResultSchema,
 )
+
+# TODO: move this to pipeline-versioned directory (very v6 specific)
 
 
 class ImportResult(BaseModel):
@@ -74,6 +78,7 @@ class AssemblyResultSchema(PipelineResultSchema):
         # QC Directory
         qc_dir = PipelineDirectorySchema(
             folder_name=EMG_CONFIG.assembly_analysis_pipeline.qc_folder,
+            external_folder_name=EMG_CONFIG.assembly_analysis_pipeline.qc_folder,
             validation_rules=[DirectoryExistsRule],
             files=[
                 PipelineFileSchema(
@@ -86,6 +91,10 @@ class AssemblyResultSchema(PipelineResultSchema):
                         short_description="Filtered contigs FASTA file",
                         long_description="Filtered contigs FASTA file used in downstream pipelines",
                     ),
+                    index_files=[
+                        DownloadFileIndexFileMetadata(index_type="fai"),
+                        DownloadFileIndexFileMetadata(index_type="gzi"),
+                    ],
                 ),
                 PipelineFileSchema(
                     filename_template="{identifier}_quast_stats.tsv.gz",
@@ -115,6 +124,7 @@ class AssemblyResultSchema(PipelineResultSchema):
         # CDS Directory
         cds_dir = PipelineDirectorySchema(
             folder_name=EMG_CONFIG.assembly_analysis_pipeline.cds_folder,
+            external_folder_name=EMG_CONFIG.assembly_analysis_pipeline.cds_folder,
             validation_rules=[DirectoryExistsRule],
             files=[
                 PipelineFileSchema(
@@ -156,6 +166,7 @@ class AssemblyResultSchema(PipelineResultSchema):
         # Taxonomy Directory
         taxonomy_dir = PipelineDirectorySchema(
             folder_name=EMG_CONFIG.assembly_analysis_pipeline.taxonomy_folder,
+            external_folder_name=EMG_CONFIG.assembly_analysis_pipeline.taxonomy_folder,
             validation_rules=[DirectoryExistsRule],
             glob_rules=[GlobOfTaxonomyFolderHasHtmlAndKronaTxtRule],
             files=[
@@ -198,6 +209,7 @@ class AssemblyResultSchema(PipelineResultSchema):
         # Functional Annotation Directory with subdirectories
         functional_dir = PipelineDirectorySchema(
             folder_name=EMG_CONFIG.assembly_analysis_pipeline.functional_annotation_folder,
+            external_folder_name=EMG_CONFIG.assembly_analysis_pipeline.functional_annotation_folder,
             validation_rules=[DirectoryExistsRule],
             subdirectories=[
                 # InterPro subdirectory
@@ -440,6 +452,7 @@ class AssemblyResultSchema(PipelineResultSchema):
         # Pathways and Systems Directory with subdirectories
         pathways_dir = PipelineDirectorySchema(
             folder_name=EMG_CONFIG.assembly_analysis_pipeline.pathways_systems_folder,
+            external_folder_name=EMG_CONFIG.assembly_analysis_pipeline.pathways_systems_folder,
             validation_rules=[DirectoryExistsRule],
             subdirectories=[
                 # antiSMASH subdirectory
@@ -649,6 +662,7 @@ class AssemblyResultSchema(PipelineResultSchema):
         # Annotation Summary Directory
         annotation_summary_dir = PipelineDirectorySchema(
             folder_name=EMG_CONFIG.assembly_analysis_pipeline.annotation_summary_folder,
+            external_folder_name=EMG_CONFIG.assembly_analysis_pipeline.annotation_summary_folder,
             validation_rules=[DirectoryExistsRule],
             files=[
                 PipelineFileSchema(

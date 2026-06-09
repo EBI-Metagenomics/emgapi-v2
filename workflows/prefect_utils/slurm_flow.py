@@ -11,7 +11,7 @@ from typing import List, Optional, Union
 from django.conf import settings
 from django.urls import reverse
 from django.utils.timezone import now
-from prefect import flow, get_run_logger, task
+from prefect import get_run_logger
 from prefect.artifacts import create_markdown_artifact
 from prefect.runtime import flow_run
 from prefect_slurm.worker import SlurmWorker
@@ -20,6 +20,15 @@ from emgapiv2.log_utils import mask_sensitive_data as safe
 from workflows.models import OrchestratedClusterJob
 from workflows.nextflow_utils.tower import get_nextflow_tower_url
 from workflows.nextflow_utils.trace import maybe_get_nextflow_trace_df
+from workflows.prefect_utils.flows_utils import (
+    close_stale_connections,
+)
+from workflows.prefect_utils.flows_utils import (
+    django_db_flow as flow,
+)
+from workflows.prefect_utils.flows_utils import (
+    django_db_task as task,
+)
 from workflows.prefect_utils.prefect_worker_utils import (
     get_prefect_worker_type,
     make_environment,
@@ -73,6 +82,8 @@ def check_cluster_job(
     :param orchestrated_cluster_job: Orchestrated Cluster Job referencing the Slurm job
     :return: state of the job, as one of the string values of SlurmStatus.
     """
+    # Refresh Django connections before DB updates after the poll interval.
+    close_stale_connections()
     logger = get_run_logger()
     logger.info(f"Checking job {orchestrated_cluster_job}")
 
@@ -97,16 +108,12 @@ def check_cluster_job(
         with open(job_log_path, "r", encoding="utf-8", errors="ignore") as job_log:
             full_log = job_log.readlines()
             log = "\n".join(full_log[-EMG_CONFIG.slurm.job_log_tail_lines :])
-            logger.info(
-                _(
-                    f"""\
+            logger.info(_(f"""\
                     Slurm Job Stdout Log (last {EMG_CONFIG.slurm.job_log_tail_lines} lines of {len(full_log)}):
                     ----------
                     <<LOG>>
                     ----------
-                    """
-                ).replace("<<LOG>>", safe(log))
-            )
+                    """).replace("<<LOG>>", safe(log)))
 
             orchestrated_cluster_job.cluster_log = log
     else:
@@ -204,13 +211,11 @@ def start_or_attach_cluster_job(
     logger.info(f"Will use {job_workdir=}")
 
     ### Prepare job submission description
-    script = _(
-        f"""\
+    script = _(f"""\
         #!/bin/bash
         set -euo pipefail
         {command}
-        """
-    )
+        """)
     logger.info(f"Will run the script ```{safe(script)}```")
     kwargs["environment"] = make_environment(kwargs.get("environment", None))
     job_submit_description = OrchestratedClusterJob.SlurmJobSubmitDescription(
@@ -280,6 +285,9 @@ def start_or_attach_cluster_job(
     nf_link = get_nextflow_tower_url()
     nf_link_markdown = f"[Watch Nextflow Workflow]({nf_link})" if nf_link else ""
 
+    # Refresh Django connections before DB writes after any preparation job.
+    close_stale_connections()
+
     ocj = OrchestratedClusterJob.objects.create(
         cluster_job_id=job_id,
         flow_run_id=flow_run.id,
@@ -289,8 +297,7 @@ def start_or_attach_cluster_job(
 
     create_markdown_artifact(
         key="slurm-job-submission",
-        markdown=_(
-            f"""\
+        markdown=_(f"""\
             # Slurm job {job_id}
             [Orchestrated Cluster Job {ocj.id}]({EMG_CONFIG.service_urls.app_root}/{reverse("admin:workflows_orchestratedclusterjob_change", kwargs={"object_id": ocj.id})})
             Submitted a script to Slurm cluster:
@@ -300,8 +307,7 @@ def start_or_attach_cluster_job(
             It will be terminated by Slurm if not done in {slurm_timedelta(expected_time)}.
             Slurm working dir is {job_workdir}.
             {nf_link_markdown}
-            """
-        ).replace("<<SCRIPT>>", safe(script)),
+            """).replace("<<SCRIPT>>", safe(script)),
     )
 
     return ocj
@@ -361,12 +367,10 @@ def run_subprocess(
     logger.info(f"Will use {job_workdir=}")
 
     ### Prepare job submission description
-    script = _(
-        f"""\
+    script = _(f"""\
         set -euo pipefail
         {command}
-        """
-    )
+        """)
 
     logger.info(f"Will run the script ```{safe(script)}```")
     job_submit_description = OrchestratedClusterJob.SlurmJobSubmitDescription(
@@ -427,6 +431,8 @@ def run_subprocess(
             environment={},
         )
 
+    # Refresh Django connections before the first DB write after any preparation job.
+    close_stale_connections()
     env = make_environment(kwargs.get("environment", None))
 
     # need to submit new job
@@ -451,8 +457,7 @@ def run_subprocess(
 
     create_markdown_artifact(
         key="slurm-job-submission",
-        markdown=_(
-            f"""\
+        markdown=_(f"""\
             # Subprocess with pid {process.pid}
             [Orchestrated Cluster Job {ocj.id}]({EMG_CONFIG.service_urls.app_root}/{reverse("admin:workflows_orchestratedclusterjob_change", kwargs={"object_id": ocj.id})})
             Submitted a script as a subprocess:
@@ -462,22 +467,25 @@ def run_subprocess(
             It will be terminated if not done in {slurm_timedelta(expected_time)}.
             Working dir is {job_workdir}.
             {nf_link_markdown}
-            """
-        ).replace("<<SCRIPT>>", safe(script)),
+            """).replace("<<SCRIPT>>", safe(script)),
     )
 
     try:
         _stdout, stderr = process.communicate(timeout=expected_time.total_seconds())
-    except TimeoutError as e:
+    except (TimeoutError, subprocess.TimeoutExpired) as e:
         logger.error(f"Failed to run subprocess: {e}")
         process.kill()
         process.wait()
 
+        # Refresh Django connections before saving after the subprocess wait.
+        close_stale_connections()
         ocj.last_known_state = SlurmStatus.failed
         ocj.save()
 
         raise SubprocessFailedException(process.pid, process.returncode, "Timed out")
 
+    # Refresh Django connections before saving after the subprocess wait.
+    close_stale_connections()
     if process.returncode == 0:
         logger.info(f"Job {ocj} finished successfully.")
 
@@ -670,7 +678,7 @@ def run_cluster_job(
 
     # Wait for job completion
     # Resumability: if this flow was re-run / restarted for some reason, or the exact same cluster job was sent later,
-    #  we should have gotten  back an existing slurm job_id of a previous run of it. And therefore the first status
+    #  we should have gotten back an existing slurm job_id of a previous run of it. And therefore the first status
     #  check will just tell us the job finished immediately / it'll wait for the EXISTING job to finish.
     is_job_in_terminal_state = False
     while not is_job_in_terminal_state:

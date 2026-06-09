@@ -1,5 +1,4 @@
 import pytest
-
 from ninja_jwt.tokens import SlidingToken
 
 from emgapiv2.api.auth import (
@@ -132,3 +131,86 @@ def test_token_endpoint_as_broker(ninja_api_client, webin_private_study, httpx_m
     validated_token = SlidingToken(token)
     assert validated_token.get("username") == webin_private_study.webin_submitter
     assert config.broker_prefix not in validated_token.get("username")
+
+
+@pytest.mark.django_db
+def test_account_endpoint(ninja_api_client, httpx_mock, private_webin):
+    httpx_mock.add_response(
+        url="http://fake-auth.example.com/auth",
+        status_code=200,
+        is_reusable=True,
+    )
+    httpx_mock.add_response(
+        url="http://fake-auth.example.com/token",
+        status_code=200,
+        text="fake-token",
+        is_reusable=True,
+    )
+    httpx_mock.add_response(
+        url="http://fake-auth.example.com/account",
+        status_code=200,
+        json={
+            "submissionContacts": [
+                {"emailAddress": "hello@example.org", "mainContact": True}
+            ]
+        },
+        is_reusable=True,
+    )
+    # Text successful fetch of accounts data
+    response = ninja_api_client.post(
+        "/auth/account",
+        json={"username": private_webin, "password": "password"},
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert "hello@example.org" in data[0]["email_address"]
+
+    # Test fetch with bad creds
+    httpx_mock.add_response(
+        url="http://fake-auth.example.com/auth",
+        status_code=401,
+    )
+    response = ninja_api_client.post(
+        "/auth/account",
+        json={"username": private_webin, "password": "password"},
+    )
+    assert response.status_code == 401
+    assert response.json() == {"detail": "Invalid credentials"}
+
+    # Test fetch if token is bad
+    httpx_mock.add_response(
+        url="http://fake-auth.example.com/auth",
+        status_code=200,
+    )
+    httpx_mock.add_response(
+        url="http://fake-auth.example.com/token",
+        status_code=401,
+        text="no token for you",
+    )
+    response = ninja_api_client.post(
+        "/auth/account",
+        json={"username": private_webin, "password": "password"},
+    )
+    assert response.status_code == 401
+    assert response.json() == {"detail": "Failed to fetch account details"}
+
+    # Test fetch if account detail is bad
+    httpx_mock.add_response(
+        url="http://fake-auth.example.com/auth",
+        status_code=200,
+    )
+    httpx_mock.add_response(
+        url="http://fake-auth.example.com/token",
+        status_code=200,
+        text="fake-token",
+    )
+    httpx_mock.add_response(
+        url="http://fake-auth.example.com/account",
+        status_code=401,
+    )
+    response = ninja_api_client.post(
+        "/auth/account",
+        json={"username": private_webin, "password": "password"},
+    )
+    assert response.status_code == 401
+    assert response.json() == {"detail": "Failed to fetch account details"}

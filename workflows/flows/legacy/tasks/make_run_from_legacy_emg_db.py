@@ -1,7 +1,7 @@
-from prefect import task, get_run_logger
+from prefect import get_run_logger, task
 
-from analyses.models import Study, Run, Sample
-from workflows.data_io_utils.legacy_emg_dbs import LegacyRun, LEGACY_EXPERIMENT_TYPE_MAP
+from analyses.models import Run, Sample, Study
+from workflows.data_io_utils.legacy_emg_dbs import LEGACY_EXPERIMENT_TYPE_MAP, LegacyRun
 
 
 @task
@@ -12,9 +12,7 @@ def make_run_from_legacy_emg_db(legacy_run: LegacyRun, study: Study) -> Run:
 
     logger = get_run_logger()
 
-    sample = Sample.objects.get(
-        ena_accessions__contains=[legacy_run.sample.primary_accession]
-    )
+    sample = Sample.objects.get_by_accession(legacy_run.sample.primary_accession)
 
     run, created = Run.objects.get_or_create(
         ena_study=study.ena_study,

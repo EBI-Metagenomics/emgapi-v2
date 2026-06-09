@@ -2,15 +2,20 @@ import uuid
 from datetime import timedelta
 from pathlib import Path
 
-from django.utils.text import slugify
-from django.db import close_old_connections
-from prefect import flow, get_run_logger
+from django.db import transaction
+from prefect import get_run_logger
 from prefect.runtime import flow_run
 
 from activate_django_first import EMG_CONFIG
 
+from workflows.flows.analyse_study_tasks.cleanup_pipeline_directories import (
+    remove_dir,
+)
 from workflows.flows.analysis.assembly.flows.import_virify_batch import (
     import_virify_batch,
+)
+from workflows.flows.analysis.assembly.utils.status_update_hooks import (
+    update_batch_status_counts,
 )
 from workflows.models import (
     AssemblyAnalysisBatch,
@@ -18,17 +23,12 @@ from workflows.models import (
     AssemblyAnalysisPipelineStatus,
 )
 from workflows.prefect_utils.build_cli_command import cli_command
+from workflows.prefect_utils.flows_utils import django_db_flow as flow
 from workflows.prefect_utils.slurm_flow import (
-    run_cluster_job,
     ClusterJobFailedException,
+    run_cluster_job,
 )
 from workflows.prefect_utils.slurm_policies import ResubmitAlwaysPolicy
-from workflows.flows.analysis.assembly.utils.status_update_hooks import (
-    update_batch_status_counts,
-)
-from workflows.flows.analyse_study_tasks.cleanup_pipeline_directories import (
-    remove_dir,
-)
 
 
 @flow(
@@ -61,13 +61,23 @@ def run_virify_batch(assembly_analyses_batch_id: uuid.UUID):
     """
     logger = get_run_logger()
 
-    assembly_analysis_batch = AssemblyAnalysisBatch.objects.get(
-        id=assembly_analyses_batch_id
-    )
+    # Lock the batch row to prevent two concurrent flows from both passing
+    # the is_running() check before either writes its flow_run_id.
+    with transaction.atomic():
+        assembly_analysis_batch = AssemblyAnalysisBatch.objects.select_for_update().get(
+            id=assembly_analyses_batch_id
+        )
 
-    # Store Prefect flow run ID
-    assembly_analysis_batch.virify_flow_run_id = flow_run.id
-    assembly_analysis_batch.save()
+        if assembly_analysis_batch.is_running(AssemblyAnalysisPipeline.VIRIFY):
+            # TODO: add reverse URL to study-assembly-analysis-status-summary admin page
+            logger.warning(
+                f"VIRify for batch {assembly_analyses_batch_id} is already being processed. "
+                f"Current flow will exit to avoid duplicate processing."
+            )
+            return
+
+        assembly_analysis_batch.virify_flow_run_id = flow_run.id
+        assembly_analysis_batch.save()
 
     # Record pipeline version
     assembly_analysis_batch.set_pipeline_version(
@@ -137,9 +147,10 @@ def run_virify_batch(assembly_analyses_batch_id: uuid.UUID):
     logger.info(f"Using output dir {virify_outdir} for VIRify pipeline")
 
     nextflow_workdir = (
-        Path(assembly_analysis_batch.workspace_dir)
-        / "virify"
-        / f"virify-sheet-{slugify(virify_samplesheet_path)}"
+        Path(EMG_CONFIG.slurm.default_nextflow_workdir)
+        / mgnify_study.ena_study.accession
+        / f"{EMG_CONFIG.virify_pipeline.pipeline_name}_{EMG_CONFIG.virify_pipeline.pipeline_version}"
+        / f"{assembly_analysis_batch.id}"
     )
     nextflow_workdir.mkdir(parents=True, exist_ok=True)
 
@@ -152,15 +163,17 @@ def run_virify_batch(assembly_analyses_batch_id: uuid.UUID):
                 EMG_CONFIG.virify_pipeline.pipeline_repo,
             ),
             (
+                "-c",
+                EMG_CONFIG.virify_pipeline.pipeline_config_file,
+            ),
+            (
                 "-r",
                 EMG_CONFIG.virify_pipeline.pipeline_git_revision,
             ),
-            # "-latest", this was causing issues - Cannot lock pack in assembly-analysis-pipeline/.git/objects/pack/pack-e....pack
             (
                 "-profile",
                 EMG_CONFIG.virify_pipeline.pipeline_nf_profile,
             ),
-            ("-config", EMG_CONFIG.virify_pipeline.pipeline_config_file),
             "-resume",
             ("-work-dir", nextflow_workdir),
             ("--samplesheet", virify_samplesheet_path),
@@ -188,9 +201,7 @@ def run_virify_batch(assembly_analyses_batch_id: uuid.UUID):
             working_dir=virify_outdir,
             resubmit_policy=ResubmitAlwaysPolicy,  # We let Nextflow handle resubmissions
         )
-        close_old_connections()
     except Exception as e:
-        close_old_connections()
         error_type = (
             "VIRIfy pipeline failed"
             if isinstance(e, ClusterJobFailedException)

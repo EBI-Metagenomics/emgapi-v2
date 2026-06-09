@@ -1,4 +1,4 @@
-from prefect import flow, get_run_logger
+from prefect import get_run_logger
 from prefect.flow_engine import load_flow_run
 
 from activate_django_first import EMG_CONFIG  # noqa
@@ -11,9 +11,11 @@ from workflows.flows.analyse_study_tasks.shared.copy_v6_pipeline_results import 
 from workflows.flows.analyse_study_tasks.shared.study_summary import (
     merge_assembly_study_summaries,
 )
+from workflows.flows.analysis import AnalysisType
 from workflows.flows.analysis.assembly.tasks.add_assembly_study_summaries_to_downloads import (
     add_assembly_study_summaries_to_downloads,
 )
+from workflows.prefect_utils.flows_utils import django_db_flow as flow
 
 
 @flow(
@@ -27,8 +29,6 @@ def finalize_assembly_study(study_accession: str):
     batch 3 flows (aca, virify and map) are not running anymore. This is not ideal, and I'm
     working to improve it.
     TODO: Improve as is_running() is not enough, flows may have failed or haven't even started!
-    TODO: Add unit tests
-    TODO: Use events or automations to improve this
 
     This includes:
     - Merging assembly study summaries
@@ -36,12 +36,15 @@ def finalize_assembly_study(study_accession: str):
     - Copying v6 study summaries
     - Updating study features
 
-    :param study_accession: Study accession (e.g., MGYS00001234)
+    :param study_accession: Study accession (MGYS e.g. MGYS00001234, or ENA e.g. ERP000001)
     :type study_accession: str
     """
     logger = get_run_logger()
 
-    mgnify_study = analyses.models.Study.objects.get(accession=study_accession)
+    try:
+        mgnify_study = analyses.models.Study.objects.get(accession=study_accession)
+    except analyses.models.Study.DoesNotExist:
+        mgnify_study = analyses.models.Study.objects.get_by_accession(study_accession)
 
     # Check if all batches are complete
     batches = workflows.models.AssemblyAnalysisBatch.objects.filter(
@@ -93,7 +96,7 @@ def finalize_assembly_study(study_accession: str):
     #####################################
     add_assembly_study_summaries_to_downloads(mgnify_study.accession)
 
-    copy_v6_study_summaries(mgnify_study.accession)
+    copy_v6_study_summaries(mgnify_study.accession, analysis_type=AnalysisType.ASSEMBLY)
 
     mgnify_study.refresh_from_db()
 

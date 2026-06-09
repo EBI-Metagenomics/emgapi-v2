@@ -7,15 +7,16 @@ from django.core.exceptions import ObjectDoesNotExist
 from prefect import flow
 
 from analyses.models import Assembly, Biome, Run, Sample, Study
-from ena.models import Study as ENAStudy, Sample as ENASample
+from ena.models import Sample as ENASample
+from ena.models import Study as ENAStudy
 from genomes.models import Genome, GenomeAssemblyLink, GenomeCatalogue
 from workflows.flows.import_genome_assembly_links_flow import (
-    import_genome_assembly_links_flow,
-    validate_tsv_file,
-    read_tsv_file,
-    process_tsv_records,
-    find_objects,
     create_links,
+    find_objects,
+    import_genome_assembly_links_flow,
+    process_tsv_records,
+    read_tsv_file,
+    validate_tsv_file,
 )
 from workflows.prefect_utils.testing_utils import run_flow_and_capture_logs
 
@@ -230,8 +231,8 @@ def test_find_objects(prefect_harness):
     )
 
     # Create assembly
-    assembly1 = Assembly.objects.create(
-        run=run,
+    assembly1 = Assembly.objects.create_for_runs_and_sample(
+        runs=[run],
         sample=sample,
         reads_study=study,
         ena_study=ena_study,
@@ -389,15 +390,15 @@ def test_create_links(prefect_harness):
     )
 
     # Create assemblies
-    assembly1 = Assembly.objects.create(
-        run=run,
+    assembly1 = Assembly.objects.create_for_runs_and_sample(
+        runs=[run],
         sample=sample,
         reads_study=study,
         ena_study=ena_study,
     )
 
-    assembly2 = Assembly.objects.create(
-        run=run,
+    assembly2 = Assembly.objects.create_for_runs_and_sample(
+        runs=[run],
         sample=sample,
         reads_study=study,
         ena_study=ena_study,
@@ -571,8 +572,8 @@ def test_import_genome_assembly_links_flow(mock_tsv_file, prefect_harness):
     )
 
     # Create assemblies
-    assembly1 = Assembly.objects.create(
-        run=run,
+    assembly1 = Assembly.objects.create_for_runs_and_sample(
+        runs=[run],
         sample=sample,
         reads_study=study,
         ena_study=ena_study,
@@ -580,8 +581,8 @@ def test_import_genome_assembly_links_flow(mock_tsv_file, prefect_harness):
     assembly1.ena_accessions = ["ERZ123456"]
     assembly1.save()
 
-    assembly2 = Assembly.objects.create(
-        run=run,
+    assembly2 = Assembly.objects.create_for_runs_and_sample(
+        runs=[run],
         sample=sample,
         reads_study=study,
         ena_study=ena_study,

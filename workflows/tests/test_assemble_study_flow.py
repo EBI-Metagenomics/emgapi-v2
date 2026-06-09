@@ -1,10 +1,10 @@
 import glob
 import json
+import logging
 import os
 import shutil
-import logging
 from pathlib import Path
-from typing import Optional, List, Union
+from typing import List, Optional, Union
 from unittest.mock import patch
 
 import pandas as pd
@@ -15,26 +15,26 @@ from pydantic import BaseModel
 
 import analyses.models
 import ena.models
-from workflows.ena_utils.ena_api_requests import ENALibraryStrategyPolicy
 from workflows.data_io_utils.file_rules.base_rules import GlobRule
 from workflows.data_io_utils.file_rules.nodes import Directory
+from workflows.ena_utils.ena_api_requests import ENALibraryStrategyPolicy
+from workflows.flows.analyse_study_tasks.cleanup_pipeline_directories import (
+    # delete_study_results_dir,
+    delete_assemble_study_nextflow_workdir,
+)
 from workflows.flows.assemble_study import AssemblerChoices, assemble_study
 from workflows.flows.assemble_study_tasks.assemble_samplesheets import (
     get_reference_genome,
     update_assemblers_and_contaminant_ref_of_assemblies_from_samplesheet,
 )
 from workflows.flows.assemble_study_tasks.make_samplesheets import (
+    make_samplesheet,
     make_samplesheets_for_runs_to_assemble,
 )
 from workflows.prefect_utils.analyses_models_helpers import mark_assembly_status
-
 from workflows.prefect_utils.testing_utils import (
-    should_not_mock_httpx_requests_to_prefect_server,
     combine_caplog_records,
-)
-from workflows.flows.analyse_study_tasks.cleanup_pipeline_directories import (
-    # delete_study_results_dir,
-    delete_assemble_study_nextflow_workdir,
+    should_not_mock_httpx_requests_to_prefect_server,
 )
 
 EMG_CONFIG = settings.EMG_CONFIG
@@ -131,15 +131,15 @@ def test_prefect_assemble_study_flow(
 
     """
     Runs description:
-    SRR1: correct PE, WGS MetaG - metaspades
-    SRR2: correct PE, WGS MetaG - metaspades (with failure)
-    SRR3: correct SE, WGS MetaG - megahit
-    SRR4: correct SE, WGS MetaG, LR - Flye
-    SRR5: correct SE, WGS MetaG, ION_TORRENT - spades
-    SRR6: correct PE, WGA MetaG - metaspades
-    SRR7: correct PE, WGA MetaT - metaspades
-    SRR8: incorrect SE, WGS MetaG - metaspades
-    SRR9: incorrect PE, WGA MetaG - megahit
+    SRR123456: correct PE, WGS MetaG - metaspades
+    SRR234567: correct PE, WGS MetaG - metaspades (with failure)
+    SRR345678: correct SE, WGS MetaG - megahit
+    SRR456789: correct SE, WGS MetaG, LR - Flye
+    SRR567890: correct SE, WGS MetaG, ION_TORRENT - spades
+    SRR678901: correct PE, WGA MetaG - metaspades
+    SRR789012: correct PE, WGA MetaT - metaspades
+    SRR890123: incorrect SE, WGS MetaG - metaspades
+    SRR901234: incorrect PE, WGA MetaG - megahit
     """
     httpx_mock.add_response(
         url=f"{EMG_CONFIG.ena.portal_search_api}?"
@@ -154,9 +154,9 @@ def test_prefect_assemble_study_flow(
                 "sample_accession": "SAMN01",
                 "sample_title": "Wookie hair 1 (PE assembled with metaspades)",
                 "secondary_sample_accession": "SRS1",
-                "run_accession": "SRR1",
+                "run_accession": "SRR123456",
                 "fastq_md5": "123;abc",
-                "fastq_ftp": "ftp.sra.example.org/vol/fastq/SRR1/SRR1_1.fastq.gz;ftp.sra.example.org/vol/fastq/SRR1/SRR1_2.fastq.gz",
+                "fastq_ftp": "ftp.sra.example.org/vol/fastq/SRR123456/SRR123456_1.fastq.gz;ftp.sra.example.org/vol/fastq/SRR123456/SRR123456_2.fastq.gz",
                 "library_layout": "PAIRED",
                 "library_strategy": "WGS",
                 "library_source": "METAGENOMIC",
@@ -173,9 +173,9 @@ def test_prefect_assemble_study_flow(
                 "sample_accession": "SAMN02",
                 "sample_title": "Wookie hair 2 (PE failed assembling with metaspades)",
                 "secondary_sample_accession": "SRS2",
-                "run_accession": "SRR2",
+                "run_accession": "SRR234567",
                 "fastq_md5": "456;xyz",
-                "fastq_ftp": "ftp.sra.example.org/vol/fastq/SRR2/SRR2_1.fastq.gz;ftp.sra.example.org/vol/fastq/SRR2/SRR2_2.fastq.gz",
+                "fastq_ftp": "ftp.sra.example.org/vol/fastq/SRR234567/SRR234567_1.fastq.gz;ftp.sra.example.org/vol/fastq/SRR234567/SRR234567_2.fastq.gz",
                 "library_layout": "PAIRED",
                 "library_strategy": "WGS",
                 "library_source": "METAGENOMIC",
@@ -192,9 +192,9 @@ def test_prefect_assemble_study_flow(
                 "sample_accession": "SAMN03",
                 "sample_title": "Wookie hair 3 (SE should be assembled with megahit)",
                 "secondary_sample_accession": "SRS3",
-                "run_accession": "SRR3",
+                "run_accession": "SRR345678",
                 "fastq_md5": "123;abc",
-                "fastq_ftp": "ftp.sra.example.org/vol/fastq/SRR3/SRR3.fastq.gz",
+                "fastq_ftp": "ftp.sra.example.org/vol/fastq/SRR345678/SRR345678.fastq.gz",
                 "library_layout": "SINGLE",
                 "library_strategy": "WGS",
                 "library_source": "METAGENOMIC",
@@ -211,9 +211,9 @@ def test_prefect_assemble_study_flow(
                 "sample_accession": "SAMN04",
                 "sample_title": "Wookie hair 4 (LR should be assembled with flye)",
                 "secondary_sample_accession": "SRS4",
-                "run_accession": "SRR4",
+                "run_accession": "SRR456789",
                 "fastq_md5": "123;abc",
-                "fastq_ftp": "ftp.sra.example.org/vol/fastq/SRR4/SRR4.fastq.gz",
+                "fastq_ftp": "ftp.sra.example.org/vol/fastq/SRR456789/SRR456789.fastq.gz",
                 "library_layout": "SINGLE",
                 "library_strategy": "WGS",
                 "library_source": "METAGENOMIC",
@@ -230,9 +230,9 @@ def test_prefect_assemble_study_flow(
                 "sample_accession": "SAMN05",
                 "sample_title": "Wookie hair 5 (ION_TORRENT should be assembled with spades)",
                 "secondary_sample_accession": "SRS5",
-                "run_accession": "SRR5",
+                "run_accession": "SRR567890",
                 "fastq_md5": "123;abc",
-                "fastq_ftp": "ftp.sra.example.org/vol/fastq/SRR5/SRR5.fastq.gz",
+                "fastq_ftp": "ftp.sra.example.org/vol/fastq/SRR567890/SRR567890.fastq.gz",
                 "library_layout": "SINGLE",
                 "library_strategy": "WGS",
                 "library_source": "METAGENOMIC",
@@ -249,9 +249,9 @@ def test_prefect_assemble_study_flow(
                 "sample_accession": "SAMN06",
                 "sample_title": "Wookie hair 6 (PE labeled as WGA and METAGENOMIC)",
                 "secondary_sample_accession": "SRS6",
-                "run_accession": "SRR6",
+                "run_accession": "SRR678901",
                 "fastq_md5": "123;abc",
-                "fastq_ftp": "ftp.sra.example.org/vol/fastq/SRR6/SRR6_1.fastq.gz;ftp.sra.example.org/vol/fastq/SRR6/SRR6_2.fastq.gz",
+                "fastq_ftp": "ftp.sra.example.org/vol/fastq/SRR678901/SRR678901_1.fastq.gz;ftp.sra.example.org/vol/fastq/SRR678901/SRR678901_2.fastq.gz",
                 "library_layout": "PAIRED",
                 "library_strategy": "WGA",
                 "library_source": "METAGENOMIC",
@@ -268,9 +268,9 @@ def test_prefect_assemble_study_flow(
                 "sample_accession": "SAMN07",
                 "sample_title": "Wookie hair 7 (PE labeled as WGA and METATRANSCRIPTOMIC)",
                 "secondary_sample_accession": "SRS7",
-                "run_accession": "SRR7",
+                "run_accession": "SRR789012",
                 "fastq_md5": "123;abc",
-                "fastq_ftp": "ftp.sra.example.org/vol/fastq/SRR7/SRR7_1.fastq.gz;ftp.sra.example.org/vol/fastq/SRR7/SRR7_2.fastq.gz",
+                "fastq_ftp": "ftp.sra.example.org/vol/fastq/SRR789012/SRR789012_1.fastq.gz;ftp.sra.example.org/vol/fastq/SRR789012/SRR789012_2.fastq.gz",
                 "library_layout": "PAIRED",
                 "library_strategy": "WGA",
                 "library_source": "METATRANSCRIPTOMIC",
@@ -287,9 +287,9 @@ def test_prefect_assemble_study_flow(
                 "sample_accession": "SAMN08",
                 "sample_title": "Wookie hair 8 (PE labeled as SE, should use changed LL)",
                 "secondary_sample_accession": "SRS8",
-                "run_accession": "SRR8",
+                "run_accession": "SRR890123",
                 "fastq_md5": "123;abc",
-                "fastq_ftp": "ftp.sra.example.org/vol/fastq/SRR8/SRR8_1.fastq.gz;ftp.sra.example.org/vol/fastq/SRR8/SRR8_2.fastq.gz",
+                "fastq_ftp": "ftp.sra.example.org/vol/fastq/SRR890123/SRR890123_1.fastq.gz;ftp.sra.example.org/vol/fastq/SRR890123/SRR890123_2.fastq.gz",
                 "library_layout": "SINGLE",
                 "library_strategy": "WGS",
                 "library_source": "METAGENOMIC",
@@ -306,9 +306,9 @@ def test_prefect_assemble_study_flow(
                 "sample_accession": "SAMN09",
                 "sample_title": "Wookie hair 9 (SE labeled as PE, should use changed LL)",
                 "secondary_sample_accession": "SRS9",
-                "run_accession": "SRR9",
+                "run_accession": "SRR901234",
                 "fastq_md5": "123;abc",
-                "fastq_ftp": "ftp.sra.example.org/vol/fastq/SRR9/SRR9.fastq.gz",
+                "fastq_ftp": "ftp.sra.example.org/vol/fastq/SRR901234/SRR901234.fastq.gz",
                 "library_layout": "PAIRED",
                 "library_strategy": "WGA",
                 "library_source": "METAGENOMIC",
@@ -324,7 +324,7 @@ def test_prefect_assemble_study_flow(
         ],
     )
 
-    def suspend_side_effect(wait_for_input=None):
+    def suspend_side_effect(wait_for_input=None, **kwargs):
         if wait_for_input.__name__ == "AssembleStudyInput":
             return assembly_study_input_mocker(
                 biome=biome_choices["root.engineered"],
@@ -351,29 +351,29 @@ def test_prefect_assemble_study_flow(
     assembly_folder.mkdir(exist_ok=True, parents=True)
 
     with open(f"{assembly_folder}/assembled_runs.csv", "w") as file:
-        file.write("SRR1,metaspades,3.15.5\n")
-        file.write("SRR3,megahit,1.2.9\n")
-        file.write("SRR4,flye,2.9.5\n")
-        file.write("SRR5,spades,3.15.5\n")
-        file.write("SRR6,metaspades,3.15.5\n")
-        file.write("SRR7,metaspades,3.15.5\n")
-        file.write("SRR8,metaspades,3.15.5\n")
-        file.write("SRR9,megahit,1.2.9")
+        file.write("SRR123456,metaspades,3.15.5\n")
+        file.write("SRR345678,megahit,1.2.9\n")
+        file.write("SRR456789,flye,2.9.5\n")
+        file.write("SRR567890,spades,3.15.5\n")
+        file.write("SRR678901,metaspades,3.15.5\n")
+        file.write("SRR789012,metaspades,3.15.5\n")
+        file.write("SRR890123,metaspades,3.15.5\n")
+        file.write("SRR901234,megahit,1.2.9")
 
     with open(f"{assembly_folder}/qc_failed_runs.csv", "w") as file:
-        file.write("SRR2,filter_ratio_threshold_exceeded")
+        file.write("SRR234567,filter_ratio_threshold_exceeded")
 
     # create fake results folders
     created_coverage_folders = [
-        f"{assembly_folder}/PRJNA1/PRJNA1/SRR1/SRR1/assembly/metaspades/3.15.5/coverage/",
-        f"{assembly_folder}/PRJNA1/PRJNA1/SRR3/SRR3/assembly/megahit/1.2.9/coverage/",
-        f"{assembly_folder}/PRJNA1/PRJNA1/SRR3/SRR3/assembly/megahit/1.2.9/coverage/",
-        f"{assembly_folder}/PRJNA1/PRJNA1/SRR4/SRR4/assembly/flye/2.9.5/coverage/",
-        f"{assembly_folder}/PRJNA1/PRJNA1/SRR5/SRR5/assembly/spades/3.15.5/coverage/",
-        f"{assembly_folder}/PRJNA1/PRJNA1/SRR6/SRR6/assembly/metaspades/3.15.5/coverage/",
-        f"{assembly_folder}/PRJNA1/PRJNA1/SRR7/SRR7/assembly/metaspades/3.15.5/coverage/",
-        f"{assembly_folder}/PRJNA1/PRJNA1/SRR8/SRR8/assembly/metaspades/3.15.5/coverage/",
-        f"{assembly_folder}/PRJNA1/PRJNA1/SRR9/SRR9/assembly/megahit/1.2.9/coverage/",
+        f"{assembly_folder}/PRJNA1/PRJNA1/SRR1234/SRR123456/assembly/metaspades/3.15.5/coverage/",
+        f"{assembly_folder}/PRJNA1/PRJNA1/SRR3456/SRR345678/assembly/megahit/1.2.9/coverage/",
+        f"{assembly_folder}/PRJNA1/PRJNA1/SRR3456/SRR345678/assembly/megahit/1.2.9/coverage/",
+        f"{assembly_folder}/PRJNA1/PRJNA1/SRR4567/SRR456789/assembly/flye/2.9.5/coverage/",
+        f"{assembly_folder}/PRJNA1/PRJNA1/SRR5678/SRR567890/assembly/spades/3.15.5/coverage/",
+        f"{assembly_folder}/PRJNA1/PRJNA1/SRR6789/SRR678901/assembly/metaspades/3.15.5/coverage/",
+        f"{assembly_folder}/PRJNA1/PRJNA1/SRR7890/SRR789012/assembly/metaspades/3.15.5/coverage/",
+        f"{assembly_folder}/PRJNA1/PRJNA1/SRR8901/SRR890123/assembly/metaspades/3.15.5/coverage/",
+        f"{assembly_folder}/PRJNA1/PRJNA1/SRR9012/SRR901234/assembly/megahit/1.2.9/coverage/",
     ]
 
     for folder in created_coverage_folders:
@@ -384,14 +384,14 @@ def test_prefect_assemble_study_flow(
 
     # create fake coverage files
     created_coverage_files = [
-        f"{assembly_folder}/PRJNA1/PRJNA1/SRR1/SRR1/assembly/metaspades/3.15.5/coverage/SRR1_coverage.json",
-        f"{assembly_folder}/PRJNA1/PRJNA1/SRR3/SRR3/assembly/megahit/1.2.9/coverage/SRR3_coverage.json",
-        f"{assembly_folder}/PRJNA1/PRJNA1/SRR4/SRR4/assembly/flye/2.9.5/coverage/SRR4_coverage.json",
-        f"{assembly_folder}/PRJNA1/PRJNA1/SRR5/SRR5/assembly/spades/3.15.5/coverage/SRR5_coverage.json",
-        f"{assembly_folder}/PRJNA1/PRJNA1/SRR6/SRR6/assembly/metaspades/3.15.5/coverage/SRR6_coverage.json",
-        f"{assembly_folder}/PRJNA1/PRJNA1/SRR7/SRR7/assembly/metaspades/3.15.5/coverage/SRR7_coverage.json",
-        f"{assembly_folder}/PRJNA1/PRJNA1/SRR8/SRR8/assembly/metaspades/3.15.5/coverage/SRR8_coverage.json",
-        f"{assembly_folder}/PRJNA1/PRJNA1/SRR9/SRR9/assembly/megahit/1.2.9/coverage/SRR9_coverage.json",
+        f"{assembly_folder}/PRJNA1/PRJNA1/SRR1234/SRR123456/assembly/metaspades/3.15.5/coverage/SRR123456_coverage.json",
+        f"{assembly_folder}/PRJNA1/PRJNA1/SRR3456/SRR345678/assembly/megahit/1.2.9/coverage/SRR345678_coverage.json",
+        f"{assembly_folder}/PRJNA1/PRJNA1/SRR4567/SRR456789/assembly/flye/2.9.5/coverage/SRR456789_coverage.json",
+        f"{assembly_folder}/PRJNA1/PRJNA1/SRR5678/SRR567890/assembly/spades/3.15.5/coverage/SRR567890_coverage.json",
+        f"{assembly_folder}/PRJNA1/PRJNA1/SRR6789/SRR678901/assembly/metaspades/3.15.5/coverage/SRR678901_coverage.json",
+        f"{assembly_folder}/PRJNA1/PRJNA1/SRR7890/SRR789012/assembly/metaspades/3.15.5/coverage/SRR789012_coverage.json",
+        f"{assembly_folder}/PRJNA1/PRJNA1/SRR8901/SRR890123/assembly/metaspades/3.15.5/coverage/SRR890123_coverage.json",
+        f"{assembly_folder}/PRJNA1/PRJNA1/SRR9012/SRR901234/assembly/megahit/1.2.9/coverage/SRR901234_coverage.json",
     ]
 
     for cov_file in created_coverage_files:
@@ -436,11 +436,11 @@ def test_prefect_assemble_study_flow(
     assert analyses.models.Assembly.objects.count() == number_of_runs
 
     assembly = analyses.models.Assembly.objects.filter(
-        run__ena_accessions__contains=["SRR1"]
+        runs__ena_accessions__contains=["SRR123456"]
     ).first()
     assert 0.0475 < assembly.metadata.get("coverage") < 0.0477
 
-    assert assembly.dir == f"{assembly_folder}/PRJNA1/PRJNA1/SRR1/SRR1"
+    assert assembly.dir == f"{assembly_folder}/PRJNA1/PRJNA1/SRR1234/SRR123456"
 
     assert (
         analyses.models.Assembly.objects.filter(status__assembly_completed=True).count()
@@ -682,9 +682,9 @@ def test_prefect_assemble_private_study_flow(
                 "sample_accession": "SAMN01",
                 "sample_title": "Wookie hair 1",
                 "secondary_sample_accession": "SRS1",
-                "run_accession": "SRR1",
+                "run_accession": "SRR123456",
                 "fastq_md5": "123;abc",
-                "fastq_ftp": "ftp.dcc_private.example.org/vol/fastq/SRR1/SRR1_1.fastq.gz;ftp.sra.example.org/vol/fastq/SRR1/SRR1_2.fastq.gz",
+                "fastq_ftp": "ftp.dcc_private.example.org/vol/fastq/SRR123456/SRR123456_1.fastq.gz;ftp.sra.example.org/vol/fastq/SRR123456/SRR123456_2.fastq.gz",
                 "library_layout": "PAIRED",
                 "library_strategy": "WGS",
                 "library_source": "METAGENOMIC",
@@ -701,9 +701,9 @@ def test_prefect_assemble_private_study_flow(
                 "sample_accession": "SAMN02",
                 "sample_title": "Wookie hair 2",
                 "secondary_sample_accession": "SRS2",
-                "run_accession": "SRR2",
+                "run_accession": "SRR234567",
                 "fastq_md5": "456;xyz",
-                "fastq_ftp": "ftp.dcc_private.example.org/vol/fastq/SRR2/SRR2_1.fastq.gz;ftp.sra.example.org/vol/fastq/SRR2/SRR2_2.fastq.gz",
+                "fastq_ftp": "ftp.dcc_private.example.org/vol/fastq/SRR234567/SRR234567_1.fastq.gz;ftp.sra.example.org/vol/fastq/SRR234567/SRR234567_2.fastq.gz",
                 "library_layout": "PAIRED",
                 "library_strategy": "WGS",
                 "library_source": "METAGENOMIC",
@@ -720,7 +720,7 @@ def test_prefect_assemble_private_study_flow(
     )
 
     ## Pretend that a human resumed the flow with the biome picker, and then with the assembler selector.
-    def suspend_side_effect(wait_for_input=None):
+    def suspend_side_effect(wait_for_input=None, **kwargs):
         if wait_for_input.__name__ == "AssembleStudyInput":
             return assembly_study_input_mocker(
                 biome=biome_choices["root.engineered"],
@@ -747,18 +747,19 @@ def test_prefect_assemble_private_study_flow(
     assembly_folder.mkdir(exist_ok=True, parents=True)
 
     with (assembly_folder / "assembled_runs.csv").open("w") as file:
-        file.write("SRR1,metaspades,3.15.5")
+        file.write("SRR123456,metaspades,3.15.5")
 
     with (assembly_folder / "qc_failed_runs.csv").open("w") as file:
-        file.write("SRR2,filter_ratio_threshold_exceeded")
+        file.write("SRR234567,filter_ratio_threshold_exceeded")
 
     (
-        assembly_folder / "PRJNA1/PRJNA1/SRR1/SRR1/assembly/metaspades/3.15.5/coverage/"
+        assembly_folder
+        / "PRJNA1/PRJNA1/SRR1234/SRR123456/assembly/metaspades/3.15.5/coverage/"
     ).mkdir(parents=True, exist_ok=True)
 
     with (
         assembly_folder
-        / "PRJNA1/PRJNA1/SRR1/SRR1/assembly/metaspades/3.15.5/coverage/SRR1_coverage.json"
+        / "PRJNA1/PRJNA1/SRR1234/SRR123456/assembly/metaspades/3.15.5/coverage/SRR123456_coverage.json"
     ).open("w") as file:
         json.dump({"coverage": 0.04760503915318373, "coverage_depth": 273.694}, file)
 
@@ -873,6 +874,98 @@ def test_assembler_changed_in_samplesheet(
         ).count()
         > 1
     )
+
+
+@pytest.mark.django_db(transaction=True)
+def test_assembler_is_changed_to_flye_for_longread(
+    prefect_harness,
+    raw_reads_mgnify_study,
+    long_read_run,
+    tmp_path,
+    top_level_biomes,
+    assemblers,
+):
+    assembly, _ = analyses.models.Assembly.objects.get_or_create_for_run_and_sample(
+        run=long_read_run,
+        sample=long_read_run.sample,
+        reads_study=raw_reads_mgnify_study,
+        ena_study=raw_reads_mgnify_study.ena_study,
+        assembler=analyses.models.Assembler.get_latest(
+            analyses.models.Assembler.METASPADES
+        ),
+        ena_accessions=[
+            "ERZ_longreads",
+        ],
+    )
+
+    human = analyses.models.Biome.objects.get(biome_name="Human")
+    raw_reads_mgnify_study.biome = human
+    raw_reads_mgnify_study.save()
+
+    # flye memory
+    analyses.models.ComputeResourceHeuristic.objects.create(
+        assembler=analyses.models.Assembler.get_latest(analyses.models.Assembler.FLYE),
+        biome=human,
+        process=analyses.models.ComputeResourceHeuristic.ProcessTypes.ASSEMBLY,
+        memory_gb=12.345,
+    )
+
+    # metaspades memory
+    analyses.models.ComputeResourceHeuristic.objects.create(
+        assembler=analyses.models.Assembler.get_latest(
+            analyses.models.Assembler.METASPADES
+        ),
+        biome=human,
+        process=analyses.models.ComputeResourceHeuristic.ProcessTypes.ASSEMBLY,
+        memory_gb=5.678,
+    )
+
+    # megahit memory
+    analyses.models.ComputeResourceHeuristic.objects.create(
+        assembler=analyses.models.Assembler.get_latest(
+            analyses.models.Assembler.MEGAHIT
+        ),
+        biome=human,
+        process=analyses.models.ComputeResourceHeuristic.ProcessTypes.ASSEMBLY,
+        memory_gb=3.456,
+    )
+
+    default_assembler = analyses.models.Assembler.get_latest(
+        analyses.models.Assembler.assembler_default
+    )
+    megahit = analyses.models.Assembler.get_latest(analyses.models.Assembler.MEGAHIT)
+    flye = analyses.models.Assembler.get_latest(analyses.models.Assembler.FLYE)
+
+    # default assembler would be metaspades
+    assert assembly.assembler == default_assembler
+
+    # make samplesheet should change default to flye for this run
+    ss, _ = make_samplesheet(
+        raw_reads_mgnify_study, [assembly.pk], default_assembler, tmp_path
+    )
+    assembly.refresh_from_db()
+    assert assembly.assembler == flye
+
+    # flye should also be in the ss
+    ss_content = ss.read_text()
+    assert "flye" in ss_content
+    # should now be using flye's memory heuristic
+    assert "12.345" in ss_content
+
+    # if we specified a non-default assembler (megahit) it should NOT be overwritten though
+    ss, _ = make_samplesheet(
+        raw_reads_mgnify_study,
+        [assembly.pk],
+        megahit,
+        tmp_path,
+        determine_suitable_assemblers=False,
+    )
+    assembly.refresh_from_db()
+    # assembler should now be megahit too as it was overwritten
+    assert assembly.assembler == megahit
+    ss_content = ss.read_text()
+    assert "megahit" in ss_content
+    assert "3.456" in ss_content
 
 
 @pytest.mark.django_db(transaction=True)

@@ -1,41 +1,41 @@
 from datetime import timedelta
 from pathlib import Path
-from typing import List, Union, Optional
+from typing import List, Optional, Union
 
 from django.conf import settings
-from django.db import close_old_connections
 from django.utils.text import slugify
-from prefect import flow
 
 from activate_django_first import EMG_CONFIG
 
 import analyses.models
+from workflows.flows.analyse_study_tasks.cleanup_pipeline_directories import (
+    remove_dir,
+)
 from workflows.flows.analyse_study_tasks.raw_reads.import_completed_rawreads_analyses import (
     import_completed_analyses,
 )
 from workflows.flows.analyse_study_tasks.raw_reads.make_samplesheet_rawreads import (
     make_samplesheet_rawreads,
 )
-from workflows.flows.analyse_study_tasks.shared.analysis_states import (
-    mark_analysis_as_started,
-    mark_analysis_as_failed,
-)
 from workflows.flows.analyse_study_tasks.raw_reads.set_rawreads_post_analysis_states import (
     set_post_analysis_states,
+)
+from workflows.flows.analyse_study_tasks.shared.analysis_states import (
+    mark_analysis_as_failed,
+    mark_analysis_as_started,
 )
 from workflows.flows.analyse_study_tasks.shared.study_summary import (
     generate_study_summary_for_pipeline_run,
 )
+from workflows.flows.analysis import AnalysisType
+from workflows.nextflow_utils.samplesheets import queryset_hash
 from workflows.prefect_utils.build_cli_command import cli_command
+from workflows.prefect_utils.flows_utils import django_db_flow as flow
 from workflows.prefect_utils.slurm_flow import (
-    run_cluster_job,
     ClusterJobFailedException,
+    run_cluster_job,
 )
 from workflows.prefect_utils.slurm_policies import ResubmitIfFailedPolicy
-from workflows.flows.analyse_study_tasks.cleanup_pipeline_directories import (
-    remove_dir,
-)
-from workflows.nextflow_utils.samplesheets import queryset_hash
 
 
 @flow(name="Run raw-reads analysis pipeline-v6 via samplesheet", log_prints=True)
@@ -44,18 +44,19 @@ def run_rawreads_pipeline_via_samplesheet(
     rawreads_analysis_ids: List[Union[str, int]],
     workdir: Optional[Path],
     outdir: Optional[Path],
+    functional_analysis: bool = False,
 ):
     if workdir is None:
         workdir = (
-            Path(f"{EMG_CONFIG.slurm.default_nextflow_workdir}")
-            / Path(f"{mgnify_study.ena_study.accession}")
-            / f"{EMG_CONFIG.rawreads_pipeline.pipeline_name}_{EMG_CONFIG.amplicon_pipeline.pipeline_version}"
+            Path(EMG_CONFIG.slurm.default_nextflow_workdir)
+            / mgnify_study.ena_study.accession
+            / f"{EMG_CONFIG.rawreads_pipeline.pipeline_name}_{EMG_CONFIG.rawreads_pipeline.pipeline_version}"
         )
     if outdir is None:
         outdir = (
-            Path(f"{EMG_CONFIG.slurm.default_workdir}")
-            / Path(f"{mgnify_study.ena_study.accession}")
-            / f"{EMG_CONFIG.rawreads_pipeline.pipeline_name}_{EMG_CONFIG.amplicon_pipeline.pipeline_version}"
+            Path(EMG_CONFIG.slurm.default_workdir)
+            / mgnify_study.ena_study.accession
+            / f"{EMG_CONFIG.rawreads_pipeline.pipeline_name}_{EMG_CONFIG.rawreads_pipeline.pipeline_version}"
         )
 
     rawreads_analyses = analyses.models.Analysis.objects.select_related("run").filter(
@@ -94,6 +95,7 @@ def run_rawreads_pipeline_via_samplesheet(
             ("--outdir", nextflow_outdir),
             EMG_CONFIG.slurm.use_nextflow_tower and "-with-tower",
             EMG_CONFIG.rawreads_pipeline.has_fire_access and "--use_fire_download",
+            ("--skip_functional", "false" if functional_analysis else "true"),
             ("-work-dir", nextflow_workdir),
             ("-ansi-log", "false"),
         ]
@@ -116,9 +118,7 @@ def run_rawreads_pipeline_via_samplesheet(
             working_dir=nextflow_outdir,
             resubmit_policy=ResubmitIfFailedPolicy,
         )
-        close_old_connections()
     except ClusterJobFailedException:
-        close_old_connections()
         for analysis in rawreads_analyses:
             mark_analysis_as_failed(analysis)
     else:
@@ -128,7 +128,7 @@ def run_rawreads_pipeline_via_samplesheet(
         generate_study_summary_for_pipeline_run(
             pipeline_outdir=nextflow_outdir,
             mgnify_study_accession=mgnify_study.accession,
-            analysis_type="rawreads",
+            analysis_type=AnalysisType.RAWREADS,
             completed_runs_filename=EMG_CONFIG.rawreads_pipeline.completed_runs_csv,
         )
         remove_dir(nextflow_workdir)  # will also delete past "abandoned" nextflow files

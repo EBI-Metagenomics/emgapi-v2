@@ -12,10 +12,20 @@ https://docs.djangoproject.com/en/4.1/ref/settings/
 
 import logging
 import os
+import warnings
 from datetime import timedelta
 from pathlib import Path
 
+# Suppress pydantic-settings warnings that are raised because the sources for toml and pyproject.toml
+# are not explicitly configured, but they are included in pydantic-settings' default model_config.
+warnings.filterwarnings(
+    "ignore",
+    message="Config key `(pyproject_toml_table_header|toml_file)` is set in model_config but will be ignored",
+    category=UserWarning,
+)
+
 import dj_database_url
+import sentry_sdk
 from django.templatetags.static import static
 from django.urls import reverse_lazy
 from django.utils.translation import gettext_lazy as _
@@ -56,6 +66,12 @@ BASE_URL = EMG_CONFIG.service_urls.base_url.lstrip("/").rstrip("/")
 if BASE_URL:
     BASE_URL += "/"
 
+
+if EMG_CONFIG.sentry_dsn:
+    sentry_sdk.init(
+        dsn=EMG_CONFIG.sentry_dsn,
+        send_default_pii=True,
+    )
 # Application definition
 
 INSTALLED_APPS = [
@@ -80,6 +96,7 @@ INSTALLED_APPS = [
     "analyses",
     "workflows",
     "genomes",
+    "kvstore",
 ]
 
 MIDDLEWARE = [

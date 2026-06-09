@@ -3,8 +3,9 @@ from __future__ import annotations
 import logging
 import os
 import re
+from collections.abc import Iterable, Mapping
 from pathlib import Path
-from typing import ClassVar, Union, Optional
+from typing import ClassVar, Literal, Optional, Union
 
 from aenum import extend_enum
 from db_file_storage.model_utils import delete_file, delete_file_if_needed
@@ -13,7 +14,7 @@ from django.contrib.postgres.indexes import GinIndex
 from django.core.exceptions import MultipleObjectsReturned, ObjectDoesNotExist
 from django.core.files.storage import storages
 from django.db import models
-from django.db.models import JSONField, Q, Func, Value
+from django.db.models import Count, Func, JSONField, Q, Value
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 from django.utils.text import Truncator
@@ -22,22 +23,26 @@ from pydantic import BaseModel, ConfigDict, Field
 
 import ena.models
 from analyses.base_models.base_models import (
+    DbStoredFileField,
     ENADerivedManager,
     ENADerivedModel,
+    InferredMetadataMixin,
     PrivacyFilterManagerMixin,
     TimeStampedModel,
     VisibilityControlledModel,
-    InferredMetadataMixin,
-    DbStoredFileField,
 )
 from analyses.base_models.mgnify_accessioned_models import MGnifyAccessionField
 from analyses.base_models.with_downloads_models import WithDownloadsModel
 from analyses.base_models.with_experiment_type_models import WithExperimentTypeModel
 from analyses.base_models.with_status_models import SelectByStatusManagerMixin
 from analyses.base_models.with_watchers_models import WithWatchersModel
-from emgapiv2.async_utils import anysync_property
-from emgapiv2.enum_utils import FutureStrEnum
+from emgapiv2.enum_utils import DjangoChoicesCompatibleStrEnum, FutureStrEnum
 from emgapiv2.model_utils import JSONFieldWithSchema
+from workflows.ena_utils.ena_accession_matching import (
+    ENA_ASSEMBLY_ACCESSION_REGEX,
+    INSDC_BIOSAMPLE_ACCESSION_REGEX,
+    INSDC_STUDY_ACCESSION_REGEX,
+)
 from workflows.ena_utils.read_run import ENAReadRunFields
 from workflows.ena_utils.sample import ENASampleFields
 
@@ -120,9 +125,10 @@ class Study(
     TimeStampedModel,
     WithWatchersModel,
 ):
-    objects = StudyManager()
+    objects: ClassVar[ENADerivedManager[Study]] = StudyManager()
     public_objects = PublicStudyManager()
 
+    PREFERRED_ENA_ACCESSION_REGEX = INSDC_STUDY_ACCESSION_REGEX
     DOWNLOAD_PARENT_IDENTIFIER_ATTR = "accession"
     ALLOWED_DOWNLOAD_GROUP_PREFIXES = ["study_summary"]
 
@@ -200,26 +206,25 @@ class Study(
             # Fast fulltext (ish) search on the study title.
         ]
 
-    @property
-    def first_accession(self):
-        # Prefer ERP--,SRP--,DRP-- etc style accessions over PRJ--, if available
-        return next(
-            (
-                accession
-                for accession in self.ena_accessions
-                if not accession.upper().startswith("PRJ")
-            ),
-            super().first_accession,
-        )
 
+class PublicSampleManager(PrivacyFilterManagerMixin, ENADerivedManager):
+    """
+    Manager for public samples, i.e. those not marked as private / pre-publication in ENA.
+    This manager's queryset prefetches the self-referential related_samples (e.g. virtual samples, derived samples etc)
+    since ENA's /links endpoint (the source of truth for related_samples) does not support auth.
+    Consequently, private samples never have related_samples.
+    Source: https://www.ebi.ac.uk/ena/portal/api/v2.0/doc checked on 2026-02-24
+    """
 
-class PublicSampleManager(PrivacyFilterManagerMixin, ENADerivedManager): ...
+    def get_queryset(self, *args, **kwargs):
+        return super().get_queryset(*args, **kwargs).prefetch_related("related_samples")
 
 
 class Sample(InferredMetadataMixin, ENADerivedModel, TimeStampedModel):
+    PREFERRED_ENA_ACCESSION_REGEX = INSDC_BIOSAMPLE_ACCESSION_REGEX
     CommonMetadataKeys = ENASampleFields
 
-    objects = ENADerivedManager()
+    objects: ClassVar[ENADerivedManager[Sample]] = ENADerivedManager()
     public_objects = PublicSampleManager()
 
     id = models.AutoField(primary_key=True)
@@ -243,6 +248,27 @@ class Sample(InferredMetadataMixin, ENADerivedModel, TimeStampedModel):
         blank=True,
     )
 
+    related_samples = models.ManyToManyField(
+        "self",
+        through="SampleRelatedSample",
+        through_fields=("declaring_sample", "related_sample"),
+        symmetrical=False,
+        related_name="inversely_related_samples",
+        blank=True,
+    )
+
+    def is_virtual_sample(self) -> bool:
+        """
+        A virtual sample is a sample entirely composed of other samples.
+        Typically, this is a sample registered to represent a co-assembly source sample.
+        """
+        return (
+            self.related_samples.exists()
+            and not self.related_samples.exclude(
+                relation_type=SampleRelatedSample.RelatedTypes.COMPOSED_OF
+            ).exists()
+        )
+
     def __str__(self):
         return f"Sample {self.id}: {self.ena_sample}"
 
@@ -255,6 +281,49 @@ class Sample(InferredMetadataMixin, ENADerivedModel, TimeStampedModel):
             ),
             # Fast fulltext (ish) search on the sample name.
         ]
+
+
+class SampleRelatedSample(models.Model):
+    declaring_sample = models.ForeignKey(
+        Sample,
+        on_delete=models.CASCADE,
+        related_name="declared_sample_related_samples",
+        help_text="The sample that declares the relationship to the related_sample.",
+    )
+    related_sample = models.ForeignKey(
+        Sample,
+        on_delete=models.CASCADE,
+        related_name="inferred_sample_related_samples",
+        help_text="The sample that is related to the declaring_sample.",
+    )
+
+    class RelatedTypes(DjangoChoicesCompatibleStrEnum):
+        DERIVED_FROM = "derived_from"
+        SAME_AS = "same_as"
+        SYMBIONT_OF = "symbiont_of"
+        COMPOSED_OF = "composed_of"
+        # from the ENA portal docs, field description of related_sample_accession
+
+    relation_type = models.CharField(
+        max_length=32, blank=False, choices=RelatedTypes.as_choices()
+    )
+
+    class Meta:
+        constraints = [
+            # prevent duplicates
+            models.UniqueConstraint(
+                fields=["declaring_sample", "related_sample"],
+                name="unique_sample_relationships",
+            ),
+            # prevent Sample pointing to itself
+            models.CheckConstraint(
+                check=~models.Q(declaring_sample=models.F("related_sample")),
+                name="no_self_relations",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.pk}: {self.declaring_sample} is {self.relation_type} {self.related_sample}"
 
 
 class PublicRunManager(PrivacyFilterManagerMixin, models.Manager): ...
@@ -279,7 +348,7 @@ class Run(
         PACBIO_SMRT = "PACBIO_SMRT"
         ION_TORRENT = "ION_TORRENT"
 
-    objects = ENADerivedManager()
+    objects: ClassVar[ENADerivedManager[Run]] = ENADerivedManager()
     public_objects = PublicRunManager()
 
     id = models.AutoField(primary_key=True)
@@ -360,34 +429,67 @@ class Assembler(TimeStampedModel):
         self.clean()
         super().save(*args, **kwargs)
 
+    _AssemblerName = Literal["metaspades", "megahit", "spades", "flye"]
+
+    @classmethod
+    def get_latest(cls, assembler_name: _AssemblerName):
+        return (
+            cls.objects.filter(name__iexact=assembler_name).order_by("-version").first()
+        )
+
     def __str__(self):
         return f"{self.name} {self.version}" if self.version is not None else self.name
 
 
 class AssemblyManager(SelectByStatusManagerMixin, ENADerivedManager):
     def get_queryset(self):
-        return super().get_queryset().select_related("run")
+        return super().get_queryset().prefetch_related("runs")
+
+    def create_for_runs_and_sample(self, runs: list[Run], sample: Sample, **kwargs):
+        obj = self.create(**kwargs, sample=sample)
+        obj.runs.set(runs)
+        return obj
+
+    def get_or_create_for_run_and_sample(
+        self, run: Run, sample: Sample, defaults: dict = None, **kwargs
+    ):
+        defaults = defaults or {}
+        try:
+            return (
+                self.filter(sample=sample, runs=run, **kwargs)
+                .annotate(run_count=Count("runs", distinct=True))
+                .get(
+                    run_count=1
+                ),  # to not much coassemblies including this run *amongst others*
+                False,
+            )
+        except self.model.DoesNotExist:
+            return (
+                self.create_for_runs_and_sample([run], sample, **kwargs, **defaults),
+                True,
+            )
 
 
 class PublicAssemblyManager(PrivacyFilterManagerMixin, AssemblyManager): ...
 
 
 class Assembly(InferredMetadataMixin, TimeStampedModel, ENADerivedModel):
-    objects = AssemblyManager()
+    objects: ClassVar[ENADerivedManager[Assembly]] = AssemblyManager()
     public_objects = PublicAssemblyManager()
 
+    PREFERRED_ENA_ACCESSION_REGEX = ENA_ASSEMBLY_ACCESSION_REGEX
+
     dir = models.CharField(max_length=200, null=True, blank=True)
-    run = models.ForeignKey(
-        Run, on_delete=models.CASCADE, related_name="assemblies", null=True, blank=True
-    )  # TODO: coassembly
+    runs = models.ManyToManyField(Run, related_name="assemblies", blank=True)
     sample = models.ForeignKey(
         Sample,
         on_delete=models.CASCADE,
         related_name="assemblies",
         null=True,
         blank=True,
-    )  # TODO: coassembly
-    # raw reads study that was used as resource for assembly
+    )  # note that the sample may include `related_samples`, if this is a co-assembly pointing at a virtual sample
+
+    # raw reads study that was used as the resource for assembly
     reads_study = models.ForeignKey(
         Study,
         on_delete=models.CASCADE,
@@ -463,7 +565,20 @@ class Assembly(InferredMetadataMixin, TimeStampedModel, ENADerivedModel):
             self.ena_accessions.append(erz_accession)
             return self.save()
 
-    @anysync_property
+    @property
+    def runs_label(self) -> str:
+        """
+        A convenience name for the run(s) of this assembly, e.g. for use in dir names during assembling.
+        :return: String representation of the run(s) of this assembly (or just this assembly's ID if there are no runs).
+        """
+        # not using values_list as first_accession is a python property
+        return (
+            ",".join([run.first_accession for run in self.runs.all()])
+            if self.runs.exists()
+            else self.pk
+        )
+
+    @property
     def dir_with_miassembler_suffix(self):
         # MIAssembler outputs to a specific dir pattern inside the run's assembly/ies folder.
         assembler = self.assembler
@@ -473,6 +588,69 @@ class Assembly(InferredMetadataMixin, TimeStampedModel, ENADerivedModel):
             / Path(assembler.name.lower())
             / Path(assembler.version)
         )
+
+    def update_coverage_metadata_from_report(
+        self, coverage_report: Mapping[str, str | float | None]
+    ) -> None:
+        """
+        Update coverage metadata from parsed MIAssembler coverage JSON values.
+        """
+        required_keys = [
+            self.CommonMetadataKeys.COVERAGE,
+            self.CommonMetadataKeys.COVERAGE_DEPTH,
+        ]
+        self.populate_metadata_from_json(
+            coverage_report,
+            required_keys=required_keys,
+        )
+
+    def determine_suitable_assembler(self, save: bool = True) -> Assembler:
+        """
+        Pick an Assembler for this assembly based on its Run metadata.
+        Always returns the latest version of chosen assembler.
+
+        # PACBIO_SMRT and OXFORD_NANOPORE - flye
+        # SE platform ION_TORRENT         - spades
+        # other SE                        - megahit
+        # all the rest (mostly illumina)  - metaspades
+        :param save: Whether to set the Assembler as self.assembler
+        :return: The Assembler object determined for this assembly.
+        """
+        first_run = self.runs.first()
+        first_run_metadata = first_run.metadata_preferring_inferred
+        SINGLE_END_LIBRARY_LAYOUT = "SINGLE"
+
+        # Default is metaspades
+        assembler = Assembler.get_latest(Assembler.METASPADES)
+
+        if first_run_metadata.get(Run.CommonMetadataKeys.INSTRUMENT_PLATFORM) in {
+            Run.InstrumentPlatformKeys.PACBIO_SMRT,
+            Run.InstrumentPlatformKeys.OXFORD_NANOPORE,
+        }:
+            # Long read platforms
+            assembler = Assembler.get_latest(Assembler.FLYE)
+        else:
+            # Short read platforms
+            if (
+                first_run_metadata.get(Run.CommonMetadataKeys.LIBRARY_LAYOUT)
+                == SINGLE_END_LIBRARY_LAYOUT
+                and first_run_metadata.get(Run.CommonMetadataKeys.INSTRUMENT_PLATFORM)
+                == Run.InstrumentPlatformKeys.ION_TORRENT
+            ):
+                # Single end ION Torrent
+                assembler = Assembler.get_latest(Assembler.SPADES)
+            elif (
+                first_run_metadata.get(Run.CommonMetadataKeys.LIBRARY_LAYOUT)
+                == SINGLE_END_LIBRARY_LAYOUT
+            ):
+                # Single end non-ion-torrent
+                assembler = Assembler.get_latest(Assembler.MEGAHIT)
+
+        if save:
+            self.assembler = assembler
+            self.save()
+        logger.info(f"Determined assembler for assembly {self} to be {assembler}")
+        return assembler
 
     class Meta:
         verbose_name_plural = "Assemblies"
@@ -486,7 +664,7 @@ class Assembly(InferredMetadataMixin, TimeStampedModel, ENADerivedModel):
         ordering = ["id"]
 
     def __str__(self):
-        return f"Assembly {self.id} | {self.first_accession or 'unaccessioned'} (Run {self.run.first_accession if self.run else '-'})"
+        return f"Assembly {self.id} | {self.first_accession or 'unaccessioned'}"
 
 
 class AssemblyAnalysisRequest(TimeStampedModel):
@@ -751,12 +929,30 @@ class Analysis(
     metadata = models.JSONField(default=dict, blank=True)
 
     class PipelineVersions(models.TextChoices):
+        v1 = "V1", "v1.0"
+        v2 = "V2", "v2.0"
+        v3 = "V3", "v3.0"
+        v4 = "V4", "v4.0"
+        v4_1 = "V4.1", "v4.1"
         v5 = "V5", "v5.0"
         v6 = "V6", "v6.0"
+        v6_1 = "V6.1", "v6.1"
 
     pipeline_version = models.CharField(
         choices=PipelineVersions, max_length=5, default=PipelineVersions.v6
     )
+
+    @classmethod
+    def pipeline_version_from_config(
+        cls, pipeline_version: str
+    ) -> "Analysis.PipelineVersions":
+        normalized = pipeline_version.strip().lower().rstrip(".0")
+        try:
+            return getattr(cls.PipelineVersions, normalized)
+        except AttributeError as exc:
+            raise ValueError(
+                f"Unsupported pipeline version {pipeline_version!r}"
+            ) from exc
 
     class AnalysisStates(FutureStrEnum):
         # TODO: this is pipeline specific - I think we need to move elsewhere or refactor (mbc)
@@ -805,8 +1001,8 @@ class Analysis(
         return self.assembly or self.run
 
     @property
-    def raw_run(self) -> Run:
-        return self.assembly.run if self.assembly else self.run
+    def raw_runs(self) -> Iterable[Run]:  # potentially >1, because of co-assemblies
+        return self.assembly.runs if self.assembly else [self.run]
 
     def inherit_experiment_type(self):
         prev_experiment_type = f"{self.experiment_type}"

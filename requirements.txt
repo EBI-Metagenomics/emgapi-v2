@@ -6,6 +6,7 @@ Pillow~=11.3.0  # imagefield requirement
 typing_extensions~=4.14.1
 tzdata
 pendulum
+pandas
 
 # Django and plugins
 django==5.2.7
@@ -13,19 +14,19 @@ django-cors-headers==4.9.0
 dj-database-url==3.0.1
 django-debug-toolbar==5.2.0
 django-json-widget==2.0.4  # for jsonfields in admin panel
-django-ltree-2==0.1.12  # biome hierarchies
+django-ltree-2==0.1.13  # biome hierarchies
 django-ninja~=1.4.3  # api
 django-ninja-jwt~=5.3.9  # api auth
 django-db-file-storage~=0.5.6.1  # logo storage in db
 django-unfold==0.67.0  # admin panel
 
 # Serving
-asgiref~=3.10.0
-gunicorn==23.0.0
+asgiref~=3.11.1
+gunicorn==25.3.0
 whitenoise==6.11.0
 
 # DB
-psycopg2-binary
+psycopg-pool==3.3.0
 
 # Prefect workflows
 prefect==3.4.19
@@ -33,6 +34,7 @@ fastapi==0.123.6
 prefect-shell==0.3.1
 prefect-slack==0.3.1
 prefect-slurm==0.1.5
+importlib-metadata==8.7.1
 
 # Pydantic
 pydantic<2.12.0  # TODO upgrade once https://github.com/eadwinCode/django-ninja-jwt/pull/151 is released
@@ -46,7 +48,11 @@ pymongo==4.13.2
 mysql-connector-python
 SQLAlchemy
 
+# Monitoring
+sentry-sdk[django]~=2.25.1
+
 # Outbound network
 requests~=2.32.4
 httpx~=0.28.1
-parse==1.20.2
+parse==1.21.1
+rt~=3.6.0  # Request Tracker helpdesk

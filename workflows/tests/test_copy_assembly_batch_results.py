@@ -1,16 +1,137 @@
+from typing import List
 from unittest.mock import patch
 
 import pytest
 
+from activate_django_first import EMG_CONFIG
+
+from analyses.models import Analysis
+from workflows.data_io_utils.file_rules.common_rules import DirectoryExistsRule
+from workflows.data_io_utils.filenames import accession_prefix_separated_dir_path
+from workflows.data_io_utils.schemas.base import PipelineDirectorySchema
 from workflows.flows.analyse_study_tasks.shared.copy_v6_pipeline_results import (
-    copy_assembly_batch_results,
+    BatchCopyResult,
+    copy_assembly_batch_results_to_destination_folder,
+    copy_schema_directory,
+)
+from workflows.flows.analysis.assembly.flows.sync_assembly_batch_results import (
+    copy_assembly_batch_results as sync_assembly_batch_results,
 )
 from workflows.models import (
     AssemblyAnalysisBatch,
     AssemblyAnalysisBatchAnalysis,
     AssemblyAnalysisPipelineStatus,
 )
-from analyses.models import Analysis
+
+
+@patch(
+    "workflows.flows.analyse_study_tasks.shared.copy_v6_pipeline_results.run_deployment"
+)
+def test_copy_schema_directory_uses_external_folder_name(
+    mock_run_deployment,
+    tmp_path,
+    prefect_harness,
+):
+    source_base = tmp_path / "source"
+    destination_base = tmp_path / "destination"
+    (source_base / "pipeline-folder").mkdir(parents=True)
+
+    success, errors = copy_schema_directory(
+        directory_schema=PipelineDirectorySchema(
+            folder_name="pipeline-folder",
+            external_folder_name="external-folder/gff",
+            validation_rules=[DirectoryExistsRule],
+        ),
+        source_base=source_base,
+        destination_base=destination_base,
+        timeout=30,
+    )
+
+    assert success
+    assert errors == []
+    assert mock_run_deployment.call_count == 1
+    assert mock_run_deployment.call_args.kwargs["parameters"]["target"] == str(
+        destination_base / "external-folder/gff"
+    )
+
+
+@patch(
+    "workflows.flows.analyse_study_tasks.shared.copy_v6_pipeline_results.run_deployment"
+)
+def test_copy_schema_directory_stops_at_external_folder_name(
+    mock_run_deployment,
+    tmp_path,
+    prefect_harness,
+):
+    source_base = tmp_path / "source"
+    destination_base = tmp_path / "destination"
+    (source_base / "parent" / "child").mkdir(parents=True)
+
+    success, errors = copy_schema_directory(
+        directory_schema=PipelineDirectorySchema(
+            folder_name="parent",
+            external_folder_name="external-parent",
+            validation_rules=[DirectoryExistsRule],
+            subdirectories=[
+                PipelineDirectorySchema(
+                    folder_name="child",
+                    external_folder_name="external-child",
+                    validation_rules=[DirectoryExistsRule],
+                )
+            ],
+        ),
+        source_base=source_base,
+        destination_base=destination_base,
+        timeout=30,
+    )
+
+    assert success
+    assert errors == []
+    assert mock_run_deployment.call_count == 1
+    assert mock_run_deployment.call_args.kwargs["parameters"]["target"] == str(
+        destination_base / "external-parent"
+    )
+
+
+@patch(
+    "workflows.flows.analyse_study_tasks.shared.copy_v6_pipeline_results.run_deployment"
+)
+def test_copy_schema_directory_skips_unmapped_container(
+    mock_run_deployment,
+    tmp_path,
+    prefect_harness,
+):
+    source_base = tmp_path / "source"
+    destination_base = tmp_path / "destination"
+    (source_base / "parent" / "child").mkdir(parents=True)
+
+    success, errors = copy_schema_directory(
+        directory_schema=PipelineDirectorySchema(
+            folder_name="parent",
+            validation_rules=[DirectoryExistsRule],
+            subdirectories=[
+                PipelineDirectorySchema(
+                    folder_name="child",
+                    external_folder_name="external-child",
+                    validation_rules=[DirectoryExistsRule],
+                )
+            ],
+        ),
+        source_base=source_base,
+        destination_base=destination_base,
+        timeout=30,
+    )
+
+    assert success
+    assert errors == []
+    assert mock_run_deployment.call_count == 1
+    assert (
+        mock_run_deployment.call_args.kwargs["parameters"]["source"]
+        == str(source_base / "parent" / "child") + "/"
+    )
+    assert mock_run_deployment.call_args.kwargs["parameters"]["target"] == str(
+        destination_base / "external-child"
+    )
 
 
 @pytest.mark.django_db
@@ -36,60 +157,149 @@ class TestCopyAssemblyBatchResults:
             assembly=mgnify_assemblies[0],
             pipeline_version="6.0",
         )
-        AssemblyAnalysisBatchAnalysis.objects.create(
+        batch_analysis_relation = AssemblyAnalysisBatchAnalysis.objects.create(
             batch=batch,
             analysis=analysis,
             asa_status=AssemblyAnalysisPipelineStatus.COMPLETED,
         )
-        return batch, analysis
+        return batch, analysis, batch_analysis_relation
 
-    @patch(
-        "workflows.flows.analyse_study_tasks.shared.copy_v6_pipeline_results._copy_single_analysis_results"
-    )
-    def test_copy_failed_updates_status(
+    def test_copy_failed_returns_result(
         self,
-        mock_copy_single,
         setup_batch_and_analysis,
         prefect_harness,
+        tmp_path,
     ):
-        """Test that if _copy_single_analysis_results fails, the analysis status is updated correctly."""
-        batch, analysis = setup_batch_and_analysis
+        """Test that analyses missing imported optional outputs are skipped."""
+        batch, analysis, batch_analysis_relation = setup_batch_and_analysis
 
-        mock_copy_single.side_effect = Exception("Copy failed!")
+        batch_analysis_relation.asa_status = AssemblyAnalysisPipelineStatus.FAILED
+        batch_analysis_relation.save()
 
-        copy_assembly_batch_results(batch.id)
-
-        # Verify analysis status was updated
-        analysis.refresh_from_db()
-        assert (
-            analysis.status[Analysis.AnalysisStates.ANALYSIS_ANNOTATIONS_IMPORTED]
-            is False
+        result: List[BatchCopyResult] = (
+            copy_assembly_batch_results_to_destination_folder(
+                batch.id,
+                destination_root=tmp_path / "ftp",
+            )[0]
         )
 
+        analysis.refresh_from_db()
+        assert result.success is False
+        assert not analysis.status[
+            Analysis.AnalysisStates.ANALYSIS_ANNOTATIONS_IMPORTED
+        ]
+
     @patch(
-        "workflows.flows.analyse_study_tasks.shared.copy_v6_pipeline_results._copy_single_analysis_results"
+        "workflows.flows.analyse_study_tasks.shared.copy_v6_pipeline_results.copy_single_analysis_results"
     )
-    def test_copy_success_updates_status(
+    def test_copy_success_returns_result(
         self,
         mock_copy_single,
         setup_batch_and_analysis,
         prefect_harness,
+        tmp_path,
     ):
-        """Test that if _copy_single_analysis_results succeeds, the analysis status is updated correctly."""
-        batch, analysis = setup_batch_and_analysis
+        """Test that successful copies are returned without updating analysis status."""
+        batch, analysis, batch_analysis_relation = setup_batch_and_analysis
+        batch_analysis_relation.virify_status = AssemblyAnalysisPipelineStatus.COMPLETED
+        batch_analysis_relation.map_status = AssemblyAnalysisPipelineStatus.COMPLETED
+        batch_analysis_relation.save()
 
         analysis.status[Analysis.AnalysisStates.ANALYSIS_QC_FAILED] = True
         analysis.status[Analysis.AnalysisStates.ANALYSIS_BLOCKED] = True
         analysis.save()
 
-        mock_copy_single.return_value = None
+        copy_result = BatchCopyResult(
+            analysis_id=analysis.id,
+            destination_folder=tmp_path / "ftp" / "analysis",
+            success=True,
+        )
+        mock_copy_single.return_value = copy_result
 
-        copy_assembly_batch_results(batch.id)
+        results = copy_assembly_batch_results_to_destination_folder(
+            batch.id,
+            destination_root=tmp_path / "ftp",
+        )
 
         analysis.refresh_from_db()
+        assert results == [copy_result]
+        assert analysis.status[Analysis.AnalysisStates.ANALYSIS_QC_FAILED] is True
+        assert analysis.status[Analysis.AnalysisStates.ANALYSIS_BLOCKED] is True
+
+        mock_copy_single.assert_called_once()
+        assert mock_copy_single.call_args.kwargs["destination_root"] == tmp_path / "ftp"
         assert (
-            analysis.status[Analysis.AnalysisStates.ANALYSIS_ANNOTATIONS_IMPORTED]
-            is True
+            mock_copy_single.call_args.kwargs["batch_analysis_job"].virify_status
+            == AssemblyAnalysisPipelineStatus.COMPLETED
         )
-        assert analysis.status[Analysis.AnalysisStates.ANALYSIS_QC_FAILED] is False
-        assert analysis.status[Analysis.AnalysisStates.ANALYSIS_BLOCKED] is False
+        assert (
+            mock_copy_single.call_args.kwargs["batch_analysis_job"].map_status
+            == AssemblyAnalysisPipelineStatus.COMPLETED
+        )
+
+    @patch(
+        "workflows.flows.analysis.assembly.flows.sync_assembly_batch_results.update_results_dirs_from_copy_results"
+    )
+    @patch(
+        "workflows.flows.analysis.assembly.flows.sync_assembly_batch_results.update_analysis_statuses_from_copy_results"
+    )
+    @patch(
+        "workflows.flows.analysis.assembly.flows.sync_assembly_batch_results.update_external_results_dirs_from_copy_results"
+    )
+    @patch(
+        "workflows.flows.analysis.assembly.flows.sync_assembly_batch_results.copy_assembly_batch_results_to_destination_folder"
+    )
+    def test_sync_assembly_batch_results_returns_copy_results(
+        self,
+        mock_copy_batch_results,
+        mock_update_external_results_dirs,
+        mock_update_analysis_statuses,
+        mock_update_results_dirs,
+        setup_batch_and_analysis,
+        prefect_harness,
+        tmp_path,
+    ):
+        batch, analysis, _batch_analysis_relation = setup_batch_and_analysis
+        external_copy_result = BatchCopyResult(
+            analysis_id=analysis.id,
+            destination_folder=tmp_path / "ftp" / "analysis",
+            success=True,
+        )
+        nfs_copy_result = BatchCopyResult(
+            analysis_id=analysis.id,
+            destination_folder=tmp_path / "workspace" / "results" / "analysis",
+            success=True,
+        )
+        mock_copy_batch_results.side_effect = [
+            [external_copy_result],
+            [nfs_copy_result],
+        ]
+
+        result = sync_assembly_batch_results(batch.id)
+
+        expected_external_results_root = (
+            EMG_CONFIG.slurm.private_results_dir
+            if batch.study.is_private
+            else EMG_CONFIG.slurm.ftp_results_dir
+        )
+        assert result.external_copy_results == [external_copy_result]
+        assert result.nfs_copy_results == [nfs_copy_result]
+        assert mock_copy_batch_results.call_count == 2
+        assert mock_copy_batch_results.call_args_list[0].kwargs["destination_root"] == (
+            expected_external_results_root
+        )
+        assert mock_copy_batch_results.call_args_list[1].kwargs["destination_root"] == (
+            tmp_path / "results"
+        )
+        expected_study_prefix = accession_prefix_separated_dir_path(
+            batch.study.first_accession, -3
+        )
+        mock_update_external_results_dirs.assert_called_once_with(
+            [external_copy_result],
+            study_prefix=expected_study_prefix,
+        )
+        mock_update_analysis_statuses.assert_called_once_with([external_copy_result])
+        mock_update_results_dirs.assert_called_once_with(
+            [nfs_copy_result],
+            study_results_dir=tmp_path / "results" / expected_study_prefix,
+        )

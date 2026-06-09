@@ -3,19 +3,19 @@ from pathlib import Path
 from textwrap import dedent as _
 
 from django.db.models import QuerySet
-from prefect import task
+from django.utils.text import slugify
 from prefect.artifacts import create_table_artifact
 
 from activate_django_first import EMG_CONFIG
 
 import analyses.models
 from workflows.nextflow_utils.samplesheets import (
-    queryset_to_samplesheet,
     SamplesheetColumnSource,
+    queryset_to_samplesheet,
 )
 from workflows.prefect_utils.cache_control import context_agnostic_task_input_hash
+from workflows.prefect_utils.flows_utils import django_db_task as task
 from workflows.views import encode_samplesheet_path
-
 
 FASTQ_FTPS = analyses.models.Run.CommonMetadataKeys.FASTQ_FTPS
 METADATA__FASTQ_FTPS = f"{analyses.models.Run.metadata.field.name}__{FASTQ_FTPS}"
@@ -32,6 +32,8 @@ def make_samplesheet_amplicon(runs: QuerySet, samplesheet_path: Path) -> Path:
     :param amplicon_analyses: QuerySet of the amplicon analyses to be executed
     :return: Tuple of the Path to the samplesheet file, and a hash of the run IDs which is used in the SS filename.
     """
+
+    pipeline_version = EMG_CONFIG.amplicon_pipeline.pipeline_version
 
     sample_sheet_csv = queryset_to_samplesheet(
         queryset=runs,
@@ -62,15 +64,13 @@ def make_samplesheet_amplicon(runs: QuerySet, samplesheet_path: Path) -> Path:
         table = list(csv_reader)
 
     create_table_artifact(
-        key="amplicon-v6-initial-sample-sheet",
+        key=slugify(f"amplicon-{pipeline_version}-initial-sample-sheet"),
         table=table,
-        description=_(
-            f"""\
-            Sample sheet created for run of amplicon-v6.
+        description=_(f"""\
+            Sample sheet created for run of amplicon-{pipeline_version}.
             Saved to `{sample_sheet_csv}`
             **Warning!** This table is the *initial* content of the samplesheet, when it was first made. Any edits made since are not shown here.
             [Edit it]({EMG_CONFIG.service_urls.app_root}/workflows/edit-samplesheet/fetch/{encode_samplesheet_path(sample_sheet_csv)})
-            """
-        ),
+            """),
     )
     return sample_sheet_csv

@@ -1,27 +1,27 @@
 import json
 
-from django.contrib import admin
+from django.contrib import admin, messages
 from django.contrib.admin.views.decorators import staff_member_required
 from django.db import models
 from django.db.models import Count
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse_lazy
 from django.utils.html import format_html
-from django.contrib import messages
 from unfold.admin import ModelAdmin
 from unfold.decorators import action, display
 
 from analyses.admin.analysis import AnalysisStatusListFilter
 from analyses.admin.base import (
+    CanonicalizeAccessionViewMixin,
     ENABrowserLinkMixin,
     JSONFieldWidgetOverridesMixin,
     StudyFilter,
     TabularInlinePaginatedWithTabSupport,
 )
 from analyses.admin.publication import StudyPublicationInline
-from workflows.models import AssemblyAnalysisPipelineStatus
 from analyses.models import Analysis, Assembly, Run, Study
 from emgapiv2.widgets import StatusPathwayWidget
+from workflows.models import AssemblyAnalysisPipelineStatus
 
 
 class StudyRunsInline(TabularInlinePaginatedWithTabSupport):
@@ -61,8 +61,8 @@ class StudyAssembliesInline(TabularInlinePaginatedWithTabSupport):
     verbose_name = "Assembly in this study"
     verbose_name_plural = "Assemblies in this study"
     show_change_link = True
-    fields = ["run", "status", "dir"]
-    readonly_fields = ["run"]
+    fields = ["runs", "status", "dir"]
+    readonly_fields = ["runs"]
     max_num = 0
     fk_name = "assembly_study"
     formfield_overrides = {
@@ -87,8 +87,8 @@ class StudyReadsInline(TabularInlinePaginatedWithTabSupport):
     verbose_name = "Assembly of this studies' read"
     verbose_name_plural = "Assemblies of this studies' reads"
     show_change_link = True
-    fields = ["run", "status", "dir"]
-    readonly_fields = ["run"]
+    fields = ["runs", "status", "dir"]
+    readonly_fields = ["runs"]
     max_num = 0
     fk_name = "reads_study"
     formfield_overrides = {
@@ -113,7 +113,12 @@ class _StudyPublicationInline(StudyPublicationInline):
 
 
 @admin.register(Study)
-class StudyAdmin(ENABrowserLinkMixin, JSONFieldWidgetOverridesMixin, ModelAdmin):
+class StudyAdmin(
+    ENABrowserLinkMixin,
+    JSONFieldWidgetOverridesMixin,
+    CanonicalizeAccessionViewMixin,
+    ModelAdmin,
+):
     inlines = [
         StudyRunsInline,
         StudyAssembliesInline,

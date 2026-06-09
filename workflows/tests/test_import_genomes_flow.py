@@ -1,15 +1,15 @@
-import os
 import json
-import tempfile
+import os
 import shutil
+import tempfile
+from pathlib import Path
 from unittest.mock import patch
 
 import pytest
-
+from django.conf import settings
 
 from analyses.models import Biome
-from genomes.models import GenomeCatalogue, Genome
-from django.conf import settings
+from genomes.models import Genome, GenomeCatalogue
 
 genome_config = settings.EMG_CONFIG.genomes
 
@@ -23,21 +23,20 @@ def mock_genome_directory():
     temp_dir = tempfile.mkdtemp()
 
     try:
-        catalogue_dir = os.path.join(temp_dir, "website")
-        os.makedirs(catalogue_dir)
+        catalogue_dir = Path(temp_dir) / "sheep-rumen" / "1.0" / "website"
+        catalogue_dir.mkdir(parents=True, exist_ok=True)
 
-        with open(os.path.join(catalogue_dir, "phylo_tree.json"), "w") as f:
+        with (catalogue_dir / "phylo_tree.json").open("w") as f:
             json.dump({"tree": "mock_tree_data"}, f)
 
-        with open(os.path.join(catalogue_dir, "catalogue_summary.json"), "w") as f:
+        with (catalogue_dir / "catalogue_summary.json").open("w") as f:
             json.dump({"summary": "mock_summary_data"}, f)
 
         genome_accessions = ["MGYG000000001", "MGYG000000002"]
         for accession in genome_accessions:
-            genome_dir = os.path.join(catalogue_dir, accession)
-            os.makedirs(genome_dir)
-
-            os.makedirs(os.path.join(genome_dir, "genome"))
+            genome_dir = catalogue_dir / accession
+            genome_dir.mkdir(parents=True, exist_ok=True)
+            (genome_dir / "genome").mkdir(parents=True, exist_ok=True)
 
             json_data = {
                 "accession": accession,
@@ -58,9 +57,17 @@ def mock_genome_directory():
                 "taxon_lineage": "d__Bacteria;p__Firmicutes;c__Bacilli;o__Lactobacillales;f__Lactobacillaceae;g__Lactobacillus;s__Lactobacillus_gasseri",
                 "trnas": 40.0,
                 "type": "mag",
+                "pangenome": {
+                    "geographic_range": ["Europe", "Africa"],
+                    "num_genomes_non_redundant": 5,  # is deprecated
+                    "num_genomes_total": 6,
+                    "pangenome_accessory_size": 1576,
+                    "pangenome_core_size": 3041,
+                    "pangenome_size": 4617,
+                },
             }
 
-            with open(os.path.join(genome_dir, f"{accession}.json"), "w") as f:
+            with (genome_dir / f"{accession}.json").open("w") as f:
                 json.dump(json_data, f)
 
             genome_subdir = os.path.join(genome_dir, "genome")
@@ -81,18 +88,18 @@ def mock_genome_directory():
             for file in required_files:
                 with open(os.path.join(genome_subdir, file), "w") as f:
                     f.write(f"Mock content for {file}")
-
-        yield temp_dir
+        parent = str(Path(catalogue_dir).parent)
+        yield parent
     finally:
         shutil.rmtree(temp_dir)
 
 
 from workflows.flows.import_genomes_flow import (
-    import_genomes_flow,
-    validate_pipeline_version,
-    parse_options,
-    get_catalogue,
     gather_genome_dirs,
+    get_catalogue,
+    import_genomes_flow,
+    parse_options,
+    validate_pipeline_version,
 )
 from workflows.prefect_utils.testing_utils import run_flow_and_capture_logs
 
@@ -144,7 +151,7 @@ def test_get_catalogue():
         assert catalogue.version == "1.0"
         assert catalogue.name == "Sheep rumen v1.0"
         assert catalogue.biome == biome
-        assert catalogue.result_directory == "/genomes/sheep-rumen/1.0"
+        assert catalogue.result_directory == "/mgnify_genomes/sheep-rumen/1.0"
         assert catalogue.pipeline_version_tag == "v3.0.0dev"
         assert catalogue.catalogue_biome_label == "Sheep Rumen"
         assert catalogue.catalogue_type == "prokaryotes"
@@ -221,6 +228,15 @@ def test_import_genomes_flow_with_mock_directory(
     accessions = [g.accession for g in genomes]
     assert "MGYG000000001" in accessions
     assert "MGYG000000002" in accessions
+
+    genome = Genome.objects.get(accession="MGYG000000001")
+    assert genome.num_genomes_total == 6
+    assert genome.pangenome_size == 4617
+    assert genome.pangenome_core_size == 3041
+    assert genome.pangenome_accessory_size == 1576
+    assert genome.geographic_range == ["Europe", "Africa"]
+    assert catalogue.result_directory == "/mgnify_genomes/sheep-rumen/1.0"
+    assert genome.result_directory == "/mgnify_genomes/sheep-rumen/1.0/MGYG000000001"
 
 
 def get_default_options(

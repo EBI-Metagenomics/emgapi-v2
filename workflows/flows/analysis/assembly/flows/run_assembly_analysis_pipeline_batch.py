@@ -2,21 +2,21 @@ import uuid
 from datetime import timedelta
 from pathlib import Path
 
+from django.db import transaction
 from django.utils.text import slugify
-from django.db import close_old_connections
-from prefect import flow, get_run_logger
+from prefect import get_run_logger
 from prefect.runtime import flow_run
 
 from activate_django_first import EMG_CONFIG
 
 from analyses.models import Study
-from workflows.flows.analyse_study_tasks.shared.copy_v6_pipeline_results import (
-    copy_assembly_batch_results,
-)
 from workflows.flows.analysis.assembly.flows.import_asa_batch import import_asa_batch
 from workflows.flows.analysis.assembly.flows.run_map_batch import run_map_batch
 from workflows.flows.analysis.assembly.flows.run_virify_batch import (
     run_virify_batch,
+)
+from workflows.flows.analysis.assembly.flows.sync_assembly_batch_results import (
+    copy_assembly_batch_results,
 )
 from workflows.flows.analysis.assembly.tasks.assembly_analysis_pipeline_batch_study_summary_generator import (
     generate_assembly_analysis_pipeline_batch_summary,
@@ -24,24 +24,24 @@ from workflows.flows.analysis.assembly.tasks.assembly_analysis_pipeline_batch_st
 from workflows.flows.analysis.assembly.tasks.make_samplesheet_assembly import (
     make_samplesheet_assembly,
 )
+from workflows.flows.analysis.assembly.utils.status_update_hooks import (
+    update_batch_status_counts,
+)
 from workflows.models import (
     AssemblyAnalysisBatch,
     AssemblyAnalysisPipeline,
     AssemblyAnalysisPipelineStatus,
 )
 from workflows.prefect_utils.build_cli_command import cli_command
+from workflows.prefect_utils.flows_utils import django_db_flow as flow
 from workflows.prefect_utils.slurm_flow import (
-    run_cluster_job,
     ClusterJobFailedException,
+    run_cluster_job,
 )
 from workflows.prefect_utils.slurm_policies import ResubmitAlwaysPolicy
-from workflows.flows.analysis.assembly.utils.status_update_hooks import (
-    update_batch_status_counts,
-)
 
 
 @flow(
-    name="Run assembly analysis pipeline-v6 for an assembly analysis batch (ASA, VIRIfy and MAP)",
     flow_run_name="Run Assembly Analysis Batch: {assembly_analyses_batch_id}",
     on_completion=[update_batch_status_counts],
     on_failure=[update_batch_status_counts],
@@ -50,7 +50,7 @@ from workflows.flows.analysis.assembly.utils.status_update_hooks import (
     retries=2,
     retry_delay_seconds=60,
 )
-def run_assembly_analysis_pipeline_batch(
+def run_assembly_batch(
     assembly_analyses_batch_id: uuid.UUID,
 ):
     """
@@ -74,12 +74,23 @@ def run_assembly_analysis_pipeline_batch(
     """
     logger = get_run_logger()
 
-    assembly_analysis_batch = AssemblyAnalysisBatch.objects.get(
-        id=assembly_analyses_batch_id
-    )
+    # Lock the batch row to prevent two concurrent flows from both passing
+    # the is_running() check before either writes its flow_run_id.
+    with transaction.atomic():
+        assembly_analysis_batch = AssemblyAnalysisBatch.objects.select_for_update().get(
+            id=assembly_analyses_batch_id
+        )
 
-    # Store Prefect flow run ID, this will be persisted in the db later in the code
-    assembly_analysis_batch.asa_flow_run_id = flow_run.id
+        if assembly_analysis_batch.is_running():
+            # TODO: add reverse URL to study-assembly-analysis-status-summary admin page
+            logger.warning(
+                f"Batch {assembly_analyses_batch_id} is already being processed. "
+                f"Current flow will exit to avoid duplicate processing."
+            )
+            return
+
+        assembly_analysis_batch.asa_flow_run_id = flow_run.id
+        assembly_analysis_batch.save()
 
     # Each batch is used to keep track of the pipelines executed.
     assembly_analysis_batch.set_pipeline_version(
@@ -136,9 +147,12 @@ def run_assembly_analysis_pipeline_batch(
         logger.info(
             f"Using {assembly_analyses_workspace_dir} as the batch nextflow outdir for ASA pipeline"
         )
+
         nextflow_workdir = (
-            Path(assembly_analysis_batch.workspace_dir)
-            / f"asa-sheet-{slugify(samplesheet)}"
+            Path(EMG_CONFIG.slurm.default_nextflow_workdir)
+            / mgnify_study.ena_study.accession
+            / f"{EMG_CONFIG.assembly_analysis_pipeline.pipeline_name}_{EMG_CONFIG.assembly_analysis_pipeline.pipeline_version}"
+            / f"{assembly_analysis_batch.id}"
         )
         nextflow_workdir.mkdir(parents=True, exist_ok=True)
 
@@ -150,25 +164,18 @@ def run_assembly_analysis_pipeline_batch(
                     EMG_CONFIG.assembly_analysis_pipeline.pipeline_repo,
                 ),
                 (
-                    "-r",
-                    EMG_CONFIG.assembly_analysis_pipeline.pipeline_git_revision,
-                ),
-                # "-latest", this was causing issues - Cannot lock pack in assembly-analysis-pipeline/.git/objects/pack/pack-e....pack
-                (
                     "-c",
                     EMG_CONFIG.assembly_analysis_pipeline.pipeline_config_file,
+                ),
+                (
+                    "-r",
+                    EMG_CONFIG.assembly_analysis_pipeline.pipeline_git_revision,
                 ),
                 (
                     "-profile",
                     EMG_CONFIG.assembly_analysis_pipeline.pipeline_nf_profile,
                 ),
                 "-resume",
-                (
-                    "-work-dir",
-                    Path(EMG_CONFIG.assembly_analysis_pipeline.workdir_root)
-                    / mgnify_study.first_accession
-                    / "asa",
-                ),
                 EMG_CONFIG.assembly_analysis_pipeline.has_fire_access
                 and "--use_fire_download",
                 ("--input", samplesheet),
@@ -196,12 +203,7 @@ def run_assembly_analysis_pipeline_batch(
                 working_dir=assembly_analyses_workspace_dir,
                 resubmit_policy=ResubmitAlwaysPolicy,  # Let Nextflow handle resubmissions
             )
-            # This is required because a flow may need a few days to run, and when that is done, the connection to
-            # psql is going to be closed or dead at least
-            close_old_connections()
         except Exception as e:
-
-            close_old_connections()
 
             error_type = (
                 "ASA pipeline failed"
@@ -230,7 +232,6 @@ def run_assembly_analysis_pipeline_batch(
     ##################
     logger.info("Starting VIRify pipeline")
     run_virify_batch(assembly_analyses_batch_id=assembly_analysis_batch.id)
-    close_old_connections()
 
     ###############
     # === MAP === #
@@ -239,8 +240,6 @@ def run_assembly_analysis_pipeline_batch(
     run_map_batch(
         assembly_analyses_batch_id=assembly_analysis_batch.id,
     )
-    # Just in case the connection was closed because previous steps took a long time
-    close_old_connections()
 
     # At this point, the batch is completed and all analyses are in the DB. #
 
@@ -266,7 +265,5 @@ def run_assembly_analysis_pipeline_batch(
             "No successfully imported ASA analyses, skipping study summary generation"
         )
 
-    #######################################
-    # === Sync results for the batch === #
-    #######################################
+    # Sync the files to NFS and the FTP server
     copy_assembly_batch_results(assembly_analyses_batch_id)

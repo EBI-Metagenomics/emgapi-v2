@@ -1,8 +1,7 @@
 import logging
 from typing import Iterable
 
-from django.contrib import admin
-from django.contrib import messages
+from django.contrib import admin, messages
 from django.db.models import QuerySet
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404
@@ -38,7 +37,7 @@ class AnalysisAdmin(JSONFieldWidgetOverridesMixin, ModelAdmin):
         "accession",
         "run__ena_accessions",
         "assembly__ena_accessions",
-        "assembly__run__ena_accessions",
+        "assembly__runs__ena_accessions",
         "ena_study__title",
         "ena_study__accession",
         "ena_study__additional_accessions",

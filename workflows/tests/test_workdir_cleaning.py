@@ -6,8 +6,8 @@ from django.conf import settings
 from django.core.management import call_command
 from django.utils.timezone import now
 
-from analyses.models import Study, Assembly
 import ena.models as ena_models
+from analyses.models import Assembly, Study
 from workflows.flows.assemble_study_tasks.archive_assembly_dirs import (
     archive_assembly_dirs,
 )
@@ -48,7 +48,7 @@ def test_clean_assembly_workdirs(prefect_harness, mgnify_assemblies_completed, c
                 / f"{study.ena_study.accession}_miassembler"
                 / "samplesheet"
                 / f"{study.first_accession}"
-                / f"{assembly.run.first_accession}"
+                / f"{assembly.runs_label}"
             ).mkdir(exist_ok=True, parents=True)
             samplesheet_workdir_for_study.mkdir(exist_ok=True, parents=True)
             (samplesheet_workdir_for_study / "file.tsv").touch()
@@ -57,7 +57,7 @@ def test_clean_assembly_workdirs(prefect_harness, mgnify_assemblies_completed, c
                 / f"{study.ena_study.accession}_miassembler"
                 / "samplesheet"
                 / f"{study.first_accession}"
-                / f"{assembly.run.first_accession}"
+                / f"{assembly.runs_label}"
             )
             assembly.save()
 

@@ -1,11 +1,11 @@
 from typing import List, Union
 
 from django.db.models import Q
-from prefect import task
 
 import analyses.base_models.with_experiment_type_models
 import analyses.models
 from workflows.ena_utils.ena_api_requests import ENALibraryStrategyPolicy
+from workflows.prefect_utils.flows_utils import django_db_task as task
 
 
 @task(
@@ -26,7 +26,7 @@ def create_analyses(
     Get or create analysis objects for each run in the study that matches the given experiment type.
     :param study: An MGYS study that already has runs to be analysed attached.
     :param for_experiment_type: E.g. AMPLICON or WGS
-    :param pipeline: Pipeline version e.g. v6
+    :param pipeline: Pipeline version e.g. v6 or v6.1
     :param ena_library_strategy_policy: Optional policy for handling runs in the study that aren't labeled as for_experiment_type.
     :return: List of matching/created analysis objects.
     """

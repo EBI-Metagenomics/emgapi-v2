@@ -22,7 +22,7 @@ deployments:
   work_pool:
     name: slurm
 
-- name: run_assembly_analysis_pipeline_batch_deployment
+- name: run_assembly_batch_deployment
   description: |-
     Run the assembly analysis pipeline-v6 for a given batch, including ASA, VIRify, and MAP.
 
@@ -41,7 +41,7 @@ deployments:
     :type assembly_analyses_batch_id: uuid.UUID
     :raises ClusterJobFailedException: If the cluster job fails during the ASA pipeline execution.
     :raises Exception: For any unexpected errors encountered during the pipeline execution.
-  entrypoint: workflows/flows/analysis/assembly/flows/run_assembly_analysis_pipeline_batch.py:run_assembly_analysis_pipeline_batch
+  entrypoint: workflows/flows/analysis/assembly/flows/run_assembly_analysis_pipeline_batch.py:run_assembly_batch
   schedule: null
   work_pool:
     name: slurm
@@ -123,6 +123,40 @@ deployments:
   work_pool:
     name: slurm
 
+- name: sync_assembly_batch_results_deployment
+  description: |-
+    Copy the results from an assembly batch to external storage and the NFS mirror.
+
+    After copying the files it updates the external_results_dir and results_dir for the analyses.
+
+    :param assembly_analyses_batch_id: The ID of the assembly analysis batch to sync.
+  entrypoint: workflows/flows/analysis/assembly/flows/sync_assembly_batch_results.py:copy_assembly_batch_results
+  schedule: null
+  work_pool:
+    name: slurm
+
+- name: import_assemblies_from_filesystem_flow_deployment
+  description: |-
+    Import miassembler outputs into Assembly records.
+
+    This flow doesn't support co-assemblies at the moment.
+
+    The input directory must be a miassembler/Nextflow output directory containing
+    `assembled_runs.csv`. Completed assemblies are imported from that report, using
+    the standard per-study/per-run output directory layout.
+
+    This flow assumes the assemblies were already uploaded to ENA. ENA Portal is
+    refreshed before import, and each completed run must resolve to an ENA assembly
+    accession returned by that refresh.
+
+    :param study_accession: ENA study accession for the miassembler outputs.
+    :param nextflow_outdir: miassembler/Nextflow output directory to import from.
+    :param fetch_read_runs_from_ena: Whether to refresh read runs from ENA before import.
+  entrypoint: workflows/flows/import_assemblies_from_filesystem_flow.py:import_assemblies_from_filesystem_flow
+  schedule: null
+  work_pool:
+    name: slurm
+
 - name: finalize_assembly_study_deployment
   description: |-
     Run the last study level steps on study assembly analysis batches.
@@ -155,3 +189,96 @@ deployments:
     job_variables:
       working_dir: /nfs/production/dev-slurm-work-dir
       memory: 1
+
+- name: clean_old_nextflow_workdirs_deployment
+  description: |-
+    Scan a directory for old Nextflow work directories and delete them after human confirmation.
+    :param path: Root path to scan
+    :param min_age_days: Minimum age in days for a directory to be a candidate (default 30)
+    :param scan_depth: How many subdirectory levels to scan (default 1)
+    :param max_candidates: Cap on directories collected per run (default 10 000)
+  entrypoint: workflows/flows/housekeeping/clean_nextflow_workdirs.py:clean_old_nextflow_workdirs
+  parameters: {}
+  work_pool:
+    name: slurm
+  schedules: []
+
+- name: sync_studies_with_ena
+  description: |-
+    This flow will sync studies metadata with ENA.
+    :param accessions: List of study accessions to sync
+  entrypoint: workflows/flows/housekeeping/sync_studies_with_ena.py:sync_studies_with_ena
+  parameters: {}
+  work_pool:
+    name: slurm
+  schedules: []
+
+- name: sync_samples_with_ena
+  description: |-
+    This flow will sync samples metadata with ENA.
+    :param accessions: List of sample accessions to sync
+  entrypoint: workflows/flows/housekeeping/sync_samples_with_ena.py:sync_samples_with_ena
+  parameters: {}
+  work_pool:
+    name: slurm
+  schedules: []
+
+
+- name: repair_eggnog_tsv_headers_deployment
+  description: |-
+    Scan assembly analyses for EggNOG annotation TSV files with duplicated headers.
+    Set dry_run=True to list affected files only.
+    Set sync_to_ftp=True to re-sync repaired EggNOG results to the FTP/private mirror.
+
+    :param analysis_accessions: Optional list of analysis accessions to limit the scan.
+    :param dry_run: If true, only list affected files and make no changes.
+    :param sync_to_ftp: If true, re-sync repaired files to the FTP/private mirror.
+  entrypoint: workflows/flows/housekeeping/fix_eggnog_tsv_headers.py:repair_eggnog_tsv_headers
+  parameters: {}
+  work_pool:
+    name: slurm
+  schedules: []
+
+- name: import_legacy_analyses_deployment
+  description: |-
+    This flow will iteratively import analyses (made with MGnify V1-V5 pipelines)
+    into the EMG DB.
+
+    It connects to the legacy EMG MySQL and Mongo DBs, but not through Django.
+
+    :param mgys: accession of the study to import (with its analyses)
+    :param fetch_functions: whether to fetch functional annotatins (slow!)
+  entrypoint: workflows/flows/legacy/flows/import_legacy_analyses.py:import_legacy_analyses
+  work_pool:
+    name: slurm
+
+- name: import_all_legacy_analyses_deployment
+  description: |-
+    This flow will iteratively import analyses (made with MGnify V1-V5 pipelines)
+    into the EMG DB.
+
+    It connects to the legacy EMG MySQL and Mongo DBs, but not through Django.
+
+    :param fetch_functions: whether to fetch functional annotatins (slow!)
+    :param mgys_after: only import studies with mgys > mgys_after
+  entrypoint: workflows/flows/legacy/flows/import_legacy_analyses.py:import_all_legacy_analyses
+  work_pool:
+    name: slurm
+
+- name: recovery_helper_import_completed_analyses_in_study_deployment
+  version: null
+  tags: []
+  concurrency_limit: null
+  description: |-
+    Helper function for importing completed analyses within a specified study and analysis
+    version. Intended for helping with recovery of failed analysis flows.
+    E.g., if you have manually altered some states of analyses, run this flow to import them.
+    Will import ONLY completed analyses that have not already been imported, from this study and pipeline-version combo.
+
+    :param study_accession: Study accession in which completed analyses are looked for
+    :param analysis_version: Pipeline version of analyses to potentially import
+    :return: None
+  entrypoint: workflows/flows/analyse_study_tasks/amplicon/import_completed_amplicon_analyses.py:recovery_helper_import_completed_analyses_in_study
+  parameters: {}
+  work_pool:
+    name: slurm

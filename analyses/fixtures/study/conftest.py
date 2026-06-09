@@ -3,8 +3,9 @@ import pytest
 
 from analyses.base_models.with_downloads_models import (
     DownloadFile,
-    DownloadType,
+    DownloadFileIndexFile,
     DownloadFileType,
+    DownloadType,
 )
 from workflows.data_io_utils.filenames import accession_prefix_separated_dir_path
 from workflows.ena_utils.study import ENAStudyFields
@@ -83,6 +84,30 @@ def private_study_with_download(webin_private_study):
             long_description="Summary of taxonomic assignments for private study",
             path="study-summaries/private_study_summary.tsv",
             download_group="study_summary.private",
+        )
+    )
+    return webin_private_study
+
+
+@pytest.fixture
+def private_study_with_indexed_download(webin_private_study):
+    """Private study with a download file that has an index file."""
+    webin_private_study.external_results_dir = "MGYS/00/000/999"
+    webin_private_study.save()
+
+    webin_private_study.add_download(
+        DownloadFile(
+            download_type=DownloadType.SEQUENCE_DATA,
+            file_type=DownloadFileType.FASTA,
+            alias=f"{webin_private_study.accession}_private_sequences.fasta.gz",
+            short_description="Private study sequences",
+            long_description="Compressed sequences for private study",
+            path="study-summaries/private_sequences.fasta.gz",
+            download_group="study_summary.private_indexed",
+            index_file=DownloadFileIndexFile(
+                path="study-summaries/private_sequences.fasta.gz.gzi",
+                index_type="gzi",
+            ),
         )
     )
     return webin_private_study

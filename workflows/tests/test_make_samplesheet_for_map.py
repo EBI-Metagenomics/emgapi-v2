@@ -1,7 +1,9 @@
 import csv
+
 import pytest
 
 from activate_django_first import EMG_CONFIG
+
 from analyses.models import Analysis
 from workflows.flows.analysis.assembly.tasks.make_samplesheet_assembly import (
     make_samplesheet_for_map,

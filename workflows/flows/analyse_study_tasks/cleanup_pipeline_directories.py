@@ -1,8 +1,11 @@
 import shutil
 from pathlib import Path
-from prefect import task, get_run_logger
 from typing import List, Union
+
+from prefect import get_run_logger
+
 import analyses.models
+from workflows.prefect_utils.flows_utils import django_db_task as task
 
 AnalysisStates = analyses.models.Analysis.AnalysisStates
 AssemblyStates = analyses.models.Assembly.AssemblyStates
@@ -64,7 +67,7 @@ def delete_assemble_study_nextflow_workdir(
     failed_assemblies = (
         analyses.models.Assembly.objects.filter(
             id__in=assemblies,
-            run__metadata__fastq_ftps__isnull=False,
+            runs__metadata__fastq_ftps__isnull=False,
             status__contains={AssemblyStates.ASSEMBLY_FAILED: True},
         )
         .order_by("id")

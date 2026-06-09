@@ -1,50 +1,49 @@
 from pathlib import Path
-from typing import Optional, List
+from typing import List, Optional
 
-from prefect import flow, get_run_logger, suspend_flow_run
+from prefect import get_run_logger, suspend_flow_run
 from prefect.events import emit_event
 from prefect.input import RunInput
-from prefect.runtime import flow_run, deployment
+from prefect.runtime import deployment, flow_run
 from pydantic import Field
 
 from activate_django_first import EMG_CONFIG
 
 import analyses.base_models.with_experiment_type_models
-from workflows.flows.analyse_study_tasks.shared.copy_v6_pipeline_results import (
-    copy_v6_study_summaries,
+import analyses.models
+import ena.models
+from workflows.ena_utils.ena_api_requests import (
+    ENALibraryStrategyPolicy,
+    get_study_from_ena,
+    get_study_readruns_from_ena,
+    library_strategy_policy_to_filter,
 )
-
-from workflows.flows.analyse_study_tasks.shared.create_analyses import create_analyses
-from workflows.flows.analyse_study_tasks.shared.get_analyses_to_attempt import (
-    get_analyses_to_attempt,
+from workflows.ena_utils.webin_owner_utils import validate_and_set_webin_owner
+from workflows.flows.analyse_study_tasks.cleanup_pipeline_directories import (
+    delete_study_nextflow_workdir,
 )
 from workflows.flows.analyse_study_tasks.raw_reads.run_rawreads_pipeline_via_samplesheet import (
     run_rawreads_pipeline_via_samplesheet,
 )
-
-import analyses.models
-import ena.models
-from workflows.ena_utils.ena_api_requests import (
-    get_study_from_ena,
-    get_study_readruns_from_ena,
-    library_strategy_policy_to_filter,
-    ENALibraryStrategyPolicy,
+from workflows.flows.analyse_study_tasks.shared.copy_v6_pipeline_results import (
+    copy_v6_study_summaries,
 )
-from workflows.ena_utils.webin_owner_utils import validate_and_set_webin_owner
+from workflows.flows.analyse_study_tasks.shared.create_analyses import create_analyses
+from workflows.flows.analyse_study_tasks.shared.get_analyses_to_attempt import (
+    get_analyses_to_attempt,
+)
 from workflows.flows.analyse_study_tasks.shared.study_summary import (
-    merge_study_summaries,
     add_study_summaries_to_downloads,
+    merge_study_summaries,
 )
+from workflows.flows.analysis import AnalysisType
 from workflows.flows.assemble_study import get_biomes_as_choices
 from workflows.prefect_utils.analyses_models_helpers import (
+    add_study_watchers,
     chunk_list,
     get_users_as_choices,
-    add_study_watchers,
 )
-from workflows.flows.analyse_study_tasks.cleanup_pipeline_directories import (
-    delete_study_nextflow_workdir,
-    # delete_study_results_dir,
-)
+from workflows.prefect_utils.flows_utils import django_db_flow as flow
 
 _METAGENOMIC = "WGS"
 
@@ -103,15 +102,17 @@ def analysis_rawreads_study(study_accession: str):
             ENALibraryStrategyPolicy.ONLY_IF_CORRECT_IN_ENA,
             description="Optionally treat read-runs with incorrect library strategy metadata as raw-reads.",
         )
+        functional_analysis: bool = Field(
+            False,
+            description="Enable functional analysis in the raw-reads pipeline.",
+        )
         webin_owner: Optional[str] = Field(
             None,
             description="Webin ID of study owner, if data is private. Can be left as None, if public.",
         )
 
     analyse_study_input: AnalyseStudyInput = suspend_flow_run(
-        wait_for_input=AnalyseStudyInput.with_initial_data(
-            description=(
-                f"""\
+        wait_for_input=AnalyseStudyInput.with_initial_data(description=(f"""\
                 **Raw-Reads V6**
                 This will analyse all {len(read_runs)} read-runs of study {ena_study.accession} \
                 using [Raw Reads Pipeline V6](https://github.com/ebi-metagenomics/raw-reads-analysis-pipeline).
@@ -126,9 +127,8 @@ def analysis_rawreads_study(study_accession: str):
 
                 **Webin owner**
                 If the study is private, the webin account owner is needed so that the user can view the study they own.
-                """
-            )
-        )
+                """)),
+        timeout=EMG_CONFIG.slurm.default_flow_suspend_awaiting_input_timeout_secs,
     )
 
     ena_study, __ = validate_and_set_webin_owner(
@@ -208,16 +208,22 @@ def analysis_rawreads_study(study_accession: str):
             f"Working on raw-reads analyses: {analyses_chunk[0]}-{analyses_chunk[-1]}"
         )
         run_rawreads_pipeline_via_samplesheet(
-            mgnify_study, analyses_chunk, study_workdir, study_outdir
+            mgnify_study,
+            analyses_chunk,
+            study_workdir,
+            study_outdir,
+            functional_analysis=analyse_study_input.functional_analysis,
         )
 
     merge_study_summaries(
         mgnify_study.accession,
         cleanup_partials=not EMG_CONFIG.rawreads_pipeline.keep_study_summary_partials,
-        analysis_type="rawreads",
+        analysis_type=AnalysisType.RAWREADS,
     )
-    add_study_summaries_to_downloads(mgnify_study.accession, analysis_type="rawreads")
-    copy_v6_study_summaries(mgnify_study.accession)
+    add_study_summaries_to_downloads(
+        mgnify_study.accession, analysis_type=AnalysisType.RAWREADS
+    )
+    copy_v6_study_summaries(mgnify_study.accession, analysis_type=AnalysisType.RAWREADS)
     # delete work directory
     delete_study_nextflow_workdir(study_workdir, analyses_to_attempt)
     # delete_study_results_dir(study_outdir, mgnify_study)

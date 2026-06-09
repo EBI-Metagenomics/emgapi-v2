@@ -1,21 +1,22 @@
 from activate_django_first import EMG_CONFIG
+
 import analyses.models
 from analyses.base_models.with_downloads_models import (
-    DownloadFileMetadata,
     DownloadFileIndexFileMetadata,
+    DownloadFileMetadata,
     DownloadFileType,
     DownloadType,
 )
-
 from workflows.data_io_utils.file_rules.common_rules import (
     DirectoryExistsRule,
     FileExistsRule,
     FileIsNotEmptyRule,
 )
+
 from .base import (
     PipelineDirectorySchema,
-    PipelineResultSchema,
     PipelineFileSchema,
+    PipelineResultSchema,
 )
 
 
@@ -31,6 +32,9 @@ class VirifyResultSchema(PipelineResultSchema):
         # Main viral annotation directory
         viral_annotation_dir = PipelineDirectorySchema(
             folder_name=EMG_CONFIG.virify_pipeline.final_gff_folder,
+            external_folder_name=(
+                f"virify/{EMG_CONFIG.virify_pipeline.final_gff_folder}"
+            ),
             validation_rules=[DirectoryExistsRule],
             files=[
                 PipelineFileSchema(

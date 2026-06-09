@@ -1,18 +1,18 @@
 import uuid
-from prefect import get_run_logger, task
+from typing import List
+
+from prefect import get_run_logger
 
 from activate_django_first import EMG_CONFIG  # noqa
 
 from analyses.models import Analysis
 from workflows.data_io_utils.schemas.assembly import ImportResult
-
-from typing import List
-
 from workflows.models import (
     AssemblyAnalysisBatch,
     AssemblyAnalysisPipeline,
     AssemblyAnalysisPipelineStatus,
 )
+from workflows.prefect_utils.flows_utils import django_db_task as task
 
 
 def mark_analyses_with_failed_status(

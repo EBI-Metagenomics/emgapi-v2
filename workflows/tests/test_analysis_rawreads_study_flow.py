@@ -1,13 +1,13 @@
-from textwrap import dedent
-import json
+import glob
 import gzip
+import json
 import logging
 import os
 import re
 import shutil
-import glob
 from enum import Enum
 from pathlib import Path
+from textwrap import dedent
 from typing import List, Optional, Union
 from unittest.mock import Mock, patch
 
@@ -16,33 +16,33 @@ from django.conf import settings
 from prefect.artifacts import Artifact
 from pydantic import BaseModel
 
-from workflows.data_io_utils.file_rules.base_rules import GlobRule
-
-import analyses.models
 import analyses.base_models.with_experiment_type_models
-from workflows.data_io_utils.file_rules.base_rules import FileRule
+import analyses.models
+from workflows.data_io_utils.file_rules.base_rules import FileRule, GlobRule
 from workflows.data_io_utils.file_rules.common_rules import GlobHasFilesCountRule
 from workflows.data_io_utils.file_rules.nodes import Directory
 from workflows.ena_utils.ena_api_requests import ENALibraryStrategyPolicy
+from workflows.flows.analyse_study_tasks.cleanup_pipeline_directories import (
+    # delete_study_results_dir,
+    delete_study_nextflow_workdir,
+)
 from workflows.flows.analyse_study_tasks.shared.study_summary import (
-    merge_study_summaries,
     STUDY_SUMMARY_TSV,
+    merge_study_summaries,
 )
 from workflows.flows.analysis_rawreads_study import analysis_rawreads_study
 from workflows.prefect_utils.analyses_models_helpers import get_users_as_choices
 from workflows.prefect_utils.testing_utils import (
-    should_not_mock_httpx_requests_to_prefect_server,
     run_flow_and_capture_logs,
-)
-from workflows.flows.analyse_study_tasks.cleanup_pipeline_directories import (
-    # delete_study_results_dir,
-    delete_study_nextflow_workdir,
+    should_not_mock_httpx_requests_to_prefect_server,
 )
 
 EMG_CONFIG = settings.EMG_CONFIG
 
 
-def generate_fake_rawreads_pipeline_results(results_dir, sample_accession):
+def generate_fake_rawreads_pipeline_results(
+    results_dir, sample_accession, make_functional=True
+):
     """
     Generate fake raw-reads pipeline results for testing.
 
@@ -50,6 +50,7 @@ def generate_fake_rawreads_pipeline_results(results_dir, sample_accession):
 
     :param results_dir: Directory to create the fake results in
     :param sample_accession: Sample accession to use in file names
+    :param make_functional: Whether to generate functional analysis (pfam) results
     """
 
     logger = logging.getLogger("generate_dummy_data_debug")
@@ -59,98 +60,91 @@ def generate_fake_rawreads_pipeline_results(results_dir, sample_accession):
     # Create multiqc directory and subdirectories
     logger.info(f"Creating dummy study multiqc results at {results_dir}")
     with open(f"{results_dir}/study_multiqc_report.html", "wt") as f:
-        f.write(
-            dedent(
-                """\
+        f.write(dedent("""\
                 <html>
                 <body>
                 <h1>MultiQC report</h1>
                 Looks good to me!
                 </body>
                 </html>
-                """
-            )
-        )
+                """))
 
     # Create function-summary directory and subdirectories
-    func_dir = f"{results_dir}/{sample_accession}/function-summary"
-    logger.info(f"Creating dummy functional results at {func_dir}")
-    pfam_dir = f"{func_dir}/pfam"
-    os.makedirs(pfam_dir, exist_ok=True)
-    with gzip.open(f"{pfam_dir}/{sample_accession}_pfam.txt.gz", "wb") as f:
-        f.write(
-            dedent(
-                """\
-                # function	read_count	coverage_depth	coverage_breadth
-                PF21175.2	1	0.9583333333333334	0.9583333333333334
-                PF10418.14	1	0.926829268292683	0.926829268292683
-                PF17802.7	1	0.7692307692307693	0.7692307692307693
-                PF17769.7	1	0.7142857142857143	0.7142857142857143
-                PF10531.15	1	0.6909090909090909	0.6909090909090909
-                PF22269.2	1	0.6612903225806451	0.6612903225806451
-                PF13411.12	1	0.6376811594202898	0.6376811594202898
-                PF00515.34	1	0.5882352941176471	0.5882352941176471
-                PF16320.10	1	0.5625	0.5625
-                PF13186.11	1	0.5522388059701493	0.5522388059701493
-                PF16124.10	1	0.5303030303030303	0.5303030303030303
-                PF13807.11	1	0.47560975609756095	0.47560975609756095
-                PF22811.2	1	0.4523809523809524	0.4523809523809524
-                PF01782.24	1	0.4523809523809524	0.4523809523809524
-                PF00009.33	2	0.4148936170212766	0.32978723404255317
-                PF00005.33	2	0.40145985401459855	0.40145985401459855
-                PF08428.16	1	0.39473684210526316	0.39473684210526316
-                PF00679.30	1	0.3707865168539326	0.3707865168539326
-                PF00448.28	2	0.3673469387755102	0.3673469387755102
-                PF06755.17	1	0.35714285714285715	0.35714285714285715
-                PF10800.13	1	0.34615384615384615	0.34615384615384615
-                PF02922.24	1	0.3373493975903614	0.3373493975903614
-                PF00472.26	1	0.33620689655172414	0.33620689655172414
-                PF23139.1	1	0.32894736842105265	0.32894736842105265
-                PF18818.7	1	0.30952380952380953	0.30952380952380953
-                PF21018.2	1	0.2727272727272727	0.2727272727272727
-                PF14284.11	1	0.272108843537415	0.272108843537415
-                PF13288.12	1	0.2608695652173913	0.2608695652173913
-                PF00308.24	1	0.24691358024691357	0.24691358024691357
-                PF12978.13	1	0.24528301886792453	0.24528301886792453
-                PF00724.26	2	0.2309941520467836	0.14912280701754385
-                PF19306.5	1	0.2261904761904762	0.2261904761904762
-                PF06924.17	1	0.22598870056497175	0.22598870056497175
-                PF02397.22	1	0.22346368715083798	0.22346368715083798
-                PF03816.19	1	0.20666666666666667	0.20666666666666667
-                PF00849.27	1	0.19736842105263158	0.19736842105263158
-                PF13614.12	1	0.1864406779661017	0.1864406779661017
-                PF09985.14	1	0.17105263157894737	0.17105263157894737
-                PF01435.24	1	0.16666666666666666	0.16666666666666666
-                PF03796.21	1	0.1568627450980392	0.1568627450980392
-                PF17657.6	1	0.1566265060240964	0.1566265060240964
-                PF00814.31	1	0.15151515151515152	0.15151515151515152
-                PF03613.19	1	0.1509433962264151	0.1509433962264151
-                PF04898.20	1	0.1444043321299639	0.1444043321299639
-                PF11997.14	1	0.1417910447761194	0.1417910447761194
-                PF02601.20	1	0.12698412698412698	0.12698412698412698
-                PF02896.24	1	0.12627986348122866	0.12627986348122866
-                PF00393.24	1	0.11724137931034483	0.11724137931034483
-                PF01702.25	1	0.10644257703081232	0.10644257703081232
-                PF01041.23	1	0.10277777777777777	0.10277777777777777
-                PF05649.18	1	0.10236220472440945	0.10236220472440945
-                PF06965.17	1	0.10160427807486631	0.10160427807486631
-                PF00478.31	1	0.10144927536231885	0.10144927536231885
-                PF00860.26	1	0.10025706940874037	0.10025706940874037
-                PF07971.18	1	0.09051724137931035	0.09051724137931035
-                PF12979.12	1	0.08882521489971347	0.08882521489971347
-                PF00330.25	1	0.08855291576673865	0.08855291576673865
-                PF01425.27	1	0.08764044943820225	0.08764044943820225
-                PF00171.27	1	0.08676789587852494	0.08676789587852494
-                PF02652.20	1	0.07279693486590039	0.07279693486590039
-                PF13597.11	1	0.060498220640569395	0.060498220640569395
-                PF02901.20	1	0.06027820710973725	0.06027820710973725
-                PF09586.16	1	0.045508982035928146	0.045508982035928146
-                """
-            ).encode()
-        )
-    os.makedirs(f"{pfam_dir}", exist_ok=True)
-    with open(f"{pfam_dir}/{sample_accession}_pfam.stats.json", "wt") as f:
-        f.write(r'{"reads_mapped": 67, "hmm_count": 63, "read_hit_count": 67}')
+    if make_functional:
+        func_dir = f"{results_dir}/{sample_accession}/function-summary"
+        logger.info(f"Creating dummy functional results at {func_dir}")
+        pfam_dir = f"{func_dir}/pfam"
+        os.makedirs(pfam_dir, exist_ok=True)
+        with gzip.open(f"{pfam_dir}/{sample_accession}_pfam.txt.gz", "wb") as f:
+            f.write(dedent("""\
+                    # function	read_count	coverage_depth	coverage_breadth
+                    PF21175.2	1	0.9583333333333334	0.9583333333333334
+                    PF10418.14	1	0.926829268292683	0.926829268292683
+                    PF17802.7	1	0.7692307692307693	0.7692307692307693
+                    PF17769.7	1	0.7142857142857143	0.7142857142857143
+                    PF10531.15	1	0.6909090909090909	0.6909090909090909
+                    PF22269.2	1	0.6612903225806451	0.6612903225806451
+                    PF13411.12	1	0.6376811594202898	0.6376811594202898
+                    PF00515.34	1	0.5882352941176471	0.5882352941176471
+                    PF16320.10	1	0.5625	0.5625
+                    PF13186.11	1	0.5522388059701493	0.5522388059701493
+                    PF16124.10	1	0.5303030303030303	0.5303030303030303
+                    PF13807.11	1	0.47560975609756095	0.47560975609756095
+                    PF22811.2	1	0.4523809523809524	0.4523809523809524
+                    PF01782.24	1	0.4523809523809524	0.4523809523809524
+                    PF00009.33	2	0.4148936170212766	0.32978723404255317
+                    PF00005.33	2	0.40145985401459855	0.40145985401459855
+                    PF08428.16	1	0.39473684210526316	0.39473684210526316
+                    PF00679.30	1	0.3707865168539326	0.3707865168539326
+                    PF00448.28	2	0.3673469387755102	0.3673469387755102
+                    PF06755.17	1	0.35714285714285715	0.35714285714285715
+                    PF10800.13	1	0.34615384615384615	0.34615384615384615
+                    PF02922.24	1	0.3373493975903614	0.3373493975903614
+                    PF00472.26	1	0.33620689655172414	0.33620689655172414
+                    PF23139.1	1	0.32894736842105265	0.32894736842105265
+                    PF18818.7	1	0.30952380952380953	0.30952380952380953
+                    PF21018.2	1	0.2727272727272727	0.2727272727272727
+                    PF14284.11	1	0.272108843537415	0.272108843537415
+                    PF13288.12	1	0.2608695652173913	0.2608695652173913
+                    PF00308.24	1	0.24691358024691357	0.24691358024691357
+                    PF12978.13	1	0.24528301886792453	0.24528301886792453
+                    PF00724.26	2	0.2309941520467836	0.14912280701754385
+                    PF19306.5	1	0.2261904761904762	0.2261904761904762
+                    PF06924.17	1	0.22598870056497175	0.22598870056497175
+                    PF02397.22	1	0.22346368715083798	0.22346368715083798
+                    PF03816.19	1	0.20666666666666667	0.20666666666666667
+                    PF00849.27	1	0.19736842105263158	0.19736842105263158
+                    PF13614.12	1	0.1864406779661017	0.1864406779661017
+                    PF09985.14	1	0.17105263157894737	0.17105263157894737
+                    PF01435.24	1	0.16666666666666666	0.16666666666666666
+                    PF03796.21	1	0.1568627450980392	0.1568627450980392
+                    PF17657.6	1	0.1566265060240964	0.1566265060240964
+                    PF00814.31	1	0.15151515151515152	0.15151515151515152
+                    PF03613.19	1	0.1509433962264151	0.1509433962264151
+                    PF04898.20	1	0.1444043321299639	0.1444043321299639
+                    PF11997.14	1	0.1417910447761194	0.1417910447761194
+                    PF02601.20	1	0.12698412698412698	0.12698412698412698
+                    PF02896.24	1	0.12627986348122866	0.12627986348122866
+                    PF00393.24	1	0.11724137931034483	0.11724137931034483
+                    PF01702.25	1	0.10644257703081232	0.10644257703081232
+                    PF01041.23	1	0.10277777777777777	0.10277777777777777
+                    PF05649.18	1	0.10236220472440945	0.10236220472440945
+                    PF06965.17	1	0.10160427807486631	0.10160427807486631
+                    PF00478.31	1	0.10144927536231885	0.10144927536231885
+                    PF00860.26	1	0.10025706940874037	0.10025706940874037
+                    PF07971.18	1	0.09051724137931035	0.09051724137931035
+                    PF12979.12	1	0.08882521489971347	0.08882521489971347
+                    PF00330.25	1	0.08855291576673865	0.08855291576673865
+                    PF01425.27	1	0.08764044943820225	0.08764044943820225
+                    PF00171.27	1	0.08676789587852494	0.08676789587852494
+                    PF02652.20	1	0.07279693486590039	0.07279693486590039
+                    PF13597.11	1	0.060498220640569395	0.060498220640569395
+                    PF02901.20	1	0.06027820710973725	0.06027820710973725
+                    PF09586.16	1	0.045508982035928146	0.045508982035928146
+                    """).encode())
+        os.makedirs(f"{pfam_dir}", exist_ok=True)
+        with open(f"{pfam_dir}/{sample_accession}_pfam.stats.json", "wt") as f:
+            f.write(r'{"reads_mapped": 67, "hmm_count": 63, "read_hit_count": 67}')
 
     # Create taxonomy-summary directory and subdirectories
     tax_dir = f"{results_dir}/{sample_accession}/taxonomy-summary"
@@ -160,17 +154,13 @@ def generate_fake_rawreads_pipeline_results(results_dir, sample_accession):
     motus_dir = f"{tax_dir}/motus"
     os.makedirs(motus_dir, exist_ok=True)
     with gzip.open(f"{motus_dir}/{sample_accession}_motus.txt.gz", "wb") as f:
-        f.write(
-            dedent(
-                """\
+        f.write(dedent("""\
                 # Count	Kingdom	Phylum	Class	Order	Family	Genus	Species
                 1.0	k__Bacteria	p__Firmicutes	c__Bacilli	o__Lactobacillales	f__Lactobacillaceae	g__Lactobacillus	s__Lactobacillus gasseri
                 2.0	k__Bacteria	p__Actinobacteria	c__Actinobacteria	o__Bifidobacteriales	f__Bifidobacteriaceae	g__Bifidobacterium	s__Bifidobacterium longum [Bifidobacterium longum CAG:69/Bifidobacterium longum]
                 1.0	k__Bacteria	p__Bacteroidetes	c__Bacteroidia	o__Bacteroidales	f__Bacteroidaceae	g__Bacteroides	s__Bacteroides thetaiotaomicron
                 2.0	unassigned
-                """
-            ).encode()
-        )
+                """).encode())
     with open(f"{motus_dir}/{sample_accession}_motus.html", "w"):
         pass
 
@@ -178,9 +168,7 @@ def generate_fake_rawreads_pipeline_results(results_dir, sample_accession):
     silvassu_dir = f"{tax_dir}/silva-ssu"
     os.makedirs(silvassu_dir, exist_ok=True)
     with gzip.open(f"{silvassu_dir}/{sample_accession}_silva-ssu.txt.gz", "wb") as f:
-        f.write(
-            dedent(
-                """\
+        f.write(dedent("""\
                 # Count	Superkingdom	Kingdom	Phylum	Class	Order	Family	Genus	Species
                 1	sk__Bacteria	k__	p__Actinomycetota
                 1	sk__Bacteria	k__	p__Actinomycetota	c__Actinomycetes
@@ -199,9 +187,7 @@ def generate_fake_rawreads_pipeline_results(results_dir, sample_accession):
                 1	sk__Bacteria	k__	p__Bacteroidota	c__Bacteroidia	o__Bacteroidales	f__Prevotellaceae
                 2	sk__Bacteria	k__	p__Pseudomonadota	c__Gammaproteobacteria	o__Enterobacterales
                 2	sk__Bacteria	k__	p__Pseudomonadota	c__Gammaproteobacteria	o__Enterobacterales	f__Enterobacteriaceae
-                """
-            ).encode()
-        )
+                """).encode())
     with open(f"{silvassu_dir}/{sample_accession}_silva-ssu.html", "w"):
         pass
 
@@ -209,9 +195,7 @@ def generate_fake_rawreads_pipeline_results(results_dir, sample_accession):
     silvalsu_dir = f"{tax_dir}/silva-lsu"
     os.makedirs(silvalsu_dir, exist_ok=True)
     with gzip.open(f"{silvalsu_dir}/{sample_accession}_silva-lsu.txt.gz", "wb") as f:
-        f.write(
-            dedent(
-                """\
+        f.write(dedent("""\
                 # Count	Superkingdom	Kingdom	Phylum	Class	Order	Family	Genus	Species
                 12	sk__Bacteria
                 1	sk__Bacteria	k__	p__Bacillota	c__Bacilli	o__Lactobacillales	f__Streptococcaceae	g__Streptococcus	s__Streptococcus_pneumoniae
@@ -223,9 +207,7 @@ def generate_fake_rawreads_pipeline_results(results_dir, sample_accession):
                 5	sk__Eukaryota	k__Metazoa
                 5	sk__Eukaryota	k__Viridiplantae
                 1	sk__Eukaryota	k__Viridiplantae	p__Streptophyta	c__Magnoliopsida	o__Fabales
-                """
-            ).encode()
-        )
+                """).encode())
     with open(f"{silvalsu_dir}/{sample_accession}_silva-lsu.html", "w"):
         pass
 
@@ -234,9 +216,7 @@ def generate_fake_rawreads_pipeline_results(results_dir, sample_accession):
     logger.info(f"Creating dummy QC results at {qc_dir}")
     os.makedirs(qc_dir, exist_ok=True)
     with open(f"{qc_dir}/{sample_accession}_decontamination.fastp.json", "wt") as f:
-        f.write(
-            dedent(
-                """\
+        f.write(dedent("""\
                 {
                     "summary": {
                         "fastp_version": "0.24.0",
@@ -273,14 +253,10 @@ def generate_fake_rawreads_pipeline_results(results_dir, sample_accession):
                         "too_long_reads": 0
                     }
                 }
-                """
-            )
-        )
+                """))
 
     with open(f"{qc_dir}/{sample_accession}_qc.fastp.json", "wt") as f:
-        f.write(
-            dedent(
-                """\
+        f.write(dedent("""\
                 {
                     "summary": {
                         "fastp_version": "0.24.0",
@@ -316,23 +292,17 @@ def generate_fake_rawreads_pipeline_results(results_dir, sample_accession):
                         "too_long_reads": 0
                     }
                 }
-                """
-            )
-        )
+                """))
 
     with open(f"{qc_dir}/{sample_accession}_multiqc_report.html", "wt") as f:
-        f.write(
-            dedent(
-                """\
+        f.write(dedent("""\
                 <html>
                 <body>
                 <h1>MultiQC report</h1>
                 Looks good to me!
                 </body>
                 </html>
-                """
-            )
-        )
+                """))
 
 
 def simulate_copy_results(
@@ -437,7 +407,7 @@ def test_prefect_analyse_rawreads_flow(
             },
         ],
         is_reusable=True,
-        is_optional=True,
+        is_optional=False,
     )
     httpx_mock.add_response(
         url=f"{EMG_CONFIG.ena.portal_search_api}?"
@@ -449,7 +419,7 @@ def test_prefect_analyse_rawreads_flow(
         f"&dataPortal=metagenome",
         json=[{"study_accession": study_accession}],
         is_reusable=True,
-        is_optional=True,
+        is_optional=False,
     )
 
     httpx_mock.add_response(
@@ -539,7 +509,7 @@ def test_prefect_analyse_rawreads_flow(
             },
         ],
         is_reusable=True,
-        is_optional=True,
+        is_optional=False,
     )
 
     # create fake results
@@ -573,14 +543,16 @@ def test_prefect_analyse_rawreads_flow(
         biome: BiomeChoices
         watchers: List[UserChoices]
         library_strategy_policy: Optional[ENALibraryStrategyPolicy]
+        functional_analysis: bool
         webin_owner: Optional[str]
 
-    def suspend_side_effect(wait_for_input=None):
+    def suspend_side_effect(wait_for_input=None, **kwargs):
         if wait_for_input.__name__ == "AnalyseStudyInput":
             return AnalyseStudyInput(
                 biome=BiomeChoices["root.engineered"],
                 watchers=[UserChoices[admin_user.username]],
                 library_strategy_policy=ENALibraryStrategyPolicy.ONLY_IF_CORRECT_IN_ENA,
+                functional_analysis=True,
                 webin_owner=None,
             )
 
@@ -963,36 +935,8 @@ def test_prefect_analyse_rawreads_flow_private_data(
             },
         ],
         is_reusable=True,
-        is_optional=True,
+        is_optional=False,
     )
-    httpx_mock.add_response(
-        url=f"{EMG_CONFIG.ena.portal_search_api}?"
-        f"result=study"
-        f"&query=%22%28study_accession%3D{study_accession}+OR+secondary_study_accession%3D{study_accession}%29%22"
-        f"&fields=study_title%2Cstudy_description%2Ccenter_name%2Csecondary_study_accession%2Cstudy_name"
-        f"&limit=10"
-        f"&format=json"
-        f"&dataPortal=metagenome",
-        match_headers={},  # public call should not find private study
-        json=[],
-        is_reusable=True,
-        is_optional=True,
-    )
-
-    httpx_mock.add_response(
-        url=f"{EMG_CONFIG.ena.portal_search_api}?"
-        f"result=study"
-        f"&query=%22%28study_accession%3D{study_accession}+OR+secondary_study_accession%3D{study_accession}%29%22"
-        f"&fields=study_title%2Cstudy_description%2Ccenter_name%2Csecondary_study_accession%2Cstudy_name"
-        f"&limit=10"
-        f"&format=json"
-        f"&dataPortal=metagenome",
-        match_headers={},  # public call should not find private study
-        json=[],
-        is_reusable=True,
-        is_optional=True,
-    )
-
     httpx_mock.add_response(
         url=f"{EMG_CONFIG.ena.portal_search_api}?"
         f"result=study"
@@ -1006,7 +950,7 @@ def test_prefect_analyse_rawreads_flow_private_data(
         },  # dcc_fake:not-a-dcc-pw
         json=[{"study_accession": study_accession}],
         is_reusable=True,
-        is_optional=True,
+        is_optional=False,
     )
     httpx_mock.add_response(
         url=f"{EMG_CONFIG.ena.portal_search_api}?"
@@ -1019,22 +963,8 @@ def test_prefect_analyse_rawreads_flow_private_data(
         match_headers={},  # public call should not find private study
         json=[],
         is_reusable=True,
-        is_optional=True,
+        is_optional=False,
     )
-    httpx_mock.add_response(
-        url=f"{EMG_CONFIG.ena.portal_search_api}?"
-        f"result=study"
-        f"&query=%22%28study_accession%3D{study_accession}+OR+secondary_study_accession%3D{study_accession}%29%22"
-        f"&fields=study_accession"
-        f"&limit="
-        f"&format=json"
-        f"&dataPortal=metagenome",
-        match_headers={},  # public call should not find private study
-        json=[],
-        is_reusable=True,
-        is_optional=True,
-    )
-
     httpx_mock.add_response(
         url=f"{EMG_CONFIG.ena.portal_search_api}?"
         f"result=read_run"
@@ -1125,7 +1055,7 @@ def test_prefect_analyse_rawreads_flow_private_data(
             },
         ],
         is_reusable=True,
-        is_optional=True,
+        is_optional=False,
     )
 
     # create fake results
@@ -1159,14 +1089,16 @@ def test_prefect_analyse_rawreads_flow_private_data(
         biome: BiomeChoices
         watchers: List[UserChoices]
         library_strategy_policy: Optional[ENALibraryStrategyPolicy]
+        functional_analysis: bool
         webin_owner: Optional[str]
 
-    def suspend_side_effect(wait_for_input=None):
+    def suspend_side_effect(wait_for_input=None, **kwargs):
         if wait_for_input.__name__ == "AnalyseStudyInput":
             return AnalyseStudyInput(
                 biome=BiomeChoices["root.engineered"],
                 watchers=[UserChoices[admin_user.username]],
                 library_strategy_policy=ENALibraryStrategyPolicy.ONLY_IF_CORRECT_IN_ENA,
+                functional_analysis=True,
                 webin_owner="webin-1",
             )
 
@@ -1304,7 +1236,7 @@ def test_prefect_analyse_rawreads_flow_private_data(
     )
 
     # need to log the directory contents
-    logging.info(f"Contents of {(summary_dir / "summaries")}:")
+    logging.info(f"Contents of {(summary_dir / 'summaries')}:")
     for fp in (summary_dir / "summaries").glob("*"):
         logging.info(fp)
 
@@ -1401,3 +1333,181 @@ def test_prefect_analyse_rawreads_flow_private_data(
     assert (
         move_to_private_found
     ), "No move operation found targeting private results directory"
+
+
+@pytest.mark.httpx_mock(should_mock=should_not_mock_httpx_requests_to_prefect_server)
+@pytest.mark.django_db(transaction=True)
+@patch(
+    "workflows.flows.analyse_study_tasks.raw_reads.run_rawreads_pipeline_via_samplesheet.queryset_hash"
+)
+@patch(
+    "workflows.data_io_utils.mgnify_v6_utils.rawreads.FileIsNotEmptyRule",
+    MockFileIsNotEmptyRule,
+)
+@patch(
+    "workflows.flows.analyse_study_tasks.shared.copy_v6_pipeline_results.run_deployment"
+)
+@pytest.mark.parametrize(
+    "mock_suspend_flow_run", ["workflows.flows.analysis_rawreads_study"], indirect=True
+)
+def test_prefect_analyse_rawreads_flow_no_functional(
+    mock_run_deployment,
+    mock_queryset_hash_for_rawreads,
+    prefect_harness,
+    httpx_mock,
+    ena_any_sample_metadata,
+    mock_cluster_can_accept_jobs_yes,
+    mock_start_cluster_job,
+    mock_check_cluster_job_all_completed,
+    raw_read_ena_study,
+    mock_suspend_flow_run,
+    admin_user,
+    top_level_biomes,
+):
+    """Test that the raw-reads flow completes when functional analysis is disabled."""
+
+    EMG_CONFIG.rawreads_pipeline.keep_study_summary_partials = True
+    mock_run_deployment.return_value = Mock(id="mock-flow-run-id")
+
+    samplesheet_hash = "nofunc123"
+    mock_queryset_hash_for_rawreads.return_value = samplesheet_hash
+
+    study_accession = "ERP136385"
+    all_results = ["ERR10889230", "ERR10889231"]
+
+    # mock ENA responses
+    httpx_mock.add_response(
+        url=f"{EMG_CONFIG.ena.portal_search_api}?"
+        f"result=study"
+        f"&query=%22%28study_accession%3D{study_accession}+OR+secondary_study_accession%3D{study_accession}%29%22"
+        f"&fields=study_title%2Cstudy_description%2Ccenter_name%2Csecondary_study_accession%2Cstudy_name"
+        f"&limit=10"
+        f"&format=json"
+        f"&dataPortal=metagenome",
+        json=[
+            {
+                "study_accession": study_accession,
+                "secondary_study_accession": study_accession,
+                "study_title": "No-functional test study",
+            },
+        ],
+        is_reusable=True,
+        is_optional=False,
+    )
+    httpx_mock.add_response(
+        url=f"{EMG_CONFIG.ena.portal_search_api}?"
+        f"result=study"
+        f"&query=%22%28study_accession%3D{study_accession}+OR+secondary_study_accession%3D{study_accession}%29%22"
+        f"&fields=study_accession"
+        f"&limit="
+        f"&format=json"
+        f"&dataPortal=metagenome",
+        json=[{"study_accession": study_accession}],
+        is_reusable=True,
+        is_optional=False,
+    )
+    httpx_mock.add_response(
+        url=f"{EMG_CONFIG.ena.portal_search_api}?"
+        f"result=read_run"
+        f"&query=%22%28%28study_accession={study_accession}+OR+secondary_study_accession={study_accession}%29%20AND%20library_strategy=WGS%29%22"
+        f"&limit=10000"
+        f"&format=json"
+        f"&fields=run_accession%2Csample_accession%2Csample_title%2Csecondary_sample_accession%2Cfastq_md5%2Cfastq_ftp%2Clibrary_layout%2Clibrary_strategy%2Clibrary_source%2Cscientific_name%2Chost_tax_id%2Chost_scientific_name%2Cinstrument_platform%2Cinstrument_model%2Clocation%2Clat%2Clon"
+        f"&dataPortal=metagenome",
+        json=[
+            {
+                "run_accession": run_acc,
+                "sample_accession": f"SAMEA11243{i}",
+                "sample_title": "stool",
+                "secondary_sample_accession": f"ERS1454{i}",
+                "fastq_md5": "aaa;bbb;ccc",
+                "fastq_ftp": f"ftp.sra.ebi.ac.uk/vol1/fastq/{run_acc}/{run_acc}.fastq.gz;ftp.sra.ebi.ac.uk/vol1/fastq/{run_acc}/{run_acc}_1.fastq.gz;ftp.sra.ebi.ac.uk/vol1/fastq/{run_acc}/{run_acc}_2.fastq.gz",
+                "library_layout": "PAIRED",
+                "library_strategy": "WGS",
+                "library_source": "METAGENOMIC",
+                "scientific_name": "human gut metagenome",
+                "host_tax_id": "",
+                "host_scientific_name": "",
+                "instrument_platform": "ILLUMINA",
+                "instrument_model": "Illumina HiSeq 2500",
+                "location": "",
+                "lat": "",
+                "lon": "",
+            }
+            for i, run_acc in enumerate(all_results)
+        ],
+        is_reusable=True,
+        is_optional=False,
+    )
+
+    # Create fake results WITHOUT functional analysis
+    rawreads_folder = (
+        Path(EMG_CONFIG.slurm.default_workdir)
+        / Path(study_accession)
+        / Path(
+            f"{EMG_CONFIG.rawreads_pipeline.pipeline_name}_{EMG_CONFIG.rawreads_pipeline.pipeline_version}"
+        )
+        / Path(samplesheet_hash)
+    )
+    rawreads_folder.mkdir(exist_ok=True, parents=True)
+
+    with open(
+        f"{rawreads_folder}/{EMG_CONFIG.rawreads_pipeline.completed_runs_csv}",
+        "w",
+    ) as file:
+        for r in all_results:
+            file.write(f"{r},all_results\n")
+
+    for r in all_results:
+        generate_fake_rawreads_pipeline_results(
+            rawreads_folder, r, make_functional=False
+        )
+
+    # Pretend that a human resumed the flow with functional_analysis=False
+    BiomeChoices = Enum("BiomeChoices", {"root.engineered": "Root:Engineered"})
+    UserChoices = get_users_as_choices()
+
+    class AnalyseStudyInput(BaseModel):
+        biome: BiomeChoices
+        watchers: List[UserChoices]
+        library_strategy_policy: Optional[ENALibraryStrategyPolicy]
+        functional_analysis: bool
+        webin_owner: Optional[str]
+
+    def suspend_side_effect(wait_for_input=None, **kwargs):
+        if wait_for_input.__name__ == "AnalyseStudyInput":
+            return AnalyseStudyInput(
+                biome=BiomeChoices["root.engineered"],
+                watchers=[UserChoices[admin_user.username]],
+                library_strategy_policy=ENALibraryStrategyPolicy.ONLY_IF_CORRECT_IN_ENA,
+                functional_analysis=False,
+                webin_owner=None,
+            )
+
+    mock_suspend_flow_run.side_effect = suspend_side_effect
+
+    # RUN MAIN FLOW
+    analysis_rawreads_study(study_accession=study_accession)
+
+    mock_start_cluster_job.assert_called()
+    mock_check_cluster_job_all_completed.assert_called()
+
+    study = analyses.models.Study.objects.get_or_create_for_ena_study(study_accession)
+    study.refresh_from_db()
+    assert study.features.has_v6_analyses
+
+    # All analyses should complete and be imported
+    assert study.analyses.filter(status__analysis_completed=True).count() == 2
+
+    # Taxonomic annotations should still be present
+    analysis_obj: analyses.models.Analysis = (
+        analyses.models.Analysis.objects_and_annotations.get(
+            run__ena_accessions__contains=[all_results[0]]
+        )
+    )
+    assert analyses.models.Analysis.TAXONOMIES in analysis_obj.annotations
+
+    # Functional annotations should NOT be present
+    assert (
+        analyses.models.Analysis.FUNCTIONAL_ANNOTATION not in analysis_obj.annotations
+    )

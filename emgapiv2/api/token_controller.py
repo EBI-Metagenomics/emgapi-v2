@@ -8,11 +8,13 @@ from ninja_jwt.tokens import SlidingToken
 
 from emgapiv2.api import ApiSections
 from emgapiv2.api.auth import (
-    authenticate_webin_user,
-    WebinUser,
+    WebinAccountDetails,
+    WebinTokenRefreshRequest,
     WebinTokenRequest,
     WebinTokenResponse,
-    WebinTokenRefreshRequest,
+    WebinUser,
+    authenticate_webin_user,
+    get_webin_account_details,
 )
 
 logger = logging.getLogger(__name__)
@@ -60,3 +62,24 @@ class WebinJwtController(NinjaJWTSlidingController):
     )
     def refresh_token(self, refresh_token: WebinTokenRefreshRequest):
         return super().refresh_token(refresh_token)
+
+    @http_post(
+        path="/account",
+        response=list[WebinAccountDetails],
+        url_name="account_details",
+        operation_id="account_details",
+        summary="Fetch Webin account details.",
+        include_in_schema=False,
+    )
+    def account_details(self, user_token: WebinTokenRequest):
+        username = user_token.username
+        password = user_token.password
+
+        if not authenticate_webin_user(username, password):
+            logger.error(f"Failed to authenticate user {username}")
+            raise HttpError(401, "Invalid credentials")
+
+        if not (contacts := get_webin_account_details(username, password)):
+            logger.error(f"Failed to fetch account details for user {username}")
+            raise HttpError(401, "Failed to fetch account details")
+        return contacts

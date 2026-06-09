@@ -1,11 +1,10 @@
+import hashlib
+import hmac
 from pathlib import Path
+from time import time
+from urllib.parse import urlencode, urljoin
 
 from django.conf import settings
-
-import hmac
-import hashlib
-from urllib.parse import urlencode, urljoin
-from time import time
 
 
 class SecureStorage:

@@ -4,7 +4,10 @@ from typing import List, Pattern
 
 from pydantic import AnyHttpUrl, BaseModel, Field
 from pydantic.networks import MongoDsn, MySQLDsn
-from pydantic_settings import BaseSettings
+from pydantic_settings import (
+    BaseSettings,
+    SettingsConfigDict,
+)
 
 from workflows.ena_utils.abstract import ENAPortalDataPortal
 
@@ -43,7 +46,7 @@ class SlurmConfig(BaseModel):
     nextflow_tower_org: str = "EMBL-EBI"
     nextflow_tower_workspace: str = "ebi-spws-dev-microbiome-info"
 
-    datamover_paritition: str = "datamover"
+    datamover_partition: str = "datamover"
 
     shared_filesystem_root_on_slurm: str = "/nfs/public"
     shared_filesystem_root_on_server: str = "/app/data"
@@ -54,6 +57,9 @@ class SlurmConfig(BaseModel):
 
     preparation_command_job_memory_gb: int = 2
     # memory for jobs like `nextflow clean ...` or `rm -r ./work` that are run before bigger jobs
+
+    default_flow_suspend_awaiting_input_timeout_secs: int = 172800  # 2 days
+    # if a flow does suspend_flow_run(wait_for_input...), how long do we wait for it to be resumed before giving up?
 
 
 class MGnifyPipelineConfig(BaseModel):
@@ -169,9 +175,6 @@ class AssemblyAnalysisPipelineConfig(MGnifyPipelineConfig):
     # Workdir
     workdir_root: str = "/nfs/public/wd"
 
-    # TODO: this is temporary, until we re-deploy the run batch flow
-    batch_runner_deployment_id: str = ""
-
     # End-of-run reports
     completed_assemblies_csv: str = "analysed_assemblies.csv"
     qc_failed_assemblies: str = "qc_failed_assemblies.csv"
@@ -231,6 +234,10 @@ class WebinConfig(BaseModel):
     webin_cli_retries: int = 6
     webin_cli_retry_delay_seconds: int = 60
     auth_endpoint: AnyHttpUrl = "https://www.ebi.ac.uk/ena/submit/webin/auth"
+    token_endpoint: AnyHttpUrl = "https://www.ebi.ac.uk/ena/submit/webin/auth/token"
+    account_details_endpoint: AnyHttpUrl = (
+        "https://www.ebi.ac.uk/ena/submit/webin/auth/admin/submission-account"
+    )
     jwt_secret_key: str = None
     jwt_expiration_minutes: int = (
         1440  # TODO: shorten once https://github.com/eadwinCode/django-ninja-jwt/issues/33 is fixed
@@ -278,6 +285,7 @@ class ServiceURLsConfig(BaseModel):
         "http://localhost:8080/pub/databases/metagenomics/mgnify_results/"
     )
     private_data_url_root: str = "http://localhost:8081/private-data/"
+    genome_search_proxy: str = "https://cobs-genome-search-01.mgnify.org/search"
 
 
 class MaskReplacement(BaseModel):
@@ -304,6 +312,7 @@ class GenomeConfig(BaseModel):
     )
     latest_mags_pipeline_tag: str = "v1.2.1"
     results_directory_root: str = "/nfs/donco/results"
+    genomes_ftp_results_subpath: str = "mgnify_genomes"
 
 
 class EuropePMCConfig(BaseModel):
@@ -326,6 +335,12 @@ class DarwinCoreArchiveConfig(BaseModel):
     )
 
 
+class RequestTrackerConfig(BaseModel):
+    rt_requests_queue: str = Field("emg_queue")
+    url: AnyHttpUrl = Field("https://example.org/REST/2.0/")
+    token: str = Field(None)
+
+
 class EMGConfig(BaseSettings):
     amplicon_pipeline: AmpliconPipelineConfig = AmpliconPipelineConfig()
     rawreads_pipeline: RawReadsPipelineConfig = RawReadsPipelineConfig()
@@ -345,8 +360,10 @@ class EMGConfig(BaseSettings):
     europe_pmc: EuropePMCConfig = EuropePMCConfig()
     genomes: GenomeConfig = GenomeConfig()
     darwin_core_archive: DarwinCoreArchiveConfig = DarwinCoreArchiveConfig()
+    rt: RequestTrackerConfig = RequestTrackerConfig()
+    sentry_dsn: str = ""
 
-    model_config = {
-        "env_prefix": "emg_",
-        "env_nested_delimiter": "__",
-    }
+    model_config = SettingsConfigDict(
+        env_prefix="emg_",
+        env_nested_delimiter="__",
+    )

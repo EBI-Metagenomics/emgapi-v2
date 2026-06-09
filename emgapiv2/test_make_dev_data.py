@@ -1,10 +1,10 @@
 from pathlib import Path
-from unittest.mock import patch, Mock
+from unittest.mock import Mock, patch
 
 import pytest
 from django.core.management import call_command
 
-from analyses.models import Biome, Run, Analysis
+from analyses.models import Analysis, Biome, Run
 from workflows.data_io_utils.mgnify_v6_utils.assembly import AssemblyResultImporter
 from workflows.data_io_utils.schemas import AssemblyResultSchema, MapResultSchema
 from workflows.flows.analyse_study_tasks.amplicon.import_completed_amplicon_analyses import (
@@ -83,9 +83,10 @@ def amplicon_analysis_with_downloads(
 )
 def assembly_analysis_with_downloads(mock_run_deployment, mgnify_assemblies_completed):
     assem = mgnify_assemblies_completed[0]
-    assem.add_erz_accession(
+    assem.ena_accessions = [
         "ERZ857107"
-    )  # n.b. does not correspond to this run in real ena
+    ]  # n.b. does not correspond to this run in real ena
+    assem.save()
 
     study = assem.reads_study
     sample = assem.sample
@@ -200,6 +201,8 @@ def test_make_dev_data(
     publication,
     mgnify_sample_lots_of_metadata,
     mgnify_study_full_metadata,
+    cog_categories_fixture,
+    kegg_classes_fixture,
 ):
     """
     Stub test that just sets up fixtures and dumps them to JSON for using as dev data.

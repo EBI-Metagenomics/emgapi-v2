@@ -9,6 +9,6 @@ source /nfs/production/rdf/metagenomics/jenkins-slurm/dev-prefect-agent/deployme
 source /nfs/production/rdf/metagenomics/jenkins-slurm/dev-prefect-agent/venv/bin/activate
 
 cd /nfs/production/rdf/metagenomics/jenkins-slurm/dev-prefect-agent/
-python manage.py prefectcli worker start --type "slurm" --pool "slurm_2" >> /nfs/production/rdf/metagenomics/jenkins-slurm/logs/dev-prefect-slurm-worker.log 2>&1 &
+python manage.py prefectcli worker start --type "slurm" --pool "slurm" >> /nfs/production/rdf/metagenomics/jenkins-slurm/logs/dev-prefect-slurm-worker.log 2>&1 &
 
 echo $! > "${DJANGOPIDFILE}"

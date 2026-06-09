@@ -1,7 +1,5 @@
 import logging
 
-from django.db import close_old_connections
-
 from workflows.models import AssemblyAnalysisBatch
 
 logger = logging.getLogger(__name__)
@@ -21,8 +19,6 @@ def update_batch_status_counts(flow, flow_run, state) -> None:
     :param state: The Prefect State object
     """
     try:
-        close_old_connections()
-
         # Extract batch_id from flow run parameters
         batch_id = flow_run.parameters.get("assembly_analyses_batch_id")
 

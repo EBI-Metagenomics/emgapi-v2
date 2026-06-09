@@ -7,13 +7,12 @@ from ninja.testing import TestClient
 
 from analyses.base_models.with_downloads_models import (
     DownloadFile,
+    DownloadFileIndexFile,
     DownloadFileType,
     DownloadType,
-    DownloadFileIndexFile,
 )
 from analyses.models import Analysis, Sample
-
-from genomes.models import GenomeAssemblyLink, AdditionalContainedGenomes
+from genomes.models import AdditionalContainedGenomes, GenomeAssemblyLink
 
 R = TypeVar("R")
 
@@ -22,6 +21,10 @@ EMG_CONFIG = settings.EMG_CONFIG
 
 def _whole_object(j):
     return j
+
+
+def _first_item(j):
+    return j["items"][0]
 
 
 def call_endpoint_and_get_data(
@@ -167,7 +170,10 @@ def test_api_analysis_downloads(raw_read_analyses, ninja_api_client):
         dl_api["url"]
         == f"http://localhost:8080/pub/databases/metagenomics/mgnify_results/analyses/{analysis.accession}/results/taxonomies.tsv.gz"
     )
-    assert dl_api["index_files"][0]["relative_url"] == "taxonomies.tsv.gz.gzi"
+    assert (
+        dl_api["index_files"][0]["url"]
+        == f"http://localhost:8080/pub/databases/metagenomics/mgnify_results/analyses/{analysis.accession}/results/taxonomies.tsv.gz.gzi"
+    )
     assert "path" not in dl_api
 
 
@@ -260,8 +266,26 @@ def test_api_super_study_detail(
 
 @pytest.mark.django_db
 def test_api_genome_list(ninja_api_client, genomes):
-    all_genomes = call_endpoint_and_get_data(ninja_api_client, "/genomes/", count=3)
-    assert all_genomes[0]["accession"].startswith("MGYG")
+    first_of_all_genomes = call_endpoint_and_get_data(
+        ninja_api_client, "/genomes/", count=3, getter=_first_item
+    )
+    assert first_of_all_genomes["accession"].startswith("MGYG")
+
+    first_of_searched_genomes = call_endpoint_and_get_data(
+        ninja_api_client, "/genomes/?search=Gamma", count=1, getter=_first_item
+    )
+    assert (
+        first_of_searched_genomes["taxon_lineage"]
+        == "Bacteria;Proteobacteria;Gammaproteobacteria"
+    )
+
+    first_ordered_genome = call_endpoint_and_get_data(
+        ninja_api_client,
+        "/genomes/?order=-length&search=human",
+        count=2,
+        getter=_first_item,
+    )
+    assert first_ordered_genome["length"] == 2000000
 
 
 @pytest.mark.django_db
@@ -283,6 +307,55 @@ def test_api_genome_catalogues(ninja_api_client, genomes, genome_catalogues):
         ninja_api_client, f"/genomes/catalogues/{cat_id}/genomes/", count=2
     )
     assert catalogue_genomes[0]["accession"] == genomes[0].accession
+
+
+@pytest.mark.django_db
+def test_api_genome_catalogue_downloads(ninja_api_client, genome_catalogues):
+    # Arrange: ensure the selected catalogue has a result_directory and one download
+    cat = next(
+        c for c in genome_catalogues if c.catalogue_id == "human-gut-prokaryotes"
+    )
+    cat.result_directory = "genomes/catalogues/human-gut-prokaryotes"
+    # Persist a download using the model helper so JSON shape matches production
+    dl = DownloadFile(
+        path="catalogue_meta/summary.tsv",
+        alias="summary.tsv",
+        download_type=DownloadType.OTHER,
+        file_type=DownloadFileType.TSV,
+        short_description="Summary table",
+        long_description="Overall catalogue summary",
+    )
+    # Save result_directory first so URL resolver has it available when endpoint serializes
+    cat.save()
+    cat.add_download(dl)
+
+    # Act: fetch the catalogue detail
+    data = call_endpoint_and_get_data(
+        ninja_api_client,
+        f"/genomes/catalogues/{cat.catalogue_id}",
+        getter=_whole_object,
+    )
+
+    # Assert: downloads are exposed with computed URL and without internal fields
+    assert "downloads" in data
+    assert isinstance(data["downloads"], list)
+    assert len(data["downloads"]) >= 1
+
+    entry = next(
+        (d for d in data["downloads"] if d.get("alias") == "summary.tsv"),
+        data["downloads"][0],
+    )
+    assert "url" in entry
+    assert entry["url"] is not None
+    # URL should be rooted at transfer service and include the result_directory + relative path
+    assert entry["url"].startswith(EMG_CONFIG.service_urls.transfer_services_url_root)
+    assert (
+        "genomes/catalogues/human-gut-prokaryotes/catalogue_meta/summary.tsv"
+        in entry["url"]
+    )
+    # Internal fields must not leak into the API
+    assert "path" not in entry
+    assert "parent_identifier" not in entry
 
 
 @pytest.mark.django_db
@@ -392,7 +465,7 @@ def test_api_assembly_detail(mgnify_assemblies_with_ena, ninja_api_client):
         getter=_whole_object,
     )
     assert assembly_detail["accession"] == assembly.first_accession
-    assert assembly_detail["run_accession"] == assembly.run.first_accession
+    assert assembly_detail["run_accession"] == assembly.runs.first().first_accession
     assert assembly_detail["sample_accession"] == assembly.sample.ena_sample.accession
     assert assembly_detail["reads_study_accession"] == assembly.reads_study.accession
     assert assembly_detail["assembler_name"] == assembly.assembler.name
@@ -470,9 +543,10 @@ def test_api_assembly_additional_contained_genomes_with_data(
     assembly.save()
 
     genome = genomes[0]
+    run = assembly.runs.first()
 
     AdditionalContainedGenomes.objects.create(
-        run=assembly.run,
+        run=run,
         genome=genome,
         assembly=assembly,
         containment=0.65,
@@ -496,4 +570,200 @@ def test_api_assembly_additional_contained_genomes_with_data(
     # Linked objects
     assert item["genome"]["accession"] == genome.accession
     assert item["genome"]["catalogue_version"] == genome.catalogue.version
-    assert item["run_accession"] == assembly.run.first_accession
+    assert item["run_accession"] == assembly.runs.first().first_accession
+
+
+@pytest.mark.django_db
+def test_runs_list_endpoint(ninja_api_client, raw_read_run, private_run):
+    # raw_read_run creates 3 run objects
+
+    items = call_endpoint_and_get_data(
+        ninja_api_client,
+        "/runs/",
+        count=len(raw_read_run),
+    )
+
+    for run in items:
+        assert "accession" in run
+        assert (
+            run["accession"] not in private_run.ena_accessions
+        ), "Private runs should not be visible in the list endpoint"
+        assert "instrument_model" in run
+        assert "instrument_platform" in run
+        assert "experiment_type" in run
+        assert "sample_accession" in run
+        assert "study_accession" in run
+
+
+@pytest.mark.django_db
+def test_runs_detail_endpoint(ninja_api_client, raw_read_run):
+    run = raw_read_run[0]
+
+    run_detail = call_endpoint_and_get_data(
+        ninja_api_client,
+        f"/runs/{run.first_accession}",
+        getter=_whole_object,
+    )
+
+    assert run_detail["accession"] == run.first_accession
+    assert run_detail["instrument_model"] == run.instrument_model
+    assert run_detail["instrument_platform"] == run.instrument_platform
+    assert run_detail["experiment_type"] == run.get_experiment_type_display()
+    assert run_detail["sample_accession"] == run.sample.ena_sample.accession
+    assert run_detail["study_accession"] == run.study.accession
+    assert isinstance(run_detail["sample"], dict)
+    assert isinstance(run_detail["study"], dict)
+
+
+@pytest.mark.django_db
+def test_runs_detail_private(ninja_api_client, private_run):
+    private_accession = private_run.ena_accessions[0]
+    response = ninja_api_client.get(f"/runs/{private_accession}")
+    assert (
+        response.status_code == 404
+    ), "Private runs should not be visible in the detail endpoint"
+    assert (
+        "not found" in response.json()["detail"].lower()
+    ), "Response should indicate not found"
+
+
+@pytest.mark.django_db
+def test_runs_detail_nonexistent(ninja_api_client):
+    response = ninja_api_client.get("/runs/DOESNOTEXIST")
+    assert response.status_code == 404
+    assert "not found" in response.json()["detail"].lower()
+
+
+@pytest.mark.django_db
+def test_runs_analyses_list(ninja_api_client, raw_read_run, raw_read_analyses):
+
+    finished_analyses = list(filter(lambda a: a.is_ready, raw_read_analyses))
+
+    run = raw_read_run[0]
+
+    items = call_endpoint_and_get_data(
+        ninja_api_client,
+        f"/runs/{run.ena_accessions[0]}/analyses/",
+        count=len(finished_analyses),
+    )
+
+    assert items[0]["accession"] in [a.accession for a in finished_analyses]
+    assert items[0]["experiment_type"] in ["Metagenomic", "Amplicon"]
+    assert "sample" in items[0]
+    assert "study_accession" in items[0]
+
+
+@pytest.mark.django_db
+def test_runs_analyses_private(ninja_api_client, private_run):
+    private_accession = private_run.ena_accessions[0]
+    response = ninja_api_client.get(f"/runs/{private_accession}/analyses/")
+    assert (
+        response.status_code == 404
+    ), "Private runs should not be visible in the detail endpoint"
+    assert (
+        "not found" in response.json()["detail"].lower()
+    ), "Response should indicate not found"
+
+
+@pytest.mark.django_db
+def test_list_sample_runs(ninja_api_client, raw_reads_mgnify_sample, raw_read_run):
+
+    sample: Sample = raw_reads_mgnify_sample[0]
+
+    items: list = call_endpoint_and_get_data(
+        ninja_api_client, f"/samples/{sample.ena_accessions[0]}/runs/", count=1
+    )
+
+    for run in items:
+        assert run["accession"] in [r.first_accession for r in raw_read_run]
+        assert run["instrument_model"] in [r.instrument_model for r in raw_read_run]
+        assert run["instrument_platform"] in [
+            r.instrument_platform for r in raw_read_run
+        ]
+        assert run["experiment_type"] in [
+            r.get_experiment_type_display() for r in raw_read_run
+        ]
+        assert run["sample_accession"] in [
+            r.sample.ena_sample.accession for r in raw_read_run
+        ]
+        assert run["study_accession"] in [r.study.accession for r in raw_read_run]
+
+
+@pytest.mark.django_db
+def test_list_sample_assemblies(
+    ninja_api_client, raw_reads_mgnify_sample, mgnify_assemblies_with_ena
+):
+    sample: Sample = raw_reads_mgnify_sample[0]
+
+    # Check that sample actually has assemblies in the fixture
+    assert sample.assemblies.count() > 0, "Sample should have assemblies in fixtures"
+
+    items: list = call_endpoint_and_get_data(
+        ninja_api_client,
+        f"/samples/{sample.ena_accessions[0]}/assemblies/",
+        count=sample.assemblies.count(),
+    )
+
+    for assembly in items:
+        assert assembly["accession"] in [
+            a.first_accession for a in sample.assemblies.all()
+        ]
+        assert "sample_accession" in assembly
+        assert assembly["sample_accession"] == sample.ena_sample.accession
+
+
+@pytest.mark.django_db
+def test_runs_assemblies_list(
+    ninja_api_client, raw_read_run, mgnify_assemblies_with_ena
+):
+    # The first run (SRR6180434) has two assemblies in the fixtures: one metaspades and one megahit
+    run = raw_read_run[0]
+
+    items = call_endpoint_and_get_data(
+        ninja_api_client,
+        f"/runs/{run.ena_accessions[0]}/assemblies/",
+        count=2,
+    )
+
+    # Ensure returned items belong to our fixture set and have expected fields
+    returned_accessions = [item["accession"] for item in items]
+    all_fixture_accessions = [a.first_accession for a in mgnify_assemblies_with_ena]
+
+    assert len(items) == 2
+    for acc in returned_accessions:
+        assert acc in all_fixture_accessions
+
+    # Validate presence and content of extra fields
+    for item in items:
+        assert (
+            item.get("run_accession")
+            in [r.first_accession for r in run.assemblies.first().runs.all()]
+            or item.get("run_accession") is not None
+        )
+        assert item.get("sample_accession") == run.sample.ena_sample.accession
+        assert item.get("reads_study_accession") == run.study.accession
+        # assembly_study_accession may be None in fixtures
+        assert "assembly_study_accession" in item
+        assert item.get("assembler_name") in [
+            a.assembler.name
+            for a in mgnify_assemblies_with_ena
+            if a.first_accession in returned_accessions
+        ]
+        assert item.get("assembler_version") in [
+            a.assembler.version
+            for a in mgnify_assemblies_with_ena
+            if a.first_accession in returned_accessions
+        ]
+        assert "updated_at" in item
+
+
+@pytest.mark.django_db
+def test_runs_assemblies_private(ninja_api_client, private_run):
+    private_accession = private_run.ena_accessions[0]
+    response = ninja_api_client.get(f"/runs/{private_accession}/assemblies/")
+    assert (
+        response.status_code == 404
+    ), "Private runs should not be visible in the assemblies list endpoint"
+    assert (
+        "not found" in response.json()["detail"].lower()
+    ), "Response should indicate not found"

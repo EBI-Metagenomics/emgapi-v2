@@ -12,11 +12,13 @@ from workflows.data_io_utils.legacy_emg_dbs import (
     LegacyAnalysisJobDownload,
     LegacyBiome,
     LegacyDownloadDescription,
+    LegacyDownloadGroupType,
     LegacyDownloadSubdir,
     LegacyEMGBase,
     LegacyRun,
     LegacySample,
     LegacyStudy,
+    LegacyStudyDownload,
 )
 
 
@@ -75,7 +77,7 @@ def in_memory_legacy_emg_db():
         run_id=1001,
         study_id=5000,
         pipeline_id=6,  # 6 is v5.0 in legacy EMG DB
-        result_directory="some/dir/in/results",
+        result_directory="2019/06/ERP1/version_5.0/ERZ1/001/ERZ1_FASTA",
         external_run_ids="ERR1000",
         secondary_accession="ERR1000",
         experiment_type_id=3,  # amplicon
@@ -104,6 +106,35 @@ def in_memory_legacy_emg_db():
         group_id=3,  # taxonomic analysis of some sort
     )
     session.add(amplicon_download)
+
+    study_summary_description = LegacyDownloadDescription(
+        id=100,
+        description="Taxonomy abundances LSU",
+        description_label="Taxonomy abundances LSU",
+    )
+    session.add(study_summary_description)
+
+    study_summary_subdir = LegacyDownloadSubdir(
+        id=100, subdir="version_5.0/project-summary"
+    )
+    session.add(study_summary_subdir)
+
+    study_summary_group_type = LegacyDownloadGroupType(
+        id=100, group_type="Taxonomic analysis LSU"
+    )
+    session.add(study_summary_group_type)
+
+    study_download = LegacyStudyDownload(
+        id=1,
+        study_id=5000,
+        real_name="taxonomy_abundances_LSU_v5.0.tsv",
+        alias="taxonomy_abundances_LSU_v5.0.tsv",
+        description_id=100,
+        subdir_id=100,
+        format_id=1,  # TSV
+        group_id=100,
+    )
+    session.add(study_download)
 
     assembly_run = LegacyRun(
         run_id=2001,

@@ -14,9 +14,9 @@ Including another URLconf
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
 
+from django.conf import settings
 from django.contrib import admin
 from django.urls import include, path
-from django.conf import settings
 
 from analyses.admin.study import (
     jump_to_latest_study_admin,
@@ -27,6 +27,11 @@ from analyses.admin.study import (
 from .api import api
 
 BASE_URL = settings.BASE_URL
+
+
+def sentry_debug(request):
+    raise Exception("Sentry debug test exception")
+
 
 urlpatterns = [
     path(
@@ -44,6 +49,7 @@ urlpatterns = [
         study_refresh_batch_counts_admin,
         name="admin_refresh_study_assembly_analysis_counts",
     ),
+    *([path(f"{BASE_URL}sentry-debug/", sentry_debug)] if settings.DEBUG else []),
     path(f"{BASE_URL}admin/", admin.site.urls),
     path(f"{BASE_URL}__debug__/", include("debug_toolbar.urls")),
     path(f"{BASE_URL}fieldfiles/", include("db_file_storage.urls")),

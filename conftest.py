@@ -2,7 +2,7 @@ import os
 import shutil
 import uuid
 from pathlib import Path
-from unittest.mock import patch, Mock
+from unittest.mock import Mock, patch
 
 import django
 import pytest
@@ -11,8 +11,9 @@ from prefect.testing.utilities import prefect_test_harness
 
 django.setup()
 
-from emgapiv2.api import api
 from django.db import connections
+
+from emgapiv2.api import api
 
 # model fixtures
 pytest_plugins = [
@@ -34,6 +35,7 @@ pytest_plugins = [
     "workflows.fixtures.ena_utils.conftest",
     "workflows.fixtures.assembly_analysis.conftest",
     "genomes.fixtures.genome.conftest",
+    "kvstore.fixtures.conftest",
 ]
 
 

@@ -1,5 +1,5 @@
 from contextlib import contextmanager
-from typing import List, Optional, TYPE_CHECKING, TypedDict
+from typing import List, Optional, TypedDict
 
 import pymongo
 from django.conf import settings
@@ -14,11 +14,9 @@ from sqlalchemy.orm import (
     sessionmaker,
 )
 
+import analyses.models
 from analyses.base_models.with_downloads_models import DownloadFileType, DownloadType
 from analyses.base_models.with_experiment_type_models import WithExperimentTypeModel
-
-if TYPE_CHECKING:
-    import analyses.models
 
 
 class LegacyEMGBase(DeclarativeBase):
@@ -63,6 +61,10 @@ class LegacyStudy(LegacyEMGBase):
         back_populates="study"
     )
 
+    study_downloads: Mapped[list["LegacyStudyDownload"]] = relationship(
+        back_populates="study"
+    )
+
     biome_id: Mapped[int] = mapped_column(
         "BIOME_ID", ForeignKey("BIOME_HIERARCHY_TREE.BIOME_ID")
     )
@@ -96,6 +98,35 @@ class LegacyRun(LegacyEMGBase):
     study: Mapped["LegacyStudy"] = relationship("LegacyStudy")
 
     experiment_type_id: Mapped[int] = mapped_column("EXPERIMENT_TYPE_ID", Integer)
+
+
+class LegacyAssembly(LegacyEMGBase):
+    __tablename__ = "ASSEMBLY"
+    assembly_id: Mapped[int] = mapped_column("ASSEMBLY_ID", Integer, primary_key=True)
+    accession: Mapped[str] = mapped_column("ACCESSION", String)
+
+    study_id: Mapped[int] = mapped_column("STUDY_ID", ForeignKey("STUDY.STUDY_ID"))
+    study: Mapped["LegacyStudy"] = relationship("LegacyStudy")
+
+    experiment_type_id: Mapped[int] = mapped_column("EXPERIMENT_TYPE_ID", Integer)
+
+
+class LegacyAssemblyRun(LegacyEMGBase):
+    __tablename__ = "ASSEMBLY_RUN"
+    assembly_run_id: Mapped[int] = mapped_column("ID", Integer, primary_key=True)
+    assembly_id: Mapped[int] = mapped_column(
+        "ASSEMBLY_ID", ForeignKey("ASSEMBLY.ASSEMBLY_ID")
+    )
+    run_id: Mapped[int] = mapped_column("RUN_ID", ForeignKey("RUN.RUN_ID"))
+
+
+class LegacyAssemblySample(LegacyEMGBase):
+    __tablename__ = "ASSEMBLY_SAMPLE"
+    assembly_sample_id: Mapped[int] = mapped_column("ID", Integer, primary_key=True)
+    assembly_id: Mapped[int] = mapped_column(
+        "ASSEMBLY_ID", ForeignKey("ASSEMBLY.ASSEMBLY_ID")
+    )
+    sample_id: Mapped[int] = mapped_column("SAMPLE_ID", ForeignKey("SAMPLE.SAMPLE_ID"))
 
 
 class LegacySuperStudy(LegacyEMGBase):
@@ -175,8 +206,15 @@ class LegacyAnalysisJob(LegacyEMGBase):
         "LegacySample", back_populates="analysis_jobs"
     )
 
-    run_id: Mapped[int] = mapped_column("RUN_ID", ForeignKey("RUN.RUN_ID"))
-    run: Mapped["LegacyRun"] = relationship("LegacyRun")
+    run_id: Mapped[Optional[int]] = mapped_column(
+        "RUN_ID", ForeignKey("RUN.RUN_ID"), nullable=True
+    )
+    run: Mapped[Optional["LegacyRun"]] = relationship("LegacyRun")
+
+    assembly_id: Mapped[Optional[int]] = mapped_column(
+        "ASSEMBLY_ID", ForeignKey("ASSEMBLY.ASSEMBLY_ID"), nullable=True
+    )
+    assembly: Mapped[Optional["LegacyAssembly"]] = relationship("LegacyAssembly")
 
     downloads: Mapped[List["LegacyAnalysisJobDownload"]] = relationship(
         back_populates="analysis_job"
@@ -196,6 +234,47 @@ class LegacyDownloadDescription(LegacyEMGBase):
     id: Mapped[int] = mapped_column("DESCRIPTION_ID", Integer, primary_key=True)
     description: Mapped[str] = mapped_column("DESCRIPTION", String)
     description_label: Mapped[str] = mapped_column("DESCRIPTION_LABEL", String)
+
+
+class LegacyDownloadGroupType(LegacyEMGBase):
+    __tablename__ = "DOWNLOAD_GROUP_TYPE"
+
+    id: Mapped[int] = mapped_column("GROUP_ID", Integer, primary_key=True)
+    group_type: Mapped[str] = mapped_column("GROUP_TYPE", String)
+
+
+class LegacyStudyDownload(LegacyEMGBase):
+    __tablename__ = "STUDY_DOWNLOAD"
+
+    id: Mapped[int] = mapped_column("id", Integer, primary_key=True)
+    real_name: Mapped[str] = mapped_column("REAL_NAME", String)
+    alias: Mapped[str] = mapped_column("ALIAS", String)
+
+    format_id: Mapped[int] = mapped_column("FORMAT_ID", Integer)
+
+    study_id: Mapped[int] = mapped_column("STUDY_ID", ForeignKey("STUDY.STUDY_ID"))
+    study: Mapped["LegacyStudy"] = relationship(
+        "LegacyStudy", back_populates="study_downloads"
+    )
+
+    subdir_id: Mapped[int] = mapped_column(
+        "SUBDIR_ID", ForeignKey("DOWNLOAD_SUBDIR.SUBDIR_ID")
+    )
+    subdir: Mapped["LegacyDownloadSubdir"] = relationship("LegacyDownloadSubdir")
+
+    description_id: Mapped[int] = mapped_column(
+        "DESCRIPTION_ID", ForeignKey("DOWNLOAD_DESCRIPTION_LABEL.DESCRIPTION_ID")
+    )
+    description: Mapped["LegacyDownloadDescription"] = relationship(
+        "LegacyDownloadDescription"
+    )
+
+    group_id: Mapped[int] = mapped_column(
+        "GROUP_ID", ForeignKey("DOWNLOAD_GROUP_TYPE.GROUP_ID")
+    )
+    group_type: Mapped["LegacyDownloadGroupType"] = relationship(
+        "LegacyDownloadGroupType"
+    )
 
 
 class LegacyAnalysisJobDownload(LegacyEMGBase):
@@ -275,6 +354,17 @@ LEGACY_EXPERIMENT_TYPE_MAP = {
     6: WithExperimentTypeModel.ExperimentTypes.UNKNOWN,
     7: WithExperimentTypeModel.ExperimentTypes.HYBRID_ASSEMBLY,
     8: WithExperimentTypeModel.ExperimentTypes.LONG_READ_ASSEMBLY,
+}
+
+
+LEGACY_PIPELINE_ID_MAP = {
+    # simple map of data from the legacy PIPELINE_ID, mapped to this codebase's Enums
+    1: analyses.models.Analysis.PipelineVersions.v1,
+    2: analyses.models.Analysis.PipelineVersions.v2,
+    3: analyses.models.Analysis.PipelineVersions.v3,
+    4: analyses.models.Analysis.PipelineVersions.v4,
+    5: analyses.models.Analysis.PipelineVersions.v4_1,
+    6: analyses.models.Analysis.PipelineVersions.v5,
 }
 
 

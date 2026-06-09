@@ -1,7 +1,7 @@
 from django.db import models
 
 from analyses.base_models.base_models import TimeStampedModel
-from analyses.models import Run, Assembly
+from analyses.models import Assembly, Run
 from genomes.models import Genome
 
 

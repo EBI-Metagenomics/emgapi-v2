@@ -8,21 +8,21 @@ from pydantic import Field
 
 import analyses.models
 from analyses.schemas import (
-    MGnifyStudyDetail,
-    MGnifyStudy,
     MGnifyAnalysis,
     MGnifyPublication,
-    OrderByFilter,
     MGnifySampleWithMetadata,
+    MGnifyStudy,
+    MGnifyStudyDetail,
+    OrderByFilter,
 )
 from emgapiv2.api import perms
-from emgapiv2.api.auth import WebinJWTAuth, DjangoSuperUserAuth, NoAuth
+from emgapiv2.api.auth import DjangoSuperUserAuth, NoAuth, WebinJWTAuth
 from emgapiv2.api.perms import UnauthorisedIsUnfoundController
 from emgapiv2.api.schema_utils import (
+    ApiSections,
+    BiomeFilter,
     make_links_section,
     make_related_detail_link,
-    BiomeFilter,
-    ApiSections,
 )
 
 
@@ -43,7 +43,7 @@ class StudyListFilters(BiomeFilter):
     def filter_has_analyses_from_pipeline(self, version: str | None) -> Q:
         if not version:
             return Q()
-        if version == analyses.models.Analysis.PipelineVersions.v6:
+        if version.lower().startswith("v6"):
             return Q(features__has_v6_analyses=True)
         if version == analyses.models.Analysis.PipelineVersions.v5:
             # TODO
@@ -94,7 +94,7 @@ class StudyController(UnauthorisedIsUnfoundController):
         response=NinjaPaginationResponseSchema[MGnifyAnalysis],
         summary="List MGnify Analyses associated with this Study",
         description="MGnify analyses correspond to an individual Run or Assembly within this study,"
-        "analysed by a MGnify Pipelione. ",
+        "analysed by a MGnify Pipeline. ",
         operation_id="list_mgnify_study_analyses",
         tags=[ApiSections.STUDIES, ApiSections.ANALYSES],
         openapi_extra=make_links_section(

@@ -1,18 +1,21 @@
 import uuid
 from pathlib import Path
-from typing import Union, List
+from typing import List, Union
 
 import click
 from ena.models import Study
 from prefect import get_run_logger, task
 
 from mgnify_pipelines_toolkit.analysis.assembly import study_summary_generator
+from prefect import get_run_logger
+
 from activate_django_first import EMG_CONFIG
 
 from workflows.data_io_utils.file_rules.nodes import Directory
 from workflows.flows.analyse_study_tasks.shared.study_summary import STUDY_SUMMARY_TSV
 from workflows.models import AssemblyAnalysisBatch, AssemblyAnalysisPipeline
 from workflows.prefect_utils.dir_context import chdir
+from workflows.prefect_utils.flows_utils import django_db_task as task
 
 
 def _run_assembly_summary_generator(
@@ -51,7 +54,7 @@ def _run_assembly_summary_generator(
     return generated_files
 
 
-@task
+@task()
 def generate_assembly_analysis_pipeline_batch_summary(
     assembly_batch_id: uuid.UUID,
 ) -> Union[List[Path], None]:
@@ -86,6 +89,9 @@ def generate_assembly_analysis_pipeline_batch_summary(
     asa_workspace = assembly_batch.get_pipeline_workspace(AssemblyAnalysisPipeline.ASA)
     assemblies_csv = asa_workspace / "analysed_assemblies.csv"
     logger.info(f"Expecting to find analysis results in {asa_workspace}")
+
+    # Ensure the study has a canonical results_dir to write summaries to.
+    study.set_results_dir_default()
 
     pipeline_config = EMG_CONFIG.assembly_analysis_pipeline
     summary_dir = Directory(

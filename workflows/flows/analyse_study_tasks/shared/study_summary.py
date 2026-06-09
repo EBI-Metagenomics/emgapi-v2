@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Union, Tuple, Literal, List
+from typing import List, Tuple, Union
 
 import click
 from mgnify_pipelines_toolkit.analysis.amplicon import (
@@ -11,13 +11,14 @@ from mgnify_pipelines_toolkit.analysis.assembly import (
 from mgnify_pipelines_toolkit.analysis.rawreads import (
     study_summary_generator as rawreads_study_summary_generator,
 )
-from prefect import flow, get_run_logger, task
+from prefect import get_run_logger
 
 from activate_django_first import EMG_CONFIG
+
 from analyses.base_models.with_downloads_models import (
     DownloadFile,
-    DownloadType,
     DownloadFileType,
+    DownloadType,
 )
 from analyses.models import Study
 from workflows.data_io_utils.file_rules.common_rules import (
@@ -30,7 +31,14 @@ from workflows.ena_utils.ena_accession_matching import (
     INSDC_PROJECT_ACCESSION_GLOB,
     INSDC_STUDY_ACCESSION_GLOB,
 )
+from workflows.flows.analysis import AnalysisType
 from workflows.prefect_utils.dir_context import chdir
+from workflows.prefect_utils.flows_utils import (
+    django_db_flow as flow,
+)
+from workflows.prefect_utils.flows_utils import (
+    django_db_task as task,
+)
 
 STUDY_SUMMARY = "_study_summary"
 STUDY_SUMMARY_TSV = STUDY_SUMMARY + ".tsv"
@@ -38,22 +46,22 @@ DWCREADY_SUMMARY = "_dwcready"
 DWCREADY_CSV = DWCREADY_SUMMARY + ".csv"
 
 STUDY_SUMMARY_GENERATORS = {
-    "amplicon": amplicon_study_summary_generator,
-    "rawreads": rawreads_study_summary_generator,
-    "assembly": assembly_study_summary_generator,
+    AnalysisType.AMPLICON: amplicon_study_summary_generator,
+    AnalysisType.RAWREADS: rawreads_study_summary_generator,
+    AnalysisType.ASSEMBLY: assembly_study_summary_generator,
 }
 PIPELINE_CONFIGS = {
-    "amplicon": EMG_CONFIG.amplicon_pipeline,
-    "rawreads": EMG_CONFIG.rawreads_pipeline,
-    "assembly": EMG_CONFIG.assembly_analysis_pipeline,
+    AnalysisType.AMPLICON: EMG_CONFIG.amplicon_pipeline,
+    AnalysisType.RAWREADS: EMG_CONFIG.rawreads_pipeline,
+    AnalysisType.ASSEMBLY: EMG_CONFIG.assembly_analysis_pipeline,
 }
 
 
-@flow
+@flow()
 def generate_study_summary_for_pipeline_run(
     mgnify_study_accession: str,
     pipeline_outdir: Path,
-    analysis_type: Literal["amplicon", "assembly", "rawreads"] = "amplicon",
+    analysis_type: AnalysisType = AnalysisType.AMPLICON,
     completed_runs_filename: str = EMG_CONFIG.amplicon_pipeline.completed_runs_csv,
 ) -> Union[List[Path], None]:
     """
@@ -103,10 +111,10 @@ def generate_study_summary_for_pipeline_run(
         summary_generator_kwargs["non_insdc"] = (
             pipeline_config.allow_non_insdc_run_names
         )
-    if analysis_type in {"rawreads", "amplicon"}:
+    if analysis_type in {AnalysisType.RAWREADS, AnalysisType.AMPLICON}:
         summary_generator_kwargs["runs"] = pipeline_run_dir.files[0].path
         summary_generator_kwargs["analyses_dir"] = pipeline_run_dir.path
-    if analysis_type in {"assembly"}:
+    if analysis_type == AnalysisType.ASSEMBLY:
         summary_generator_kwargs["assemblies"] = pipeline_run_dir.files[0].path
         summary_generator_kwargs["study_dir"] = pipeline_run_dir.path
         summary_generator_kwargs["outdir"] = pipeline_run_dir.path
@@ -130,10 +138,10 @@ def generate_study_summary_for_pipeline_run(
     return generated_files
 
 
-@flow
+@flow()
 def merge_study_summaries(
     mgnify_study_accession: str,
-    analysis_type: Literal["amplicon", "rawreads", "assembly"] = "amplicon",
+    analysis_type: AnalysisType = AnalysisType.AMPLICON,
     cleanup_partials: bool = False,
     bludgeon: bool = True,
 ) -> Union[List[Path], None]:
@@ -192,9 +200,9 @@ def merge_study_summaries(
     )
 
     extra_merge_kwargs = {}
-    if analysis_type in {"rawreads", "amplicon"}:
+    if analysis_type in {AnalysisType.RAWREADS, AnalysisType.AMPLICON}:
         extra_merge_kwargs["analyses_dir"] = summary_dir.path
-    if analysis_type in {"assembly"}:
+    if analysis_type == AnalysisType.ASSEMBLY:
         extra_merge_kwargs["study_dir"] = summary_dir.path
 
     with chdir(summary_dir.path):
@@ -222,10 +230,10 @@ def merge_study_summaries(
             file.unlink()
 
 
-@task
+@task()
 def add_study_summaries_to_downloads(
     mgnify_study_accession: str,
-    analysis_type: Literal["amplicon", "rawreads", "assembly"] = "amplicon",
+    analysis_type: AnalysisType = AnalysisType.AMPLICON,
 ):
     """
     Adds study summary files to the download list of a specified study.
@@ -239,7 +247,9 @@ def add_study_summaries_to_downloads(
 
     :param mgnify_study_accession: The accession identifier for the study to process.
     """
-    pipeline_config = PIPELINE_CONFIGS[analysis_type]
+    pipeline_config = PIPELINE_CONFIGS[
+        analysis_type
+    ]  # TODO: this will not scale to future pipeline versions
 
     logger = get_run_logger()
     study = Study.objects.get(accession=mgnify_study_accession)
@@ -271,7 +281,7 @@ def add_study_summaries_to_downloads(
                 DownloadFile(
                     path=Path("study-summaries") / summary_file.name,
                     download_type=DownloadType.TAXONOMIC_ANALYSIS,
-                    download_group="study_summary",
+                    download_group=f"study_summary.{pipeline_config.pipeline_version}.{pipeline_config.pipeline_name}",
                     file_type=DownloadFileType.TSV,
                     short_description=f"Summary of {db_or_region} taxonomies",
                     long_description=f"Summary of {db_or_region} taxonomic assignments, across all runs in the study",
@@ -337,7 +347,7 @@ def _get_download_file(
         )
 
 
-@flow
+@flow()
 def merge_assembly_study_summaries(
     study: Union[Study, str],
     cleanup_partials: bool = False,
@@ -357,7 +367,7 @@ def merge_assembly_study_summaries(
     :return: List of paths to the merged study summary files
     """
     logger = get_run_logger()
-    pipeline_config = PIPELINE_CONFIGS["assembly"]
+    pipeline_config = PIPELINE_CONFIGS[AnalysisType.ASSEMBLY]
 
     # Accept either Study object or accession string
     if isinstance(study, str):
@@ -404,7 +414,7 @@ def merge_assembly_study_summaries(
         f"There appear to be {len(summary_files)} study summary files in {summary_dir.path}"
     )
 
-    assembly_summary_generator = STUDY_SUMMARY_GENERATORS["assembly"]
+    assembly_summary_generator = STUDY_SUMMARY_GENERATORS[AnalysisType.ASSEMBLY]
 
     with chdir(summary_dir.path):
         with click.Context(assembly_summary_generator.merge_summaries) as ctx:
@@ -433,10 +443,10 @@ def merge_assembly_study_summaries(
     return generated_files
 
 
-@task
+@task()
 def add_rawreads_study_summaries_to_downloads(mgnify_study_accession: str):
     logger = get_run_logger()
-    pipeline_config = PIPELINE_CONFIGS["rawreads"]
+    pipeline_config = PIPELINE_CONFIGS[AnalysisType.RAWREADS]
 
     study = Study.objects.get(accession=mgnify_study_accession)
 

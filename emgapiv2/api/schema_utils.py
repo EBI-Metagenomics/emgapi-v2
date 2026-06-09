@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Optional, ClassVar
+from typing import ClassVar, Optional
 
 from caseconverter import pascalcase, titlecase
 from django.db.models import Q
@@ -14,6 +14,7 @@ from emgapiv2.enum_utils import FutureStrEnum
 class ApiSections(FutureStrEnum):
     STUDIES = "Studies"
     SAMPLES = "Samples"
+    RUNS = "Runs"
     ANALYSES = "Analyses"
     PUBLICATIONS = "Publications"
     REQUESTS = "Requests"

@@ -1,21 +1,22 @@
 ---
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v5.0.0
+    rev: v6.0.0
     hooks:
       - id: end-of-file-fixer
       - id: trailing-whitespace
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.11.13
+    rev: v0.15.12
     hooks:
       - id: ruff  # Fixes issues (including unused imports)
         args: ["--fix"]
   - repo: https://github.com/psf/black
-    rev: 25.1.0
+    rev: 26.3.1
     hooks:
       - id: black
+        exclude: ^.*\b(migrations)\b.*$
   - repo: https://github.com/adrienverge/yamllint
-    rev: v1.37.1
+    rev: v1.38.0
     hooks:
       - id: yamllint
         args: [--format, parsable, --strict, -c=.yamllint]
@@ -24,3 +25,17 @@ repos:
     hooks:
       - id: talisman-commit
         entry: cmd --githook pre-commit
+  - repo: https://github.com/ebi-metagenomics/no_talisman_dupes
+    rev: 'v0.1.0'
+    hooks:
+      - id: talisman-no-duplicate-filenames
+# TODO: enable this hook once all flows/tasks are migrated to django_flow/django_task wrappers
+#  - repo: local
+#    hooks:
+#      - id: no-bare-prefect-flow-task
+#        name: Use django_flow/django_task wrappers instead of bare prefect imports
+#        language: pygrep
+#        entry: "from prefect import[^\\n]*(\\bflow\\b|\\btask\\b)"
+#        types: [python]
+#        files: ^workflows/
+#        exclude: ^workflows/tests/test_flows_utils\.py$

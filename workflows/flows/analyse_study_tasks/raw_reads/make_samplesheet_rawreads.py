@@ -3,17 +3,17 @@ from pathlib import Path
 from textwrap import dedent as _
 
 from django.db.models import QuerySet
-from prefect import task
 from prefect.artifacts import create_table_artifact
 
 from activate_django_first import EMG_CONFIG
 
 import analyses.models
 from workflows.nextflow_utils.samplesheets import (
-    queryset_to_samplesheet,
     SamplesheetColumnSource,
+    queryset_to_samplesheet,
 )
 from workflows.prefect_utils.cache_control import context_agnostic_task_input_hash
+from workflows.prefect_utils.flows_utils import django_db_task as task
 from workflows.views import encode_samplesheet_path
 
 FASTQ_FTPS = analyses.models.Run.CommonMetadataKeys.FASTQ_FTPS
@@ -73,13 +73,11 @@ def make_samplesheet_rawreads(runs: QuerySet, samplesheet_path: Path) -> Path:
     create_table_artifact(
         key="rawreads-v6-initial-sample-sheet",
         table=table,
-        description=_(
-            f"""\
+        description=_(f"""\
             Sample sheet created for run of rawreads-v6.
             Saved to `{sample_sheet_csv}`
             **Warning!** This table is the *initial* content of the samplesheet, when it was first made. Any edits made since are not shown here.
             [Edit it]({EMG_CONFIG.service_urls.app_root}/workflows/edit-samplesheet/fetch/{encode_samplesheet_path(sample_sheet_csv)})
-            """
-        ),
+            """),
     )
     return sample_sheet_csv

@@ -50,3 +50,22 @@ def private_run(webin_private_study, private_mgnify_sample):
         },
     )
     return run_obj
+
+
+@pytest.fixture
+def long_read_run(raw_reads_mgnify_study, raw_reads_mgnify_sample):
+    run_obj, _ = mg_models.Run.objects.get_or_create(
+        ena_accessions=["ERRlongread"],
+        study=raw_reads_mgnify_study,
+        ena_study=raw_reads_mgnify_study.ena_study,
+        sample=raw_reads_mgnify_sample[0],
+        experiment_type="METAG",
+        metadata={
+            mg_models.Run.CommonMetadataKeys.FASTQ_FTPS: [
+                "ftp://example.org/fastq1",
+                "ftp://example.org/fastq2",
+            ],
+            mg_models.Run.CommonMetadataKeys.INSTRUMENT_PLATFORM: "OXFORD_NANOPORE",
+        },
+    )
+    return run_obj

@@ -1,10 +1,9 @@
 from datetime import timedelta
 from pathlib import Path
-from typing import List, Union, Optional
+from typing import List, Optional, Union
 
 from django.conf import settings
 from django.utils.text import slugify
-from prefect import flow
 
 from activate_django_first import EMG_CONFIG
 
@@ -15,12 +14,15 @@ from workflows.flows.analyse_study_tasks.amplicon.import_completed_amplicon_anal
 from workflows.flows.analyse_study_tasks.amplicon.make_samplesheet_amplicon import (
     make_samplesheet_amplicon,
 )
-from workflows.flows.analyse_study_tasks.shared.analysis_states import (
-    mark_analysis_as_started,
-    mark_analysis_as_failed,
-)
 from workflows.flows.analyse_study_tasks.amplicon.set_post_analysies_states import (
     set_post_analysis_states,
+)
+from workflows.flows.analyse_study_tasks.cleanup_pipeline_directories import (
+    remove_dir,
+)
+from workflows.flows.analyse_study_tasks.shared.analysis_states import (
+    mark_analysis_as_failed,
+    mark_analysis_as_started,
 )
 from workflows.flows.analyse_study_tasks.shared.dwcr_generator import (
     generate_dwc_ready_summary_for_pipeline_run,
@@ -31,19 +33,18 @@ from workflows.flows.analyse_study_tasks.shared.markergene_study_summary import 
 from workflows.flows.analyse_study_tasks.shared.study_summary import (
     generate_study_summary_for_pipeline_run,
 )
+from workflows.flows.analysis import AnalysisType
+from workflows.nextflow_utils.samplesheets import queryset_hash
 from workflows.prefect_utils.build_cli_command import cli_command
+from workflows.prefect_utils.flows_utils import django_db_flow as flow
 from workflows.prefect_utils.slurm_flow import (
-    run_cluster_job,
     ClusterJobFailedException,
+    run_cluster_job,
 )
 from workflows.prefect_utils.slurm_policies import ResubmitIfFailedPolicy
-from workflows.flows.analyse_study_tasks.cleanup_pipeline_directories import (
-    remove_dir,
-)
-from workflows.nextflow_utils.samplesheets import queryset_hash
 
 
-@flow(name="Run analysis pipeline-v6 via samplesheet", log_prints=True)
+@flow(name="Run amplicon analysis pipeline via samplesheet", log_prints=True)
 def run_amplicon_pipeline_via_samplesheet(
     mgnify_study: analyses.models.Study,
     amplicon_analysis_ids: List[Union[str, int]],
@@ -148,7 +149,7 @@ def run_amplicon_pipeline_via_samplesheet(
         generate_study_summary_for_pipeline_run(
             pipeline_outdir=nextflow_outdir,
             mgnify_study_accession=mgnify_study.accession,
-            analysis_type="amplicon",
+            analysis_type=AnalysisType.AMPLICON,
             completed_runs_filename=EMG_CONFIG.amplicon_pipeline.completed_runs_csv,
         )
         generate_dwc_ready_summary_for_pipeline_run(

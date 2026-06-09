@@ -1,8 +1,9 @@
-from prefect import task, get_run_logger
+from prefect import get_run_logger, task
 
 import ena.models
-from analyses.models import Study, Biome
-from workflows.data_io_utils.legacy_emg_dbs import LegacyStudy, LegacyBiome
+from analyses.models import Biome, Study
+from workflows.data_io_utils.filenames import accession_prefix_separated_dir_path
+from workflows.data_io_utils.legacy_emg_dbs import LegacyBiome, LegacyStudy
 
 
 @task
@@ -33,6 +34,10 @@ def make_study_from_legacy_emg_db(
     if created:
         logger.warning(f"Created new Biome object {biome}")
 
+    external_results_dir = accession_prefix_separated_dir_path(
+        legacy_study.ext_study_id, 6
+    )
+
     mg_study, created = Study.objects.get_or_create(
         id=legacy_study.id,
         defaults={
@@ -40,6 +45,7 @@ def make_study_from_legacy_emg_db(
             "title": legacy_study.study_name,
             "ena_accessions": [legacy_study.ext_study_id, legacy_study.project_id],
             "biome": biome,
+            "external_results_dir": str(external_results_dir),
         },
     )
     if created:

@@ -1,20 +1,34 @@
 from pathlib import Path
 from textwrap import dedent as _
-from typing import Optional, List
+from typing import List, Optional
 
-from prefect import flow, get_run_logger, suspend_flow_run
+from prefect import get_run_logger, suspend_flow_run
 from prefect.events import emit_event
 from prefect.input import RunInput
-from prefect.runtime import flow_run, deployment
+from prefect.runtime import deployment, flow_run
 from pydantic import Field
 
 from activate_django_first import EMG_CONFIG
 
 import analyses.base_models.with_experiment_type_models
+import analyses.models
+import ena.models
+from workflows.ena_utils.ena_api_requests import (
+    ENALibraryStrategyPolicy,
+    get_study_from_ena,
+    get_study_readruns_from_ena,
+    library_strategy_policy_to_filter,
+)
+from workflows.ena_utils.webin_owner_utils import validate_and_set_webin_owner
+from workflows.flows.analyse_study_tasks.amplicon.run_amplicon_pipeline_via_samplesheet import (
+    run_amplicon_pipeline_via_samplesheet,
+)
+from workflows.flows.analyse_study_tasks.cleanup_pipeline_directories import (
+    delete_study_nextflow_workdir,
+)
 from workflows.flows.analyse_study_tasks.shared.copy_v6_pipeline_results import (
     copy_v6_study_summaries,
 )
-
 from workflows.flows.analyse_study_tasks.shared.create_analyses import create_analyses
 from workflows.flows.analyse_study_tasks.shared.dwcr_generator import (
     add_dwcr_summaries_to_downloads,
@@ -23,49 +37,41 @@ from workflows.flows.analyse_study_tasks.shared.dwcr_generator import (
 from workflows.flows.analyse_study_tasks.shared.get_analyses_to_attempt import (
     get_analyses_to_attempt,
 )
-from workflows.flows.analyse_study_tasks.amplicon.run_amplicon_pipeline_via_samplesheet import (
-    run_amplicon_pipeline_via_samplesheet,
-)
-
-import analyses.models
-import ena.models
-from workflows.ena_utils.ena_api_requests import (
-    get_study_from_ena,
-    get_study_readruns_from_ena,
-    library_strategy_policy_to_filter,
-    ENALibraryStrategyPolicy,
-)
-from workflows.ena_utils.webin_owner_utils import validate_and_set_webin_owner
 from workflows.flows.analyse_study_tasks.shared.study_summary import (
-    merge_study_summaries,
     add_study_summaries_to_downloads,
+    merge_study_summaries,
+)
+from workflows.flows.analysis import AnalysisType
+from workflows.flows.analysis.pipeline_versions import (
+    get_current_pipeline_version_for_experiment_type,
+    get_v6_family_pipeline_versions_for_experiment_type,
 )
 from workflows.flows.assemble_study import get_biomes_as_choices
 from workflows.prefect_utils.analyses_models_helpers import (
+    add_study_watchers,
     chunk_list,
     get_users_as_choices,
-    add_study_watchers,
 )
-from workflows.flows.analyse_study_tasks.cleanup_pipeline_directories import (
-    delete_study_nextflow_workdir,
-    # delete_study_results_dir,
-)
+from workflows.prefect_utils.flows_utils import django_db_flow as flow
 
 _AMPLICON = "AMPLICON"
 
 
 @flow(
-    name="Run analysis pipeline-v6 on amplicon study",
+    name="Run amplicon analysis pipeline on study",
     log_prints=True,
     flow_run_name="Analyse amplicon: {study_accession}",
 )
 def analysis_amplicon_study(study_accession: str):
     """
     Get a study from ENA, and input it to MGnify.
-    Kick off amplicon-v6 pipeline.
+    Kick off the configured amplicon pipeline.
     :param study_accession: Study accession e.g. PRJxxxxxx
     """
     logger = get_run_logger()
+    amplicon_pipeline_version = get_current_pipeline_version_for_experiment_type(
+        analyses.models.Analysis.ExperimentTypes.AMPLICON
+    )
     # Create/get ENA Study object
     ena_study = ena.models.Study.objects.get_ena_study(study_accession)
     if not ena_study:
@@ -115,11 +121,10 @@ def analysis_amplicon_study(study_accession: str):
 
     analyse_study_input: AnalyseStudyInput = suspend_flow_run(
         wait_for_input=AnalyseStudyInput.with_initial_data(
-            description=_(
-                f"""\
-                **Amplicon V6**
+            description=_(f"""\
+                **Amplicon {amplicon_pipeline_version.label}**
                 This will analyse all {len(read_runs)} amplicon read-runs of study {ena_study.accession} \
-                using [Amplicon Pipeline V6](https://github.com/ebi-metagenomics/amplicon-pipeline).
+                using [Amplicon Pipeline {amplicon_pipeline_version.label.upper()}](https://github.com/ebi-metagenomics/amplicon-pipeline).
 
                 **Read-run filtering**
                 If you expected more than {len(read_runs)} amplicon read-runs, you can add other (incorrect) \
@@ -131,9 +136,9 @@ def analysis_amplicon_study(study_accession: str):
 
                 **Webin owner**
                 If the study is private, the webin account owner is needed so that the user can view the study they own.
-                """
-            ),
-        )
+                """),
+        ),
+        timeout=EMG_CONFIG.slurm.default_flow_suspend_awaiting_input_timeout_secs,
     )
 
     ena_study, __ = validate_and_set_webin_owner(
@@ -176,7 +181,7 @@ def analysis_amplicon_study(study_accession: str):
     create_analyses(
         mgnify_study,
         for_experiment_type=analyses.base_models.with_experiment_type_models.WithExperimentTypeModel.ExperimentTypes.AMPLICON,
-        pipeline=analyses.models.Analysis.PipelineVersions.v6,
+        pipeline=amplicon_pipeline_version,
         ena_library_strategy_policy=analyse_study_input.library_strategy_policy,
     )
     ena_study.save()  # just for safety, propagate privacy state/owner from study to new analyses etc.
@@ -184,6 +189,7 @@ def analysis_amplicon_study(study_accession: str):
     analyses_to_attempt = get_analyses_to_attempt(
         mgnify_study,
         for_experiment_type=analyses.base_models.with_experiment_type_models.WithExperimentTypeModel.ExperimentTypes.AMPLICON,
+        pipeline=amplicon_pipeline_version,
         ena_library_strategy_policy=analyse_study_input.library_strategy_policy,
     )
 
@@ -215,23 +221,29 @@ def analysis_amplicon_study(study_accession: str):
     merge_study_summaries(
         mgnify_study.accession,
         cleanup_partials=not EMG_CONFIG.amplicon_pipeline.keep_study_summary_partials,
-        analysis_type="amplicon",
+        analysis_type=AnalysisType.AMPLICON,
     )
     merge_dwc_ready_summaries(
         mgnify_study.accession,
         cleanup_partials=not EMG_CONFIG.amplicon_pipeline.keep_study_summary_partials,
     )
-    add_study_summaries_to_downloads(mgnify_study.accession, analysis_type="amplicon")
+    add_study_summaries_to_downloads(
+        mgnify_study.accession, analysis_type=AnalysisType.AMPLICON
+    )
     add_dwcr_summaries_to_downloads(mgnify_study.accession)
-    copy_v6_study_summaries(mgnify_study.accession)
+    copy_v6_study_summaries(mgnify_study.accession, analysis_type=AnalysisType.AMPLICON)
     # delete work directory
     delete_study_nextflow_workdir(study_workdir, analyses_to_attempt)
     # delete_study_results_dir(study_outdir, mgnify_study)
 
     mgnify_study.refresh_from_db()
     mgnify_study.features.has_v6_analyses = mgnify_study.analyses.filter(
-        pipeline_version=analyses.models.Analysis.PipelineVersions.v6, is_ready=True
+        pipeline_version__in=get_v6_family_pipeline_versions_for_experiment_type(
+            analyses.models.Analysis.ExperimentTypes.AMPLICON
+        ),
+        is_ready=True,
     ).exists()
+    # TODO: remove has_v6_analyses from features json once all legacy data imported
     mgnify_study.save()
 
     emit_event(

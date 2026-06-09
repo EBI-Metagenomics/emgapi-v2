@@ -8,6 +8,7 @@ from django.core.management import call_command
 from analyses.models import (
     Analysis,
     Assembler,
+    Assembly,
     Biome,
     ComputeResourceHeuristic,
     Run,
@@ -30,20 +31,22 @@ def create_analysis(is_private=False):
 @pytest.mark.django_db(transaction=True, reset_sequences=True)
 def test_study():
     # Test accessioning
-    ena_study = ENAStudy.objects.create(accession="PRJ1", title="Project 1")
+    ena_study = ENAStudy.objects.create(accession="PRJNA1", title="Project 1")
     study = Study.objects.create(ena_study=ena_study, title="Project 1")
     assert study.accession == "MGYS00000001"
     study.inherit_accessions_from_related_ena_object("ena_study")
-    assert "PRJ1" in study.ena_accessions
-    study.ena_study.additional_accessions = ["ERP1"]
+    assert "PRJNA1" in study.ena_accessions
+    study.ena_study.additional_accessions = ["ERP000001"]
     study.ena_study.save()
     study.inherit_accessions_from_related_ena_object("ena_study")
-    assert "PRJ1" in study.ena_accessions
-    assert "ERP1" in study.ena_accessions
-    assert study.first_accession == "ERP1"
-    study.ena_accessions = ["PRJ1", "ERP1"]
+    assert "PRJNA1" in study.ena_accessions
+    assert "ERP000001" in study.ena_accessions
+    assert study.first_accession == "ERP000001"  # ERP is preferred over PRJ
+    study.ena_accessions = ["PRJNA1", "ERP000001"]
     study.save()
-    assert study.first_accession == "ERP1"
+    assert (
+        study.first_accession == "ERP000001"
+    )  # ERP is preferred even when PRJ is explicitly before it in accessions array
 
 
 def test_biome_lineage_path_generator():
@@ -447,6 +450,28 @@ def test_update_or_create_by_accession(raw_reads_mgnify_study):
 
 
 @pytest.mark.django_db
+def test_get_or_create_should_not_create_duplicate_run_with_conflicting_kwargs(
+    raw_read_run, raw_reads_mgnify_sample
+):
+    run = raw_read_run[0]
+    other_sample = raw_reads_mgnify_sample[1]
+    assert other_sample != run.sample
+
+    returned_run, created = Run.objects.update_or_create_by_accession(
+        known_accessions=run.ena_accessions,
+        study=run.study,
+        ena_study=run.ena_study,
+        sample=other_sample,
+    )
+
+    assert created is False
+    assert returned_run.pk == run.pk
+    assert returned_run.study == run.study
+    assert returned_run.sample == run.sample
+    assert Run.objects.filter(ena_accessions__overlap=run.ena_accessions).count() == 1
+
+
+@pytest.mark.django_db
 def test_inferred_metadata_mixin(raw_read_run):
     run = Run.objects.first()
     run.metadata = {}
@@ -467,3 +492,43 @@ def test_inferred_metadata_mixin(raw_read_run):
     assert run.metadata_preferring_inferred["kessel_run"] == "20 parsecs"
     assert run.metadata["kessel_run"] == 20
     assert run.metadata_preferring_inferred["falcon"] == "millenium"
+
+
+@pytest.mark.django_db
+def test_populate_metadata_from_json(mgnify_assemblies):
+    assembly = mgnify_assemblies[0]
+
+    assembly.populate_metadata_from_json(
+        {"coverage": 0.25, "coverage_depth": 42.5, "fake": 3},
+        required_keys=["coverage", "coverage_depth"],
+    )
+
+    assembly.refresh_from_db()
+    assert assembly.metadata["coverage"] == 0.25
+    assert assembly.metadata["coverage_depth"] == 42.5
+    assert "fake" not in assembly.metadata
+
+    assembly.populate_metadata_from_json(
+        {"coverage": 0.30, "coverage_depth": 44.5, "fake": 3},
+        required_keys=["coverage", "coverage_depth"],
+        optional_keys=["fake"],
+    )
+    assembly.refresh_from_db()
+    assert assembly.metadata["coverage"] == 0.30
+    assert assembly.metadata["coverage_depth"] == 44.5
+    assert assembly.metadata["fake"] == 3
+
+
+@pytest.mark.django_db
+def test_assembly_runs_labels(raw_read_run):
+    run: Run = Run.objects.first()
+    assembly, _ = Assembly.objects.get_or_create_for_run_and_sample(
+        run=run, sample=run.sample, ena_study_id=run.ena_study_id, reads_study=run.study
+    )
+    assert assembly.runs_label == run.first_accession
+
+    # coassembly
+    other_run: Run = Run.objects.exclude(pk=run.pk).first()
+    assembly.runs.add(other_run)
+    assembly.refresh_from_db()
+    assert assembly.runs_label == f"{run.first_accession},{other_run.first_accession}"

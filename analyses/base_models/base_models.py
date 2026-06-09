@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, Protocol
+import re
+from collections.abc import Mapping
+from typing import Any, ClassVar, Generic, Protocol, TypeVar
 
 from django.conf import settings
 from django.contrib.postgres.fields import ArrayField
-from django.core.exceptions import ObjectDoesNotExist, MultipleObjectsReturned
+from django.core.exceptions import MultipleObjectsReturned, ObjectDoesNotExist
 from django.db import models
+
 import ena.models
 
 
@@ -88,7 +91,10 @@ class GetByENAAccessionManagerMixin:
         return matching_assemblies
 
 
-class UpdateOrCreateByAccessionManagerMixin:
+T_ENADerivedModel = TypeVar("T_ENADerivedModel", bound="ENADerivedModel")
+
+
+class UpdateOrCreateByAccessionManagerMixin(Generic[T_ENADerivedModel]):
     def update_or_create_by_accession(
         self,
         known_accessions: list[str],
@@ -96,16 +102,21 @@ class UpdateOrCreateByAccessionManagerMixin:
         create_defaults: dict[str, Any] | None = None,
         include_update_defaults_in_create_defaults: bool = True,
         **kwargs,
-    ) -> tuple[ENADerivedModel, bool]:
+    ) -> tuple[T_ENADerivedModel, bool]:
         """
-        Like django update_or_create, but with handling for multiple accessions.
-        I.e., will select the model based on ena_accessions field containing any of the given accessions,
-        and will set the ena_accessions to the union of provided known_accessions and any existing accessions.
-        :param known_accessions: List of accessions to match on and set as ena_accessions.
+        Update or create a model by matching any known accession.
+
+        Existing objects are selected only by overlap between `known_accessions` and
+        the model's `ena_accessions` field. `defaults` and `kwargs` are not used
+        to identify duplicate records.
+        `kwargs` are only applied when a new object is created. After update or creation,
+        `ena_accessions` is set to include the union of provided and existing accessions.
+
+        :param known_accessions: Accessions to match against ``ena_accessions`` and preserve on the object.
         :param defaults: Fields to update.
         :param create_defaults: Fields to set if the object is created.
         :param include_update_defaults_in_create_defaults: If true, the defaults dict will be merged with create_defaults for creation.
-        :param kwargs: other matchers
+        :param kwargs: Extra fields to apply only when creating a new object.
         :return: Tuple of object, created.
         """
         defaults = defaults or {}
@@ -119,9 +130,7 @@ class UpdateOrCreateByAccessionManagerMixin:
         # Two-step process needed (first get, then update/create).
         # This is because __overlap cannot be used with default django update_or_create.
         try:
-            obj = self.get_queryset().get(
-                ena_accessions__overlap=known_accessions, **kwargs
-            )
+            obj = self.get_queryset().get(ena_accessions__overlap=known_accessions)
         except ObjectDoesNotExist:
             obj = None
 
@@ -153,13 +162,17 @@ class UpdateOrCreateByAccessionManagerMixin:
 class ENADerivedManager(
     SelectRelatedEnaStudyManagerMixin,
     GetByENAAccessionManagerMixin,
-    UpdateOrCreateByAccessionManagerMixin,
+    UpdateOrCreateByAccessionManagerMixin[T_ENADerivedModel],
     models.Manager,
 ): ...
 
 
 class ENADerivedModel(VisibilityControlledModel):
     objects = ENADerivedManager()
+
+    # Allow certain accession prefixes (i.e. formats) to be preferred over others.
+    # E.g. if this is "[ESD]RP.*", .first_accession will return ERP001 even if ena_accessions is {PRJ098, ERP001}
+    PREFERRED_ENA_ACCESSION_REGEX: ClassVar[re.Pattern] = re.compile(r".*")
 
     ena_accessions = ArrayField(
         models.CharField(max_length=20, blank=True),
@@ -169,12 +182,14 @@ class ENADerivedModel(VisibilityControlledModel):
     )
     is_suppressed = models.BooleanField(default=False)
 
-    # TODO – postgres GIN index on accessions?
-
     @property
     def first_accession(self):
         if len(self.ena_accessions):
-            return self.ena_accessions[0]
+            pattern = self.PREFERRED_ENA_ACCESSION_REGEX
+            return next(
+                (acc for acc in self.ena_accessions if pattern.match(acc)),
+                self.ena_accessions[0],
+            )
         return None
 
     @property
@@ -203,7 +218,8 @@ class ENADerivedModel(VisibilityControlledModel):
             if related_additional_accessions:
                 try:
                     for accession in list(related_additional_accessions):
-                        all_accessions.append(accession)
+                        if accession:
+                            all_accessions.append(accession)
                 except ValueError:
                     pass
         self.ena_accessions = list(set(all_accessions))
@@ -273,6 +289,41 @@ class InferredMetadataMixin:
     @property
     def metadata_preferring_inferred(self: HasMetadata):
         return InferredMetadataMixin._MetadataDictPreferringInferred(self.metadata)
+
+    def populate_metadata_from_json(
+        self,
+        json_data: Mapping[str, Any],
+        required_keys: list[str],
+        optional_keys: list[str] = None,
+    ) -> None:
+        """
+        Copy selected values from a JSON-like mapping into ``metadata``.
+
+        All ``required_keys`` must be present in ``json_data``. Missing
+        required keys raise ``ValueError``. ``optional_keys`` are copied when
+        present and ignored when missing.
+
+        :param json_data: JSON-like mapping containing metadata values.
+        :param required_keys: Metadata keys that must exist in ``json_data``.
+        :param optional_keys: Metadata keys to copy only when present.
+        """
+        if not isinstance(json_data, Mapping):
+            raise ValueError("JSON data must be a mapping")
+
+        optional_keys = optional_keys or []
+
+        missing_keys = [key for key in required_keys if key not in json_data]
+        if missing_keys:
+            raise ValueError(
+                "JSON data is missing required metadata keys: "
+                f"{', '.join(missing_keys)}"
+            )
+
+        metadata_keys = required_keys + [
+            key for key in optional_keys if key in json_data
+        ]
+        self.metadata.update({key: json_data[key] for key in metadata_keys})
+        self.save()
 
 
 class DbStoredFileField(models.Model):
