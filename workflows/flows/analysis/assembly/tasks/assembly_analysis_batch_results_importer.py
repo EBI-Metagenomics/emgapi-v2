@@ -74,9 +74,10 @@ def clear_pipeline_downloads(
         analysis.save()
 
 
-@task()
-def assembly_analysis_batch_results_importer(
-    assembly_analyses_batch_id: uuid.UUID,
+def validate_and_import_analysis_results(
+    analyses: List[Analysis],
+    schema,
+    base_path: str,
     pipeline_type: AssemblyAnalysisPipeline,
     validation_only: bool = False,
 ) -> List[ImportResult]:
@@ -150,7 +151,7 @@ def assembly_analysis_batch_results_importer(
     return results
 
 
-@task
+@task()
 def assembly_analysis_batch_results_importer(
     assembly_analyses_batch_id: uuid.UUID,
     pipeline_type: AssemblyAnalysisPipeline,

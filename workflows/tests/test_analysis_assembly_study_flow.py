@@ -2,8 +2,6 @@ import csv
 import gzip
 import re
 import shutil
-from enum import Enum
-import uuid
 from pathlib import Path
 from typing import List, Optional
 from unittest.mock import Mock, patch
@@ -17,6 +15,7 @@ import ena.models
 from analyses.base_models.with_downloads_models import DownloadType
 from analyses.models import Analysis, Study
 from workflows.data_io_utils.filenames import accession_prefix_separated_dir_path
+from workflows.fixtures.assembly_analysis.conftest import AssemblyTestScenario
 from workflows.flows.analysis.assembly.flows.analysis_assembly_study import (
     analysis_assembly_study,
 )
@@ -39,7 +38,6 @@ from workflows.prefect_utils.testing_utils import (
     generate_assembly_v6_pipeline_results,
     should_not_mock_httpx_requests_to_prefect_server,
 )
-from workflows.fixtures.assembly_analysis.conftest import AssemblyTestScenario
 
 EMG_CONFIG = settings.EMG_CONFIG
 
