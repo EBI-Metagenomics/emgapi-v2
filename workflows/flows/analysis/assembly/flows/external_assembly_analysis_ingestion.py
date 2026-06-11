@@ -2,28 +2,38 @@ import csv
 import hashlib
 from pathlib import Path
 from textwrap import dedent as _
-from typing import Optional, List
+from typing import List, Optional
 
+from django.conf import settings
 from prefect import flow, get_run_logger, suspend_flow_run, task
 from prefect.input import RunInput
 from pydantic import Field
-from django.conf import settings
 
 import analyses.models
 import ena.models
 from workflows.data_io_utils.schemas import (
     AssemblyResultSchema,
-    VirifyResultSchema,
     MapResultSchema,
+    VirifyResultSchema,
 )
 from workflows.ena_utils.ena_api_requests import (
-    get_study_from_ena,
-    get_study_assemblies_from_ena,
-    get_study_accession_for_assembly,
     get_fasta_md5_for_assembly,
+    get_study_accession_for_assembly,
+    get_study_assemblies_from_ena,
+)
+from workflows.flows.analyse_study_tasks.shared.analysis_states import AnalysisStates
+from workflows.flows.analyse_study_tasks.shared.copy_v6_pipeline_results import (
+    _copy_external_single_analysis_results,
+    copy_v6_study_summaries,
+)
+from workflows.flows.analysis.assembly.tasks.add_assembly_study_summaries_to_downloads import (
+    add_assembly_study_summaries_to_downloads,
 )
 from workflows.flows.analysis.assembly.tasks.assembly_analysis_batch_results_importer import (
     validate_and_import_analysis_results,
+)
+from workflows.flows.analysis.assembly.tasks.assembly_analysis_pipeline_batch_study_summary_generator import (
+    generate_assembly_analysis_pipeline_summary,
 )
 from workflows.flows.analysis.assembly.tasks.create_analyses_for_assemblies import (
     create_analyses_for_assemblies,
@@ -31,23 +41,17 @@ from workflows.flows.analysis.assembly.tasks.create_analyses_for_assemblies impo
 from workflows.flows.analysis.assembly.tasks.process_import_results import (
     mark_analyses_with_failed_status,
 )
-from workflows.flows.analyse_study_tasks.shared.analysis_states import AnalysisStates
+from workflows.flows.analysis.assembly.tasks.set_post_assembly_analysis_states import (
+    parse_asa_end_of_run_reports,
+    update_analyses_from_asa_reports,
+)
 from workflows.flows.assemble_study import get_biomes_as_choices
-from workflows.flows.analyse_study_tasks.shared.copy_v6_pipeline_results import (
-    copy_v6_study_summaries,
-    _copy_external_single_analysis_results,
-)
-from workflows.flows.analysis.assembly.tasks.assembly_analysis_pipeline_batch_study_summary_generator import (
-    generate_assembly_analysis_pipeline_summary,
-)
-from workflows.flows.analysis.assembly.tasks.add_assembly_study_summaries_to_downloads import (
-    add_assembly_study_summaries_to_downloads,
-)
+from workflows.flows.shared.study_tasks import get_or_create_mgnify_study
+from workflows.models import Analysis, AssemblyAnalysisPipeline, Study
 from workflows.prefect_utils.analyses_models_helpers import (
-    get_users_as_choices,
     add_study_watchers,
+    get_users_as_choices,
 )
-from workflows.models import AssemblyAnalysisPipeline, Analysis, Study
 
 
 @flow(
@@ -59,17 +63,17 @@ def external_assembly_analysis_ingestion(
     samplesheet_path: str,
 ):
     """
-    Ingest Assembly Analysis Pipeline results that were run externally.
+    Ingest Assembly Analysis Pipeline results that were run out-of-production.
 
-    This flow accepts a path to externally-run ASA/VIRify/MAP results and:
+    This flow takes samplesheet, a path to out-of-production ASA/VIRify/MAP results and:
     1. Creates/fetches the required database models (study, assemblies and analyses)
-    2. Validates that the results match the samplesheet and filesystem structure
+    2. Validates that the results match the samplesheet and expected folder structure
     3. Imports the pipeline results into the production system
     4. Triggers study summary creation and file copying
 
-    :param results_dir: Path to the directory containing externally-run results.
+    :param results_dir: Path to the directory containing out-of-production results.
                         Should contain folders: asa/, virify/, map/
-    :param samplesheet_path: Path to the samplesheet CSV used for the external run.
+    :param samplesheet_path: Path to the samplesheet CSV used for the out-of-production run.
     """
     logger = get_run_logger()
     results_path = Path(results_dir)
@@ -124,28 +128,20 @@ def external_assembly_analysis_ingestion(
 
     # Process the study and its assemblies
     logger.info(f"Processing study accession: {study_accession}")
+    mgnify_study_id = get_or_create_mgnify_study(study_accession)
+    mgnify_study = analyses.models.Study.objects.get(id=mgnify_study_id)
     ena_study = ena.models.Study.objects.get_ena_study(study_accession)
-    if not ena_study:
-        ena_study = get_study_from_ena(study_accession)
-
-    ena_study.refresh_from_db()
-    logger.info(f"ENA Study is {ena_study.accession}: {ena_study.title}")
-
-    mgnify_study = analyses.models.Study.objects.get_or_create_for_ena_study(
-        study_accession
-    )
-    mgnify_study.refresh_from_db()
-    logger.info(f"MGnify study is {mgnify_study.accession}: {mgnify_study.title}")
 
     # Run this function to fetch related runs/samples for this study and save them in the DB
-    get_study_assemblies_from_ena(ena_study.accession, limit=10000)
+    get_study_assemblies_from_ena(study_accession, limit=10000)
 
-    # TODO check if this code makes sense in this context
+    # TODO check if this code makes sense in the context of out-of-production runs
     # Set results_dir to the provided external path
     logger.info(f"Set results_dir to {results_path}")
     mgnify_study.results_dir = str(results_path)
     mgnify_study.save()
 
+    # TODO: refactor to remove code duplication with analysis_assembly_study.py
     # Check if biome-picker is needed
     if not mgnify_study.biome:
         BiomeChoices = get_biomes_as_choices()
@@ -160,17 +156,15 @@ def external_assembly_analysis_ingestion(
 
         ingest_input: IngestExternalInput = suspend_flow_run(
             wait_for_input=IngestExternalInput.with_initial_data(
-                description=_(
-                    f"""\
+                description=_(f"""\
                         **External Assembly Analysis Ingestion**
-                        Ingesting externally-run Assembly Analysis results for study {ena_study.accession} \
+                        Ingesting externally-run Assembly Analysis results for study {study_accession} \
                         produced by [Assembly Analysis Pipeline V6](https://github.com/EBI-Metagenomics/assembly-analysis-pipeline).
 
                         **Biome tagger**
                         Please select a Biome for the entire study \
                         [{ena_study.accession}: {ena_study.title}](https://www.ebi.ac.uk/ena/browser/view/{ena_study.accession}).
-                        """
-                ),
+                        """),
             )
         )
 
@@ -218,7 +212,6 @@ def external_assembly_analysis_ingestion(
     )
 
     logger.info("Processing VIRify results...")
-    # TODO in production we only import if VIRIFY statuses are present, do we want same here?
     process_external_pipeline_results(
         exported_analyses,
         results_path,
@@ -226,7 +219,6 @@ def external_assembly_analysis_ingestion(
     )
 
     logger.info("Processing MAP results...")
-    # TODO in production we only import if MAP statuses are present, do we want same here?
     process_external_pipeline_results(
         exported_analyses,
         results_path,
@@ -241,8 +233,6 @@ def external_assembly_analysis_ingestion(
     generate_assembly_analysis_pipeline_summary(
         study=mgnify_study,
     )
-
-    # TODO: if more analysis will be analyses in future, how to update summaries?
 
     add_assembly_study_summaries_to_downloads(mgnify_study.accession)
     logger.info("Added study summaries to downloads")
@@ -307,12 +297,6 @@ def _parse_and_validate_samplesheet(samplesheet_path: Path) -> list[str]:
 
             actual_columns = set(reader.fieldnames)
 
-            optional_columns = {
-                "contaminant_reference",
-                "human_reference",
-                "phix_reference",
-            }
-
             required_columns = {"sample", "assembly_fasta"}
 
             if not required_columns.issubset(actual_columns):
@@ -320,15 +304,11 @@ def _parse_and_validate_samplesheet(samplesheet_path: Path) -> list[str]:
                     f"Samplesheet is missing required columns: {required_columns - actual_columns}"
                 )
 
-            if not actual_columns.issubset(optional_columns | required_columns):
-                raise ValueError(
-                    f"Samplesheet contains unexpected columns: {actual_columns - (optional_columns | required_columns)}. "
-                )
-
             for row in reader:
-                assembly_acc = row.get("sample", "").strip()
+                assembly_acc = row["sample"]
                 if assembly_acc:
-                    fasta_file = Path(row.get("assembly_fasta", "").strip())
+                    fasta_file = Path(row["assembly_fasta"])
+                    # TODO: consider removing this FASTA MD5 validation step for flexibility and simplicity
                     actual_fasta_md5 = _compute_md5(fasta_file)
                     expected_fasta_md5 = get_fasta_md5_for_assembly(assembly_acc)
 
@@ -452,7 +432,6 @@ def process_external_pipeline_results(
     )
 
     # Process validation results - mark failures as FAILED
-    # TODO: check with Martin if we want to mark virify/map analyses as QC_FAILED if no results found
     mark_analyses_with_failed_status(
         validation_results,
         pipeline_type,
@@ -482,87 +461,27 @@ def process_external_pipeline_results(
 def set_asa_analysis_states(assembly_current_outdir: Path, analyses: List[Analysis]):
     """
     This function processes the end-of-execution reports generated by the assembly analysis pipeline
-    to determine the outcome of each assembly and updates their status accordingly.
-
-    TODO: this function is a copy-paste of set_post_assembly_analysis_states with some changes,
-    needs refactoring (ochkalova).
-
-    The pipeline produces two CSV files:
-    - qc_failed_assemblies.csv: Lists assemblies that failed QC checks (assemblyID, reason)
-    - analysed_assemblies.csv: Lists assemblies that completed successfully (assemblyID, info)
-
-    Logic flow:
-    1. Read QC failures from qc_failed_assemblies.csv if it exists
-    2. Read successful analyses from analysed_assemblies.csv (raises error if the file is missing)
-    3. For each assembly analysis:
-    - If assembly is in QC failures: Mark workflow_status as FAILED and set status to ANALYSIS_QC_FAILED
-    - If assembly is in successful analyses: Mark workflow_status as COMPLETED
-    - If assembly is in neither list: Mark workflow_status as FAILED with unknown reason
-    4. Bulk update all analyses to minimize database operations
+    to determine the outcome of each assembly and updates their statuses in the database accordingly.
 
     :param assembly_current_outdir: Path to the directory containing the pipeline output
     :param analyses: List of assembly analyses objects to process
-    :raises ValueError: If the analysed_assemblies.csv file is missing (catastrophic failure)
+    :raises ValueError: If the analysed_assemblies.csv file is missing
     """
-    # The pipeline produces top-level end-of-execution reports, which contain
-    # the list of the assemblies that were completed and those that were not.
-    # Similar to the amplicon pipeline
-
     logger = get_run_logger()
 
-    # qc_failed_assemblies.csv: assemblyID,reason
-    qc_failed_csv = Path(f"{assembly_current_outdir}/qc_failed_assemblies.csv")
-    qc_failed_assemblies = {}  # Stores {assembly_accession, qc_fail_reason}
+    qc_failed_csv = assembly_current_outdir / "qc_failed_assemblies.csv"
+    analysed_assemblies_csv = assembly_current_outdir / "analysed_assemblies.csv"
+    qc_failed_assemblies, analysed_assemblies = parse_asa_end_of_run_reports(
+        qc_failed_csv, analysed_assemblies_csv, logger=logger
+    )
 
-    if qc_failed_csv.is_file():
-        logger.info("Reading qc failed assemblies...")
-        with qc_failed_csv.open(mode="r") as file_handle:
-            for row in csv.reader(file_handle, delimiter=","):
-                assembly_accession, fail_reason = row
-                qc_failed_assemblies[assembly_accession] = fail_reason
-
-    # analysed_assemblies.csv: assemblyID, info
-    analysed_assemblies_csv = Path(f"{assembly_current_outdir}/analysed_assemblies.csv")
-    analysed_assemblies = {}  # Stores {assembly_accession, info}
-
-    if analysed_assemblies_csv.is_file():
-        with analysed_assemblies_csv.open(mode="r") as file_handle:
-            for row in csv.reader(file_handle, delimiter=","):
-                assembly_accession, info = row
-                analysed_assemblies[assembly_accession] = info
-    else:
-        # The caller is responsible for handling this error -- which is quite catastrophic.
-        raise ValueError(
-            f"The end of run execution CSV file is missing. Expected path: {analysed_assemblies_csv}"
-        )
-
-    analyses_to_update = []
-
-    for analysis in analyses:
-        assembly_accession = analysis.assembly.first_accession
-
-        if assembly_accession in qc_failed_assemblies:
-            logger.error(f"QC failed - {assembly_accession}")
-            analysis.mark_status(
-                AnalysisStates.ANALYSIS_QC_FAILED,
-                set_status_as=True,
-                reason=qc_failed_assemblies[assembly_accession],
-                save=False,
-            )
-            analyses_to_update.append(analysis)
-        elif assembly_accession in analysed_assemblies:
-            logger.info(
-                f"{assembly_accession} marked as analyzed in the end of run CSV."
-            )
-        else:
-            logger.error(f"Assembly {assembly_accession} missing from CSV.")
-            analysis.mark_status(
-                AnalysisStates.ANALYSIS_QC_FAILED,
-                set_status_as=True,
-                save=False,
-                reason=f"Assembly missing from {analysed_assemblies_csv}.",
-            )
-            analyses_to_update.append(analysis)
+    analyses_to_update = update_analyses_from_asa_reports(
+        analyses,
+        qc_failed_assemblies,
+        analysed_assemblies,
+        analysed_assemblies_csv,
+        logger=logger,
+    )
 
     # Bulk update - slightly gentler on the DB
     Analysis.objects.bulk_update(analyses_to_update, ["status"])
