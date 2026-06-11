@@ -353,6 +353,9 @@ items:
         nginx.ingress.kubernetes.io/use-regex: "true"
         nginx.ingress.kubernetes.io/rewrite-target: /$1
         nginx.ingress.kubernetes.io/service-upstream: "true"
+        nginx.ingress.kubernetes.io/proxy-read-timeout: "360"
+        nginx.ingress.kubernetes.io/proxy-send-timeout: "360"
+        nginx.ingress.kubernetes.io/proxy-body-size: "100m"
     spec:
       rules:
         - host: www.ebi.ac.uk
