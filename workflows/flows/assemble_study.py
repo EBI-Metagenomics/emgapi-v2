@@ -40,6 +40,7 @@ from workflows.prefect_utils.analyses_models_helpers import (
     get_users_as_choices,
 )
 from workflows.prefect_utils.flows_utils import django_db_flow as flow
+from workflows.prefect_utils.input_helpers import ask_every_time_suspend_for_input_key
 from workflows.views import encode_samplesheet_path
 
 
@@ -158,6 +159,7 @@ def assemble_study(
                 """),
         ),
         timeout=EMG_CONFIG.slurm.default_flow_suspend_awaiting_input_timeout_secs,
+        key=ask_every_time_suspend_for_input_key(),
     )
 
     validate_and_set_webin_owner(ena_study, assemble_study_input.webin_owner)
@@ -232,6 +234,7 @@ def assemble_study(
             wait_for_input=ResumeAfterSamplesheetEditingInput.with_initial_data(
                 description=suspend_message
             ),
+            key=f"samplesheets-editing-{ask_every_time_suspend_for_input_key()}",
         )
 
     logger.info("Flow resumed after samplesheet editing")

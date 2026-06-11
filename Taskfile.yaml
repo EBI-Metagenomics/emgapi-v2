@@ -13,11 +13,10 @@ tasks:
       - docker compose run app python manage.py prefectcli {{.CLI_ARGS}}
 
   create-pool:
-    desc: "Create a Prefect workpool. E.g. NAME=slurm task create-process-pool"
+    desc: "Create or update the local Prefect Slurm work pool"
     cmds:
-      - docker compose exec -e PREFECT_CLIENT_RETRY_EXTRA_CODES=0 app python manage.py prefectcli work-pool create --type {{.TYPE}} {{.CLI_ARGS}} {{.NAME}}
+      - docker compose exec -e PREFECT_CLIENT_RETRY_EXTRA_CODES=0 app python manage.py prefectcli work-pool create --type slurm --base-job-template slurm-dev-environment/configs/prefect-slurm-base-job-template.json --overwrite {{.CLI_ARGS}} {{.NAME}}
     vars:
-      TYPE: '{{.TYPE | default "slurm"}}'
       NAME: '{{.NAME | default "slurm"}}'
 
   deploy-flow:
