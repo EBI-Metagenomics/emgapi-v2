@@ -38,4 +38,6 @@ class LatestStudiesFeed(Feed):
         return item.updated_at
 
     def item_categories(self, item: Study):
-        return [item.biome.biome_name]
+        biome_categories = [item.biome.biome_name] if item.biome else []
+        # TODO: analysis type categories etc
+        return biome_categories
