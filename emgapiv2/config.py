@@ -288,6 +288,13 @@ class ServiceURLsConfig(BaseModel):
     genome_search_proxy: str = "https://cobs-genome-search-01.mgnify.org/search"
 
 
+class DataDistributionConfig(BaseModel):
+    studies_url_root_for_permalinks: str = Field(
+        "https://www.ebi.ac.uk/metagenomics/studies/"
+    )
+    latest_studies_feed_count: int = 20
+
+
 class MaskReplacement(BaseModel):
     match: Pattern = Field(
         ..., description="A compiled regex pattern which, when matched, will be masked"
@@ -330,9 +337,6 @@ class DarwinCoreArchiveConfig(BaseModel):
         "EMBL-EBI's MGnify imposes no additional restriction on the use of the contributed data than those provided by the data owner."
     )
     keywords: list[str] = Field(["metagenomics", "environmental genomics"])
-    studies_url_root_for_distribution: str = Field(
-        "https://www.ebi.ac.uk/metagenomics/studies/"
-    )
 
 
 class RequestTrackerConfig(BaseModel):
@@ -362,6 +366,7 @@ class EMGConfig(BaseSettings):
     darwin_core_archive: DarwinCoreArchiveConfig = DarwinCoreArchiveConfig()
     rt: RequestTrackerConfig = RequestTrackerConfig()
     sentry_dsn: str = ""
+    distribution: DataDistributionConfig = DataDistributionConfig()
 
     model_config = SettingsConfigDict(
         env_prefix="emg_",

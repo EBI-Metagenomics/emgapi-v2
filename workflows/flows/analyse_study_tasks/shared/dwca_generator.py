@@ -93,7 +93,7 @@ def convert_dwcr_to_dwca(
         distribution=Distribution(
             online=DistributionOnline(
                 url=urljoin(
-                    EMG_CONFIG.darwin_core_archive.studies_url_root_for_distribution,
+                    EMG_CONFIG.distribution.studies_url_root_for_permalinks,
                     study.accession,
                 )
             )
