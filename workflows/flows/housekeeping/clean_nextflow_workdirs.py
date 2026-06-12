@@ -13,6 +13,8 @@ from pydantic import Field
 
 from activate_django_first import EMG_CONFIG
 
+from workflows.prefect_utils.input_helpers import ask_every_time_suspend_for_input_key
+
 
 class Workdir(TypedDict):
     """Shape of a candidate Nextflow work directory entry."""
@@ -223,6 +225,7 @@ def clean_old_nextflow_workdirs(
             description=description,
         ),
         timeout=EMG_CONFIG.slurm.default_flow_suspend_awaiting_input_timeout_secs,
+        key=ask_every_time_suspend_for_input_key(),
     )
 
     if not confirm.confirm_deletion:

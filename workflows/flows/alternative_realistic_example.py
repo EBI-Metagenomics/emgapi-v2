@@ -12,6 +12,7 @@ from prefect.task_runners import ThreadPoolTaskRunner
 from activate_django_first import EMG_CONFIG
 
 from ena.models import Sample, Study
+from workflows.prefect_utils.input_helpers import ask_every_time_suspend_for_input_key
 
 
 @task(
@@ -144,7 +145,8 @@ def alternative_realistic_example(accession: str):
 
                 Please pick how many samples (the max limit) to download for the study {study.accession}.
             """),
-        )
+        ),
+        key=ask_every_time_suspend_for_input_key(),
     )
 
     logger.info(
