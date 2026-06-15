@@ -21,7 +21,6 @@ from workflows.ena_utils.ena_api_requests import (
 from workflows.ena_utils.webin_owner_utils import validate_and_set_webin_owner
 from workflows.flows.analyse_study_tasks.cleanup_pipeline_directories import (
     delete_study_nextflow_workdir,
-    # delete_study_results_dir,
 )
 from workflows.flows.analyse_study_tasks.raw_reads.run_rawreads_pipeline_via_samplesheet import (
     run_rawreads_pipeline_via_samplesheet,
@@ -128,7 +127,8 @@ def analysis_rawreads_study(study_accession: str):
 
                 **Webin owner**
                 If the study is private, the webin account owner is needed so that the user can view the study they own.
-                """))
+                """)),
+        timeout=EMG_CONFIG.slurm.default_flow_suspend_awaiting_input_timeout_secs,
     )
 
     ena_study, __ = validate_and_set_webin_owner(

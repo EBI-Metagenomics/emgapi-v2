@@ -275,10 +275,10 @@ def generate_fake_pipeline_all_results(amplicon_run_folder: Path, run):
         / "SILVA-SSU"
     )
     (ssu_dir / f"{run}_SILVA-SSU.mseq").touch()
-    (ssu_dir / f"{run}_SILVA-SSU.txt").touch()
     with (
         (ssu_dir / f"{run}.html").open("w") as ssu_krona,
         (ssu_dir / f"{run}_SILVA-SSU.tsv").open("w") as ssu_tsv,
+        (ssu_dir / f"{run}_SILVA-SSU.txt").open("w") as ssu_tax,
     ):
         ssu_tsv.writelines(
             [
@@ -290,6 +290,11 @@ def generate_fake_pipeline_all_results(amplicon_run_folder: Path, run):
             ]
         )
         ssu_krona.write("<html></html>")
+        ssu_tax.write(dedent("""\
+            1	sk__Bacteria	k__	p__Bacillota	c__Bacilli
+            2	sk__Bacteria	k__	p__Bacillota	c__Bacilli	o__Lactobacillales	f__Carnobacteriaceae	g__Trichococcus
+            1	sk__Bacteria	k__	p__Bacillota	c__Clostridia	o__Eubacteriales	f__Eubacteriaceae	g__Eubacterium	s__Eubacterium_coprostanoligenes
+            """))
     pr2_dir = (
         amplicon_run_folder
         / EMG_CONFIG.amplicon_pipeline.taxonomy_summary_folder
@@ -1104,7 +1109,7 @@ def test_prefect_analyse_amplicon_flow(
         """))
 
     ## Pretend that a human resumed the flow with the biome picker.
-    def suspend_side_effect(wait_for_input=None):
+    def suspend_side_effect(wait_for_input=None, **kwargs):
         if wait_for_input.__name__ == "AnalyseStudyInput":
             return analysis_study_input_mocker(
                 biome=biome_choices["root.engineered"],
@@ -1233,13 +1238,13 @@ def test_prefect_analyse_amplicon_flow(
         / f"{EMG_CONFIG.amplicon_pipeline.pipeline_name}_{EMG_CONFIG.amplicon_pipeline.pipeline_version}"
     )
 
-    merge_study_summary_count = 6
+    merge_study_summary_count = 7
     merge_dwcr_summary_count = 6
     directory_count = 2
 
     total_expected_summary_count = (
         merge_study_summary_count + merge_dwcr_summary_count + directory_count
-    )  # adds up to 14
+    )  # adds up to 15
 
     Directory(
         path=summary_dir,
@@ -1275,13 +1280,13 @@ def test_prefect_analyse_amplicon_flow(
             GlobRule(
                 rule_name="All study level files are present",
                 glob_pattern=f"{study.first_accession}*{STUDY_SUMMARY_TSV}",
-                test=lambda f: len(list(f)) == 6,
+                test=lambda f: len(list(f)) == 7,
             ),
         ],
     )
 
     study.refresh_from_db()
-    assert len(study.downloads_as_objects) == 12
+    assert len(study.downloads_as_objects) == 13
 
     # test merging of study summaries again – expect default bludgeon should overwrite the existing ones
     logged_run = run_flow_and_capture_logs(
@@ -1294,7 +1299,7 @@ def test_prefect_analyse_amplicon_flow(
         logged_run.logs.count(
             f"Deleting {str(Path(summary_dir) / study.first_accession)}"
         )
-        == 6
+        == 7
     )
     Directory(
         path=summary_dir,
@@ -1305,7 +1310,7 @@ def test_prefect_analyse_amplicon_flow(
             GlobRule(
                 rule_name="All files are study level",
                 glob_pattern=f"{study.first_accession}*{STUDY_SUMMARY_TSV}",
-                test=lambda f: len(list(f)) == 6,
+                test=lambda f: len(list(f)) == 7,
             ),
             GlobRule(
                 rule_name="Samplesheet-specific DwC Ready files are present",
@@ -1316,7 +1321,7 @@ def test_prefect_analyse_amplicon_flow(
     )
 
     study.refresh_from_db()
-    assert len(study.downloads_as_objects) == 12
+    assert len(study.downloads_as_objects) == 13
     assert study.features.has_v6_analyses
 
     # simulate copy_v6_pipeline_results and copy_v6_summaries
@@ -1386,7 +1391,7 @@ def test_prefect_analyse_amplicon_flow(
             GlobRule(
                 rule_name="Recursive number of files",
                 glob_pattern="**/*",
-                test=lambda x: len(list(x)) == 155,
+                test=lambda x: len(list(x)) == 156,
             )
         ],
     )
@@ -1638,7 +1643,7 @@ def test_prefect_analyse_amplicon_flow_private_data(
     )
 
     ## Pretend that a human resumed the flow with the biome picker.
-    def suspend_side_effect(wait_for_input=None):
+    def suspend_side_effect(wait_for_input=None, **kwargs):
         if wait_for_input.__name__ == "AnalyseStudyInput":
             return analysis_study_input_mocker(
                 biome=biome_choices["root.engineered"],
@@ -1739,12 +1744,12 @@ def test_prefect_analyse_amplicon_flow_private_data(
     )
 
     merge_study_summary_count = 6
-    merge_dwcr_summary_count = 5
+    merge_dwcr_summary_count = 6
     directory_count = 2
 
     total_expected_summary_count = (
         merge_study_summary_count + merge_dwcr_summary_count + directory_count
-    )  # adds up to 13
+    )  # adds up to 14
 
     Directory(
         path=summary_dir,
@@ -1780,13 +1785,13 @@ def test_prefect_analyse_amplicon_flow_private_data(
             GlobRule(
                 rule_name="All study level files are present",
                 glob_pattern=f"{study.first_accession}*{STUDY_SUMMARY_TSV}",
-                test=lambda f: len(list(f)) == 5,
+                test=lambda f: len(list(f)) == 6,
             ),
         ],
     )
 
     study.refresh_from_db()
-    assert len(study.downloads_as_objects) == 11
+    assert len(study.downloads_as_objects) == 12
 
     # test merging of study summaries again – expect default bludgeon should overwrite the existing ones
     logged_run = run_flow_and_capture_logs(
@@ -1799,7 +1804,7 @@ def test_prefect_analyse_amplicon_flow_private_data(
         logged_run.logs.count(
             f"Deleting {str(Path(summary_dir) / study.first_accession)}"
         )
-        == 5
+        == 6
     )
     Directory(
         path=summary_dir,
@@ -1810,7 +1815,7 @@ def test_prefect_analyse_amplicon_flow_private_data(
             GlobRule(
                 rule_name="All files are study level",
                 glob_pattern=f"{study.first_accession}*{STUDY_SUMMARY_TSV}",
-                test=lambda f: len(list(f)) == 5,
+                test=lambda f: len(list(f)) == 6,
             ),
             GlobRule(
                 rule_name="Samplesheet-specific DwC Ready files are present",
@@ -1821,7 +1826,7 @@ def test_prefect_analyse_amplicon_flow_private_data(
     )
 
     study.refresh_from_db()
-    assert len(study.downloads_as_objects) == 11
+    assert len(study.downloads_as_objects) == 12
     assert study.features.has_v6_analyses
 
     assert study.is_private

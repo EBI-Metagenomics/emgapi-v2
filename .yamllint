@@ -8,5 +8,8 @@ rules:
       Taskfile.yaml
       docker-compose.yaml
       slurm-dev-environment/docker-compose.yaml
+  document-start:
+    ignore: |
+      kvstore/fixtures/*.yaml
 ignore:
   workflows/prefect_deployments/*.yaml  # managed by prefect

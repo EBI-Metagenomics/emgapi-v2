@@ -324,7 +324,7 @@ def test_prefect_assemble_study_flow(
         ],
     )
 
-    def suspend_side_effect(wait_for_input=None):
+    def suspend_side_effect(wait_for_input=None, **kwargs):
         if wait_for_input.__name__ == "AssembleStudyInput":
             return assembly_study_input_mocker(
                 biome=biome_choices["root.engineered"],
@@ -720,7 +720,7 @@ def test_prefect_assemble_private_study_flow(
     )
 
     ## Pretend that a human resumed the flow with the biome picker, and then with the assembler selector.
-    def suspend_side_effect(wait_for_input=None):
+    def suspend_side_effect(wait_for_input=None, **kwargs):
         if wait_for_input.__name__ == "AssembleStudyInput":
             return assembly_study_input_mocker(
                 biome=biome_choices["root.engineered"],

@@ -53,6 +53,7 @@ from workflows.prefect_utils.analyses_models_helpers import (
     get_users_as_choices,
 )
 from workflows.prefect_utils.flows_utils import django_db_flow as flow
+from workflows.prefect_utils.input_helpers import ask_every_time_suspend_for_input_key
 
 _AMPLICON = "AMPLICON"
 
@@ -137,7 +138,9 @@ def analysis_amplicon_study(study_accession: str):
                 **Webin owner**
                 If the study is private, the webin account owner is needed so that the user can view the study they own.
                 """),
-        )
+        ),
+        timeout=EMG_CONFIG.slurm.default_flow_suspend_awaiting_input_timeout_secs,
+        key=ask_every_time_suspend_for_input_key(),
     )
 
     ena_study, __ = validate_and_set_webin_owner(

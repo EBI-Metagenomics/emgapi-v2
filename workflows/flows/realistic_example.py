@@ -10,6 +10,7 @@ from prefect.input import RunInput
 from activate_django_first import EMG_CONFIG
 
 from ena.models import Sample, Study
+from workflows.prefect_utils.input_helpers import ask_every_time_suspend_for_input_key
 from workflows.prefect_utils.slurm_flow import (
     ClusterJobFailedException,
     run_cluster_job,
@@ -99,7 +100,8 @@ def realistic_example(accession: str):
 
                 Please pick how many samples (the max limit) to download for the study {study.accession}.
             """),
-        )
+        ),
+        key=ask_every_time_suspend_for_input_key(),
     )
 
     logger.info(

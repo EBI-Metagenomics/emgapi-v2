@@ -26,6 +26,7 @@ from workflows.prefect_utils.analyses_models_helpers import (
     get_users_as_choices,
 )
 from workflows.prefect_utils.flows_utils import django_db_flow as flow
+from workflows.prefect_utils.input_helpers import ask_every_time_suspend_for_input_key
 
 
 @flow(
@@ -108,7 +109,9 @@ def analysis_assembly_study(
 
                         {"**Webin owner** The study is private. Please provide the Webin account ID of the study owner so they can view their study." if needs_webin else ""}
                         """),
-            )
+            ),
+            timeout=EMG_CONFIG.slurm.default_flow_suspend_awaiting_input_timeout_secs,
+            key=ask_every_time_suspend_for_input_key(),
         )
 
         biome = analyses.models.Biome.objects.get(path=analyse_study_input.biome.name)

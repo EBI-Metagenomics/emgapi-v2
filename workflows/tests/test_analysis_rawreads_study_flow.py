@@ -546,7 +546,7 @@ def test_prefect_analyse_rawreads_flow(
         functional_analysis: bool
         webin_owner: Optional[str]
 
-    def suspend_side_effect(wait_for_input=None):
+    def suspend_side_effect(wait_for_input=None, **kwargs):
         if wait_for_input.__name__ == "AnalyseStudyInput":
             return AnalyseStudyInput(
                 biome=BiomeChoices["root.engineered"],
@@ -1092,7 +1092,7 @@ def test_prefect_analyse_rawreads_flow_private_data(
         functional_analysis: bool
         webin_owner: Optional[str]
 
-    def suspend_side_effect(wait_for_input=None):
+    def suspend_side_effect(wait_for_input=None, **kwargs):
         if wait_for_input.__name__ == "AnalyseStudyInput":
             return AnalyseStudyInput(
                 biome=BiomeChoices["root.engineered"],
@@ -1474,7 +1474,7 @@ def test_prefect_analyse_rawreads_flow_no_functional(
         functional_analysis: bool
         webin_owner: Optional[str]
 
-    def suspend_side_effect(wait_for_input=None):
+    def suspend_side_effect(wait_for_input=None, **kwargs):
         if wait_for_input.__name__ == "AnalyseStudyInput":
             return AnalyseStudyInput(
                 biome=BiomeChoices["root.engineered"],

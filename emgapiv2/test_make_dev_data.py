@@ -201,6 +201,8 @@ def test_make_dev_data(
     publication,
     mgnify_sample_lots_of_metadata,
     mgnify_study_full_metadata,
+    cog_categories_fixture,
+    kegg_classes_fixture,
 ):
     """
     Stub test that just sets up fixtures and dumps them to JSON for using as dev data.

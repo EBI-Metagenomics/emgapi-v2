@@ -12,7 +12,6 @@ from analyses.models import Biome
 from genomes.management.lib.genome_util import (
     apparent_accession_of_genome_dir,
     find_genome_results,
-    get_genome_result_path,
     read_json,
     sanity_check_catalogue_dir,
     sanity_check_genome_output_euks,
@@ -61,9 +60,7 @@ def get_catalogue(options):
     catalogue_dirname = os.path.basename(
         os.path.dirname(os.path.normpath(options["results_directory"]))
     )
-    results_path_to_save = (
-        f"/genomes/{catalogue_dirname}/{options['catalogue_version']}"
-    )
+    results_path_to_save = f"/{genome_config.genomes_ftp_results_subpath}/{catalogue_dirname}/{options['catalogue_version']}"
     catalogue_id = f"{options['catalogue_name'].replace(' ', '-')}-v{options['catalogue_version'].replace('.', '-')}".lower()
 
     catalogue, _ = GenomeCatalogue.objects.get_or_create(
@@ -110,14 +107,13 @@ def process_genome_dir(catalogue, genome_dir):
     path = Biome.lineage_to_path(genome_data["gold_biome"])
 
     genome_data["catalogue"] = catalogue
-    genome_results_path = get_genome_result_path(genome_dir)
 
-    genome_data["result_directory"] = f"{genome_results_path.replace('/website/', '/')}"
+    genome_data["result_directory"] = Path(catalogue.result_directory) / accession
 
     genome_data["biome"] = Biome.objects.filter(path=path).first()
 
     genome_data = Genome.clean_data(genome_data)
-    genome_data = Genome.clean_data(genome_data)
+    logger.info(f"UPDATED Writing genome data: {genome_data}")
 
     genome, _ = Genome.objects.update_or_create(
         accession=accession, defaults=genome_data

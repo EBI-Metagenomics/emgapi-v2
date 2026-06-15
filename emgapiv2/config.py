@@ -58,6 +58,9 @@ class SlurmConfig(BaseModel):
     preparation_command_job_memory_gb: int = 2
     # memory for jobs like `nextflow clean ...` or `rm -r ./work` that are run before bigger jobs
 
+    default_flow_suspend_awaiting_input_timeout_secs: int = 172800  # 2 days
+    # if a flow does suspend_flow_run(wait_for_input...), how long do we wait for it to be resumed before giving up?
+
 
 class MGnifyPipelineConfig(BaseModel):
     """
@@ -231,6 +234,10 @@ class WebinConfig(BaseModel):
     webin_cli_retries: int = 6
     webin_cli_retry_delay_seconds: int = 60
     auth_endpoint: AnyHttpUrl = "https://www.ebi.ac.uk/ena/submit/webin/auth"
+    token_endpoint: AnyHttpUrl = "https://www.ebi.ac.uk/ena/submit/webin/auth/token"
+    account_details_endpoint: AnyHttpUrl = (
+        "https://www.ebi.ac.uk/ena/submit/webin/auth/admin/submission-account"
+    )
     jwt_secret_key: str = None
     jwt_expiration_minutes: int = (
         1440  # TODO: shorten once https://github.com/eadwinCode/django-ninja-jwt/issues/33 is fixed
@@ -281,6 +288,13 @@ class ServiceURLsConfig(BaseModel):
     genome_search_proxy: str = "https://cobs-genome-search-01.mgnify.org/search"
 
 
+class DataDistributionConfig(BaseModel):
+    studies_url_root_for_permalinks: str = Field(
+        "https://www.ebi.ac.uk/metagenomics/studies/"
+    )
+    latest_studies_feed_count: int = 20
+
+
 class MaskReplacement(BaseModel):
     match: Pattern = Field(
         ..., description="A compiled regex pattern which, when matched, will be masked"
@@ -305,6 +319,7 @@ class GenomeConfig(BaseModel):
     )
     latest_mags_pipeline_tag: str = "v1.2.1"
     results_directory_root: str = "/nfs/donco/results"
+    genomes_ftp_results_subpath: str = "mgnify_genomes"
 
 
 class EuropePMCConfig(BaseModel):
@@ -322,9 +337,12 @@ class DarwinCoreArchiveConfig(BaseModel):
         "EMBL-EBI's MGnify imposes no additional restriction on the use of the contributed data than those provided by the data owner."
     )
     keywords: list[str] = Field(["metagenomics", "environmental genomics"])
-    studies_url_root_for_distribution: str = Field(
-        "https://www.ebi.ac.uk/metagenomics/studies/"
-    )
+
+
+class RequestTrackerConfig(BaseModel):
+    rt_requests_queue: str = Field("emg_queue")
+    url: AnyHttpUrl = Field("https://example.org/REST/2.0/")
+    token: str = Field(None)
 
 
 class EMGConfig(BaseSettings):
@@ -346,7 +364,9 @@ class EMGConfig(BaseSettings):
     europe_pmc: EuropePMCConfig = EuropePMCConfig()
     genomes: GenomeConfig = GenomeConfig()
     darwin_core_archive: DarwinCoreArchiveConfig = DarwinCoreArchiveConfig()
+    rt: RequestTrackerConfig = RequestTrackerConfig()
     sentry_dsn: str = ""
+    distribution: DataDistributionConfig = DataDistributionConfig()
 
     model_config = SettingsConfigDict(
         env_prefix="emg_",

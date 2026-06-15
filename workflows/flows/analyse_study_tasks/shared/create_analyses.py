@@ -35,7 +35,7 @@ def create_analyses(
     else:
         for_experiment_type_ = [for_experiment_type]
     analyses_list = []
-    runs = study.runs
+    runs = study.runs.all()
     if ena_library_strategy_policy == ENALibraryStrategyPolicy.ONLY_IF_CORRECT_IN_ENA:
         runs = runs.filter(experiment_type__in=[v.value for v in for_experiment_type_])
     elif (

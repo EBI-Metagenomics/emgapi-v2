@@ -24,6 +24,7 @@ from analyses.admin.study import (
     study_refresh_batch_counts_admin,
 )
 
+from . import feeds
 from .api import api
 
 BASE_URL = settings.BASE_URL
@@ -54,6 +55,7 @@ urlpatterns = [
     path(f"{BASE_URL}__debug__/", include("debug_toolbar.urls")),
     path(f"{BASE_URL}fieldfiles/", include("db_file_storage.urls")),
     path(BASE_URL, api.urls),
+    path(f"{BASE_URL}rss/studies/", feeds.LatestStudiesFeed()),
     path(f"{BASE_URL}workflows/", include("workflows.urls")),
 ]
 admin.site.index_title = "EMG DB Administration"

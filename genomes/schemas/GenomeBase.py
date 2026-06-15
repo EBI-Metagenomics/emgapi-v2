@@ -14,11 +14,14 @@ class GenomeBase(Schema):
     accession: str = Field(..., examples=["MGYG000000001"])
     ena_genome_accession: Optional[str]
     ena_sample_accession: Optional[str]
+    ena_study_accession: Optional[str]
     ncbi_genome_accession: Optional[str]
+    ncbi_study_accession: Optional[str]
     img_genome_accession: Optional[str]
     patric_genome_accession: Optional[str]
     length: int
     num_contigs: int
+    num_genomes_total: int = None
     n_50: int
     gc_content: float
     type: Genome.GenomeType

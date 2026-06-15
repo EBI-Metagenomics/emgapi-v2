@@ -14,6 +14,18 @@ fileignoreconfig:
 - filename: analyses/models.py
   allowed_patterns: [key]
 
+- filename: analyses/management/commands/merge_assemblies_duplicates.py
+  checksum: 88d8816aedddb6d0303df338854a283092fbc2d697fc08d37f5838d3423814af
+
+- filename: analyses/management/commands/merge_ena_study_duplicates.py
+  checksum: cbec9df9d7d9c07cceb95bd620bfd15fa7b7d938af0a1e67c68f6954be477389
+
+- filename: analyses/management/commands/merge_runs_duplicates.py
+  checksum: ba11faabb0b0890d4bec373d086ea6ebb416c21047d6d1568062b88b15636c2d
+
+- filename: analyses/management/commands/merge_mgys_duplicates.py
+  checksum: 1d9ec962dd81a8453027fd16c4918044f4f03c368859a11885b8126734ea3581
+
 - filename: analyses/tests.py
   allowed_patterns: [key]
 
@@ -24,7 +36,7 @@ fileignoreconfig:
   allowed_patterns: [password="password123"]
 
 - filename: deployment/ebi-wp-k8s-hl/ebi-wp-k8s-hl.yaml
-  checksum: c4ad998308f09a7017f930604108ada656b68eb3765989e19652824a5ef631ae
+  checksum: 5b5fee63f59bcf5779cea584d87a043b21b22f6d10a67a0a1957f186fbfc490b
 
 - filename: deployment/ebi-wp-k8s-hl/README.md
   allowed_patterns: [kubectl create secret generic nginx-private-data-config-secret --from-file=private-data-nginx.conf -n emgapiv2-hl-exp, google-maps-key-secret, create secret generic, google-maps-key]
@@ -36,16 +48,16 @@ fileignoreconfig:
   allowed_patterns: [OpenApiKeywords]
 
 - filename: emgapiv2/api/auth.py
-  checksum: c6f5567123aa0ab79412e2244398b2e6355a61635d8c861ab2fd650e0ae0f9bd
+  checksum: 5d028587b866b9dd2ac7aa0c4279441cc0d495e4df9338729db30ac583e49299
 
 - filename: emgapiv2/api/storage.py
   checksum: be76261cc58f5ccea9a0b0d9179894ff3260cb5672aa69a4cfc66732200fed0d
 
 - filename: emgapiv2/test_auth.py
-  checksum: 0a415d1b95a80e683db7275da1d4e62106863fb5670a7a377161295b9993c973
+  checksum: 70445b01e0fe46760e7fda5d7b4aa7762e55b60b3235ffa84fb1986fac24b1ec
 
 - filename: emgapiv2/api/token_controller.py
-  checksum: 545749dba1bdae2b79e23d43af01344331b8ff03cc909a730c57502ae016bbae
+  checksum: a8e985d6b3167f60056b11e7f915153ded842bbaff59d109e4d17f85df97199d
 
 - filename: emgapiv2/dict_utils.py
   allowed_patterns: [keys]
@@ -57,7 +69,7 @@ fileignoreconfig:
   checksum: 3afe465b36e4e141124bd84c8459c5aa81332eedf49b691eff22c74df63a0f18
 
 - filename: emgapiv2/settings.py
-  checksum: 83a113079b31fa3d07ce523e4a76378c97916823c53554148a1b815c34ab6b42
+  checksum: c6b5a727cf8a2638879787d5670b7f198574be0c31878a6bc92e652ce298af70
 
 - filename: emgapiv2/settings_test.py
   checksum: ded898400b4eda7e3cf75694af1b66235975a85eb5b8f49f3a2c708163a7aad4
@@ -68,11 +80,29 @@ fileignoreconfig:
 - filename: emgapiv2/widgets.py
   allowed_patterns: [key]
 
+- filename: kvstore/admin.py
+  checksum: 6b7aaaf47569a4e81acab3b714ce8896a2ec470dd60d7d834852fc80ee56d798
+
+- filename: kvstore/fixtures/cog_categories.yaml
+  ignore_detectors: [filecontent]
+
+- filename: kvstore/migrations/0001_initial.py
+  allowed_patterns: [key]
+
+- filename: kvstore/models.py
+  checksum: 0b14ee6c60bc8a82ca1148fcd1eb97e556ddfc0b736331096d250520b53bf544
+
+- filename: kvstore/tests.py
+  allowed_patterns: [key, test_key, update_key]
+
 - filename: pyproject.toml
   allowed_patterns: [Config key]
 
 - filename: slurm-dev-environment/configs/jwt_hs256.key
   checksum: cf9887754600f97f20b4afb223bcd666c3b0aa47dab9b067669c24997f398c26
+
+- filename: slurm-dev-environment/configs/prefect-flow-environment.sh
+  checksum: 7b7f8c4c12b95aad3d0a1757af84992d190d35c03b5f7d0294a8acbc7718f853
 
 - filename: slurm-dev-environment/configs/private-data-nginx.conf
   checksum: e3bb31e2a0f97c62ee684dd7124e5b72db364c52088ddd98331310909c6a0493
@@ -155,6 +185,9 @@ fileignoreconfig:
 - filename: workflows/flows/analyse_study_tasks/shared/dwca_generator.py
   allowed_patterns: [keywordSet, KeywordSet, keyword]
 
+- filename: workflows/flows/assemble_study.py
+  allowed_patterns: [key]
+
 - filename: workflows/flows/assemble_study_tasks/assemble_samplesheets.py
   allowed_patterns: [key]
 
@@ -179,6 +212,9 @@ fileignoreconfig:
 
 - filename: workflows/tests/test_analysis_rawreads_study_flow.py
   checksum: 211d4cfcd3e1b0dbe6e8b92683f6160661c50a17429d470ea0651daa41f5c3f8
+
+- filename: workflows/tests/flows/analyse_study_tasks/amplicon/test_import_primer_identification_for_imported_analyses.py
+  checksum: 8ad9be595fec33682cd1c23db036ac27453692e0a2b71bf80b104117f0bfbd6f
 
 - filename: workflows/flows/upload_assembly.py
   allowed_patterns: [key]
@@ -259,3 +295,5 @@ allowed_patterns:
 - pass_whole_object
 - dictionary key
 - OpenApiKeywords
+- KeyValueStore
+- key=ask_every_time_suspend_for_input_key()

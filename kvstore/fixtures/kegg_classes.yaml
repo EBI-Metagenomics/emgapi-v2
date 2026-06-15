@@ -1,0 +1,584 @@
+- model: kvstore.keyvaluestore
+  pk: kegg_class_description_map
+  fields:
+    value:
+      '09191': 'Unclassified: metabolism'
+      '09192': 'Unclassified: genetic information processing'
+      '09193': 'Unclassified: signaling and cellular processes'
+      '09194': Poorly characterized
+      '09167': Endocrine and metabolic diseases
+      '09168': NFIA; nuclear factor I/A
+      '09154': Digestive system
+      '09121': Transcription
+      '09165': Substance dependence
+      '09123': Folding, sorting and degradation
+      '09122': Translation
+      '09124': Replication and repair
+      '09109': Metabolism of terpenoids and polyketides
+      '09108': Metabolism of cofactors and vitamins
+      '09107': Glycan biosynthesis and metabolism
+      '09106': Metabolism of other amino acids
+      '09105': Amino acid metabolism
+      '09104': Nucleotide metabolism
+      '09103': Lipid metabolism
+      '09102': Energy metabolism
+      '09101': Carbohydrate metabolism
+      '09149': Aging
+      '09183': 'Protein families: signaling and cellular processes'
+      '09182': 'Protein families: genetic information processing'
+      '09181': 'Protein families: metabolism'
+      '09143': Cell growth and death
+      '09142': Cell motility
+      '09141': Transport and catabolism
+      '09166': Cardiovascular diseases
+      '09161': 'Cancers: Overview'
+      '09145': Cellular community - prokaryotes
+      '09162': 'Cancers: Specific types'
+      '09163': Immune diseases
+      '09132': Signal transduction
+      '09133': Signaling molecules and interaction
+      '09156': Nervous system
+      '09131': Membrane transport
+      '09151': Immune system
+      '09152': Endocrine system
+      '09153': Circulatory system
+      '09110': Biosynthesis of other secondary metabolites
+      '09111': Xenobiotics biodegradation and metabolism
+      '09158': Development
+      '09159': Environmental adaptation
+      '09155': Excretory system
+      '09164': Neurodegenerative diseases
+      '09144': Cellular community - eukaryotes
+      '09157': Sensory system
+      '04341': Hedgehog signaling pathway - fly
+      '01503': Cationic antimicrobial peptide (CAMP) resistance
+      '04391': Hippo signaling pathway - fly
+      '99981': Carbohydrate metabolism
+      '05323': Rheumatoid arthritis
+      '05218': Melanoma
+      '00130': Ubiquinone and other terpenoid-quinone biosynthesis
+      '04515': Cell adhesion molecules
+      '04624': Toll and Imd signaling pathway
+      '00965': Betalain biosynthesis
+      '00564': Glycerophospholipid metabolism
+      '03036': Chromosome and associated proteins
+      '03021': Transcription machinery
+      '04080': Neuroactive ligand-receptor interaction
+      '04022': cGMP-PKG signaling pathway
+      '00253': Tetracycline biosynthesis
+      '09120': Genetic Information Processing
+      '05110': Vibrio cholerae infection
+      '00604': Glycosphingolipid biosynthesis - ganglio series
+      '00941': Flavonoid biosynthesis
+      '04145': Phagosome
+      '05322': Systemic lupus erythematosus
+      '00030': Pentose phosphate pathway
+      '05120': Epithelial cell signaling in Helicobacter pylori infection
+      '00120': Primary bile acid biosynthesis
+      '04016': MAPK signaling pathway - plant
+      '01009': Protein phosphatases and associated proteins
+      '02048': Prokaryotic defense system
+      '05033': Nicotine addiction
+      '00190': Oxidative phosphorylation
+      '04146': Peroxisome
+      '00624': Polycyclic aromatic hydrocarbon degradation
+      '00750': Vitamin B6 metabolism
+      '00514': Other types of O-glycan biosynthesis
+      '04725': Cholinergic synapse
+      '01001': Protein kinases
+      '01000': Enzymes
+      '99983': Lipid metabolism
+      '04218': Cellular senescence
+      '00600': Sphingolipid metabolism
+      '00909': Sesquiterpenoid and triterpenoid biosynthesis
+      '00520': Amino sugar and nucleotide sugar metabolism
+      '05217': Basal cell carcinoma
+      '00770': Pantothenate and CoA biosynthesis
+      '04040': Ion channels
+      '00537': Glycosylphosphatidylinositol (GPI)-anchored proteins
+      '01003': Glycosyltransferases
+      '00945': Stilbenoid, diarylheptanoid and gingerol biosynthesis
+      '03460': Fanconi anemia pathway
+      '99978': Cell growth
+      '05321': Inflammatory bowel disease (IBD)
+      '00260': Glycine, serine and threonine metabolism
+      '99988': Secondary metabolism
+      '04066': HIF-1 signaling pathway
+      '99987': Cofactor metabolism
+      '01504': Antimicrobial resistance genes
+      '04923': Regulation of lipolysis in adipocytes
+      '00791': Atrazine degradation
+      '05140': Leishmaniasis
+      '00061': Fatty acid biosynthesis
+      '05012': Parkinson disease
+      '00261': Monobactam biosynthesis
+      '05168': Herpes simplex virus 1 infection
+      '00970': Aminoacyl-tRNA biosynthesis
+      '99986': Glycan metabolism
+      '05206': MicroRNAs in cancer
+      '04915': Estrogen signaling pathway
+      '04070': Phosphatidylinositol signaling system
+      '05144': Malaria
+      '00720': Carbon fixation pathways in prokaryotes
+      '09160': Human Diseases
+      '05418': Fluid shear stress and atherosclerosis
+      '04612': Antigen processing and presentation
+      '00900': Terpenoid backbone biosynthesis
+      '04740': Olfactory transduction
+      '04215': Apoptosis - multiple species
+      '00230': Purine metabolism
+      '00361': Chlorocyclohexane and chlorobenzene degradation
+      '05150': Staphylococcus aureus infection
+      '04714': Thermogenesis
+      '05340': Primary immunodeficiency
+      '04614': Renin-angiotensin system
+      '09176': 'Drug resistance: Antineoplastic'
+      '04727': GABAergic synapse
+      '04933': AGE-RAGE signaling pathway in diabetic complications
+      '00902': Monoterpenoid biosynthesis
+      '00536': Glycosaminoglycan binding proteins
+      '09130': Environmental Information Processing
+      '03020': RNA polymerase
+      '05226': Gastric cancer
+      '05133': Pertussis
+      '00540': Lipopolysaccharide biosynthesis
+      '04921': Oxytocin signaling pathway
+      '05134': Legionellosis
+      '02000': Transporters
+      '04630': Jak-STAT signaling pathway
+      '04925': Aldosterone synthesis and secretion
+      '00073': Cutin, suberine and wax biosynthesis
+      '04122': Sulfur relay system
+      '04261': Adrenergic signaling in cardiomyocytes
+      '00740': Riboflavin metabolism
+      '04114': Oocyte meiosis
+      '04380': Osteoclast differentiation
+      '00363': Bisphenol degradation
+      '04075': Plant hormone signal transduction
+      '05160': Hepatitis C
+      '04330': Notch signaling pathway
+      '05010': Alzheimer disease
+      '05132': Salmonella infection
+      '00920': Sulfur metabolism
+      '00290': Valine, leucine and isoleucine biosynthesis
+      '03009': Ribosome biogenesis
+      '04151': PI3K-Akt signaling pathway
+      '00332': Carbapenem biosynthesis
+      '00220': Arginine biosynthesis
+      '02030': Bacterial chemotaxis
+      '05205': Proteoglycans in cancer
+      '00561': Glycerolipid metabolism
+      '99976': Replication and repair
+      '04914': Progesterone-mediated oocyte maturation
+      '04310': Wnt signaling pathway
+      '00984': Steroid degradation
+      '99974': Translation
+      '04144': Endocytosis
+      '04979': Cholesterol metabolism
+      '05202': Transcriptional misregulation in cancer
+      '00966': Glucosinolate biosynthesis
+      '00521': Streptomycin biosynthesis
+      '09180': Brite Hierarchies
+      '04930': Type II diabetes mellitus
+      '00901': Indole alkaloid biosynthesis
+      '04011': MAPK signaling pathway - yeast
+      '02035': Bacterial motility proteins
+      '03011': Ribosome
+      '05410': Hypertrophic cardiomyopathy (HCM)
+      '00860': Porphyrin and chlorophyll metabolism
+      '00640': Propanoate metabolism
+      '00940': Phenylpropanoid biosynthesis
+      '00232': Caffeine metabolism
+      '05222': Small cell lung cancer
+      '05210': Colorectal cancer
+      '00410': beta-Alanine metabolism
+      '03032': DNA replication proteins
+      '04370': VEGF signaling pathway
+      '05203': Viral carcinogenesis
+      '00364': Fluorobenzoate degradation
+      '00790': Folate biosynthesis
+      '03019': Messenger RNA biogenesis
+      '01040': Biosynthesis of unsaturated fatty acids
+      '02040': Flagellar assembly
+      '04012': ErbB signaling pathway
+      '00670': One carbon pool by folate
+      '99973': Transcription
+      '05224': Breast cancer
+      '04050': Cytokine receptors
+      '00562': Inositol phosphate metabolism
+      '05014': Amyotrophic lateral sclerosis (ALS)
+      '04970': Salivary secretion
+      '03440': Homologous recombination
+      '01053': Biosynthesis of siderophore group nonribosomal peptides
+      '03010': Ribosome
+      '00140': Steroid hormone biosynthesis
+      '00300': Lysine biosynthesis
+      '09113': Global maps only
+      '04976': Bile secretion
+      '04024': cAMP signaling pathway
+      '05332': Graft-versus-host disease
+      '02025': Biofilm formation - Pseudomonas aeruginosa
+      '05221': Acute myeloid leukemia
+      '04150': mTOR signaling pathway
+      '03030': DNA replication
+      '04110': Cell cycle
+      '00535': Proteoglycans
+      '04670': Leukocyte transendothelial migration
+      '01057': Biosynthesis of type II polyketide products
+      '04975': Fat digestion and absorption
+      '02060': Phosphotransferase system (PTS)
+      '04090': CD molecules
+      '00981': Insect hormone biosynthesis
+      '04520': Adherens junction
+      '04977': Vitamin digestion and absorption
+      '05034': Alcoholism
+      '05320': Autoimmune thyroid disease
+      '00603': Glycosphingolipid biosynthesis - globo and isoglobo series
+      '00760': Nicotinate and nicotinamide metabolism
+      '00780': Biotin metabolism
+      '04927': Cortisol synthesis and secretion
+      '00572': Arabinogalactan biosynthesis - Mycobacterium
+      '09150': Organismal Systems
+      '04742': Taste transduction
+      '04140': Autophagy - animal
+      '99975': Protein processing
+      '00281': Geraniol degradation
+      '00040': Pentose and glucuronate interconversions
+      '00512': Mucin type O-glycan biosynthesis
+      '05131': Shigellosis
+      '04932': Non-alcoholic fatty liver disease (NAFLD)
+      '01521': EGFR tyrosine kinase inhibitor resistance
+      '00380': Tryptophan metabolism
+      '04320': Dorso-ventral axis formation
+      '04966': Collecting duct acid secretion
+      '09140': Cellular Processes
+      '00010': Glycolysis / Gluconeogenesis
+      '04014': Ras signaling pathway
+      '03013': RNA transport
+      '04072': Phospholipase D signaling pathway
+      '01055': Biosynthesis of vancomycin group antibiotics
+      '05145': Toxoplasmosis
+      '03029': Mitochondrial biogenesis
+      '00565': Ether lipid metabolism
+      '00950': Isoquinoline alkaloid biosynthesis
+      '00620': Pyruvate metabolism
+      '04141': Protein processing in endoplasmic reticulum
+      '00471': D-Glutamine and D-glutamate metabolism
+      '04260': Cardiac muscle contraction
+      '04658': Th1 and Th2 cell differentiation
+      '00405': Phenazine biosynthesis
+      '03018': RNA degradation
+      '04540': Gap junction
+      '03420': Nucleotide excision repair
+      '00650': Butanoate metabolism
+      '01056': Biosynthesis of type II polyketide backbone
+      '01502': Vancomycin resistance
+      '05219': Bladder cancer
+      '04971': Gastric acid secretion
+      '00472': D-Arginine and D-ornithine metabolism
+      '04625': C-type lectin receptor signaling pathway
+      '04113': Meiosis - yeast
+      '00401': Novobiocin biosynthesis
+      '05170': Human immunodeficiency virus 1 infection
+      '05164': Influenza A
+      '04928': Parathyroid hormone synthesis, secretion and action
+      '09174': 'Infectious diseases: Parasitic'
+      '05230': Central carbon metabolism in cancer
+      '04973': Carbohydrate digestion and absorption
+      '03000': Transcription factors
+      '04710': Circadian rhythm
+      '00254': Aflatoxin biosynthesis
+      '04510': Focal adhesion
+      '00062': Fatty acid elongation
+      '04940': Type I diabetes mellitus
+      '04514': Cell adhesion molecules (CAMs)
+      '04750': Inflammatory mediator regulation of TRP channels
+      '00630': Glyoxylate and dicarboxylate metabolism
+      '00430': Taurine and hypotaurine metabolism
+      '00550': Peptidoglycan biosynthesis
+      '05412': Arrhythmogenic right ventricular cardiomyopathy (ARVC)
+      '04662': B cell receptor signaling pathway
+      '04726': Serotonergic synapse
+      '05032': Morphine addiction
+      '01002': Peptidases
+      '05213': Endometrial cancer
+      '03041': Spliceosome
+      '04810': Regulation of actin cytoskeleton
+      '04371': Apelin signaling pathway
+      '00534': Glycosaminoglycan biosynthesis - heparan sulfate / heparin
+      '03430': Mismatch repair
+      '00623': Toluene degradation
+      '00643': Styrene degradation
+      '00311': Penicillin and cephalosporin biosynthesis
+      '04212': Longevity regulating pathway - worm
+      '04392': Hippo signaling pathway - multiple species
+      '00983': Drug metabolism - other enzymes
+      '04030': G protein-coupled receptors
+      '04917': Prolactin signaling pathway
+      '04664': Fc epsilon RI signaling pathway
+      '04010': MAPK signaling pathway
+      '05212': Pancreatic cancer
+      '02024': Quorum sensing
+      '03450': Non-homologous end-joining
+      '04934': Cushing syndrome
+      '04142': Lysosome
+      '04960': Aldosterone-regulated sodium reabsorption
+      '04728': Dopaminergic synapse
+      '00052': Galactose metabolism
+      '00622': Xylene degradation
+      '05310': Asthma
+      '05152': Tuberculosis
+      '03400': DNA repair and recombination proteins
+      '04512': ECM-receptor interaction
+      '04650': Natural killer cell mediated cytotoxicity
+      '00592': alpha-Linolenic acid metabolism
+      '00524': Neomycin, kanamycin and gentamicin biosynthesis
+      '04920': Adipocytokine signaling pathway
+      '04721': Synaptic vesicle cycle
+      '00440': Phosphonate and phosphinate metabolism
+      '05020': Prion diseases
+      '04131': Membrane trafficking
+      '04918': Thyroid hormone synthesis
+      '04620': Toll-like receptor signaling pathway
+      '04120': Ubiquitin mediated proteolysis
+      '04530': Tight junction
+      '04064': NF-kappa B signaling pathway
+      '09175': 'Drug resistance: Antimicrobial'
+      '04659': Th17 cell differentiation
+      '04214': Apoptosis - fly
+      '00930': Caprolactam degradation
+      '09171': 'Infectious diseases: Bacterial'
+      '04622': RIG-I-like receptor signaling pathway
+      '05166': Human T-cell leukemia virus 1 infection
+      '01008': Polyketide biosynthesis proteins
+      '04130': SNARE interactions in vesicular transport
+      '03012': Translation factors
+      '04091': Lectins
+      '03015': mRNA surveillance pathway
+      '04137': Mitophagy - animal
+      '99997': Function unknown
+      '04730': Long-term depression
+      '00626': Naphthalene degradation
+      '00944': Flavone and flavonol biosynthesis
+      '01052': Type I polyketide structures
+      '04722': Neurotrophin signaling pathway
+      '00571': Lipoarabinomannan (LAM) biosynthesis
+      '05216': Thyroid cancer
+      '00072': Synthesis and degradation of ketone bodies
+      '04911': Insulin secretion
+      '04812': Cytoskeleton proteins
+      '04972': Pancreatic secretion
+      '04060': Cytokine-cytokine receptor interaction
+      '00904': Diterpenoid biosynthesis
+      '05225': Hepatocellular carcinoma
+      '05165': Human papillomavirus infection
+      '05204': Chemical carcinogenesis
+      '04213': Longevity regulating pathway - multiple species
+      '09190': Not Included in Pathway or Brite
+      '00621': Dioxin degradation
+      '00513': Various types of N-glycan biosynthesis
+      '09184': RNA family
+      '00402': Benzoxazinoid biosynthesis
+      '03310': Nuclear receptors
+      '03110': Chaperones and folding catalysts
+      '04340': Hedgehog signaling pathway
+      '00340': Histidine metabolism
+      '00563': Glycosylphosphatidylinositol (GPI)-anchor biosynthesis
+      '02022': Two-component system
+      '01005': Lipopolysaccharide biosynthesis proteins
+      '01006': Prenyltransferases
+      '04360': Axon guidance
+      '01007': Amino acid related enzymes
+      '04390': Hippo signaling pathway
+      '01051': Biosynthesis of ansamycins
+      '09100': Metabolism
+      '00231': Puromycin biosynthesis
+      '01524': Platinum drug resistance
+      '04152': AMPK signaling pathway
+      '04668': TNF signaling pathway
+      '00330': Arginine and proline metabolism
+      '04138': Autophagy - yeast
+      '05200': Pathways in cancer
+      '00525': Acarbose and validamycin biosynthesis
+      '00903': Limonene and pinene degradation
+      '02042': Bacterial toxins
+      '03008': Ribosome biogenesis in eukaryotes
+      '00404': Staurosporine biosynthesis
+      '03040': Spliceosome
+      '00071': Fatty acid degradation
+      '04210': Apoptosis
+      '04147': Exosome
+      '00473': D-Alanine metabolism
+      '00331': Clavulanic acid biosynthesis
+      '00680': Methane metabolism
+      '05214': Glioma
+      '01058': Acridone alkaloid biosynthesis
+      '00365': Furfural degradation
+      '00830': Retinol metabolism
+      '04712': Circadian rhythm - plant
+      '04657': IL-17 signaling pathway
+      '00100': Steroid biosynthesis
+      '00906': Carotenoid biosynthesis
+      '00633': Nitrotoluene degradation
+      '04961': Endocrine and other factor-regulated calcium reabsorption
+      '03200': Viral proteins
+      '04672': Intestinal immune network for IgA production
+      '04924': Renin secretion
+      '04020': Calcium signaling pathway
+      '00942': Anthocyanin biosynthesis
+      '02010': ABC transporters
+      '00194': Photosynthesis proteins
+      '00533': Glycosaminoglycan biosynthesis - keratan sulfate
+      '04720': Long-term potentiation
+      '04121': Ubiquitin system
+      '00523': Polyketide sugar unit biosynthesis
+      '00710': Carbon fixation in photosynthetic organisms
+      '00350': Tyrosine metabolism
+      '04974': Protein digestion and absorption
+      '99980': Enzymes with EC numbers
+      '00960': Tropane, piperidine and pyridine alkaloid biosynthesis
+      '04071': Sphingolipid signaling pathway
+      '05330': Allograft rejection
+      '00403': Indole diterpene alkaloid biosynthesis
+      '04919': Thyroid hormone signaling pathway
+      '03051': Proteasome
+      '04713': Circadian entrainment
+      '99985': Amino acid metabolism
+      '04115': p53 signaling pathway
+      '04640': Hematopoietic cell lineage
+      '00333': Prodigiosin biosynthesis
+      '01501': beta-Lactam resistance
+      '09172': 'Infectious diseases: Viral'
+      '00240': Pyrimidine metabolism
+      '04068': FoxO signaling pathway
+      '99984': Nucleotide metabolism
+      '00270': Cysteine and methionine metabolism
+      '00908': Zeatin biosynthesis
+      '00591': Linoleic acid metabolism
+      '00531': Glycosaminoglycan degradation
+      '03050': Proteasome
+      '04744': Phototransduction
+      '04978': Mineral absorption
+      '04062': Chemokine signaling pathway
+      '01054': Nonribosomal peptide structures
+      '00660': C5-Branched dibasic acid metabolism
+      '01004': Lipid biosynthesis proteins
+      '00910': Nitrogen metabolism
+      '00532': Glycosaminoglycan biosynthesis - chondroitin sulfate / dermatan sulfate
+      '05231': Choline metabolism in cancer
+      '03060': Protein export
+      '04139': Mitophagy - yeast
+      '00982': Drug metabolism - cytochrome P450
+      '99982': Energy metabolism
+      '00195': Photosynthesis
+      '04962': Vasopressin-regulated water reabsorption
+      '00601': Glycosphingolipid biosynthesis - lacto and neolacto series
+      '00730': Thiamine metabolism
+      '04015': Rap1 signaling pathway
+      '05111': Biofilm formation - Vibrio cholerae
+      '02020': Two-component system
+      '99992': Structural proteins
+      '04013': MAPK signaling pathway - fly
+      '05031': Amphetamine addiction
+      '00590': Arachidonic acid metabolism
+      '04052': Cytokines and growth factors
+      '00510': N-Glycan biosynthesis
+      '00511': Other glycan degradation
+      '99977': Transport
+      '00642': Ethylbenzene degradation
+      '99979': Unclassified viral proteins
+      '03070': Bacterial secretion system
+      '05416': Viral myocarditis
+      '05220': Chronic myeloid leukemia
+      '05146': Amoebiasis
+      '00310': Lysine degradation
+      '04724': Glutamatergic synapse
+      '04054': Pattern recognition receptors
+      '05169': Epstein-Barr virus infection
+      '00905': Brassinosteroid biosynthesis
+      '04660': T cell receptor signaling pathway
+      '03016': Transfer RNA biogenesis
+      '00199': Cytochrome P450
+      '00360': Phenylalanine metabolism
+      '02026': Biofilm formation - Escherichia coli
+      '00280': Valine, leucine and isoleucine degradation
+      '04031': GTP-binding proteins
+      '00362': Benzoate degradation
+      '04112': Cell cycle - Caulobacter
+      '01059': Biosynthesis of enediyne antibiotics
+      '05162': Measles
+      '00943': Isoflavonoid biosynthesis
+      '01011': Peptidoglycan biosynthesis and degradation proteins
+      '00460': Cyanoamino acid metabolism
+      '05223': Non-small cell lung cancer
+      '04916': Melanogenesis
+      '04910': Insulin signaling pathway
+      '03410': Base excision repair
+      '05215': Prostate cancer
+      '00480': Glutathione metabolism
+      '04964': Proximal tubule bicarbonate reclamation
+      '05130': Pathogenic Escherichia coli infection
+      '05161': Hepatitis B
+      '04217': Necroptosis
+      '00400': Phenylalanine, tyrosine and tryptophan biosynthesis
+      '99995': Signaling proteins
+      '04745': Phototransduction - fly
+      '00999': Biosynthesis of secondary metabolites - unclassified
+      '04216': Ferroptosis
+      '05016': Huntington disease
+      '05100': Bacterial invasion of epithelial cells
+      '00627': Aminobenzoate degradation
+      '03022': Basal transcription factors
+      '99999': Others
+      '04611': Platelet activation
+      '04621': NOD-like receptor signaling pathway
+      '00500': Starch and sucrose metabolism
+      '00450': Selenocompound metabolism
+      '04610': Complement and coagulation cascades
+      '04211': Longevity regulating pathway
+      '05414': Dilated cardiomyopathy (DCM)
+      '00625': Chloroalkane and chloroalkene degradation
+      '99998': Others
+      '03320': PPAR signaling pathway
+      '99993': Cell motility
+      '04111': Cell cycle - yeast
+      '04623': Cytosolic DNA-sensing pathway
+      '00020': Citrate cycle (TCA cycle)
+      '01522': Endocrine resistance
+      '00515': Mannose type O-glycan biosynthesis
+      '04912': GnRH signaling pathway
+      '02044': Secretion system
+      '00250': Alanine, aspartate and glutamate metabolism
+      '04723': Retrograde endocannabinoid signaling
+      '05167': Kaposi sarcoma-associated herpesvirus infection
+      '01523': Antifolate resistance
+      '99994': Others
+      '04926': Relaxin signaling pathway
+      '03100': Non-coding RNAs
+      '04626': Plant-pathogen interaction
+      '05142': Chagas disease (American trypanosomiasis)
+      '00980': Metabolism of xenobiotics by cytochrome P450
+      '04922': Glucagon signaling pathway
+      '00196': Photosynthesis - antenna proteins
+      '00785': Lipoic acid metabolism
+      '04666': Fc gamma R-mediated phagocytosis
+      '04913': Ovarian steroidogenesis
+      '00522': Biosynthesis of 12-, 14- and 16-membered macrolides
+      '00121': Secondary bile acid biosynthesis
+      '04711': Circadian rhythm - fly
+      '04136': Autophagy - other
+      '04550': Signaling pathways regulating pluripotency of stem cells
+      '05163': Human cytomegalovirus infection
+      '05143': African trypanosomiasis
+      '00051': Fructose and mannose metabolism
+      '04950': Maturity onset diabetes of the young
+      '09112': Not included in regular maps
+      '99996': General function prediction only
+      '04270': Vascular smooth muscle contraction
+      '04350': TGF-beta signaling pathway
+      '05211': Renal cell carcinoma
+      '05030': Cocaine addiction
+      '00053': Ascorbate and aldarate metabolism
+      '04931': Insulin resistance
+      '09185': ''
+    updated_at: '2026-05-27T10:35:00Z'

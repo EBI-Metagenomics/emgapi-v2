@@ -1,5 +1,6 @@
 from django.conf import settings
 from django.db import models
+from django.utils import timezone
 
 from analyses.base_models.base_models import TimeStampedModel
 from analyses.base_models.with_downloads_models import WithDownloadsModel
@@ -9,6 +10,9 @@ EMG_CONFIG = settings.EMG_CONFIG
 
 
 class GenomeCatalogue(WithDownloadsModel, TimeStampedModel):
+    updated_at = models.DateTimeField(default=timezone.now, editable=True)
+    # override default auto-updated timestamp for catalogues, so that date represents pipeline run date not object date
+
     DOWNLOAD_PARENT_IDENTIFIER_ATTR = "catalogue_id"
     catalogue_id = models.SlugField(
         db_column="catalogue_id", max_length=100, primary_key=True

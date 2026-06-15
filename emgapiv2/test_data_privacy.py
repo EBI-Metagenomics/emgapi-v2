@@ -555,3 +555,138 @@ def test_private_analysis_annotations_access(
         headers=headers_owner,
     )
     assert response.status_code == 200
+
+
+def test_request_analysis_endpoint(
+    ninja_api_client, httpx_mock, webin_private_auth_token
+):
+    httpx_mock.add_response(
+        url="http://fake-auth.example.com/token",
+        status_code=200,
+        text="fake-token",
+    )
+    httpx_mock.add_response(
+        url="http://fake-auth.example.com/account",
+        status_code=200,
+        json={
+            "submissionContacts": [
+                {
+                    "emailAddress": "hello@example.org",
+                    "mainContact": True,
+                    "firstName": "Hello",
+                    "surname": "World",
+                },
+                {
+                    "emailAddress": "goodbye@example.org",
+                    "mainContact": False,
+                    "consortium": "Earth",
+                },
+            ]
+        },
+        is_reusable=True,
+    )
+    httpx_mock.add_response(
+        url="http://fake-rt.example.com/REST/2.0/ticket",
+        status_code=201,
+        json={
+            "id": "1",
+        },
+    )
+
+    creation_response = ninja_api_client.post(
+        "/my-data/request",
+        json={
+            "study_accession": "PRJEB123456",
+            "analysis_type": "Analysis",
+            "request_type": "Public",
+            "comments": "This is a test analysis request",
+        },
+        headers={"Authorization": f"Bearer {webin_private_auth_token}"},
+    )
+    assert creation_response.status_code == 200
+    assert "1" in creation_response.json()["message"]
+
+    # if token cant be fetched from ENA
+    httpx_mock.add_response(
+        url="http://fake-auth.example.com/token",
+        status_code=401,
+    )
+    # rt endpoint should cause failure since it has already been used, if the 401 token does not stop us
+    creation_response = ninja_api_client.post(
+        "/my-data/request",
+        json={
+            "study_accession": "PRJEB12345",
+            "analysis_type": "Analysis",
+            "request_type": "Public",
+            "comments": "This is a test analysis request",
+        },
+        headers={"Authorization": f"Bearer {webin_private_auth_token}"},
+    )
+    assert creation_response.status_code == 401
+
+    # if RT server goes bad
+    httpx_mock.add_response(
+        url="http://fake-auth.example.com/token",
+        status_code=200,
+    )
+    httpx_mock.add_response(
+        url="http://fake-rt.example.com/REST/2.0/ticket",
+        status_code=500,
+    )
+    creation_response = ninja_api_client.post(
+        "/my-data/request",
+        json={
+            "study_accession": "PRJEB12345",
+            "analysis_type": "Analysis",
+            "request_type": "Public",
+            "comments": "This is a test analysis request",
+        },
+        headers={"Authorization": f"Bearer {webin_private_auth_token}"},
+    )
+    assert creation_response.status_code == 424
+
+    # if no auth token given
+    creation_response = ninja_api_client.post(
+        "/my-data/request",
+        json={
+            "study_accession": "PRJEB12345",
+            "analysis_type": "Analysis",
+            "request_type": "Public",
+            "comments": "This is a test analysis request",
+        },
+    )
+    assert creation_response.status_code == 401
+
+    # incorrectly signed token should fail on perms
+    header, payload, signature = webin_private_auth_token.split(".")
+    bad_token = f"{header}.{payload}.invalidsignature"
+
+    creation_response = ninja_api_client.post(
+        "/my-data/request",
+        json={
+            "study_accession": "PRJEB12345",
+            "analysis_type": "Analysis",
+            "request_type": "Public",
+            "comments": "This is a test analysis request",
+        },
+        headers={"Authorization": f"Bearer {bad_token}"},
+    )
+    assert creation_response.status_code == 401
+
+    # bad study accession format should fail
+    httpx_mock.add_response(
+        url="http://fake-auth.example.com/token",
+        status_code=200,
+        text="fake-token",
+    )
+    creation_response = ninja_api_client.post(
+        "/my-data/request",
+        json={
+            "study_accession": "Fish projects",
+            "analysis_type": "Analysis",
+            "request_type": "Public",
+            "comments": "This is a test analysis request",
+        },
+        headers={"Authorization": f"Bearer {webin_private_auth_token}"},
+    )
+    assert creation_response.status_code == 400
