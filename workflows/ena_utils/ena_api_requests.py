@@ -12,7 +12,6 @@ from prefect.tasks import task_input_hash
 import analyses.models
 import ena.models
 from emgapiv2.dict_utils import some
-from emgapiv2.enum_utils import FutureStrEnum
 from workflows.ena_utils.abstract import ENAPortalResultType
 from workflows.ena_utils.analysis import ENAAnalysisFields, ENAAnalysisQuery
 from workflows.ena_utils.ena_accession_matching import (
@@ -20,15 +19,20 @@ from workflows.ena_utils.ena_accession_matching import (
     extract_study_accession_from_study_title,
 )
 from workflows.ena_utils.ena_auth import dcc_auth
+from workflows.ena_utils.ena_policies import (
+    ALLOWED_LIBRARY_SOURCE,
+    COMMONLY_INCORRECT_LIBRARY_SOURCE,
+    METAGENOME_SCIENTIFIC_NAME,
+    PAIRED_END_LIBRARY_LAYOUT,
+    ENALibrarySourcePolicy,
+    ENALibraryStrategyPolicy,
+)
 from workflows.ena_utils.read_run import ENAReadRunFields, ENAReadRunQuery
 from workflows.ena_utils.requestors import ENAAPIRequest, ENAAvailabilityException
 from workflows.ena_utils.sample import ENASampleFields, ENASampleQuery
 from workflows.ena_utils.study import ENAStudyFields, ENAStudyQuery
 
-ALLOWED_LIBRARY_SOURCE: list = ["METAGENOMIC", "METATRANSCRIPTOMIC"]
-SINGLE_END_LIBRARY_LAYOUT: str = "SINGLE"
-PAIRED_END_LIBRARY_LAYOUT: str = "PAIRED"
-METAGENOME_SCIENTIFIC_NAME: str = "metagenome"
+
 PRIMARY_METAGENOME_ASSEMBLY_TYPE: str = '"primary metagenome"'
 
 EMG_CONFIG = settings.EMG_CONFIG
@@ -38,16 +42,6 @@ RETRY_DELAY = EMG_CONFIG.ena.portal_search_api_retry_delay_seconds
 
 
 base_logger = logging.getLogger(__name__)
-
-
-class ENALibraryStrategyPolicy(FutureStrEnum):
-    """
-    Each policy determines a trust vs. override level for the library strategy metadata in ENA.
-    """
-
-    ONLY_IF_CORRECT_IN_ENA = "only_if_correct_in_ena"
-    ASSUME_OTHER_ALSO_MATCHES = "assume_other_also_matches"
-    OVERRIDE_ALL = "override_all"
 
 
 def library_strategy_policy_to_filter(
@@ -197,8 +191,29 @@ def check_reads_fastq(
 
 
 def _make_samples_and_run(
-    run_or_assembly_response: dict, study: analyses.models.Study
+    run_or_assembly_response: dict,
+    study: analyses.models.Study,
+    library_strategy_policy: ENALibraryStrategyPolicy = ENALibraryStrategyPolicy.ONLY_IF_CORRECT_IN_ENA,
+    library_source_policy: ENALibrarySourcePolicy = ENALibrarySourcePolicy.OVERRIDE_GENOMIC_IF_METAGENOMIC_SCIENTIFIC_NAME,
+    expected_experiment_type: analyses.models.Run.ExperimentTypes | None = None,
 ) -> tuple[ena.models.Sample, analyses.models.Sample, analyses.models.Run]:
+    """
+    Generate and update samples and runs for given study and ENA data.
+
+    This function updates or creates ENA and MGnify sample records as well as
+    run records using the provided ENA data and study information. Metadata
+    for samples and runs is extracted and synchronized accordingly. It also
+    handles library strategy and source policies to determine experiment
+    types. If an ENA sample is newly created, it fetches complete metadata
+    for the sample from the ENA API.
+
+    :param run_or_assembly_response: A dictionary containing metadata from ENA about a run or assembly.
+    :param study: A Study object representing the context in which the samples and runs are created or updated.
+    :param library_strategy_policy: Policy dictating how to handle library strategies that may be incorrect in ENA
+    :param library_source_policy: Policy determining how library source from ENA is interpreted or overridden
+    :param expected_experiment_type: Optional predefined expected experiment type, used if the policies dictate it should be overridden
+    :return: A tuple with three components - (ENA sample, MGnify sample, Run).
+    """
     _ = ENAReadRunFields  # fields used here are also present on ENAAnalysisFields
 
     ena_sample, ena_sample_was_created = ena.models.Sample.objects.update_or_create(
@@ -263,6 +278,10 @@ def _make_samples_and_run(
     run.set_experiment_type_by_metadata(
         run_or_assembly_response.get(_.LIBRARY_STRATEGY, ""),
         run_or_assembly_response.get(_.LIBRARY_SOURCE, ""),
+        run_or_assembly_response.get(_.SCIENTIFIC_NAME, ""),
+        library_strategy_policy=library_strategy_policy,
+        library_source_policy=library_source_policy,
+        expected_experiment_type=expected_experiment_type,
     )
 
     if ena_sample_was_created:
@@ -284,8 +303,11 @@ def _make_samples_and_run(
 def get_study_readruns_from_ena(
     accession: str,
     limit: int = 20,
-    filter_library_strategy: list[str] = None,
+    filter_library_strategy: list[str] | None = None,
     raise_on_empty: bool = True,
+    library_strategy_policy: ENALibraryStrategyPolicy = ENALibraryStrategyPolicy.ONLY_IF_CORRECT_IN_ENA,
+    library_source_policy: ENALibrarySourcePolicy = ENALibrarySourcePolicy.OVERRIDE_GENOMIC_IF_METAGENOMIC_SCIENTIFIC_NAME,
+    expected_experiment_type: analyses.models.Run.ExperimentTypes | None = None,
 ) -> List[str]:
     """
     Retrieve a list of read_runs from the ENA Portal API, for a given study.
@@ -347,12 +369,21 @@ def get_study_readruns_from_ena(
     run_accessions = []
     for read_run in portal_read_runs:
         # check scientific name and metagenome source
-        if (
-            METAGENOME_SCIENTIFIC_NAME not in read_run[_.SCIENTIFIC_NAME]
-            and read_run[_.LIBRARY_SOURCE] not in ALLOWED_LIBRARY_SOURCE
-        ):
+        if library_source_policy == ENALibrarySourcePolicy.OVERRIDE_ALL_TO_METAGENOMIC:
+            library_source_is_valid_by_policy = True
+        elif library_source_policy == ENALibrarySourcePolicy.ONLY_IF_METAGENOMIC_IN_ENA:
+            library_source_is_valid_by_policy = (
+                read_run[_.LIBRARY_SOURCE] in ALLOWED_LIBRARY_SOURCE
+            )
+        else:  # OVERRIDE_GENOMIC_IF_METAGENOMIC_SCIENTIFIC_NAME
+            library_source_is_valid_by_policy = (
+                METAGENOME_SCIENTIFIC_NAME in read_run[_.SCIENTIFIC_NAME].lower()
+                and read_run[_.LIBRARY_SOURCE] in COMMONLY_INCORRECT_LIBRARY_SOURCE
+            ) or read_run[_.LIBRARY_SOURCE] in ALLOWED_LIBRARY_SOURCE
+
+        if not library_source_is_valid_by_policy:
             logger.warning(
-                f"Run {read_run['run_accession']} is not in metagenome taxa and not in allowed library_sources. "
+                f"Run {read_run['run_accession']} is not in metagenome taxa and not in allowed library_sources (policy: {library_source_policy}). "
                 f"No further processing for that run."
             )
             continue
@@ -371,7 +402,13 @@ def get_study_readruns_from_ena(
 
         logger.info(f"Creating objects for {read_run[_.RUN_ACCESSION]}")
 
-        __, __, run = _make_samples_and_run(read_run, mgys_study)
+        __, __, run = _make_samples_and_run(
+            read_run,
+            mgys_study,
+            library_strategy_policy=library_strategy_policy,
+            library_source_policy=library_source_policy,
+            expected_experiment_type=expected_experiment_type,
+        )
         run.metadata[analyses.models.Run.CommonMetadataKeys.FASTQ_FTPS] = (
             fastq_ftp_reads
         )
@@ -482,7 +519,13 @@ def sync_privacy_state_of_ena_study_and_derived_objects(
     cache_key_fn=task_input_hash,
     task_run_name="Get study assemblies from ENA: {accession}",
 )
-def get_study_assemblies_from_ena(accession: str, limit: int = 10) -> list[str]:
+def get_study_assemblies_from_ena(
+    accession: str,
+    limit: int = 10,
+    library_strategy_policy: ENALibraryStrategyPolicy = ENALibraryStrategyPolicy.ONLY_IF_CORRECT_IN_ENA,
+    library_source_policy: ENALibrarySourcePolicy = ENALibrarySourcePolicy.OVERRIDE_GENOMIC_IF_METAGENOMIC_SCIENTIFIC_NAME,
+    expected_experiment_type: analyses.models.Run.ExperimentTypes | None = None,
+) -> list[str]:
     """
     Fetches a list of assemblies from the European Nucleotide Archive (ENA) for a given study accession.
 
@@ -540,7 +583,12 @@ def get_study_assemblies_from_ena(accession: str, limit: int = 10) -> list[str]:
 
     # read-runs may exist in the same study as the assemblies
     portal_runs = get_study_readruns_from_ena(
-        accession=accession, limit=limit, raise_on_empty=False
+        accession=accession,
+        limit=limit,
+        raise_on_empty=False,
+        library_strategy_policy=library_strategy_policy,
+        library_source_policy=library_source_policy,
+        expected_experiment_type=expected_experiment_type,
     )
 
     if study.assemblies_assembly.exists():
@@ -578,6 +626,9 @@ def get_study_assemblies_from_ena(accession: str, limit: int = 10) -> list[str]:
         get_study_readruns_from_ena(
             accession=reads_study.first_accession,
             limit=limit,
+            library_strategy_policy=library_strategy_policy,
+            library_source_policy=library_source_policy,
+            expected_experiment_type=expected_experiment_type,
         )
 
     assemblies: list[str] = []
@@ -591,7 +642,13 @@ def get_study_assemblies_from_ena(accession: str, limit: int = 10) -> list[str]:
         except analyses.models.Sample.DoesNotExist:
             # make sample based on metadata available from ENA assembly
             logger.info(f"Creating sample for {assembly_data[_.SAMPLE_ACCESSION]}")
-            __, mgnify_sample, run = _make_samples_and_run(assembly_data, study)
+            __, mgnify_sample, run = _make_samples_and_run(
+                assembly_data,
+                study,
+                library_strategy_policy=library_strategy_policy,
+                library_source_policy=library_source_policy,
+                expected_experiment_type=expected_experiment_type,
+            )
         else:
             run = mgnify_sample.runs.first()  # TODO: coassemblies? replicates?
 

@@ -17,7 +17,10 @@ import analyses.models
 import ena.models
 from workflows.data_io_utils.file_rules.base_rules import GlobRule
 from workflows.data_io_utils.file_rules.nodes import Directory
-from workflows.ena_utils.ena_api_requests import ENALibraryStrategyPolicy
+from workflows.ena_utils.ena_policies import (
+    ENALibrarySourcePolicy,
+    ENALibraryStrategyPolicy,
+)
 from workflows.flows.analyse_study_tasks.cleanup_pipeline_directories import (
     # delete_study_results_dir,
     delete_assemble_study_nextflow_workdir,
@@ -51,6 +54,7 @@ def assembly_study_input_mocker(biome_choices, user_choices):
         watchers: List[user_choices]
         wait_for_samplesheet_editing: bool
         library_strategy_policy: ENALibraryStrategyPolicy
+        library_source_policy: ENALibrarySourcePolicy
 
     return MockAssembleStudyInput
 
@@ -333,6 +337,7 @@ def test_prefect_assemble_study_flow(
                 watchers=[user_choices[admin_user.username]],
                 wait_for_samplesheet_editing=False,
                 library_strategy_policy=ENALibraryStrategyPolicy.ONLY_IF_CORRECT_IN_ENA,
+                library_source_policy=ENALibrarySourcePolicy.OVERRIDE_GENOMIC_IF_METAGENOMIC_SCIENTIFIC_NAME,
             )
 
     mock_suspend_flow_run.side_effect = suspend_side_effect
@@ -496,6 +501,7 @@ def test_prefect_assemble_study_flow(
 
     source = mgys.results_dir_path
     target = Path(mgys.external_results_dir)
+    shutil.rmtree(target, ignore_errors=True)
 
     # test deleting where not everything is copied
     allowed_extensions = {
@@ -729,6 +735,7 @@ def test_prefect_assemble_private_study_flow(
                 watchers=[user_choices[admin_user.username]],
                 wait_for_samplesheet_editing=False,
                 library_strategy_policy=ENALibraryStrategyPolicy.ONLY_IF_CORRECT_IN_ENA,
+                library_source_policy=ENALibrarySourcePolicy.OVERRIDE_GENOMIC_IF_METAGENOMIC_SCIENTIFIC_NAME,
             )
 
     mock_suspend_flow_run.side_effect = suspend_side_effect

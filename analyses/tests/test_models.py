@@ -12,9 +12,15 @@ from analyses.models import (
     Biome,
     ComputeResourceHeuristic,
     Run,
+    Sample,
     Study,
 )
+from ena.models import Sample as ENASample
 from ena.models import Study as ENAStudy
+from workflows.ena_utils.ena_policies import (
+    ENALibrarySourcePolicy,
+    ENALibraryStrategyPolicy,
+)
 
 
 def create_analysis(is_private=False):
@@ -26,6 +32,62 @@ def create_analysis(is_private=False):
         sample=run.sample,
         is_private=is_private,
     )
+
+
+@pytest.mark.django_db
+def test_set_experiment_type_by_metadata():
+    ena_study = ENAStudy.objects.create(accession="ERP123")
+    study = Study.objects.create(ena_study=ena_study, title="Project 1")
+    ena_sample = ENASample.objects.create(accession="ERS123", study=ena_study)
+    sample = Sample.objects.create(ena_study=ena_study, ena_sample=ena_sample)
+    run = Run.objects.create(study=study, ena_study=ena_study, sample=sample)
+
+    # Normal Case: Metagenomic + WGS
+    run.set_experiment_type_by_metadata("WGS", "METAGENOMIC")
+    assert run.experiment_type == Run.ExperimentTypes.METAGENOMIC
+
+    # Case from issue: Metagenome scientific name + GENOMIC + AMPLICON
+    run.set_experiment_type_by_metadata(
+        "AMPLICON", "GENOMIC", ena_scientific_name="marine metagenome"
+    )
+    assert run.experiment_type == Run.ExperimentTypes.AMPLICON
+
+    # Case from issue: Metagenome scientific name + GENOMIC + WGS
+    run.set_experiment_type_by_metadata(
+        "WGS", "GENOMIC", ena_scientific_name="marine metagenome"
+    )
+    assert run.experiment_type == Run.ExperimentTypes.METAGENOMIC
+
+    # Unknown case: GENOMIC + AMPLICON (without metagenome scientific name)
+    run.set_experiment_type_by_metadata(
+        "AMPLICON", "GENOMIC", ena_scientific_name="Homo sapiens"
+    )
+    assert run.experiment_type == Run.ExperimentTypes.UNKNOWN
+
+    # ONLY_IF_METAGENOMIC_IN_ENA policy
+    run.set_experiment_type_by_metadata(
+        "AMPLICON",
+        "GENOMIC",
+        ena_scientific_name="marine metagenome",
+        library_source_policy=ENALibrarySourcePolicy.ONLY_IF_METAGENOMIC_IN_ENA,
+    )
+    assert run.experiment_type == Run.ExperimentTypes.UNKNOWN
+
+    # OVERRIDE_ALL strategy policy persists the caller-provided expected experiment type
+    run.set_experiment_type_by_metadata(
+        "OTHER",
+        "GENOMIC",
+        library_strategy_policy=ENALibraryStrategyPolicy.OVERRIDE_ALL,
+        expected_experiment_type=Run.ExperimentTypes.AMPLICON,
+    )
+    assert run.experiment_type == Run.ExperimentTypes.AMPLICON
+
+    with pytest.raises(ValueError):
+        run.set_experiment_type_by_metadata(
+            "OTHER",
+            "GENOMIC",
+            library_strategy_policy=ENALibraryStrategyPolicy.OVERRIDE_ALL,
+        )
 
 
 @pytest.mark.django_db(transaction=True, reset_sequences=True)
