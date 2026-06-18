@@ -271,24 +271,39 @@ def copy_assembly_batch_results_to_destination_folder(
 @task
 def copy_single_analysis_results(
     analysis: Analysis,
-    batch_analysis_job,
-    batch: AssemblyAnalysisBatch,
     destination_root: Path,
+    batch_analysis_job=None,
+    batch: AssemblyAnalysisBatch | None = None,
+    results_workspace: Path | None = None,
     timeout: int = 14400,
 ) -> BatchCopyResult:
     """
-    Copy results for a single assembly analysis from the batch workspace to external results.
+    Copy results for a single assembly analysis to external results.
 
-    This only considers the batch analysis that are COMPLETED (as pre the status in the batch analysis).
+        Supports two contexts:
+        - Batch context: provide both ``batch_analysis_job`` and ``batch``.
+            Results are copied only when batch analysis is COMPLETED (as per the status in the batch analysis).
+        - Out-of-production context: provide ``results_workspace``.
+            ASA is required, VIRify and MAP are optional based on directory presence.
 
     :param analysis: The analysis to copy results for
     :param batch_analysis_job: The batch relation containing per-pipeline statuses
     :param batch: The batch containing the analysis
+    :param results_workspace: Source workspace with ``asa/``, ``virify/``, ``map/``
+                              subdirectories (used when batch context is absent)
     :param destination_root: The root directory for copied results
     :param timeout: Timeout in seconds for each move operation (default: 4 hours)
     :return: Copy result for this analysis
     """
     logger = get_run_logger()
+
+    has_batch_context = batch_analysis_job is not None and batch is not None
+    if has_batch_context and results_workspace is not None:
+        raise ValueError("results_workspace cannot be used together with batch context")
+    if not has_batch_context and results_workspace is None:
+        raise ValueError(
+            "Provide either batch context (batch + batch_analysis_job) or results_workspace"
+        )
 
     # The results folder looks like ERPxxxx/ERZyyy/ERZyyyyy
 
@@ -309,11 +324,27 @@ def copy_single_analysis_results(
 
     copy_errors: list[CopyError] = []
 
-    if batch_analysis_job.asa_status == AssemblyAnalysisPipelineStatus.COMPLETED:
+    def pipeline_source_base(pipeline: AssemblyAnalysisPipeline) -> Path:
+        if has_batch_context:
+            return batch.get_pipeline_workspace(pipeline) / assembly_accession
+
+        pipeline_workspace_names = {
+            AssemblyAnalysisPipeline.ASA: "asa",
+            AssemblyAnalysisPipeline.VIRIFY: "virify",
+            AssemblyAnalysisPipeline.MAP: "map",
+        }
+        return (
+            results_workspace / pipeline_workspace_names[pipeline] / assembly_accession
+        )
+
+    asa_source_base = pipeline_source_base(AssemblyAnalysisPipeline.ASA)
+    if (
+        not has_batch_context
+        or batch_analysis_job.asa_status == AssemblyAnalysisPipelineStatus.COMPLETED
+    ):
         asa_copy_success, asa_copy_errors = copy_schema_directories(
             schema=AssemblyResultSchema(),
-            source_base=batch.get_pipeline_workspace(AssemblyAnalysisPipeline.ASA)
-            / assembly_accession,
+            source_base=asa_source_base,
             destination_base=destination_base,
             timeout=timeout,
         )
@@ -332,8 +363,7 @@ def copy_single_analysis_results(
             success=False,
             errors=[
                 CopyError(
-                    source=batch.get_pipeline_workspace(AssemblyAnalysisPipeline.ASA)
-                    / assembly_accession,
+                    source=asa_source_base,
                     message=f"Analysis {analysis.accession} files cannot be synced because ASA is not completed",
                     pipeline_name=AssemblyAnalysisPipeline.ASA.value,
                 )
@@ -345,11 +375,11 @@ def copy_single_analysis_results(
     # Optional pipelines are controlled by the workflow state first. A directory merely
     # existing on disk is not enough because stale or partial outputs may be
     # present for non-completed runs.
-    if batch_analysis_job.virify_status == AssemblyAnalysisPipelineStatus.COMPLETED:
-        virify_source_base = (
-            batch.get_pipeline_workspace(AssemblyAnalysisPipeline.VIRIFY)
-            / assembly_accession
-        )
+    if (
+        not has_batch_context
+        or batch_analysis_job.virify_status == AssemblyAnalysisPipelineStatus.COMPLETED
+    ):
+        virify_source_base = pipeline_source_base(AssemblyAnalysisPipeline.VIRIFY)
         if virify_source_base.exists():
             virify_copy_success, virify_copy_errors = copy_schema_directories(
                 schema=VirifyResultSchema(),
@@ -369,11 +399,11 @@ def copy_single_analysis_results(
 
     # MAP follows the same rule: only publish outputs that the batch relation
     # recorded as completed, then treat a missing optional directory as a no-op.
-    if batch_analysis_job.map_status == AssemblyAnalysisPipelineStatus.COMPLETED:
-        map_source_base = (
-            batch.get_pipeline_workspace(AssemblyAnalysisPipeline.MAP)
-            / assembly_accession
-        )
+    if (
+        not has_batch_context
+        or batch_analysis_job.map_status == AssemblyAnalysisPipelineStatus.COMPLETED
+    ):
+        map_source_base = pipeline_source_base(AssemblyAnalysisPipeline.MAP)
         if map_source_base.exists():
             map_copy_success, map_copy_errors = copy_schema_directories(
                 schema=MapResultSchema(),
@@ -594,132 +624,46 @@ def copy_pipeline_results(
     return True, []
 
 
-def _copy_external_single_analysis_results(
-    analysis: Analysis,
+@task(
+    description="Copy Out-of-Production Assembly Results",
+    task_run_name="Copy out-of-production assembly results to {destination_root}",
+)
+def copy_out_of_production_analysis_results_to_destination_folder(
+    analyses: list[Analysis],
     results_workspace: Path,
-    target_root: str,
-    logger,
+    destination_root: str | Path,
     timeout: int = 14400,
-):
+) -> list[BatchCopyResult]:
     """
-    TODO: This is a duplicate of the function above adjusted to work without batch context, needs to be cleaned up.
-    Copy results for a single analysis from the batch workspace to external results.
+    FIXME: This function is very similar to copy_assembly_batch_results_to_destination_folder,
+    needs refactoring (ochkalova).
 
-    :param analysis: The analysis to copy results for
-    :param results_workspace: The source directory for the results
-    :param target_root: The root directory for external results
-    :param logger: Prefect logger
+    The source workspace is expected to have three pipeline subdirectories:
+    ``asa/``, ``virify/``, and ``map/``, each with per-assembly result folders.
+
+    :param analyses: List of analyses to copy results for
+    :param results_workspace: Source workspace with ``asa/``, ``virify/`, and ``map/`` subdirectories
+    :param destination_root: The root directory to copy results into
     :param timeout: Timeout in seconds for each move operation (default: 4 hours)
+    :return: One copy result per ASA-completed analysis in the batch
     """
-    # Get assembly accession
-    assembly_accession = analysis.assembly_or_run.first_accession
-    study_accession = analysis.study.first_accession
+    logger = get_run_logger()
 
-    # Build target directory structure
-    target_base = (
-        Path(target_root)
-        / accession_prefix_separated_dir_path(study_accession, -3)
-        / accession_prefix_separated_dir_path(assembly_accession, -3)
-        / analysis.pipeline_version
-        / Analysis.ExperimentTypes.ASSEMBLY.label.lower()
-    )
+    destination_root = Path(destination_root)
+
+    copy_results: list[BatchCopyResult] = []
+    for analysis in analyses:
+        copy_results.append(
+            copy_single_analysis_results(
+                analysis=analysis,
+                results_workspace=results_workspace,
+                destination_root=destination_root,
+                timeout=timeout,
+            )
+        )
 
     logger.info(
-        f"Copying results for {analysis.accession} (assembly: {assembly_accession})"
+        f"Completed copying out-of-production results for {len(copy_results)} analyses to {destination_root}"
     )
 
-    # rsync command for copying all files
-    command = cli_command(
-        [
-            "rsync",
-            "-av",
-        ]
-    )
-
-    # Copy ASA results to root (ASA is always completed since we filter for it)
-    asa_workspace = results_workspace / "asa"
-    asa_source = asa_workspace / assembly_accession
-    if asa_source.exists():
-        logger.info(f"Copying ASA results: {asa_source} -> {target_base}")
-
-        flowrun = run_deployment(
-            name="move-data/move_data_deployment",
-            parameters={
-                "move_command": command,
-                "source": trailing_slash_ensured_dir(str(asa_source)),
-                "target": str(target_base),
-                "make_target": True,
-            },
-            job_variables={
-                "partition": EMG_CONFIG.slurm.datamover_paritition,
-            },
-            timeout=timeout,
-        )
-        logger.info(f"ASA mover flowrun is {flowrun}")
-
-    else:
-        logger.warning(
-            f"ASA results not found for {assembly_accession} at {asa_source}"
-        )
-
-    # Copy VIRify results to virify/ (only if VIRify completed)
-    virify_workspace = results_workspace / "virify"
-    virify_source = virify_workspace / assembly_accession
-    virify_target = target_base / "virify"
-    # TODO we need a way to know if VIRify completed here? any way to check status without batch context?
-    if virify_source.exists():
-        logger.info(f"Copying VIRify results: {virify_source} -> {virify_target}")
-        flowrun = run_deployment(
-            name="move-data/move_data_deployment",
-            parameters={
-                "move_command": command,
-                "source": trailing_slash_ensured_dir(str(virify_source)),
-                "target": str(virify_target),
-                "make_target": True,
-            },
-            job_variables={
-                "partition": EMG_CONFIG.slurm.datamover_paritition,
-            },
-            timeout=timeout,
-        )
-        logger.info(f"VIRify mover flowrun is {flowrun}")
-    else:
-        logger.info(
-            f"VIRify not completed or results not found for {assembly_accession} at {virify_source}"
-        )
-
-    # Copy MAP results to mobilome-annotation/ (only if MAP completed)
-    map_workspace = results_workspace / "map"
-    map_source = map_workspace / assembly_accession
-    map_target = target_base / "mobilome-annotation"
-    # TODO we need a way to know if MAP completed here? any way to check status without batch context?
-    if map_source.exists():
-        logger.info(f"Copying MAP results: {map_source} -> {map_target}")
-        flowrun = run_deployment(
-            name="move-data/move_data_deployment",
-            parameters={
-                "move_command": command,
-                "source": trailing_slash_ensured_dir(str(map_source)),
-                "target": str(map_target),
-                "make_target": True,
-            },
-            job_variables={
-                "partition": EMG_CONFIG.slurm.datamover_paritition,
-            },
-            timeout=timeout,
-        )
-        logger.info(f"MAP mover flowrun is {flowrun}")
-    else:
-        logger.info(
-            f"MAP not completed or results not found for {assembly_accession} at {map_source}"
-        )
-
-    # Update analysis and study external_results_dir
-    analysis.external_results_dir = target_base.relative_to(target_root)
-    analysis.save()
-    analysis.study.external_results_dir = target_base.parent.relative_to(target_root)
-    analysis.study.save()
-
-    logger.info(
-        f"Analysis {analysis.accession} now has results at {analysis.external_results_dir} in {target_root}"
-    )
+    return copy_results
