@@ -149,7 +149,7 @@ def test_prefect_assemble_study_flow(
         url=f"{EMG_CONFIG.ena.portal_search_api}?"
         f"result=read_run"
         f"&query=%22%28study_accession={study_accession}%20OR%20secondary_study_accession={study_accession}%29%22"
-        f"&limit=5000"
+        f"&limit=10000"
         f"&format=json"
         f"&fields=run_accession%2Csample_accession%2Csample_title%2Csecondary_sample_accession%2Cfastq_md5%2Cfastq_ftp%2Clibrary_layout%2Clibrary_strategy%2Clibrary_source%2Cscientific_name%2Chost_tax_id%2Chost_scientific_name%2Cinstrument_platform%2Cinstrument_model%2Clocation%2Clat%2Clon"
         f"&dataPortal=metagenome",
@@ -676,7 +676,7 @@ def test_prefect_assemble_private_study_flow(
         url=f"{EMG_CONFIG.ena.portal_search_api}?"
         f"result=read_run"
         f"&query=%22%28study_accession={study_accession}%20OR%20secondary_study_accession={study_accession}%29%22"
-        f"&limit=5000"
+        f"&limit=10000"
         f"&format=json"
         f"&fields=run_accession%2Csample_accession%2Csample_title%2Csecondary_sample_accession%2Cfastq_md5%2Cfastq_ftp%2Clibrary_layout%2Clibrary_strategy%2Clibrary_source%2Cscientific_name%2Chost_tax_id%2Chost_scientific_name%2Cinstrument_platform%2Cinstrument_model%2Clocation%2Clat%2Clon"
         f"&dataPortal=metagenome",

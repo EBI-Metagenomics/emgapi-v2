@@ -102,7 +102,7 @@ def assemble_study(
 
     read_runs = get_study_readruns_from_ena(
         ena_study.accession,
-        limit=5000,
+        limit=EMG_CONFIG.ena.portal_max_readruns_to_fetch,
         expected_experiment_type=analyses.models.Run.ExperimentTypes.METAGENOMIC,
     )
     logger.info(f"Have {len(read_runs)} from ENA portal API")
@@ -181,7 +181,7 @@ def assemble_study(
     ):
         read_runs = get_study_readruns_from_ena(
             ena_study.accession,
-            limit=5000,
+            limit=EMG_CONFIG.ena.portal_max_readruns_to_fetch,
             library_strategy_policy=assemble_study_input.library_strategy_policy,
             library_source_policy=assemble_study_input.library_source_policy,
             expected_experiment_type=analyses.models.Run.ExperimentTypes.METAGENOMIC,

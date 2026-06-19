@@ -76,7 +76,7 @@ def analysis_assembly_study(
     # Get assemble-able runs
     assemblies_accessions: list[str] = get_study_assemblies_from_ena(
         ena_study.accession,
-        limit=10000,  # TODO: this should be a config value
+        limit=EMG_CONFIG.ena.portal_max_readruns_to_fetch,
         expected_experiment_type=analyses.models.Run.ExperimentTypes.METAGENOMIC,
     )
     logger.info(f"Returned {len(assemblies_accessions)} assemblies from ENA portal API")
@@ -148,7 +148,7 @@ def analysis_assembly_study(
         ):
             assemblies_accessions = get_study_assemblies_from_ena(
                 ena_study.accession,
-                limit=10000,
+                limit=EMG_CONFIG.ena.portal_max_readruns_to_fetch,
                 library_strategy_policy=analyse_study_input.library_strategy_policy,
                 library_source_policy=analyse_study_input.library_source_policy,
                 expected_experiment_type=analyses.models.Run.ExperimentTypes.METAGENOMIC,

@@ -84,7 +84,7 @@ def analysis_rawreads_study(study_accession: str):
 
     read_runs = get_study_readruns_from_ena(
         ena_study.accession,
-        limit=10000,
+        limit=EMG_CONFIG.ena.portal_max_readruns_to_fetch,
         raise_on_empty=False,
         filter_library_strategy=library_strategy_policy_to_filter(
             _METAGENOMIC, policy=ENALibraryStrategyPolicy.ONLY_IF_CORRECT_IN_ENA
@@ -157,7 +157,7 @@ def analysis_rawreads_study(study_accession: str):
     ):
         read_runs = get_study_readruns_from_ena(
             ena_study.accession,
-            limit=10000,
+            limit=EMG_CONFIG.ena.portal_max_readruns_to_fetch,
             raise_on_empty=True,
             filter_library_strategy=library_strategy_policy_to_filter(
                 _METAGENOMIC, policy=analyse_study_input.library_strategy_policy

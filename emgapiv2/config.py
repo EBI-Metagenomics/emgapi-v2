@@ -253,6 +253,7 @@ class ENAConfig(BaseModel):
     ]
     portal_search_api_max_retries: int = 4
     portal_search_api_retry_delay_seconds: int = 15
+    portal_max_readruns_to_fetch: int = 10000
     browser_view_url_prefix: AnyHttpUrl = "https://www.ebi.ac.uk/ena/browser/view"
     # TODO: migrate to the ENA Handler
     study_metadata_fields: list[str] = [
