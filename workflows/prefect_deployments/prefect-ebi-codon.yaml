@@ -42,7 +42,10 @@ deployments:
 
     :param study_accession: e.g. PRJ or ERP accession
     :param workspace_dir: Path for the workspace dir. Defaults to the configured SLURM default workdir.
+    :param contaminant_reference: Optional contaminant reference name to use for ASA decontamination. See: https://github.com/EBI-Metagenomics/assembly-analysis-pipeline/blob/main/docs/usage.md#samplesheet-input
   entrypoint: workflows/flows/analysis/assembly/flows/analysis_assembly_study.py:analysis_assembly_study
+  parameters:
+    contaminant_reference: null
   schedule: null
   work_pool:
     name: slurm

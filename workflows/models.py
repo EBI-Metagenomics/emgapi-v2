@@ -389,6 +389,12 @@ class AssemblyAnalysisBatchAnalysis(
     disabled_reason = models.TextField(
         null=True, blank=True, help_text="Reason for disabling this analysis"
     )
+    contaminant_reference = models.CharField(
+        max_length=500,
+        null=True,
+        blank=True,
+        help_text="Contaminant reference name used for ASA decontamination.",
+    )
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -416,6 +422,7 @@ class AssemblyAnalysisBatchManager(models.Manager):
         max_analyses: int = None,
         workspace_dir: Path = None,
         skip_completed: bool = True,
+        contaminant_reference: str = None,
     ) -> list["AssemblyAnalysisBatch"]:
         """
         Create batches for all pending analyses in a study.
@@ -435,6 +442,7 @@ class AssemblyAnalysisBatchManager(models.Manager):
         :param max_analyses: Maximum total analyses to process (safety cap)
         :param workspace_dir: The workspace directory (default: working dir, each pipeline will have its own subdir)
         :param skip_completed: Skip already-completed analyses (default True)
+        :param contaminant_reference: Optional contaminant reference name to use for ASA decontamination
         :return: List of created batches (or existing batches if no new analyses to batch)
         :raises ValueError: If no valid analyses remain after filtering
         """
@@ -522,14 +530,21 @@ class AssemblyAnalysisBatchManager(models.Manager):
         batches = []
         for chunk in chunks:
             batch = self._create_for_analyses(
-                study=study, analysis_ids=chunk, workspace_dir=workspace_dir
+                study=study,
+                analysis_ids=chunk,
+                workspace_dir=workspace_dir,
+                contaminant_reference=contaminant_reference,
             )
             batches.append(batch)
 
         return batches
 
     def _create_for_analyses(
-        self, study: "Study", analysis_ids: list[int], workspace_dir: Path = None
+        self,
+        study: "Study",
+        analysis_ids: list[int],
+        workspace_dir: Path = None,
+        contaminant_reference: str = None,
     ) -> "AssemblyAnalysisBatch":
         """
         Internal method to create a batch for a list of analysis IDs.
@@ -540,6 +555,7 @@ class AssemblyAnalysisBatchManager(models.Manager):
         :param study: The study
         :param analysis_ids: List of analysis IDs
         :param workspace_dir: Optional base workspace directory
+        :param contaminant_reference: Optional contaminant reference name to store on batch jobs
         :return: Created batch
         """
         logger.info(f"Creating batch for {len(analysis_ids)} analyses")
@@ -592,7 +608,11 @@ class AssemblyAnalysisBatchManager(models.Manager):
         if new_analysis_ids:
             AssemblyAnalysisBatchAnalysis.objects.bulk_create(
                 [
-                    AssemblyAnalysisBatchAnalysis(analysis_id=aid, batch=batch)
+                    AssemblyAnalysisBatchAnalysis(
+                        analysis_id=aid,
+                        batch=batch,
+                        contaminant_reference=contaminant_reference,
+                    )
                     for aid in new_analysis_ids
                 ]
             )

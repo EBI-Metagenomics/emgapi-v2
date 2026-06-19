@@ -36,6 +36,7 @@ from workflows.prefect_utils.input_helpers import ask_every_time_suspend_for_inp
 def analysis_assembly_study(
     study_accession: str,
     workspace_dir: str = EMG_CONFIG.slurm.default_workdir,
+    contaminant_reference: Optional[str] = None,
 ):
     """
     Get a study from ENA (or MGnify), and run assembly analysis the assemblies of the study.
@@ -47,6 +48,7 @@ def analysis_assembly_study(
 
     :param study_accession: e.g. PRJ or ERP accession
     :param workspace_dir: Path for the workspace dir. Defaults to the configured SLURM default workdir.
+    :param contaminant_reference: Optional contaminant reference name to use for ASA decontamination. See: https://github.com/EBI-Metagenomics/assembly-analysis-pipeline/blob/main/docs/usage.md#samplesheet-input
     """
     logger = get_run_logger()
 
@@ -151,6 +153,7 @@ def analysis_assembly_study(
             pipeline=analyses.models.Analysis.PipelineVersions.v6,
             max_analyses=EMG_CONFIG.assembly_analysis_pipeline.max_analyses_per_study,
             workspace_dir=Path(workspace_dir),
+            contaminant_reference=contaminant_reference,
         )
     )
 

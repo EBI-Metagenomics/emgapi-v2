@@ -104,6 +104,35 @@ def test_get_or_create_batches_for_study_with_valid_analyses(
 
 
 @pytest.mark.django_db(transaction=True)
+def test_get_or_create_batches_for_study_stores_contaminant_reference(
+    assembly_with_analyses, tmp_path
+):
+    """
+    Test that a contaminant reference is stored on each batch job.
+    """
+    study = assembly_with_analyses[0].study
+    contaminant_reference = "chicken.fna"
+
+    batches = (
+        workflows.models.AssemblyAnalysisBatch.objects.get_or_create_batches_for_study(
+            study=study,
+            pipeline=analyses.models.Analysis.PipelineVersions.v6,
+            workspace_dir=tmp_path,
+            contaminant_reference=contaminant_reference,
+        )
+    )
+
+    assert len(batches) == 1
+    batch_jobs = workflows.models.AssemblyAnalysisBatchAnalysis.objects.filter(
+        batch=batches[0]
+    )
+    assert batch_jobs.count() == len(assembly_with_analyses)
+    assert set(batch_jobs.values_list("contaminant_reference", flat=True)) == {
+        contaminant_reference
+    }
+
+
+@pytest.mark.django_db(transaction=True)
 def test_get_or_create_batches_for_study_chunks_analyses(
     assembly_with_analyses, tmp_path
 ):

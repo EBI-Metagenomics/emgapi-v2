@@ -26,7 +26,7 @@ from workflows.prefect_utils.flows_utils import django_db_task as task
 @task(cache_key_fn=context_agnostic_task_input_hash)
 def make_samplesheet_assembly(
     mgnify_study: analyses.models.Study,
-    assembly_analyses: QuerySet,
+    assembly_batch_jobs: QuerySet,
     output_dir: Path = None,
 ) -> (Path, str):
     """
@@ -35,18 +35,17 @@ def make_samplesheet_assembly(
     The samplesheet is stored in the batch working directory, not in a temporary location.
 
     :param mgnify_study: MGYS study
-    :param assembly_analyses: QuerySet of the assembly analyses to be executed
+    :param assembly_batch_jobs: QuerySet of AssemblyAnalysisBatchAnalysis jobs to be executed.
     :param output_dir: Directory where the samplesheet should be saved. If None, uses default workdir.
     :return: Tuple of the Path to the samplesheet file, and a hash of the assembly IDs which is used in the SS filename.
     """
 
     logger = get_run_logger()
 
-    assembly_ids = assembly_analyses.values_list("assembly_id", flat=True)
-    assemblies = analyses.models.Assembly.objects.filter(id__in=assembly_ids)
+    assembly_ids = assembly_batch_jobs.values_list("analysis__assembly_id", flat=True)
     logger.info(f"Making assembly samplesheet for assemblies {assembly_ids}")
 
-    ss_hash = queryset_hash(assemblies, "id")
+    ss_hash = queryset_hash(assembly_batch_jobs, "analysis__assembly_id")
 
     # Use provided output_dir or fail back to the default workdir
     if output_dir is None:
@@ -55,24 +54,32 @@ def make_samplesheet_assembly(
         output_dir = Path(output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
 
+    column_map = {
+        "sample": SamplesheetColumnSource(
+            lookup_string="analysis__assembly__ena_accessions",
+            renderer=lambda accessions: accessions[0] if accessions else "",
+        ),
+        "assembly_fasta": SamplesheetColumnSource(
+            lookup_string=f"analysis__assembly__metadata__{ENAAnalysisFields.GENERATED_FTP}",
+            renderer=lambda ftp_path: (
+                # convert_ena_ftp_to_fire_fastq(ftp_path) if ftp_path else ""  # TODO: once ASA supports FIRE
+                "https://"
+                + ftp_path
+            ),
+        ),
+        "contaminant_reference": SamplesheetColumnSource(
+            lookup_string="contaminant_reference",
+            renderer=lambda reference: reference or "",
+        ),
+        "human_reference": "",
+        "phix_reference": "",
+    }
+
     sample_sheet_csv = queryset_to_samplesheet(
-        queryset=assemblies,
+        queryset=assembly_batch_jobs,
         filename=output_dir
         / f"{mgnify_study.ena_study.accession}_samplesheet_assembly-v6_{ss_hash}.csv",
-        column_map={
-            "sample": SamplesheetColumnSource(
-                lookup_string="ena_accessions",
-                renderer=lambda accessions: accessions[0] if accessions else "",
-            ),
-            "assembly_fasta": SamplesheetColumnSource(
-                lookup_string=f"metadata__{ENAAnalysisFields.GENERATED_FTP}",
-                renderer=lambda ftp_path: (
-                    # convert_ena_ftp_to_fire_fastq(ftp_path) if ftp_path else ""  # TODO: once ASA supports FIRE
-                    "https://"
-                    + ftp_path
-                ),
-            ),
-        },
+        column_map=column_map,
         bludgeon=True,
     )
 
