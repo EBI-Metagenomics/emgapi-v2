@@ -11,11 +11,13 @@ from workflows.ena_utils.abstract import (
     ENAQueryOperators,
     ENAQueryPair,
 )
+from workflows.ena_utils.analysis import ENAAnalysisQuery
 from workflows.ena_utils.ena_accession_matching import (
     extract_all_accessions,
     extract_study_accession_from_study_title,
 )
 from workflows.ena_utils.ena_api_requests import (
+    PRIMARY_METAGENOME_ASSEMBLY_TYPE,
     ENALibraryStrategyPolicy,
     get_study_from_ena,
     get_study_readruns_from_ena,
@@ -829,6 +831,15 @@ def test_ena_api_query_maker(httpx_mock):
         "result": "study",
         "dataPortal": "metagenome",
     }
+
+    assemblies_query = (
+        ENAAnalysisQuery(study_accession="ERP1")
+        | ENAAnalysisQuery(secondary_study_accession="ERP1")
+    ) & ENAAnalysisQuery(assembly_type=PRIMARY_METAGENOME_ASSEMBLY_TYPE)
+    assert (
+        str(assemblies_query)
+        == '((study_accession=ERP1 OR secondary_study_accession=ERP1) AND assembly_type="primary metagenome")'
+    )
 
     # calling API
     httpx_mock.add_response(
