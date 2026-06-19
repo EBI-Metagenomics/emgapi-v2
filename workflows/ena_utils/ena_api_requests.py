@@ -29,6 +29,7 @@ ALLOWED_LIBRARY_SOURCE: list = ["METAGENOMIC", "METATRANSCRIPTOMIC"]
 SINGLE_END_LIBRARY_LAYOUT: str = "SINGLE"
 PAIRED_END_LIBRARY_LAYOUT: str = "PAIRED"
 METAGENOME_SCIENTIFIC_NAME: str = "metagenome"
+PRIMARY_METAGENOME_ASSEMBLY_TYPE: str = '"primary metagenome"'
 
 EMG_CONFIG = settings.EMG_CONFIG
 
@@ -510,6 +511,12 @@ def get_study_assemblies_from_ena(accession: str, limit: int = 10) -> list[str]:
 
     ena_auth = dcc_auth if study.is_private else None
 
+    # Restrict to primary metagenome assemblies only
+    assembly_query = (
+        ENAAnalysisQuery(study_accession=accession)
+        | ENAAnalysisQuery(secondary_study_accession=accession)
+    ) & ENAAnalysisQuery(assembly_type=PRIMARY_METAGENOME_ASSEMBLY_TYPE)
+
     # fetch all assemblies in the "assembly study"
     portal_assemblies = ENAAPIRequest(
         result=ENAPortalResultType.ANALYSIS,
@@ -528,8 +535,7 @@ def get_study_assemblies_from_ena(accession: str, limit: int = 10) -> list[str]:
             _.GENERATED_FTP,
         ],
         limit=limit,
-        query=ENAAnalysisQuery(study_accession=accession)
-        | ENAAnalysisQuery(secondary_study_accession=accession),
+        query=assembly_query,
     ).get(auth=ena_auth)
 
     # read-runs may exist in the same study as the assemblies
