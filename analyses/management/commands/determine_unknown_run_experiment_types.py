@@ -155,7 +155,9 @@ class Command(BaseCommand):
             "analysis_accessions": ",".join(
                 run.analyses.order_by("accession").values_list("accession", flat=True)
             ),
-            "library_strategy": metadata.get(Run.CommonMetadataKeys.LIBRARY_STRATEGY, ""),
+            "library_strategy": metadata.get(
+                Run.CommonMetadataKeys.LIBRARY_STRATEGY, ""
+            ),
             "library_source": metadata.get(Run.CommonMetadataKeys.LIBRARY_SOURCE) or "",
             "scientific_name": metadata.get(Run.CommonMetadataKeys.SCIENTIFIC_NAME)
             or "",
