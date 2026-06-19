@@ -195,6 +195,7 @@ class Study(
         verbose_name_plural = "studies"
 
         indexes = [
+            GinIndex(name="idx_study_ena_accessions_gin", fields=["ena_accessions"]),
             GinIndex(
                 fields=["features"]
             ),  # Faster selection of studies with e.g. a certain pipeline version
@@ -274,6 +275,7 @@ class Sample(InferredMetadataMixin, ENADerivedModel, TimeStampedModel):
 
     class Meta:
         indexes = [
+            GinIndex(name="idx_sample_ena_accessions_gin", fields=["ena_accessions"]),
             GinIndex(
                 name="idx_sample_title_trgm",
                 fields=["sample_title"],
@@ -405,6 +407,11 @@ class Run(
 
     def __str__(self):
         return f"Run {self.id}: {self.first_accession}"
+
+    class Meta:
+        indexes = [
+            GinIndex(name="idx_run_ena_accessions_gin", fields=["ena_accessions"]),
+        ]
 
 
 class Assembler(TimeStampedModel):
@@ -660,6 +667,9 @@ class Assembly(InferredMetadataMixin, TimeStampedModel, ENADerivedModel):
                 | Q(assembly_study__isnull=False),
                 name="at_least_one_study_present",
             )
+        ]
+        indexes = [
+            GinIndex(name="idx_assembly_ena_acc_gin", fields=["ena_accessions"]),
         ]
         ordering = ["id"]
 

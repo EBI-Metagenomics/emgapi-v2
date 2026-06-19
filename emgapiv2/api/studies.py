@@ -1,7 +1,7 @@
 from typing import Literal, Optional
 
 from django.db.models import Q
-from ninja import Query
+from ninja import Query, Schema
 from ninja_extra import api_controller, http_get, paginate
 from ninja_extra.schemas import NinjaPaginationResponseSchema
 from pydantic import Field
@@ -24,6 +24,14 @@ from emgapiv2.api.schema_utils import (
     make_links_section,
     make_related_detail_link,
 )
+
+
+class MGnifyStudyAccessionLookup(Schema):
+    accession: str = Field(
+        ...,
+        description="The MGnify study accession corresponding to the requested INSDC study/project accession.",
+        examples=["MGYS00000001"],
+    )
 
 
 class StudyListFilters(BiomeFilter):
@@ -53,6 +61,29 @@ class StudyListFilters(BiomeFilter):
 
 @api_controller("studies", tags=[ApiSections.STUDIES])
 class StudyController(UnauthorisedIsUnfoundController):
+    @http_get(
+        "/insdc/{accession}",
+        response=MGnifyStudyAccessionLookup,
+        summary="Find a MGnify study by its corresponding INSDC study/project accession",
+        description="Returns the MGnify study accession corresponding to an INSDC study/project accession.",
+        operation_id="get_mgnify_study_accession_by_insdc_accession",
+        openapi_extra=make_links_section(
+            make_related_detail_link(
+                related_detail_operation_id="get_mgnify_study",
+                self_object_name="studyAccession",
+                related_object_name="study",
+                related_id_in_response="accession",
+                from_list_to_detail=False,
+            )
+        ),
+    )
+    def get_mgnify_study_accession_by_insdc_accession(self, accession: str):
+        mgnify_study = self.get_object_or_exception(
+            analyses.models.Study.public_objects.select_related(None).only("accession"),
+            ena_accessions__contains=[accession],
+        )
+        return {"accession": mgnify_study.accession}
+
     @http_get(
         "/{accession}",
         response=MGnifyStudyDetail,
