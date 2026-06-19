@@ -118,10 +118,6 @@ def run_assembly_batch(
         # Mark analyses being processed as RUNNING
         analyses_to_process.update(asa_status=AssemblyAnalysisPipelineStatus.RUNNING)
 
-        analyses_to_process_objs = assembly_analysis_batch.analyses.filter(
-            id__in=analyses_to_process.values_list("analysis_id", flat=True)
-        )
-
         # TODO: we are working out what is the best way to handle this
         #       mbc added this one so users know that the jobs are running
         #       running this on_running won't do the trick as refreshing the counts
@@ -132,7 +128,7 @@ def run_assembly_batch(
         # Generate ASA samplesheet using the task - only for analyses that need processing
         samplesheet, _ = make_samplesheet_assembly(
             assembly_analysis_batch.study,
-            analyses_to_process_objs,
+            analyses_to_process,
             output_dir=Path(assembly_analysis_batch.workspace_dir) / "samplesheets",
         )
 
