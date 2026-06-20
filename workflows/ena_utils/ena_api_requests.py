@@ -609,7 +609,15 @@ def get_study_assemblies_from_ena(accession: str, limit: int = 10) -> list[str]:
             include_update_defaults_in_create_defaults=True,
         )
         assembly.metadata[_.GENERATED_FTP] = assembly_data[_.GENERATED_FTP]
-        assembly.runs.add(run)
+
+        # FIXME: Error - DETAIL:  Failing row contains (113467, 60323, null) for some studies such as PRJEB88595!
+        # I imagine some public assemblies are not linked to any runs
+        if run:
+            assembly.runs.add(run)
+        else:
+            logger.error(
+                f"Could not find run for assembly {assembly_data[_.ANALYSIS_ACCESSION]}!"
+            )
         assembly.save()
         assemblies.append(assembly.first_accession)
     return assemblies
