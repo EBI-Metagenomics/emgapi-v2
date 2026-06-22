@@ -9,7 +9,7 @@ pendulum
 pandas
 
 # Django and plugins
-django==5.2.7
+django==5.2.14
 django-cors-headers==4.9.0
 dj-database-url==3.0.1
 django-debug-toolbar==5.2.0
