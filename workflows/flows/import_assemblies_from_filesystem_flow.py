@@ -6,7 +6,7 @@ from pandera.typing import DataFrame
 from prefect import get_run_logger
 from prefect.artifacts import create_table_artifact
 
-import activate_django_first  # noqa
+from activate_django_first import EMG_CONFIG
 
 import analyses.models
 from workflows.data_io_utils.miassembler_utils import (
@@ -434,7 +434,7 @@ def import_assemblies_from_filesystem_flow(
     if fetch_read_runs_from_ena:
         read_runs = get_study_readruns_from_ena(
             reads_mgnify_study.first_accession,
-            limit=500,  # TODO: make this configurable, or to provide the accessions as a parameter
+            limit=EMG_CONFIG.ena.portal_max_readruns_to_fetch,
             raise_on_empty=False,
         )
         logger.info(f"Fetched or refreshed {len(read_runs)} read runs from ENA")

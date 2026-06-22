@@ -20,7 +20,10 @@ import analyses.models
 from workflows.data_io_utils.file_rules.base_rules import FileRule, GlobRule
 from workflows.data_io_utils.file_rules.common_rules import GlobHasFilesCountRule
 from workflows.data_io_utils.file_rules.nodes import Directory
-from workflows.ena_utils.ena_api_requests import ENALibraryStrategyPolicy
+from workflows.ena_utils.ena_policies import (
+    ENALibrarySourcePolicy,
+    ENALibraryStrategyPolicy,
+)
 from workflows.flows.analyse_study_tasks.cleanup_pipeline_directories import (
     # delete_study_results_dir,
     delete_study_nextflow_workdir,
@@ -584,6 +587,7 @@ def analysis_study_input_mocker(biome_choices, user_choices):
         webin_owner: Optional[str]
         watchers: List[user_choices]
         library_strategy_policy: ENALibraryStrategyPolicy
+        library_source_policy: ENALibrarySourcePolicy
 
     return MockAnalyseStudyInput
 
@@ -1115,6 +1119,7 @@ def test_prefect_analyse_amplicon_flow(
                 biome=biome_choices["root.engineered"],
                 watchers=[user_choices[admin_user.username]],
                 library_strategy_policy=ENALibraryStrategyPolicy.ONLY_IF_CORRECT_IN_ENA,
+                library_source_policy=ENALibrarySourcePolicy.OVERRIDE_GENOMIC_IF_METAGENOMIC_SCIENTIFIC_NAME,
                 webin_owner=None,
             )
 
@@ -1649,6 +1654,7 @@ def test_prefect_analyse_amplicon_flow_private_data(
                 biome=biome_choices["root.engineered"],
                 watchers=[user_choices[admin_user.username]],
                 library_strategy_policy=ENALibraryStrategyPolicy.ONLY_IF_CORRECT_IN_ENA,
+                library_source_policy=ENALibrarySourcePolicy.OVERRIDE_GENOMIC_IF_METAGENOMIC_SCIENTIFIC_NAME,
                 webin_owner="webin-1",
             )
 
