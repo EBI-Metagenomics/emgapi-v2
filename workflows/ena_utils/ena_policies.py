@@ -5,6 +5,7 @@ COMMONLY_INCORRECT_LIBRARY_SOURCE: list = ["GENOMIC", "OTHER"]
 SINGLE_END_LIBRARY_LAYOUT: str = "SINGLE"
 PAIRED_END_LIBRARY_LAYOUT: str = "PAIRED"
 METAGENOME_SCIENTIFIC_NAME: str = "metagenome"
+PRIMARY_METAGENOME_ASSEMBLY_TYPE: str = '"primary metagenome"'
 
 
 class ENALibraryStrategyPolicy(FutureStrEnum):

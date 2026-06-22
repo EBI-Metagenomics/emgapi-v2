@@ -24,6 +24,7 @@ from workflows.ena_utils.ena_policies import (
     COMMONLY_INCORRECT_LIBRARY_SOURCE,
     METAGENOME_SCIENTIFIC_NAME,
     PAIRED_END_LIBRARY_LAYOUT,
+    PRIMARY_METAGENOME_ASSEMBLY_TYPE,
     ENALibrarySourcePolicy,
     ENALibraryStrategyPolicy,
 )
@@ -31,9 +32,6 @@ from workflows.ena_utils.read_run import ENAReadRunFields, ENAReadRunQuery
 from workflows.ena_utils.requestors import ENAAPIRequest, ENAAvailabilityException
 from workflows.ena_utils.sample import ENASampleFields, ENASampleQuery
 from workflows.ena_utils.study import ENAStudyFields, ENAStudyQuery
-
-
-PRIMARY_METAGENOME_ASSEMBLY_TYPE: str = '"primary metagenome"'
 
 EMG_CONFIG = settings.EMG_CONFIG
 
