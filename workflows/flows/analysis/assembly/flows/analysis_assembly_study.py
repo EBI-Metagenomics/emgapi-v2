@@ -1,6 +1,6 @@
 from pathlib import Path
 from textwrap import dedent as _
-from typing import List, Optional
+from typing import List, Optional, Type
 
 from prefect import get_run_logger, suspend_flow_run
 from prefect.deployments import run_deployment
@@ -15,6 +15,10 @@ import workflows.models
 from workflows.ena_utils.ena_api_requests import (
     get_study_assemblies_from_ena,
     get_study_from_ena,
+)
+from workflows.ena_utils.ena_policies import (
+    ENALibrarySourcePolicy,
+    ENALibraryStrategyPolicy,
 )
 from workflows.ena_utils.webin_owner_utils import validate_and_set_webin_owner
 from workflows.flows.analysis.assembly.tasks.create_analyses_for_assemblies import (
@@ -72,7 +76,8 @@ def analysis_assembly_study(
     # Get assemble-able runs
     assemblies_accessions: list[str] = get_study_assemblies_from_ena(
         ena_study.accession,
-        limit=10000,  # TODO: this should be a config value
+        limit=EMG_CONFIG.ena.portal_max_readruns_to_fetch,
+        expected_experiment_type=analyses.models.Run.ExperimentTypes.METAGENOMIC,
     )
     logger.info(f"Returned {len(assemblies_accessions)} assemblies from ENA portal API")
 
@@ -86,9 +91,17 @@ def analysis_assembly_study(
 
         class AnalyseStudyInput(RunInput):
             biome: BiomeChoices
-            watchers: Optional[List[UserChoices]] = Field(
+            watchers: Optional[List[Type[UserChoices]]] = Field(
                 None,
                 description="Admin users watching this study will get status notifications.",
+            )
+            library_strategy_policy: ENALibraryStrategyPolicy = Field(
+                ENALibraryStrategyPolicy.ONLY_IF_CORRECT_IN_ENA,
+                description="Optionally treat assemblies with incorrect library strategy metadata as raw-reads.",
+            )
+            library_source_policy: ENALibrarySourcePolicy = Field(
+                ENALibrarySourcePolicy.OVERRIDE_GENOMIC_IF_METAGENOMIC_SCIENTIFIC_NAME,
+                description="How to handle the library source metadata (e.g. if it is GENOMIC instead of METAGENOMIC).",
             )
             webin_owner: Optional[str] = Field(
                 None,
@@ -126,6 +139,24 @@ def analysis_assembly_study(
 
         validate_and_set_webin_owner(ena_study, analyse_study_input.webin_owner)
         mgnify_study.refresh_from_db()
+
+        if (
+            analyse_study_input.library_strategy_policy
+            != ENALibraryStrategyPolicy.ONLY_IF_CORRECT_IN_ENA
+            or analyse_study_input.library_source_policy
+            != ENALibrarySourcePolicy.OVERRIDE_GENOMIC_IF_METAGENOMIC_SCIENTIFIC_NAME
+        ):
+            assemblies_accessions = get_study_assemblies_from_ena(
+                ena_study.accession,
+                limit=EMG_CONFIG.ena.portal_max_readruns_to_fetch,
+                library_strategy_policy=analyse_study_input.library_strategy_policy,
+                library_source_policy=analyse_study_input.library_source_policy,
+                expected_experiment_type=analyses.models.Run.ExperimentTypes.METAGENOMIC,
+            )
+            logger.info(
+                f"Using policies strategy:{analyse_study_input.library_strategy_policy} source:{analyse_study_input.library_source_policy}, "
+                f"now returned {len(assemblies_accessions)} assemblies from ENA portal API."
+            )
     else:
         logger.info(
             f"Biome {mgnify_study.biome} was already set for this study. If a change is needed, do so in the DB Admin Panel."

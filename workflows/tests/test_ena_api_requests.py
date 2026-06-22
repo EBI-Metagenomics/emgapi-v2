@@ -17,7 +17,6 @@ from workflows.ena_utils.ena_accession_matching import (
     extract_study_accession_from_study_title,
 )
 from workflows.ena_utils.ena_api_requests import (
-    PRIMARY_METAGENOME_ASSEMBLY_TYPE,
     ENALibraryStrategyPolicy,
     get_study_from_ena,
     get_study_readruns_from_ena,
@@ -26,6 +25,7 @@ from workflows.ena_utils.ena_api_requests import (
     library_strategy_policy_to_filter,
     sync_privacy_state_of_ena_study_and_derived_objects,
 )
+from workflows.ena_utils.ena_policies import PRIMARY_METAGENOME_ASSEMBLY_TYPE
 from workflows.ena_utils.requestors import (
     ENAAccessException,
     ENAAPIRequest,

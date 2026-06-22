@@ -16,6 +16,10 @@ import ena.models
 from analyses.base_models.with_downloads_models import DownloadType
 from analyses.models import Analysis, Study
 from workflows.data_io_utils.filenames import accession_prefix_separated_dir_path
+from workflows.ena_utils.ena_policies import (
+    ENALibrarySourcePolicy,
+    ENALibraryStrategyPolicy,
+)
 from workflows.flows.analysis.assembly.flows.analysis_assembly_study import (
     analysis_assembly_study,
 )
@@ -103,6 +107,8 @@ def analyse_study_input_mocker(biome_choices, user_choices):
         biome: biome_choices
         watchers: Optional[List[user_choices]] = None
         webin_owner: Optional[str] = None
+        library_strategy_policy: Optional[ENALibraryStrategyPolicy] = None
+        library_source_policy: Optional[ENALibrarySourcePolicy] = None
 
     return MockAnalyseStudyInput
 
@@ -518,6 +524,7 @@ def test_prefect_analyse_assembly_flow(
         url=re.compile(
             f"{re.escape(EMG_CONFIG.ena.portal_search_api)}\\?result=analysis&query=.*{re.escape(assembly_test_scenario.study_accession)}.*"
         ),
+        is_reusable=True,
         json=[
             {
                 "sample_accession": assembly_test_scenario.sample_accession,
@@ -541,6 +548,7 @@ def test_prefect_analyse_assembly_flow(
         url=re.compile(
             f"{re.escape(EMG_CONFIG.ena.portal_search_api)}\\?result=read_run&query=.*{re.escape(assembly_test_scenario.study_accession)}.*"
         ),
+        is_reusable=True,
         json=[
             {
                 "sample_accession": assembly_test_scenario.sample_accession,
@@ -910,6 +918,7 @@ def test_prefect_analyse_assembly_flow_missing_directory(
         url=re.compile(
             f"{re.escape(EMG_CONFIG.ena.portal_search_api)}\\?result=analysis&query=.*{re.escape(scenario.study_accession)}.*"
         ),
+        is_reusable=True,
         json=[
             {
                 "sample_accession": scenario.sample_accession,
@@ -933,6 +942,7 @@ def test_prefect_analyse_assembly_flow_missing_directory(
         url=re.compile(
             f"{re.escape(EMG_CONFIG.ena.portal_search_api)}\\?result=read_run&query=.*{re.escape(scenario.study_accession)}.*"
         ),
+        is_reusable=True,
         json=[
             {
                 "sample_accession": scenario.sample_accession,
@@ -1089,6 +1099,7 @@ def test_prefect_analyse_assembly_flow_invalid_schema(
         url=re.compile(
             f"{re.escape(EMG_CONFIG.ena.portal_search_api)}\\?result=analysis&query=.*{re.escape(scenario.study_accession)}.*"
         ),
+        is_reusable=True,
         json=[
             {
                 "sample_accession": scenario.sample_accession,
@@ -1112,6 +1123,7 @@ def test_prefect_analyse_assembly_flow_invalid_schema(
         url=re.compile(
             f"{re.escape(EMG_CONFIG.ena.portal_search_api)}\\?result=read_run&query=.*{re.escape(scenario.study_accession)}.*"
         ),
+        is_reusable=True,
         json=[
             {
                 "sample_accession": scenario.sample_accession,
