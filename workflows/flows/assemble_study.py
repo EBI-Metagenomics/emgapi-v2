@@ -54,6 +54,7 @@ class AssemblerChoices(FutureStrEnum):
     metaspades = "metaspades"
     spades = "spades"
     flye = "flye"
+    metamdbg = "metamdbg"
 
 
 def get_biomes_as_choices():
