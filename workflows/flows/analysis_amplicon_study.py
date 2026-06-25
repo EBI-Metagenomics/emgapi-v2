@@ -46,6 +46,10 @@ from workflows.flows.analysis.pipeline_versions import (
     get_current_pipeline_version_for_experiment_type,
     get_v6_family_pipeline_versions_for_experiment_type,
 )
+from workflows.flows.analysis.summaries.amplicon.v6.study_summary_parquet import (
+    add_amplicon_v6_taxonomy_summary_outputs_to_downloads,
+    merge_amplicon_v6_taxonomy_summary_outputs,
+)
 from workflows.flows.assemble_study import get_biomes_as_choices
 from workflows.prefect_utils.analyses_models_helpers import (
     add_study_watchers,
@@ -226,10 +230,19 @@ def analysis_amplicon_study(study_accession: str):
         mgnify_study.accession,
         cleanup_partials=not EMG_CONFIG.amplicon_pipeline.keep_study_summary_partials,
     )
+    merge_amplicon_v6_taxonomy_summary_outputs(
+        mgnify_study.accession,
+        pipeline_version=EMG_CONFIG.amplicon_pipeline.pipeline_version,
+        cleanup_partials=not EMG_CONFIG.amplicon_pipeline.keep_study_summary_partials,
+    )
     add_study_summaries_to_downloads(
         mgnify_study.accession, analysis_type=AnalysisType.AMPLICON
     )
     add_dwcr_summaries_to_downloads(mgnify_study.accession)
+    add_amplicon_v6_taxonomy_summary_outputs_to_downloads(
+        mgnify_study.accession,
+        pipeline_version=EMG_CONFIG.amplicon_pipeline.pipeline_version,
+    )
     copy_v6_study_summaries(mgnify_study.accession, analysis_type=AnalysisType.AMPLICON)
     # delete work directory
     delete_study_nextflow_workdir(study_workdir, analyses_to_attempt)

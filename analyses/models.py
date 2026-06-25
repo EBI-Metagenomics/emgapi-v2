@@ -169,6 +169,7 @@ class Study(
 
     @property
     def results_dir_path(self) -> Path:
+        return Path("/Users/mbc/projects/bluecloud/emgapi-v2-study-summaries-EMG-9835/results")
         return Path(self.results_dir)
 
     def set_results_dir_default(self):

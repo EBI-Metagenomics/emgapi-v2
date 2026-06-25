@@ -156,6 +156,12 @@ def copy_v6_study_summaries(
             f"--include=[DES]RP*{STUDY_SUMMARY_TSV}",
             f"--include=PRJ*{DWCREADY_CSV}",
             f"--include=[DES]RP*{DWCREADY_CSV}",
+            "--include=PRJ*.parquet",
+            "--include=[DES]RP*.parquet",
+            "--include=MGY*.parquet",
+            "--include=PRJ*.dwca.zip",
+            "--include=[DES]RP*.dwca.zip",
+            "--include=MGY*.dwca.zip",
             "--exclude=*",
         ]
     )

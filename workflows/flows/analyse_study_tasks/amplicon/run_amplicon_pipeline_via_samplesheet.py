@@ -34,6 +34,9 @@ from workflows.flows.analyse_study_tasks.shared.study_summary import (
     generate_study_summary_for_pipeline_run,
 )
 from workflows.flows.analysis import AnalysisType
+from workflows.flows.analysis.summaries.amplicon.v6.study_summary_parquet import (
+    generate_study_summary_parquet,
+)
 from workflows.nextflow_utils.samplesheets import queryset_hash
 from workflows.prefect_utils.build_cli_command import cli_command
 from workflows.prefect_utils.flows_utils import django_db_flow as flow
@@ -157,5 +160,9 @@ def run_amplicon_pipeline_via_samplesheet(
             pipeline_outdir=nextflow_outdir,
             refdb_otus_dir=Path(EMG_CONFIG.amplicon_pipeline.refdb_otus_dir),
             completed_runs_filename=EMG_CONFIG.amplicon_pipeline.completed_runs_csv,
+        )
+        generate_study_summary_parquet(
+            mgnify_study_accession=mgnify_study.accession,
+            pipeline_version=EMG_CONFIG.amplicon_pipeline.pipeline_version,
         )
         remove_dir(nextflow_workdir)  # will also delete past "abandoned" nextflow files

@@ -32,6 +32,8 @@ class DownloadFileType(FutureStrEnum):
     TSV = "tsv"
     BIOM = "biom"
     CSV = "csv"
+    PARQUET = "parquet"
+    ZIP = "zip"
     JSON = "json"
     SVG = "svg"
     TREE = "tree"  # e.g. newick
@@ -267,6 +269,28 @@ class WithDownloadsModel(models.Model):
             )
             for dl in self.downloads
         ]
+
+    def matching_downloads(
+        self,
+        group: str | None = None,
+        suffix: str | None = None,
+        file_type: DownloadFileType | None = None,
+    ) -> List[DownloadFile]:
+        """Return registered downloads matching the provided metadata filters.
+        :param group: Download group to filter by (such as "taxonomies")
+        :param suffix: Download suffix to filter by, example taxonomies.closed_reference
+        :param file_type: Download file type to filter by (such as FASTA)
+        """
+        downloads = []
+        for download in self.downloads_as_objects:
+            if group is not None and download.download_group != group:
+                continue
+            if file_type is not None and download.file_type != file_type:
+                continue
+            if suffix is not None and not download.alias.endswith(suffix):
+                continue
+            downloads.append(download)
+        return downloads
 
     class Meta:
         abstract = True
