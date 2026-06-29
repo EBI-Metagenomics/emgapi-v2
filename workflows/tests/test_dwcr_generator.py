@@ -15,6 +15,73 @@ from workflows.flows.analyse_study_tasks.shared.dwcr_generator import (
 )
 
 
+def _ensure_flow_like_amplicon_objects_for_dwcr(study: Study):
+    """
+    Ensure the minimum Study/Sample/Run objects and metadata exist as they would
+    after `analysis_amplicon_study` ingests run data from ENA.
+    """
+    sample_metadata = {
+        "lat": 52,
+        "lon": 0,
+        "collection_date": "2025-05-25",
+        "depth": 0.12,
+        "center_name": "Devonshire Building",
+        "temperature": 12,
+        "salinity": 0.12,
+        "country": "United Kingdom",
+    }
+    run_metadata = {
+        "library_strategy": "AMPLICON",
+        "library_source": "METAGENOMIC",
+        "scientific_name": "metagenome",
+        "instrument_platform": "ILLUMINA",
+        "instrument_model": "Illumina MiSeq",
+    }
+
+    study.inherit_accessions_from_related_ena_object("ena_study")
+
+    run = study.runs.select_related("sample__ena_sample").first()
+    if run is None:
+        ena_sample = ena_models.Sample.objects.create(
+            accession="SAMNTEST1",
+            study=study.ena_study,
+            metadata={"sample_title": "test_sample", **sample_metadata},
+        )
+        mgnify_sample, _ = analyses_models.Sample.objects.get_or_create(
+            ena_sample=ena_sample,
+            ena_study=study.ena_study,
+        )
+        mgnify_sample.studies.add(study)
+        mgnify_sample.inherit_accessions_from_related_ena_object("ena_sample")
+        mgnify_sample.metadata.update(sample_metadata)
+        mgnify_sample.save()
+
+        run = analyses_models.Run.objects.create(
+            study=study,
+            ena_study=study.ena_study,
+            sample=mgnify_sample,
+            instrument_platform="ILLUMINA",
+            instrument_model="Illumina MiSeq",
+            metadata=run_metadata,
+            ena_accessions=["SRR1111111"],
+            experiment_type=analyses_models.Run.ExperimentTypes.AMPLICON,
+        )
+    else:
+        sample = run.sample
+        sample.studies.add(study)
+        sample.inherit_accessions_from_related_ena_object("ena_sample")
+        sample.metadata.update(sample_metadata)
+        sample.save()
+
+        run.instrument_platform = run.instrument_platform or "ILLUMINA"
+        run.instrument_model = run.instrument_model or "Illumina MiSeq"
+        run.metadata.update(run_metadata)
+        if "SRR1111111" not in run.ena_accessions:
+            run.ena_accessions = list(set([*run.ena_accessions, "SRR1111111"]))
+        run.experiment_type = analyses_models.Run.ExperimentTypes.AMPLICON
+        run.save()
+
+
 @pytest.mark.django_db(transaction=True)
 def test_dwcr_generator(
     amplicon_analysis_with_downloads,
@@ -30,33 +97,7 @@ def test_dwcr_generator(
     # Ensure there is at least one Run/Sample for the study so the generator
     # can build per-run metadata JSON. Create minimal ENA and analysis objects
     # when the study has no runs.
-    if not raw_reads_mgnify_study.runs.exists():
-        ena_sample = ena_models.Sample.objects.create(
-            accession="SAMNTEST1", title="test_sample", metadata={}
-        )
-        mgnify_sample = analyses_models.Sample.objects.create(
-            ena_sample=ena_sample,
-            metadata={
-                "lat": 12,
-                "lon": 22,
-                "collection_date": "2025-05-25",
-                "depth": 0.12,
-                "center_name": "Devonshire Building",
-                "temperature": 12,
-                "salinity": 0.12,
-                "country": "United Kingdom",
-            },
-        )
-        mgnify_sample.studies.add(raw_reads_mgnify_study)
-        analyses_models.Run.objects.create(
-            study=raw_reads_mgnify_study,
-            sample=mgnify_sample,
-            instrument_model="Illumina MiSeq",
-            metadata={
-                "instrument_model": "Illumina MiSeq",
-            },
-            ena_accessions=["SRRTEST1"],
-        )
+    _ensure_flow_like_amplicon_objects_for_dwcr(raw_reads_mgnify_study)
 
     generate_dwc_ready_summary_for_pipeline_run(
         raw_reads_mgnify_study.accession,
