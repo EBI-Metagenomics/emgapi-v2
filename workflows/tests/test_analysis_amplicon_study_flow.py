@@ -763,32 +763,6 @@ def test_prefect_analyse_amplicon_flow(
         ],
     )
 
-    # Mock the read_run ENA API requests that `dwc_summary_generator` uses
-    responses.add(
-        responses.GET,
-        EMG_CONFIG.ena.portal_search_api,
-        json=[
-            {
-                "run_accession": amplicon_run_all_results,
-                "secondary_study_accession": "PRJNA398089",
-                "sample_accession": "SAMN08514017",
-                "instrument_model": "Illumina MiSeq",
-            }
-        ],
-        match=[
-            responses.matchers.query_param_matcher(
-                {
-                    "result": "read_run",
-                    "includeAccessions": amplicon_run_all_results,
-                    "fields": "secondary_study_accession,sample_accession,instrument_model",
-                    "limit": "10",
-                    "format": "json",
-                    "download": "false",
-                }
-            )
-        ],
-    )
-
     responses.add(
         responses.GET,
         EMG_CONFIG.ena.portal_search_api,
@@ -881,36 +855,6 @@ def test_prefect_analyse_amplicon_flow(
                     "result": "read_run",
                     "includeAccessions": amplicon_run_extra_dada2,
                     "fields": "secondary_study_accession,sample_accession,instrument_model",
-                    "limit": "10",
-                    "format": "json",
-                    "download": "false",
-                }
-            )
-        ],
-    )
-
-    # mock the sample ENA API requests that `dwc_summary_generator` uses
-    responses.add(
-        responses.GET,
-        EMG_CONFIG.ena.portal_search_api,
-        json=[
-            {
-                "lat": "52",
-                "lon": "0",
-                "collection_date": "2025-05-25",
-                "depth": 0.12,
-                "center_name": "Devonshire Building",
-                "temperature": 12,
-                "salinity": 0.12,
-                "country": "United Kingdom",
-            }
-        ],
-        match=[
-            responses.matchers.query_param_matcher(
-                {
-                    "result": "sample",
-                    "includeAccessions": "SAMN08514017",
-                    "fields": "lat,lon,collection_date,depth,center_name,temperature,salinity,country",
                     "limit": "10",
                     "format": "json",
                     "download": "false",
