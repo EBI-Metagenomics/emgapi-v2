@@ -1,0 +1,45 @@
+---
+name: sourmash-local
+
+services:
+  redis:
+    image: redis:7
+    container_name: sourmash-local-redis
+    ports:
+      - "6380:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+
+  sourmash-queue:
+    build:
+      context: ${SOURMASH_QUEUE_REPO:-/private/tmp/sourmash-queue}
+      dockerfile: Dockerfile
+    container_name: sourmash-local-worker
+    depends_on:
+      redis:
+        condition: service_healthy
+    volumes:
+      - ${SOURMASH_QUEUE_REPO:-/private/tmp/sourmash-queue}:/opt/app
+      - ${SOURMASH_QUEUE_REPO:-/private/tmp/sourmash-queue}/settings-local.py:/opt/app/settings.py:ro
+      - ./data:/opt/sourmash
+    working_dir: /opt/app
+
+  flower:
+    build:
+      context: ${SOURMASH_QUEUE_REPO:-/private/tmp/sourmash-queue}
+      dockerfile: Dockerfile
+    container_name: sourmash-local-flower
+    command: python -m flower --app=tasks --broker=redis://redis:6379/0 flower --port=5555
+    depends_on:
+      redis:
+        condition: service_healthy
+    volumes:
+      - ${SOURMASH_QUEUE_REPO:-/private/tmp/sourmash-queue}:/opt/app
+      - ${SOURMASH_QUEUE_REPO:-/private/tmp/sourmash-queue}/settings-local.py:/opt/app/settings.py:ro
+      - ./data:/opt/sourmash
+    working_dir: /opt/app
+    ports:
+      - "5555:5555"

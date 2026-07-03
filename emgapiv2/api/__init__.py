@@ -16,6 +16,7 @@ from .analyses import AnalysisController
 from .assemblies import AssemblyController
 from .biome import BiomeController
 from .genome_search import GenomeSearchController
+from .genome_search_gather import GenomeSearchGatherController
 from .genomes import GenomeController
 from .private import MyDataController
 from .publications import PublicationController
@@ -157,6 +158,7 @@ api.register_controllers(BiomeController)
 api.register_controllers(MyDataController)
 api.register_controllers(AnalysedRunController)
 api.register_controllers(GenomeSearchController)
+api.register_controllers(GenomeSearchGatherController)
 
 # Private data auth token provider (Webin JWTs)
 api.register_controllers(WebinJwtController)

@@ -25,6 +25,9 @@ asgiref~=3.11.1
 gunicorn==25.3.0
 whitenoise==6.11.0
 
+# Queue clients
+celery[redis]~=5.5.3
+
 # DB
 psycopg-pool==3.3.0
 
