@@ -6,8 +6,7 @@ import pytest
 
 from activate_django_first import EMG_CONFIG
 
-import analyses.models as analyses_models
-from analyses.models import Study
+from analyses.models import Run, Study
 from workflows.flows.analyse_study_tasks.shared.dwcr_generator import (
     generate_dwc_ready_summary_for_pipeline_run,
     merge_dwc_ready_summaries,
@@ -45,7 +44,7 @@ def _ensure_flow_like_amplicon_objects_for_dwcr(study: Study):
 
     run.instrument_platform = run.instrument_platform or "ILLUMINA"
     run.instrument_model = run.instrument_model or "Illumina MiSeq"
-    run.experiment_type = analyses_models.Run.ExperimentTypes.AMPLICON
+    run.experiment_type = Run.ExperimentTypes.AMPLICON
     run.save()
 
 
