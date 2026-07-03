@@ -7,7 +7,6 @@ import pytest
 from activate_django_first import EMG_CONFIG
 
 import analyses.models as analyses_models
-import ena.models as ena_models
 from analyses.models import Study
 from workflows.flows.analyse_study_tasks.shared.dwcr_generator import (
     generate_dwc_ready_summary_for_pipeline_run,
@@ -17,8 +16,11 @@ from workflows.flows.analyse_study_tasks.shared.dwcr_generator import (
 
 def _ensure_flow_like_amplicon_objects_for_dwcr(study: Study):
     """
-    Ensure the minimum Study/Sample/Run objects and metadata exist as they would
-    after `analysis_amplicon_study` ingests run data from ENA.
+    Ensure the minimum Study/Sample/Run metadata exists as it would after
+    `analysis_amplicon_study` ingests run data from ENA.
+
+    Assumes a Run (e.g. from the `amplicon_analysis_with_downloads` fixture)
+    already exists for the study.
     """
     sample_metadata = {
         "lat": 52,
@@ -30,56 +32,21 @@ def _ensure_flow_like_amplicon_objects_for_dwcr(study: Study):
         "salinity": 0.12,
         "country": "United Kingdom",
     }
-    run_metadata = {
-        "library_strategy": "AMPLICON",
-        "library_source": "METAGENOMIC",
-        "scientific_name": "metagenome",
-        "instrument_platform": "ILLUMINA",
-        "instrument_model": "Illumina MiSeq",
-    }
 
     study.inherit_accessions_from_related_ena_object("ena_study")
 
-    run = study.runs.select_related("sample__ena_sample").first()
-    if run is None:
-        ena_sample = ena_models.Sample.objects.create(
-            accession="SAMNTEST1",
-            study=study.ena_study,
-            metadata={"sample_title": "test_sample", **sample_metadata},
-        )
-        mgnify_sample, _ = analyses_models.Sample.objects.get_or_create(
-            ena_sample=ena_sample,
-            ena_study=study.ena_study,
-        )
-        mgnify_sample.studies.add(study)
-        mgnify_sample.inherit_accessions_from_related_ena_object("ena_sample")
-        mgnify_sample.metadata.update(sample_metadata)
-        mgnify_sample.save()
+    run = study.runs.select_related("sample__ena_sample").get()
 
-        run = analyses_models.Run.objects.create(
-            study=study,
-            ena_study=study.ena_study,
-            sample=mgnify_sample,
-            instrument_platform="ILLUMINA",
-            instrument_model="Illumina MiSeq",
-            metadata=run_metadata,
-            ena_accessions=["SRR1111111"],
-            experiment_type=analyses_models.Run.ExperimentTypes.AMPLICON,
-        )
-    else:
-        sample = run.sample
-        sample.studies.add(study)
-        sample.inherit_accessions_from_related_ena_object("ena_sample")
-        sample.metadata.update(sample_metadata)
-        sample.save()
+    sample = run.sample
+    sample.studies.add(study)
+    sample.inherit_accessions_from_related_ena_object("ena_sample")
+    sample.metadata.update(sample_metadata)
+    sample.save()
 
-        run.instrument_platform = run.instrument_platform or "ILLUMINA"
-        run.instrument_model = run.instrument_model or "Illumina MiSeq"
-        run.metadata.update(run_metadata)
-        if "SRR1111111" not in run.ena_accessions:
-            run.ena_accessions = list(set([*run.ena_accessions, "SRR1111111"]))
-        run.experiment_type = analyses_models.Run.ExperimentTypes.AMPLICON
-        run.save()
+    run.instrument_platform = run.instrument_platform or "ILLUMINA"
+    run.instrument_model = run.instrument_model or "Illumina MiSeq"
+    run.experiment_type = analyses_models.Run.ExperimentTypes.AMPLICON
+    run.save()
 
 
 @pytest.mark.django_db(transaction=True)

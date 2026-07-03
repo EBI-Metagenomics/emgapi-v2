@@ -49,21 +49,18 @@ def build_run_metadata_json(study) -> Dict[str, dict]:
     and `study` where available. Missing or empty values are set to the string
     "NA".
     """
+
+    def _get_meta(obj, key):
+        val = obj.metadata.get(key, "NA")
+        if val in (None, ""):
+            return "NA"
+        return val
+
     metadata_out: Dict[str, dict] = {}
     for run_obj in study.runs.all():
         # Determine run and sample accession
         run_acc = run_obj.first_accession
         sample_obj = run_obj.sample
-
-        def _get_meta(obj, key):
-            pref = getattr(obj, "metadata_preferring_inferred", None)
-            if pref is not None:
-                val = pref.get(key, "NA")
-            else:
-                val = obj.metadata.get(key, "NA")
-            if val in (None, ""):
-                return "NA"
-            return val
 
         md = {
             "RunID": run_acc,
@@ -77,12 +74,9 @@ def build_run_metadata_json(study) -> Dict[str, dict]:
             "salinity": _get_meta(sample_obj, "salinity"),
             "country": _get_meta(sample_obj, "country"),
             "InstitutionCode": _get_meta(sample_obj, "center_name"),
-            "seq_meth": getattr(
-                run_obj, "instrument_model", _get_meta(run_obj, "instrument_model")
-            ),
+            "seq_meth": run_obj.instrument_model,
         }
-        md = {k: (str(v) if v is not None else "NA") for k, v in md.items()}
-        md = {k: (v if v != "" else "NA") for k, v in md.items()}
+        md = {k: ("NA" if v in (None, "") else str(v)) for k, v in md.items()}
         metadata_out[run_acc] = md
 
     return metadata_out
