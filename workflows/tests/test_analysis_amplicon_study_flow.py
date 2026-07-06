@@ -438,13 +438,13 @@ def generate_fake_pipeline_no_asvs(amplicon_run_folder, run):
         open(
             f"{amplicon_run_folder}/{EMG_CONFIG.amplicon_pipeline.qc_folder}/{run}.fastp.json",
             "w",
-        ),
+        ) as fastp,
         open(
             f"{amplicon_run_folder}/{EMG_CONFIG.amplicon_pipeline.qc_folder}/{run}_multiqc_report.html",
             "w",
         ),
     ):
-        pass
+        json.dump({}, fastp)  # to get valid json
 
     # AMPLIFIED REGION INFERENCE
     os.makedirs(
@@ -1114,7 +1114,7 @@ def test_prefect_analyse_amplicon_flow(
     # check sanity check runs
     assert (
         study.analyses.filter(status__analysis_post_sanity_check_failed=True).count()
-        == 3  # 2 fail sanity check for missing qc, a third fails import
+        == 2  # 2 fail sanity check for missing qc
     )
     assert (
         study.analyses.filter(status__analysis_completed_reason="all_results").count()
@@ -1340,7 +1340,7 @@ def test_prefect_analyse_amplicon_flow(
             GlobRule(
                 rule_name="Recursive number of files",
                 glob_pattern="**/*",
-                test=lambda x: len(list(x)) == 156,
+                test=lambda x: len(list(x)) == 157,
             )
         ],
     )
