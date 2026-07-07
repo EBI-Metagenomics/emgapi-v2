@@ -49,39 +49,35 @@ def build_run_metadata_json(study) -> Dict[str, dict]:
     and `study` where available. Missing or empty values are set to the string
     "NA".
     """
-
-    def _get_meta(obj, key):
-        val = obj.metadata.get(key, "NA")
-        if val in (None, ""):
-            return "NA"
-        return val
-
     metadata_out: Dict[str, dict] = {}
+
     for run_obj in study.runs.all():
-        # Determine run and sample accession
         run_acc = run_obj.first_accession
         sample_obj = run_obj.sample
+        sample_metadata = sample_obj.metadata
 
-        md = {
+        metadata = {
             "RunID": run_acc,
             "SampleID": sample_obj.first_accession,
             "StudyID": study.first_accession,
-            "decimalLatitude": _get_meta(sample_obj, Sample.CommonMetadataKeys.LAT),
-            "decimalLongitude": _get_meta(sample_obj, Sample.CommonMetadataKeys.LON),
-            "collectionDate": _get_meta(
-                sample_obj, Sample.CommonMetadataKeys.COLLECTION_DATE
+            "decimalLatitude": sample_metadata.get(Sample.CommonMetadataKeys.LAT),
+            "decimalLongitude": sample_metadata.get(Sample.CommonMetadataKeys.LON),
+            "collectionDate": sample_metadata.get(
+                Sample.CommonMetadataKeys.COLLECTION_DATE
             ),
-            "depth": _get_meta(sample_obj, Sample.CommonMetadataKeys.DEPTH),
-            "temperature": _get_meta(sample_obj, Sample.CommonMetadataKeys.TEMPERATURE),
-            "salinity": _get_meta(sample_obj, Sample.CommonMetadataKeys.SALINITY),
-            "country": _get_meta(sample_obj, Sample.CommonMetadataKeys.COUNTRY),
-            "InstitutionCode": _get_meta(
-                sample_obj, Sample.CommonMetadataKeys.CENTER_NAME
+            "depth": sample_metadata.get(Sample.CommonMetadataKeys.DEPTH),
+            "temperature": sample_metadata.get(Sample.CommonMetadataKeys.TEMPERATURE),
+            "salinity": sample_metadata.get(Sample.CommonMetadataKeys.SALINITY),
+            "country": sample_metadata.get(Sample.CommonMetadataKeys.COUNTRY),
+            "InstitutionCode": sample_metadata.get(
+                Sample.CommonMetadataKeys.CENTER_NAME
             ),
             "seq_meth": run_obj.instrument_model,
         }
-        md = {k: ("NA" if v in (None, "") else str(v)) for k, v in md.items()}
-        metadata_out[run_acc] = md
+        metadata = {
+            k: ("NA" if v in (None, "") else str(v)) for k, v in metadata.items()
+        }
+        metadata_out[run_acc] = metadata
 
     return metadata_out
 
