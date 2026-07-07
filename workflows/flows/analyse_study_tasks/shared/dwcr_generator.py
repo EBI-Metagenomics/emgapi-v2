@@ -16,7 +16,7 @@ from analyses.base_models.with_downloads_models import (
     DownloadFileType,
     DownloadType,
 )
-from analyses.models import Study
+from analyses.models import Sample, Study
 from workflows.data_io_utils.file_rules.common_rules import (
     DirectoryExistsRule,
     FileExistsRule,
@@ -66,14 +66,18 @@ def build_run_metadata_json(study) -> Dict[str, dict]:
             "RunID": run_acc,
             "SampleID": sample_obj.first_accession,
             "StudyID": study.first_accession,
-            "decimalLatitude": _get_meta(sample_obj, "lat"),
-            "decimalLongitude": _get_meta(sample_obj, "lon"),
-            "collectionDate": _get_meta(sample_obj, "collection_date"),
-            "depth": _get_meta(sample_obj, "depth"),
-            "temperature": _get_meta(sample_obj, "temperature"),
-            "salinity": _get_meta(sample_obj, "salinity"),
-            "country": _get_meta(sample_obj, "country"),
-            "InstitutionCode": _get_meta(sample_obj, "center_name"),
+            "decimalLatitude": _get_meta(sample_obj, Sample.CommonMetadataKeys.LAT),
+            "decimalLongitude": _get_meta(sample_obj, Sample.CommonMetadataKeys.LON),
+            "collectionDate": _get_meta(
+                sample_obj, Sample.CommonMetadataKeys.COLLECTION_DATE
+            ),
+            "depth": _get_meta(sample_obj, Sample.CommonMetadataKeys.DEPTH),
+            "temperature": _get_meta(sample_obj, Sample.CommonMetadataKeys.TEMPERATURE),
+            "salinity": _get_meta(sample_obj, Sample.CommonMetadataKeys.SALINITY),
+            "country": _get_meta(sample_obj, Sample.CommonMetadataKeys.COUNTRY),
+            "InstitutionCode": _get_meta(
+                sample_obj, Sample.CommonMetadataKeys.CENTER_NAME
+            ),
             "seq_meth": run_obj.instrument_model,
         }
         md = {k: ("NA" if v in (None, "") else str(v)) for k, v in md.items()}
