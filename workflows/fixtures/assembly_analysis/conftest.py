@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import List, Optional
 
 import pytest
 from pydantic import BaseModel
@@ -49,3 +50,15 @@ def assembly_test_scenario(test_workspace):
         biome_path="root.engineered",
         biome_name="Engineered",
     )
+
+
+@pytest.fixture
+def analyse_study_input_mocker(biome_choices, user_choices):
+    """Fixture that creates a mock AnalyseStudyInput class for assembly analysis tests."""
+
+    class MockAnalyseStudyInput(BaseModel):
+        biome: biome_choices
+        watchers: Optional[List[user_choices]] = None
+        webin_owner: Optional[str] = None
+
+    return MockAnalyseStudyInput

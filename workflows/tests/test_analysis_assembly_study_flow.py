@@ -3,12 +3,10 @@ import gzip
 import re
 import shutil
 from pathlib import Path
-from typing import List, Optional
 from unittest.mock import Mock, patch
 
 import pytest
 from django.conf import settings
-from pydantic import BaseModel
 
 import analyses.models
 import ena.models
@@ -40,18 +38,6 @@ from workflows.prefect_utils.testing_utils import (
 )
 
 EMG_CONFIG = settings.EMG_CONFIG
-
-
-@pytest.fixture
-def analyse_study_input_mocker(biome_choices, user_choices):
-    """Fixture that creates a mock AnalyseStudyInput class for assembly analysis tests."""
-
-    class MockAnalyseStudyInput(BaseModel):
-        biome: biome_choices
-        watchers: Optional[List[user_choices]] = None
-        webin_owner: Optional[str] = None
-
-    return MockAnalyseStudyInput
 
 
 def setup_assembly_batch_fixtures(scenario: AssemblyTestScenario):

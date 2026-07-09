@@ -2,12 +2,10 @@ import csv
 import hashlib
 from pathlib import Path
 from textwrap import dedent as _
-from typing import List, Optional
+from typing import List
 
 from django.conf import settings
-from prefect import flow, get_run_logger, suspend_flow_run, task
-from prefect.input import RunInput
-from pydantic import Field
+from prefect import flow, get_run_logger, task
 
 import analyses.models
 import ena.models
@@ -25,6 +23,9 @@ from workflows.ena_utils.ena_api_requests import (
 from workflows.flows.analyse_study_tasks.shared.copy_v6_pipeline_results import (
     copy_out_of_production_analysis_results_to_destination_folder,
     copy_v6_study_summaries,
+)
+from workflows.flows.analysis.assembly.flows.analysis_assembly_study import (
+    set_study_biome_webin_and_watchers,
 )
 from workflows.flows.analysis.assembly.flows.sync_assembly_batch_results import (
     update_analysis_statuses_from_copy_results,
@@ -50,13 +51,8 @@ from workflows.flows.analysis.assembly.tasks.set_post_assembly_analysis_states i
     parse_asa_end_of_run_reports,
     update_analyses_from_asa_reports,
 )
-from workflows.flows.assemble_study import get_biomes_as_choices
 from workflows.flows.shared.study_tasks import get_or_create_mgnify_study
 from workflows.models import Analysis, AssemblyAnalysisPipeline, Study
-from workflows.prefect_utils.analyses_models_helpers import (
-    add_study_watchers,
-    get_users_as_choices,
-)
 
 
 @flow(
@@ -137,6 +133,9 @@ def external_assembly_analysis_ingestion(
     mgnify_study = analyses.models.Study.objects.get(id=mgnify_study_id)
     ena_study = ena.models.Study.objects.get_ena_study(study_accession)
 
+    if mgnify_study.is_private:
+        logger.info(f"{mgnify_study} is a private study.")
+
     # Run this function to fetch related runs/samples for this study and save them in the DB
     get_study_assemblies_from_ena(study_accession, limit=10000)
 
@@ -146,46 +145,22 @@ def external_assembly_analysis_ingestion(
     mgnify_study.results_dir = str(results_path)
     mgnify_study.save()
 
-    # TODO: refactor to remove code duplication with analysis_assembly_study.py
-    # Check if biome-picker is needed
-    if not mgnify_study.biome:
-        BiomeChoices = get_biomes_as_choices()
-        UserChoices = get_users_as_choices()
+    # Suspend if biome is needed, or if the study is private and has no webin submitter set yet
+    needs_biome = not mgnify_study.biome
+    needs_webin = mgnify_study.is_private and not ena_study.webin_submitter
 
-        class IngestExternalInput(RunInput):
-            biome: BiomeChoices
-            watchers: Optional[List[UserChoices]] = Field(
-                None,
-                description="Admin users watching this study will get status notifications.",
-            )
-
-        ingest_input: IngestExternalInput = suspend_flow_run(
-            wait_for_input=IngestExternalInput.with_initial_data(
-                description=_(f"""\
+    if needs_biome or needs_webin:
+        set_study_biome_webin_and_watchers(
+            mgnify_study,
+            ena_study,
+            needs_biome,
+            needs_webin,
+            logger,
+            prompt_description=_(f"""\
                         **External Assembly Analysis Ingestion**
                         Ingesting externally-run Assembly Analysis results for study {study_accession} \
                         produced by [Assembly Analysis Pipeline V6](https://github.com/EBI-Metagenomics/assembly-analysis-pipeline).
-
-                        **Biome tagger**
-                        Please select a Biome for the entire study \
-                        [{ena_study.accession}: {ena_study.title}](https://www.ebi.ac.uk/ena/browser/view/{ena_study.accession}).
                         """),
-            )
-        )
-
-        biome = analyses.models.Biome.objects.get(path=ingest_input.biome.name)
-        mgnify_study.biome = biome
-        mgnify_study.save()
-        logger.info(f"MGnify study {mgnify_study.accession} has biome {biome.path}.")
-
-        if ingest_input.watchers:
-            add_study_watchers(mgnify_study, ingest_input.watchers)
-    else:
-        logger.info(
-            f"Biome {mgnify_study.biome} was already set for this study. If a change is needed, do so in the DB Admin Panel."
-        )
-        logger.info(
-            f"MGnify study has watchers: {mgnify_study.watchers.values_list('username', flat=True)}. Add more in the DB Admin Panel if needed."
         )
 
     # =========================================================================

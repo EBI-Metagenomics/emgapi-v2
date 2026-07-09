@@ -1,11 +1,9 @@
 import re
-from enum import Enum
 from pathlib import Path
 from typing import List
 
 import pytest
 from django.conf import settings
-from pydantic import BaseModel
 
 from analyses.models import Study as AnalysisStudy
 from workflows.flows.analysis.assembly.flows.external_assembly_analysis_ingestion import (
@@ -13,7 +11,6 @@ from workflows.flows.analysis.assembly.flows.external_assembly_analysis_ingestio
     _validate_results_structure,
     external_assembly_analysis_ingestion,
 )
-from workflows.prefect_utils.analyses_models_helpers import get_users_as_choices
 from workflows.prefect_utils.testing_utils import (
     generate_assembly_v6_pipeline_results,
     run_flow_and_capture_logs,
@@ -137,9 +134,7 @@ class TestExternalAssemblyAnalysisIngestionRealData:
     )
     @pytest.mark.parametrize(
         "mock_suspend_flow_run",
-        [
-            "workflows.flows.analysis.assembly.flows.external_assembly_analysis_ingestion"
-        ],
+        ["workflows.flows.analysis.assembly.flows.analysis_assembly_study"],
         indirect=True,
     )
     @pytest.mark.prefect_harness
@@ -152,6 +147,9 @@ class TestExternalAssemblyAnalysisIngestionRealData:
         mocker,
         top_level_biomes,
         assembly_test_scenario,
+        biome_choices,
+        user_choices,
+        analyse_study_input_mocker,
     ):
         """
         Test complete external_assembly_analysis_ingestion flow.
@@ -286,24 +284,13 @@ class TestExternalAssemblyAnalysisIngestionRealData:
             ],
         )
 
-        # Set biome for the study
-        BiomeChoices = Enum(
-            "BiomeChoices",
-            {
-                assembly_test_scenario.biome_path: f"Root:{assembly_test_scenario.biome_name}"
-            },
-        )
-        UserChoices = get_users_as_choices()
-
-        class AnalyseStudyInput(BaseModel):
-            biome: BiomeChoices
-            watchers: List[UserChoices]
-
-        def suspend_side_effect(wait_for_input=None):
-            return AnalyseStudyInput(
-                biome=BiomeChoices[assembly_test_scenario.biome_path],
-                watchers=[UserChoices[admin_user.username]],
-            )
+        def suspend_side_effect(wait_for_input=None, **kwargs):
+            if wait_for_input.__name__ == "AnalyseStudyInput":
+                return analyse_study_input_mocker(
+                    biome=biome_choices[assembly_test_scenario.biome_path],
+                    watchers=[user_choices[admin_user.username]],
+                    webin_owner=None,
+                )
 
         mock_suspend_flow_run.side_effect = suspend_side_effect
 
