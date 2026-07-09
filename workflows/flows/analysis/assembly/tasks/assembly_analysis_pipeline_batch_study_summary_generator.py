@@ -3,14 +3,12 @@ from pathlib import Path
 from typing import List, Union
 
 import click
-from ena.models import Study
-from prefect import get_run_logger, task
-
 from mgnify_pipelines_toolkit.analysis.assembly import study_summary_generator
 from prefect import get_run_logger
 
 from activate_django_first import EMG_CONFIG
 
+from ena.models import Study
 from workflows.data_io_utils.file_rules.nodes import Directory
 from workflows.flows.analyse_study_tasks.shared.study_summary import STUDY_SUMMARY_TSV
 from workflows.models import AssemblyAnalysisBatch, AssemblyAnalysisPipeline
@@ -78,10 +76,8 @@ def generate_assembly_analysis_pipeline_batch_summary(
     logger = get_run_logger()
 
     assembly_batch = AssemblyAnalysisBatch.objects.get(id=assembly_batch_id)
-    study = assembly_batch.study
 
-    # Ensure the study has a results_dir to write summaries to
-    study.set_results_dir_default()
+    study = assembly_batch.study
 
     logger.info(f"Generating assembly batch summary for {assembly_batch}")
 
