@@ -1,27 +1,27 @@
-from enum import Enum
-from typing import List
 import re
+from enum import Enum
 from pathlib import Path
+from typing import List
 
 import pytest
-from pydantic import BaseModel
 from django.conf import settings
+from pydantic import BaseModel
 
 from analyses.models import Study as AnalysisStudy
+from workflows.flows.analysis.assembly.flows.external_assembly_analysis_ingestion import (
+    _compute_md5,
+    _validate_results_structure,
+    external_assembly_analysis_ingestion,
+)
 from workflows.prefect_utils.analyses_models_helpers import get_users_as_choices
 from workflows.prefect_utils.testing_utils import (
+    generate_assembly_v6_pipeline_results,
     run_flow_and_capture_logs,
     should_not_mock_httpx_requests_to_prefect_server,
-    generate_assembly_v6_pipeline_results,
 )
 from workflows.tests.test_analysis_assembly_study_flow import (
-    setup_virify_batch_fixtures,
     setup_map_batch_fixtures,
-)
-from workflows.flows.analysis.assembly.flows.external_assembly_analysis_ingestion import (
-    _validate_results_structure,
-    _compute_md5,
-    external_assembly_analysis_ingestion,
+    setup_virify_batch_fixtures,
 )
 
 EMG_CONFIG = settings.EMG_CONFIG
@@ -308,7 +308,7 @@ class TestExternalAssemblyAnalysisIngestionRealData:
         mock_suspend_flow_run.side_effect = suspend_side_effect
 
         mock_copy_external = mocker.patch(
-            "workflows.flows.analysis.assembly.flows.external_assembly_analysis_ingestion.copy_external_assembly_analysis_results"
+            "workflows.flows.analysis.assembly.flows.external_assembly_analysis_ingestion.copy_out_of_production_assembly_analysis_results"
         )
         mock_copy_summaries = mocker.patch(
             "workflows.flows.analysis.assembly.flows.external_assembly_analysis_ingestion.copy_v6_study_summaries"
