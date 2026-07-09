@@ -1,5 +1,4 @@
 import csv
-import hashlib
 from pathlib import Path
 from textwrap import dedent as _
 from typing import List
@@ -16,7 +15,6 @@ from workflows.data_io_utils.schemas import (
     VirifyResultSchema,
 )
 from workflows.ena_utils.ena_api_requests import (
-    get_fasta_md5_for_assembly,
     get_study_accession_for_assembly,
     get_study_assemblies_from_ena,
 )
@@ -139,7 +137,7 @@ def external_assembly_analysis_ingestion(
     # Run this function to fetch related runs/samples for this study and save them in the DB
     get_study_assemblies_from_ena(study_accession, limit=10000)
 
-    # TODO check if this code makes sense in the context of out-of-production runs
+    # TODO check if this code makes sense in the context of out-of-production pipeline runs
     # Set results_dir to the provided external path
     logger.info(f"Set results_dir to {results_path}")
     mgnify_study.results_dir = str(results_path)
@@ -249,8 +247,7 @@ def external_assembly_analysis_ingestion(
 @task
 def _parse_and_validate_samplesheet(samplesheet_path: Path) -> list[str]:
     """
-    Parse the samplesheet CSV to extract assembly accessions, validate required columns
-    and check that the provided FASTA files match the expected MD5 checksums from ENA.
+    Parse the samplesheet CSV to extract assembly accessions and validate required columns.
 
     Expected samplesheet format (CSV with header):
         sample,assembly_fasta,contaminant_reference,human_reference,phix_reference
@@ -287,21 +284,6 @@ def _parse_and_validate_samplesheet(samplesheet_path: Path) -> list[str]:
             for row in reader:
                 assembly_acc = row["sample"]
                 if assembly_acc:
-                    fasta_file = Path(row["assembly_fasta"])
-                    # TODO: consider removing this FASTA MD5 validation step for flexibility and simplicity
-                    actual_fasta_md5 = _compute_md5(fasta_file)
-                    expected_fasta_md5 = get_fasta_md5_for_assembly(assembly_acc)
-
-                    if actual_fasta_md5 != expected_fasta_md5:
-                        raise ValueError(
-                            f"FASTA MD5 mismatch for assembly {assembly_acc}: "
-                            f"expected {expected_fasta_md5} (ENA generated_md5 field), got {actual_fasta_md5}. "
-                            f"Check that the correct FASTA file is provided in the samplesheet."
-                        )
-                    logger.debug(
-                        f"FASTA MD5 for assembly {assembly_acc} matches expected value"
-                    )
-
                     assembly_accessions.append(assembly_acc)
                     logger.debug(f"Parsed assembly accession: {assembly_acc}")
 
@@ -314,16 +296,6 @@ def _parse_and_validate_samplesheet(samplesheet_path: Path) -> list[str]:
         )
 
     return assembly_accessions
-
-
-def _compute_md5(path: Path, chunk_size: int = 8192) -> str:
-    md5 = hashlib.md5()
-
-    with path.open("rb") as f:
-        for chunk in iter(lambda: f.read(chunk_size), b""):
-            md5.update(chunk)
-
-    return md5.hexdigest()
 
 
 @task

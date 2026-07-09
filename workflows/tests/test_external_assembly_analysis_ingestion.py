@@ -7,7 +7,6 @@ from django.conf import settings
 
 from analyses.models import Study as AnalysisStudy
 from workflows.flows.analysis.assembly.flows.external_assembly_analysis_ingestion import (
-    _compute_md5,
     _validate_results_structure,
     external_assembly_analysis_ingestion,
 )
@@ -61,7 +60,7 @@ def setup_fixtures_of_completed_assembly_analysis(assembly_test_scenario):
     workspace = assembly_test_scenario.workspace_dir
     # Create input fasta files
     fasta_dir = workspace / "assembly_fastas"
-    fasta_md5s = create_input_fasta_files(
+    create_input_fasta_files(
         fasta_dir,
         [
             assembly_test_scenario.assembly_accession_success,
@@ -88,7 +87,7 @@ def setup_fixtures_of_completed_assembly_analysis(assembly_test_scenario):
     setup_virify_batch_fixtures(workspace / "virify", assembly_test_scenario)
     setup_map_batch_fixtures(workspace / "map", assembly_test_scenario)
 
-    return workspace, samplesheet_path, fasta_md5s
+    return workspace, samplesheet_path
 
 
 def create_samplesheet_with_assemblies(
@@ -106,17 +105,12 @@ def create_samplesheet_with_assemblies(
 
 def create_input_fasta_files(fasta_dir: Path, assembly_accessions: List[str]):
     """Create dummy input fasta files for given assembly accessions."""
-    md5s = {}
     for acc in assembly_accessions:
         fasta_path = fasta_dir / f"{acc}.fa.gz"
         fasta_path.parent.mkdir(parents=True, exist_ok=True)
         with fasta_path.open("w") as f:
             f.write(f">Dummy contig for {acc}\n")
             f.write("ATGC" * 10 + "\n")
-
-        md5s[acc] = _compute_md5(fasta_path)
-
-    return md5s
 
 
 # ============================================================================
@@ -170,24 +164,8 @@ class TestExternalAssemblyAnalysisIngestionRealData:
         - Prefect context for flow execution
         """
 
-        mocked_results_dir, samplesheet_path, fasta_md5s = (
+        mocked_results_dir, samplesheet_path = (
             setup_fixtures_of_completed_assembly_analysis(assembly_test_scenario)
-        )
-
-        # Mock ENA responses to fetch md5 and study accession for the input assembly fasta
-        httpx_mock.add_response(
-            url=re.compile(
-                f"{re.escape(EMG_CONFIG.ena.portal_search_api)}\\?result=analysis&query=.*{re.escape(assembly_test_scenario.assembly_accession_success)}.*"
-            ),
-            json=[
-                {
-                    "generated_md5": fasta_md5s[
-                        assembly_test_scenario.assembly_accession_success
-                    ],
-                    "study_accession": assembly_test_scenario.study_accession,
-                },
-            ],
-            is_reusable=True,
         )
 
         # Mock ENA response to fetch study accession
