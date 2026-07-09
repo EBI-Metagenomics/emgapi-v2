@@ -270,6 +270,9 @@ fileignoreconfig:
 - filename: workflows/flows/import_assemblies_from_filesystem_flow.py
   allowed_patterns: [key]
 
+- filename: workflows/flows/legacy/flows/relink_legacy_assembly_analyses.py
+  allowed_patterns: [key]
+
 - filename: workflows/tests/test_backfill_assembly_analysis_results_dirs_flow.py
   allowed_patterns: [key]
 
