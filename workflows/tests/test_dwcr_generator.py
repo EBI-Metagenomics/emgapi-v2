@@ -52,6 +52,7 @@ def _ensure_flow_like_amplicon_objects_for_dwcr(study: Study):
 def test_dwcr_generator(
     amplicon_analysis_with_downloads,
     raw_reads_mgnify_study: Study,
+    raw_reads_mgnify_sample,
     prefect_harness,
     completed_runs_filename: str = EMG_CONFIG.amplicon_pipeline.completed_runs_csv,
 ):
@@ -64,6 +65,20 @@ def test_dwcr_generator(
     # can build per-run metadata JSON. Create minimal ENA and analysis objects
     # when the study has no runs.
     _ensure_flow_like_amplicon_objects_for_dwcr(raw_reads_mgnify_study)
+
+    # qc_passed_runs.csv also lists SRR6180434, which has no amplicon results and will be skipped by the generator.
+    # However, it should be present in JSON metadata.
+    # Give it a placeholder object referencing existing sample so the generator
+    # finds metadata for both runs.
+    placeholder_sample = raw_reads_mgnify_sample[1]
+    placeholder_sample.studies.add(raw_reads_mgnify_study)
+    Run.objects.get_or_create(
+        ena_accessions=["SRR6180434"],
+        study=raw_reads_mgnify_study,
+        ena_study=raw_reads_mgnify_study.ena_study,
+        sample=placeholder_sample,
+        experiment_type=Run.ExperimentTypes.AMPLICON,
+    )
 
     generate_dwc_ready_summary_for_pipeline_run(
         raw_reads_mgnify_study.accession,

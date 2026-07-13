@@ -1,2 +1,2 @@
 assembly-uploader==1.2.0
-mgnify-pipelines-toolkit==1.5.2
+mgnify-pipelines-toolkit==1.5.4
