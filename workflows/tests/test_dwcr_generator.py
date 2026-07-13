@@ -52,6 +52,7 @@ def _ensure_flow_like_amplicon_objects_for_dwcr(study: Study):
 def test_dwcr_generator(
     amplicon_analysis_with_downloads,
     raw_reads_mgnify_study: Study,
+    raw_reads_mgnify_sample,
     prefect_harness,
     completed_runs_filename: str = EMG_CONFIG.amplicon_pipeline.completed_runs_csv,
 ):
