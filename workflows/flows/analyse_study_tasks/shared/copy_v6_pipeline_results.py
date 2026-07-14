@@ -280,11 +280,11 @@ def copy_single_analysis_results(
     """
     Copy results for a single assembly analysis to external results.
 
-        Supports two contexts:
-        - Batch context: provide both ``batch_analysis_job`` and ``batch``.
-            Results are copied only when batch analysis is COMPLETED (as per the status in the batch analysis).
-        - Out-of-production context: provide ``results_workspace``.
-            ASA is required, VIRify and MAP are optional based on directory presence.
+    Supports two contexts:
+    - Batch context: provide both ``batch_analysis_job`` and ``batch``.
+        Results are copied only when batch analysis is COMPLETED (as per the status in the batch analysis).
+    - Out-of-production context: provide ``results_workspace``.
+        ASA is required, VIRify and MAP are optional based on directory presence.
 
     :param analysis: The analysis to copy results for
     :param batch_analysis_job: The batch relation containing per-pipeline statuses

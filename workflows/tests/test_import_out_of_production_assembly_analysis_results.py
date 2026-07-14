@@ -29,7 +29,7 @@ EMG_CONFIG = settings.EMG_CONFIG
 
 
 @pytest.mark.django_db
-class TestExternalAssemblyAnalysisIngestion:
+class TestImportOutOfProductionAssemblyAnalysisResults:
 
     def test_validate_results_structure_missing_pipeline_dir_error(
         self, tmp_path, prefect_harness
@@ -119,7 +119,7 @@ def create_input_fasta_files(fasta_dir: Path, assembly_accessions: List[str]):
 
 
 @pytest.mark.django_db
-class TestExternalAssemblyAnalysisIngestionRealData:
+class TestImportOutOfProductionAssemblyAnalysisResultsRealData:
     """Integration tests using real data from data/ folder."""
 
     @pytest.mark.django_db(transaction=True)

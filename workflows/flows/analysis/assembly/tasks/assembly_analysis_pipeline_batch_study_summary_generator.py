@@ -27,7 +27,7 @@ def _run_assembly_summary_generator(
 
     logger.info(f"Study results_dir, where summaries will be made, is {output_dir}")
 
-    with chdir(output_dir):
+    with chdir(asa_workspace):
         # TODO: we need to expose the summary as a lib component we can just import instead of having to use
         #       click to bootstrap the environment
         with click.Context(study_summary_generator.summarise_analyses) as ctx:
@@ -101,7 +101,7 @@ def generate_assembly_analysis_pipeline_batch_summary(
 
     return _run_assembly_summary_generator(
         output_dir=summary_dir.path,
-        asa_workspace=Path(asa_workspace),
+        asa_workspace=asa_workspace,
         assemblies_csv=assemblies_csv,
         output_prefix=str(assembly_batch.id),
     )
@@ -113,8 +113,6 @@ def generate_assembly_analysis_pipeline_summary(
 ) -> Union[List[Path], None]:
     """
     Generate a study summary file for assembly analysis results (no batch context).
-
-    It will use the analyses where the workflow_status for ASA is set to COMPLETED.
 
     The study summaries are written to the study.results_dir.
 

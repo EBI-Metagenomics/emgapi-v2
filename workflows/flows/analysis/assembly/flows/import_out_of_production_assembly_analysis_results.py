@@ -35,7 +35,7 @@ from workflows.flows.analysis.assembly.tasks.add_assembly_study_summaries_to_dow
     add_assembly_study_summaries_to_downloads,
 )
 from workflows.flows.analysis.assembly.tasks.assembly_analysis_batch_results_importer import (
-    validate_and_import_analysis_results,
+    assembly_analysis_results_importer,
 )
 from workflows.flows.analysis.assembly.tasks.assembly_analysis_pipeline_batch_study_summary_generator import (
     generate_assembly_analysis_pipeline_summary,
@@ -140,7 +140,6 @@ def import_out_of_production_assembly_analysis_results(
     # Run this function to fetch related runs/samples for this study and save them in the DB
     get_study_assemblies_from_ena(study_accession, limit=10000)
 
-    # TODO check if this code makes sense in the context of out-of-production pipeline runs
     # Set results_dir to the provided external path
     logger.info(f"Set results_dir to {results_path}")
     mgnify_study.results_dir = str(results_path)
@@ -186,21 +185,21 @@ def import_out_of_production_assembly_analysis_results(
     )
 
     logger.info("Processing ASA results...")
-    process_out_of_production_analysis_results(
+    import_out_of_production_analysis_results(
         exported_analyses,
         results_path,
         AssemblyAnalysisPipeline.ASA,
     )
 
     logger.info("Processing VIRify results...")
-    process_out_of_production_analysis_results(
+    import_out_of_production_analysis_results(
         exported_analyses,
         results_path,
         AssemblyAnalysisPipeline.VIRIFY,
     )
 
     logger.info("Processing MAP results...")
-    process_out_of_production_analysis_results(
+    import_out_of_production_analysis_results(
         exported_analyses,
         results_path,
         AssemblyAnalysisPipeline.MAP,
@@ -267,7 +266,6 @@ def _parse_and_validate_samplesheet(samplesheet_path: Path) -> list[str]:
     logger = get_run_logger()
     assembly_accessions = []
 
-    # TODO maybe add validation with pandera model?
     try:
         with open(samplesheet_path, "r") as f:
             reader = csv.DictReader(f)
@@ -351,14 +349,21 @@ def _validate_results_structure(
     retries=2,
     retry_delay_seconds=60,
 )
-def process_out_of_production_analysis_results(
+def import_out_of_production_analysis_results(
     analyses: list[Analysis],
     results_path: Path,
     pipeline_type: AssemblyAnalysisPipeline,
 ) -> None:
     """
-    Import pipeline results without using batch abstraction.
-    # TODO: add docstring and description of the flow
+    Import out-of-production assembly analysis results.
+    This flow validates the results of ASA/VIRify/MAP pipelines using the appropriate schema,
+    marks analysis that failed validation as FAILED, and imports the results of analyses that
+    passed validation into the database.
+
+    :param analyses: List of Analysis objects to process
+    :param results_path: Path to the directory containing out-of-production results
+                        (should contain folders: asa/, virify/, map/)
+    :param pipeline_type: The pipeline type (ASA, VIRify, or MAP)
     """
     logger = get_run_logger()
 
@@ -385,7 +390,7 @@ def process_out_of_production_analysis_results(
 
     # First, validate schemas (without importing)
     logger.info(f"Validating {pipeline_type} results schemas...")
-    validation_results = validate_and_import_analysis_results(
+    validation_results = assembly_analysis_results_importer(
         analyses, schema, base_path, pipeline_type, validation_only=True
     )
 
@@ -402,7 +407,7 @@ def process_out_of_production_analysis_results(
         logger.info(
             f"Importing {len(successful_validations)} validated {pipeline_type} analyses..."
         )
-        import_results = validate_and_import_analysis_results(
+        import_results = assembly_analysis_results_importer(
             analyses, schema, base_path, pipeline_type, validation_only=False
         )
         # Process import results (should all succeed since validation passed)
@@ -513,9 +518,6 @@ def copy_out_of_production_analysis_results_to_destination_folder(
     timeout: int = 14400,
 ) -> list[BatchCopyResult]:
     """
-    FIXME: This function is very similar to copy_assembly_batch_results_to_destination_folder,
-    needs refactoring (ochkalova).
-
     The source workspace is expected to have three pipeline subdirectories:
     ``asa/``, ``virify/``, and ``map/``, each with per-assembly result folders.
 
