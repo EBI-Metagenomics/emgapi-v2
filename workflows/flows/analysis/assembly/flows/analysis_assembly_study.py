@@ -28,70 +28,6 @@ from workflows.prefect_utils.analyses_models_helpers import (
 from workflows.prefect_utils.flows_utils import django_db_flow as flow
 
 
-def set_study_biome_webin_and_watchers(
-    mgnify_study: analyses.models.Study,
-    ena_study: ena.models.Study,
-    needs_biome: bool,
-    needs_webin: bool,
-    logger,
-    prompt_description: str,
-) -> None:
-    """Set biome and optionally add watchers, or log existing settings if already configured."""
-    BiomeChoices = get_biomes_as_choices()
-    UserChoices = get_users_as_choices()
-
-    class AnalyseStudyInput(RunInput):
-        biome: BiomeChoices
-        watchers: Optional[List[UserChoices]] = Field(
-            None,
-            description="Admin users watching this study will get status notifications.",
-        )
-        webin_owner: Optional[str] = Field(
-            None,
-            description="Webin ID of study owner, if data is private. Can be left as None if public.",
-        )
-
-    initial_data = {}
-    if not needs_biome:
-        initial_data["biome"] = BiomeChoices[str(mgnify_study.biome.path)]
-
-    biome_description = (
-        f"**Biome tagger** Please select a Biome for the entire study "
-        f"[{ena_study.accession}: {ena_study.title}](https://www.ebi.ac.uk/ena/browser/view/{ena_study.accession})."
-        if needs_biome
-        else f"Biome is already set to {mgnify_study.biome} — change here if needed."
-    )
-
-    webin_description = (
-        "**Webin owner** The study is private. Please provide the Webin account ID..."
-        if needs_webin
-        else ""
-    )
-
-    description = _(
-        f"{prompt_description}\n\n{biome_description}\n\n{webin_description}"
-    )
-
-    analyse_study_input: AnalyseStudyInput = suspend_flow_run(
-        wait_for_input=AnalyseStudyInput.with_initial_data(
-            **initial_data,
-            description=description,
-        ),
-        timeout=EMG_CONFIG.slurm.default_flow_suspend_awaiting_input_timeout_secs,
-    )
-
-    biome = analyses.models.Biome.objects.get(path=analyse_study_input.biome.name)
-    mgnify_study.biome = biome
-    mgnify_study.save()
-    logger.info(f"MGnify study {mgnify_study.accession} has biome {biome.path}.")
-
-    if analyse_study_input.watchers:
-        add_study_watchers(mgnify_study, analyse_study_input.watchers)
-
-    validate_and_set_webin_owner(ena_study, analyse_study_input.webin_owner)
-    mgnify_study.refresh_from_db()
-
-
 @flow(
     name="Run assembly analysis v6 pipeline on a study",
     flow_run_name="Analyse assembly: {study_accession}",
@@ -201,3 +137,67 @@ def analysis_assembly_study(
         f"All {len(batches)} batches submitted successfully. "
         "Finalization will be triggered automatically when all batches complete."
     )
+
+
+def set_study_biome_webin_and_watchers(
+    mgnify_study: analyses.models.Study,
+    ena_study: ena.models.Study,
+    needs_biome: bool,
+    needs_webin: bool,
+    logger,
+    prompt_description: str,
+) -> None:
+    """Set biome and optionally add watchers, or log existing settings if already configured."""
+    BiomeChoices = get_biomes_as_choices()
+    UserChoices = get_users_as_choices()
+
+    class AnalyseStudyInput(RunInput):
+        biome: BiomeChoices
+        watchers: Optional[List[UserChoices]] = Field(
+            None,
+            description="Admin users watching this study will get status notifications.",
+        )
+        webin_owner: Optional[str] = Field(
+            None,
+            description="Webin ID of study owner, if data is private. Can be left as None if public.",
+        )
+
+    initial_data = {}
+    if not needs_biome:
+        initial_data["biome"] = BiomeChoices[str(mgnify_study.biome.path)]
+
+    biome_description = (
+        f"**Biome tagger** Please select a Biome for the entire study "
+        f"[{ena_study.accession}: {ena_study.title}](https://www.ebi.ac.uk/ena/browser/view/{ena_study.accession})."
+        if needs_biome
+        else f"Biome is already set to {mgnify_study.biome} — change here if needed."
+    )
+
+    webin_description = (
+        "**Webin owner** The study is private. Please provide the Webin account ID..."
+        if needs_webin
+        else ""
+    )
+
+    description = _(
+        f"{prompt_description}\n\n{biome_description}\n\n{webin_description}"
+    )
+
+    analyse_study_input: AnalyseStudyInput = suspend_flow_run(
+        wait_for_input=AnalyseStudyInput.with_initial_data(
+            **initial_data,
+            description=description,
+        ),
+        timeout=EMG_CONFIG.slurm.default_flow_suspend_awaiting_input_timeout_secs,
+    )
+
+    biome = analyses.models.Biome.objects.get(path=analyse_study_input.biome.name)
+    mgnify_study.biome = biome
+    mgnify_study.save()
+    logger.info(f"MGnify study {mgnify_study.accession} has biome {biome.path}.")
+
+    if analyse_study_input.watchers:
+        add_study_watchers(mgnify_study, analyse_study_input.watchers)
+
+    validate_and_set_webin_owner(ena_study, analyse_study_input.webin_owner)
+    mgnify_study.refresh_from_db()

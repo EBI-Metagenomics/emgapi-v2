@@ -6,9 +6,9 @@ import pytest
 from django.conf import settings
 
 from analyses.models import Study as AnalysisStudy
-from workflows.flows.analysis.assembly.flows.external_assembly_analysis_ingestion import (
+from workflows.flows.analysis.assembly.flows.import_out_of_production_assembly_analysis_results import (
     _validate_results_structure,
-    external_assembly_analysis_ingestion,
+    import_out_of_production_assembly_analysis_results,
 )
 from workflows.prefect_utils.testing_utils import (
     generate_assembly_v6_pipeline_results,
@@ -132,7 +132,7 @@ class TestExternalAssemblyAnalysisIngestionRealData:
         indirect=True,
     )
     @pytest.mark.prefect_harness
-    def test_external_assembly_analysis_ingestion_real_data(
+    def test_import_out_of_production_assembly_analysis_results_real_data(
         self,
         admin_user,
         httpx_mock,
@@ -146,7 +146,7 @@ class TestExternalAssemblyAnalysisIngestionRealData:
         analyse_study_input_mocker,
     ):
         """
-        Test complete external_assembly_analysis_ingestion flow.
+        Test complete import_out_of_production_assembly_analysis_results flow.
 
         What is tested here:
         1. Parsing of the samplesheet
@@ -273,20 +273,22 @@ class TestExternalAssemblyAnalysisIngestionRealData:
         mock_suspend_flow_run.side_effect = suspend_side_effect
 
         mock_copy_external = mocker.patch(
-            "workflows.flows.analysis.assembly.flows.external_assembly_analysis_ingestion.copy_out_of_production_assembly_analysis_results"
+            "workflows.flows.analysis.assembly.flows.import_out_of_production_assembly_analysis_results.copy_out_of_production_assembly_analysis_results"
         )
         mock_copy_summaries = mocker.patch(
-            "workflows.flows.analysis.assembly.flows.external_assembly_analysis_ingestion.copy_v6_study_summaries"
+            "workflows.flows.analysis.assembly.flows.import_out_of_production_assembly_analysis_results.copy_v6_study_summaries"
         )
 
         # Wish me luck...
         try:
             result = run_flow_and_capture_logs(
-                external_assembly_analysis_ingestion,
+                import_out_of_production_assembly_analysis_results,
                 results_dir=str(mocked_results_dir),
                 samplesheet_path=str(samplesheet_path),
             )
-            print("✓ external_assembly_analysis_ingestion flow completed successfully")
+            print(
+                "✓ import_out_of_production_assembly_analysis_results flow completed successfully"
+            )
         except Exception as e:
             print(f"✗ Flow failed with error: {e}")
             raise
