@@ -17,13 +17,12 @@ from workflows.ena_utils.ena_accession_matching import (
 )
 from workflows.ena_utils.ena_api_requests import (
     ENALibraryStrategyPolicy,
+    get_study_accession_for_assembly,
     get_study_from_ena,
     get_study_readruns_from_ena,
     is_ena_study_available_privately,
     is_ena_study_public,
     library_strategy_policy_to_filter,
-    get_study_accession_for_assembly,
-    ENALibraryStrategyPolicy,
     sync_privacy_state_of_ena_study_and_derived_objects,
 )
 from workflows.ena_utils.requestors import (
