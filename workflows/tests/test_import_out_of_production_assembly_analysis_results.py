@@ -271,6 +271,7 @@ class TestImportOutOfProductionAssemblyAnalysisResultsRealData:
                     watchers=[user_choices[admin_user.username]],
                     webin_owner=None,
                 )
+            return None
 
         mock_suspend_flow_run.side_effect = suspend_side_effect
 
