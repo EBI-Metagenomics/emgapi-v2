@@ -12,12 +12,8 @@ from prefect.tasks import task_input_hash
 import analyses.models
 import ena.models
 from emgapiv2.dict_utils import some
-<<<<<<< HEAD
 from emgapiv2.enum_utils import FutureStrEnum
 from workflows.ena_utils.abstract import ENAPortalDataPortal, ENAPortalResultType
-=======
-from workflows.ena_utils.abstract import ENAPortalResultType
->>>>>>> origin/main
 from workflows.ena_utils.analysis import ENAAnalysisFields, ENAAnalysisQuery
 from workflows.ena_utils.ena_accession_matching import (
     extract_all_accessions,

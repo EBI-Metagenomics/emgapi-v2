@@ -4,6 +4,10 @@ from typing import List, Optional
 import pytest
 from pydantic import BaseModel
 
+from workflows.ena_utils.ena_policies import (
+    ENALibrarySourcePolicy,
+    ENALibraryStrategyPolicy,
+)
 from workflows.models import AssemblyAnalysisBatch
 
 
@@ -60,5 +64,11 @@ def analyse_study_input_mocker(biome_choices, user_choices):
         biome: biome_choices
         watchers: Optional[List[user_choices]] = None
         webin_owner: Optional[str] = None
+        library_strategy_policy: ENALibraryStrategyPolicy = (
+            ENALibraryStrategyPolicy.ONLY_IF_CORRECT_IN_ENA
+        )
+        library_source_policy: ENALibrarySourcePolicy = (
+            ENALibrarySourcePolicy.OVERRIDE_GENOMIC_IF_METAGENOMIC_SCIENTIFIC_NAME
+        )
 
     return MockAnalyseStudyInput
