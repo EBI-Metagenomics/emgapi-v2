@@ -271,7 +271,7 @@ class InferredMetadataMixin:
     INFERRED = "INFERRED"
 
     class _MetadataDictPreferringInferred(dict):
-        def get(self, __key):
+        def get(self, __key, default=None):
             for potential_key in [
                 f"{InferredMetadataMixin.INFERRED}_{__key}",
                 f"{InferredMetadataMixin.INFERRED.lower()}_{__key}",
@@ -281,7 +281,7 @@ class InferredMetadataMixin:
                         f"Using inferred value of {__key}, because {potential_key} found in {self}"
                     )
                     return super().get(potential_key)
-            return super().get(__key)
+            return super().get(__key, default)
 
         def __getitem__(self, item):
             return self.get(item)

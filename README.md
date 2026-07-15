@@ -74,6 +74,8 @@ FLOW=realistic_example task deploy-flow  # this "deploys" workflows/flows/realis
 FILE=workflows/prefect_utils/datamovers.py FLOW=move_data task deploy-flow
 # if a flow filename + function name don't match, specify FILE separately.
 # This move_data flow needs to be deployed, because it is used by other flows.
+
+task create-pool  # this make a "slurm" work pool on the local prefect server
 ```
 
 #### Run everything (the databases, the Django app, the Prefect workflow server, a Prefect work agent, and a small Slurm cluster with associated controllers+dbs.)
@@ -274,9 +276,3 @@ task ebi-wp-k8s-hl:deploy-all
 
 Note that the prefect workers *ALSO* need to have your new flow code, which is currently deployed separately.
 For EBI-WP-K8s-HL, there is a Jenkins job to deploy those workers to Codon.
-
-
-## TODO
-* DB Schema parity with EMG DB (v1) and EMG Backlog
-* Job cleanup flows
-* Legacy data importers

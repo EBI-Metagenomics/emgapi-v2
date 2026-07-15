@@ -30,6 +30,7 @@ class AssemblyAnalysisBatchAnalysisInline(TabularInline):
         "asa_status",
         "virify_status",
         "map_status",
+        "contaminant_reference",
         "disabled",
         "disabled_reason",
         "order",
@@ -80,6 +81,7 @@ class AssemblyAnalysisBatchAdmin(JSONFieldWidgetOverridesMixin, ModelAdmin):
     list_display = [
         "id_short",
         "study_link",
+        "contaminant_references",
         "updated_at",
     ]
 
@@ -92,6 +94,7 @@ class AssemblyAnalysisBatchAdmin(JSONFieldWidgetOverridesMixin, ModelAdmin):
         "id",
         "study__accession",
         "study__title",
+        "batch_analyses__contaminant_reference",
     ]
 
     list_select_related = ["study"]
@@ -124,6 +127,20 @@ class AssemblyAnalysisBatchAdmin(JSONFieldWidgetOverridesMixin, ModelAdmin):
         """Link to the study admin page."""
         url = reverse("admin:analyses_study_change", args=[obj.study.accession])
         return format_html('<a href="{}">{}</a>', url, obj.study.accession)
+
+    @display(description="Contaminant reference")
+    def contaminant_references(self, obj):
+        """Display contaminant references used by this batch."""
+        references = sorted(
+            {
+                reference
+                for reference in obj.batch_analyses.values_list(
+                    "contaminant_reference", flat=True
+                )
+                if reference
+            }
+        )
+        return ", ".join(references) if references else "-"
 
     @action(description="Reset selected batches to PENDING")
     def mark_for_rerun(self, request, queryset):

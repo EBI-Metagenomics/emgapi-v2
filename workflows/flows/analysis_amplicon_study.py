@@ -1,6 +1,6 @@
 from pathlib import Path
 from textwrap import dedent as _
-from typing import List, Optional
+from typing import List, Optional, Type
 
 from prefect import get_run_logger, suspend_flow_run
 from prefect.events import emit_event
@@ -14,10 +14,13 @@ import analyses.base_models.with_experiment_type_models
 import analyses.models
 import ena.models
 from workflows.ena_utils.ena_api_requests import (
-    ENALibraryStrategyPolicy,
     get_study_from_ena,
     get_study_readruns_from_ena,
     library_strategy_policy_to_filter,
+)
+from workflows.ena_utils.ena_policies import (
+    ENALibrarySourcePolicy,
+    ENALibraryStrategyPolicy,
 )
 from workflows.ena_utils.webin_owner_utils import validate_and_set_webin_owner
 from workflows.flows.analyse_study_tasks.amplicon.run_amplicon_pipeline_via_samplesheet import (
@@ -53,6 +56,7 @@ from workflows.prefect_utils.analyses_models_helpers import (
     get_users_as_choices,
 )
 from workflows.prefect_utils.flows_utils import django_db_flow as flow
+from workflows.prefect_utils.input_helpers import ask_every_time_suspend_for_input_key
 
 _AMPLICON = "AMPLICON"
 
@@ -93,11 +97,12 @@ def analysis_amplicon_study(study_accession: str):
 
     read_runs = get_study_readruns_from_ena(
         ena_study.accession,
-        limit=10000,  # TODO: This should be a parameter or config
+        limit=EMG_CONFIG.ena.portal_max_readruns_to_fetch,
         raise_on_empty=False,
         filter_library_strategy=library_strategy_policy_to_filter(
             _AMPLICON, policy=ENALibraryStrategyPolicy.ONLY_IF_CORRECT_IN_ENA
         ),
+        expected_experiment_type=analyses.models.Run.ExperimentTypes.AMPLICON,
     )
     logger.info(f"Returned {len(read_runs)} run from ENA portal API")
 
@@ -106,13 +111,17 @@ def analysis_amplicon_study(study_accession: str):
 
     class AnalyseStudyInput(RunInput):
         biome: BiomeChoices
-        watchers: Optional[List[UserChoices]] = Field(
+        watchers: Optional[List[Type[UserChoices]]] = Field(
             None,
             description="Admin users watching this study will get status notifications.",
         )
         library_strategy_policy: ENALibraryStrategyPolicy = Field(
             ENALibraryStrategyPolicy.ONLY_IF_CORRECT_IN_ENA,
             description="Optionally treat read-runs with incorrect library strategy metadata as amplicon.",
+        )
+        library_source_policy: ENALibrarySourcePolicy = Field(
+            ENALibrarySourcePolicy.OVERRIDE_GENOMIC_IF_METAGENOMIC_SCIENTIFIC_NAME,
+            description="How to handle the library source metadata (e.g. if it is GENOMIC instead of METAGENOMIC).",
         )
         webin_owner: Optional[str] = Field(
             None,
@@ -139,6 +148,7 @@ def analysis_amplicon_study(study_accession: str):
                 """),
         ),
         timeout=EMG_CONFIG.slurm.default_flow_suspend_awaiting_input_timeout_secs,
+        key=ask_every_time_suspend_for_input_key(),
     )
 
     ena_study, __ = validate_and_set_webin_owner(
@@ -153,19 +163,23 @@ def analysis_amplicon_study(study_accession: str):
 
     if (
         analyse_study_input.library_strategy_policy
-        and not analyse_study_input.library_strategy_policy
-        == ENALibraryStrategyPolicy.ONLY_IF_CORRECT_IN_ENA
+        != ENALibraryStrategyPolicy.ONLY_IF_CORRECT_IN_ENA
+        or analyse_study_input.library_source_policy
+        != ENALibrarySourcePolicy.OVERRIDE_GENOMIC_IF_METAGENOMIC_SCIENTIFIC_NAME
     ):
         read_runs = get_study_readruns_from_ena(
             ena_study.accession,
-            limit=10000,
+            limit=EMG_CONFIG.ena.portal_max_readruns_to_fetch,
             raise_on_empty=True,
             filter_library_strategy=library_strategy_policy_to_filter(
                 _AMPLICON, policy=analyse_study_input.library_strategy_policy
             ),
+            library_strategy_policy=analyse_study_input.library_strategy_policy,
+            library_source_policy=analyse_study_input.library_source_policy,
+            expected_experiment_type=analyses.models.Run.ExperimentTypes.AMPLICON,
         )
         logger.info(
-            f"Using policy {analyse_study_input.library_strategy_policy}, "
+            f"Using policies strategy:{analyse_study_input.library_strategy_policy} source:{analyse_study_input.library_source_policy}, "
             f"now returned {len(read_runs)} run from ENA portal API."
         )
 

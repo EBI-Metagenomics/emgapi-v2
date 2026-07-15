@@ -58,6 +58,30 @@ def test_api_study(raw_reads_mgnify_study, ninja_api_client):
 
 
 @pytest.mark.django_db
+def test_api_study_insdc_accession_lookup(raw_reads_mgnify_study, ninja_api_client):
+    response = call_endpoint_and_get_data(
+        ninja_api_client,
+        f"/studies/insdc/{raw_reads_mgnify_study.first_accession}",
+        getter=_whole_object,
+    )
+    assert response["accession"] == raw_reads_mgnify_study.accession
+
+
+@pytest.mark.django_db
+def test_api_study_insdc_accession_lookup_does_not_leak_private_studies(
+    webin_private_study, ninja_api_client
+):
+    webin_private_study.ena_accessions = ["ERPPRIVATE"]
+    webin_private_study.save()
+
+    private_response = ninja_api_client.get("/studies/insdc/ERPPRIVATE")
+    missing_response = ninja_api_client.get("/studies/insdc/ERPUNKNOWN")
+
+    assert private_response.status_code == 404
+    assert missing_response.status_code == 404
+
+
+@pytest.mark.django_db
 def test_api_study_filtering(
     raw_reads_mgnify_study, ninja_api_client, top_level_biomes
 ):

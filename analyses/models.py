@@ -43,6 +43,12 @@ from workflows.ena_utils.ena_accession_matching import (
     INSDC_BIOSAMPLE_ACCESSION_REGEX,
     INSDC_STUDY_ACCESSION_REGEX,
 )
+from workflows.ena_utils.ena_policies import (
+    COMMONLY_INCORRECT_LIBRARY_SOURCE,
+    METAGENOME_SCIENTIFIC_NAME,
+    ENALibrarySourcePolicy,
+    ENALibraryStrategyPolicy,
+)
 from workflows.ena_utils.read_run import ENAReadRunFields
 from workflows.ena_utils.sample import ENASampleFields
 
@@ -195,6 +201,7 @@ class Study(
         verbose_name_plural = "studies"
 
         indexes = [
+            GinIndex(name="idx_study_ena_accessions_gin", fields=["ena_accessions"]),
             GinIndex(
                 fields=["features"]
             ),  # Faster selection of studies with e.g. a certain pipeline version
@@ -274,6 +281,7 @@ class Sample(InferredMetadataMixin, ENADerivedModel, TimeStampedModel):
 
     class Meta:
         indexes = [
+            GinIndex(name="idx_sample_ena_accessions_gin", fields=["ena_accessions"]),
             GinIndex(
                 name="idx_sample_title_trgm",
                 fields=["sample_title"],
@@ -374,29 +382,79 @@ class Run(
         return latest_analysis.status
 
     def set_experiment_type_by_metadata(
-        self, ena_library_strategy: str, ena_library_source: str
+        self,
+        ena_library_strategy: str,
+        ena_library_source: str,
+        ena_scientific_name: str = "",
+        library_strategy_policy: ENALibraryStrategyPolicy = ENALibraryStrategyPolicy.ONLY_IF_CORRECT_IN_ENA,
+        library_source_policy: ENALibrarySourcePolicy = ENALibrarySourcePolicy.OVERRIDE_GENOMIC_IF_METAGENOMIC_SCIENTIFIC_NAME,
+        expected_experiment_type: Run.ExperimentTypes | None = None,
     ):
+        """
+        Sets the experiment type based on provided metadata, with consideration for
+        library strategy and source policies. This function assigns a corresponding
+        experiment type considering ENA metadata and policies for overriding and
+        correcting library sources or strategies.
+
+        :param ena_library_strategy: The ENA library strategy provided in the metadata.
+        :param ena_library_source: The ENA library source provided in the metadata.
+        :param ena_scientific_name: The scientific name associated with the data, which may e.g. include "metagenome".
+        :param library_strategy_policy: Policy for how to handle ENA library strategy
+            data. The default behaviour is that no overriding of ENA metadata will happen.
+        :param library_source_policy: Policy governing how to interpret or override
+            the ENA library source data. The Default behaviour overrides genomic sources
+            in cases involving metagenomic scientific names.
+        :param expected_experiment_type: The expected experiment type to directly
+            override metadata-based determination when the library strategy policy
+            allows overriding.
+        :return: None
+        """
         ALLOWED_WHOLE_GENOME_LIBRARY_STRATEGIES = ["wgs", "wga"]
         ALLOWED_AMPLICON_LIBRARY_STRATEGIES = ["amplicon"]
 
-        if ena_library_strategy.lower() == "rna-seq" and (
-            ena_library_source.lower() == "metagenomic"
-            or ena_library_source.lower() == "metatranscriptomic"
+        ena_library_source = ena_library_source.upper()
+        ena_library_strategy = ena_library_strategy.lower()
+        ena_scientific_name = ena_scientific_name.lower()
+
+        is_metagenomic_source = ena_library_source == "METAGENOMIC"
+        is_metatranscriptomic_source = ena_library_source == "METATRANSCRIPTOMIC"
+
+        if library_source_policy == ENALibrarySourcePolicy.OVERRIDE_ALL_TO_METAGENOMIC:
+            is_metagenomic_source = True
+        elif (
+            library_source_policy
+            == ENALibrarySourcePolicy.OVERRIDE_GENOMIC_IF_METAGENOMIC_SCIENTIFIC_NAME
+            and ena_library_source in COMMONLY_INCORRECT_LIBRARY_SOURCE
+        ):
+            if METAGENOME_SCIENTIFIC_NAME in ena_scientific_name:
+                is_metagenomic_source = True
+
+        if library_strategy_policy == ENALibraryStrategyPolicy.OVERRIDE_ALL:
+            if expected_experiment_type is None:
+                raise ValueError(
+                    "expected_experiment_type is required when library_strategy_policy is OVERRIDE_ALL"
+                )
+            self.experiment_type = expected_experiment_type
+            self.save()
+            return
+
+        if ena_library_strategy == "rna-seq" and (
+            is_metagenomic_source or is_metatranscriptomic_source
         ):
             self.experiment_type = Run.ExperimentTypes.METATRANSCRIPTOMIC
         elif (
-            ena_library_strategy.lower() in ALLOWED_WHOLE_GENOME_LIBRARY_STRATEGIES
-            and ena_library_source.lower() == "metatranscriptomic"
+            ena_library_strategy in ALLOWED_WHOLE_GENOME_LIBRARY_STRATEGIES
+            and is_metatranscriptomic_source
         ):
             self.experiment_type = Run.ExperimentTypes.METATRANSCRIPTOMIC
         elif (
-            ena_library_strategy.lower() in ALLOWED_WHOLE_GENOME_LIBRARY_STRATEGIES
-            and ena_library_source.lower() == "metagenomic"
+            ena_library_strategy in ALLOWED_WHOLE_GENOME_LIBRARY_STRATEGIES
+            and is_metagenomic_source
         ):
             self.experiment_type = Run.ExperimentTypes.METAGENOMIC
         elif (
-            ena_library_strategy.lower() in ALLOWED_AMPLICON_LIBRARY_STRATEGIES
-            and ena_library_source.lower() == "metagenomic"
+            ena_library_strategy in ALLOWED_AMPLICON_LIBRARY_STRATEGIES
+            and is_metagenomic_source
         ):
             self.experiment_type = Run.ExperimentTypes.AMPLICON
         else:
@@ -405,6 +463,11 @@ class Run(
 
     def __str__(self):
         return f"Run {self.id}: {self.first_accession}"
+
+    class Meta:
+        indexes = [
+            GinIndex(name="idx_run_ena_accessions_gin", fields=["ena_accessions"]),
+        ]
 
 
 class Assembler(TimeStampedModel):
@@ -660,6 +723,9 @@ class Assembly(InferredMetadataMixin, TimeStampedModel, ENADerivedModel):
                 | Q(assembly_study__isnull=False),
                 name="at_least_one_study_present",
             )
+        ]
+        indexes = [
+            GinIndex(name="idx_assembly_ena_acc_gin", fields=["ena_accessions"]),
         ]
         ordering = ["id"]
 

@@ -6,13 +6,69 @@ from activate_django_first import EMG_CONFIG
 
 from analyses.models import Analysis
 from workflows.flows.analysis.assembly.tasks.make_samplesheet_assembly import (
+    make_samplesheet_assembly,
     make_samplesheet_for_map,
 )
 from workflows.models import (
     AssemblyAnalysisBatch,
+    AssemblyAnalysisBatchAnalysis,
     AssemblyAnalysisPipeline,
     AssemblyAnalysisPipelineStatus,
 )
+
+
+@pytest.mark.django_db(transaction=True)
+class TestMakeSamplesheetForASA:
+    def test_make_samplesheet_assembly_includes_contaminant_reference(
+        self,
+        prefect_harness,
+        raw_reads_mgnify_study,
+        raw_reads_mgnify_sample,
+        mgnify_assemblies,
+        tmp_path,
+    ):
+        """Test that the ASA samplesheet includes a contaminant reference column."""
+        analysis = Analysis.objects.create(
+            study=raw_reads_mgnify_study,
+            sample=raw_reads_mgnify_sample[0],
+            ena_study=raw_reads_mgnify_study.ena_study,
+            assembly=mgnify_assemblies[0],
+        )
+        analysis.assembly.ena_accessions = ["ERZ123123"]
+        analysis.assembly.metadata = {
+            **analysis.assembly.metadata,
+            "generated_ftp": "ftp.ebi.ac.uk/pub/databases/custom_assembly.fna.gz",
+        }
+        analysis.assembly.save()
+
+        contaminant_reference = "sea_cucumber.fna"
+
+        batch = AssemblyAnalysisBatch.objects.create(
+            study=raw_reads_mgnify_study,
+            batch_type="assembly_analysis",
+            workspace_dir=str(tmp_path),
+            total_analyses=1,
+        )
+        batch_job = AssemblyAnalysisBatchAnalysis.objects.create(
+            batch=batch,
+            analysis=analysis,
+            contaminant_reference=contaminant_reference,
+        )
+
+        samplesheet_path, _ = make_samplesheet_assembly(
+            mgnify_study=raw_reads_mgnify_study,
+            assembly_batch_jobs=AssemblyAnalysisBatchAnalysis.objects.filter(
+                id=batch_job.id
+            ),
+            output_dir=tmp_path / "samplesheets",
+        )
+
+        with open(samplesheet_path, newline="") as csvfile:
+            rows = list(csv.DictReader(csvfile))
+
+        assert len(rows) == 1
+        assert rows[0]["sample"] == "ERZ123123"
+        assert rows[0]["contaminant_reference"] == contaminant_reference
 
 
 @pytest.mark.django_db(transaction=True)

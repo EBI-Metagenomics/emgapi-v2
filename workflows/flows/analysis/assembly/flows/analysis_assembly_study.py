@@ -1,6 +1,6 @@
 from pathlib import Path
 from textwrap import dedent as _
-from typing import List, Optional
+from typing import List, Optional, Type
 
 from prefect import get_run_logger, suspend_flow_run
 from prefect.deployments import run_deployment
@@ -16,6 +16,10 @@ from workflows.ena_utils.ena_api_requests import (
     get_study_assemblies_from_ena,
     get_study_from_ena,
 )
+from workflows.ena_utils.ena_policies import (
+    ENALibrarySourcePolicy,
+    ENALibraryStrategyPolicy,
+)
 from workflows.ena_utils.webin_owner_utils import validate_and_set_webin_owner
 from workflows.flows.analysis.assembly.tasks.create_analyses_for_assemblies import (
     create_analyses_for_assemblies,
@@ -26,6 +30,7 @@ from workflows.prefect_utils.analyses_models_helpers import (
     get_users_as_choices,
 )
 from workflows.prefect_utils.flows_utils import django_db_flow as flow
+from workflows.prefect_utils.input_helpers import ask_every_time_suspend_for_input_key
 
 
 @flow(
@@ -35,6 +40,7 @@ from workflows.prefect_utils.flows_utils import django_db_flow as flow
 def analysis_assembly_study(
     study_accession: str,
     workspace_dir: str = EMG_CONFIG.slurm.default_workdir,
+    contaminant_reference: Optional[str] = None,
 ):
     """
     Get a study from ENA (or MGnify), and run assembly analysis the assemblies of the study.
@@ -46,6 +52,7 @@ def analysis_assembly_study(
 
     :param study_accession: e.g. PRJ or ERP accession
     :param workspace_dir: Path for the workspace dir. Defaults to the configured SLURM default workdir.
+    :param contaminant_reference: Optional contaminant reference name to use for ASA decontamination. See: https://github.com/EBI-Metagenomics/assembly-analysis-pipeline/blob/main/docs/usage.md#samplesheet-input
     """
     logger = get_run_logger()
 
@@ -69,7 +76,8 @@ def analysis_assembly_study(
     # Get assemble-able runs
     assemblies_accessions: list[str] = get_study_assemblies_from_ena(
         ena_study.accession,
-        limit=10000,  # TODO: this should be a config value
+        limit=EMG_CONFIG.ena.portal_max_readruns_to_fetch,
+        expected_experiment_type=analyses.models.Run.ExperimentTypes.METAGENOMIC,
     )
     logger.info(f"Returned {len(assemblies_accessions)} assemblies from ENA portal API")
 
@@ -78,6 +86,7 @@ def analysis_assembly_study(
     needs_webin = mgnify_study.is_private and not ena_study.webin_submitter
 
     if needs_biome or needs_webin:
+<<<<<<< HEAD
         set_study_biome_webin_and_watchers(
             mgnify_study,
             ena_study,
@@ -90,6 +99,79 @@ def analysis_assembly_study(
                         using [Assembly Analysis Pipeline V6](https://github.com/EBI-Metagenomics/assembly-analysis-pipeline).
                     """),
         )
+=======
+        BiomeChoices = get_biomes_as_choices()
+        UserChoices = get_users_as_choices()
+
+        class AnalyseStudyInput(RunInput):
+            biome: BiomeChoices
+            watchers: Optional[List[Type[UserChoices]]] = Field(
+                None,
+                description="Admin users watching this study will get status notifications.",
+            )
+            library_strategy_policy: ENALibraryStrategyPolicy = Field(
+                ENALibraryStrategyPolicy.ONLY_IF_CORRECT_IN_ENA,
+                description="Optionally treat assemblies with incorrect library strategy metadata as raw-reads.",
+            )
+            library_source_policy: ENALibrarySourcePolicy = Field(
+                ENALibrarySourcePolicy.OVERRIDE_GENOMIC_IF_METAGENOMIC_SCIENTIFIC_NAME,
+                description="How to handle the library source metadata (e.g. if it is GENOMIC instead of METAGENOMIC).",
+            )
+            webin_owner: Optional[str] = Field(
+                None,
+                description="Webin ID of study owner, if data is private. Can be left as None if public.",
+            )
+
+        initial_data = {}
+        if not needs_biome:
+            initial_data["biome"] = BiomeChoices[str(mgnify_study.biome.path)]
+
+        analyse_study_input: AnalyseStudyInput = suspend_flow_run(
+            wait_for_input=AnalyseStudyInput.with_initial_data(
+                **initial_data,
+                description=_(f"""\
+                        **Assembly Analysis V6**
+                        This will analyse all {len(assemblies_accessions)} assemblies of study {ena_study.accession} \
+                        using [Assembly Analysis Pipeline V6](https://github.com/EBI-Metagenomics/assembly-analysis-pipeline).
+
+                        {"**Biome tagger** Please select a Biome for the entire study " + f"[{ena_study.accession}: {ena_study.title}](https://www.ebi.ac.uk/ena/browser/view/{ena_study.accession})." if needs_biome else f"Biome is already set to {mgnify_study.biome} — change here if needed."}
+
+                        {"**Webin owner** The study is private. Please provide the Webin account ID of the study owner so they can view their study." if needs_webin else ""}
+                        """),
+            ),
+            timeout=EMG_CONFIG.slurm.default_flow_suspend_awaiting_input_timeout_secs,
+            key=ask_every_time_suspend_for_input_key(),
+        )
+
+        biome = analyses.models.Biome.objects.get(path=analyse_study_input.biome.name)
+        mgnify_study.biome = biome
+        mgnify_study.save()
+        logger.info(f"MGnify study {mgnify_study.accession} has biome {biome.path}.")
+
+        if analyse_study_input.watchers:
+            add_study_watchers(mgnify_study, analyse_study_input.watchers)
+
+        validate_and_set_webin_owner(ena_study, analyse_study_input.webin_owner)
+        mgnify_study.refresh_from_db()
+
+        if (
+            analyse_study_input.library_strategy_policy
+            != ENALibraryStrategyPolicy.ONLY_IF_CORRECT_IN_ENA
+            or analyse_study_input.library_source_policy
+            != ENALibrarySourcePolicy.OVERRIDE_GENOMIC_IF_METAGENOMIC_SCIENTIFIC_NAME
+        ):
+            assemblies_accessions = get_study_assemblies_from_ena(
+                ena_study.accession,
+                limit=EMG_CONFIG.ena.portal_max_readruns_to_fetch,
+                library_strategy_policy=analyse_study_input.library_strategy_policy,
+                library_source_policy=analyse_study_input.library_source_policy,
+                expected_experiment_type=analyses.models.Run.ExperimentTypes.METAGENOMIC,
+            )
+            logger.info(
+                f"Using policies strategy:{analyse_study_input.library_strategy_policy} source:{analyse_study_input.library_source_policy}, "
+                f"now returned {len(assemblies_accessions)} assemblies from ENA portal API."
+            )
+>>>>>>> origin/main
     else:
         logger.info(
             f"Biome {mgnify_study.biome} was already set for this study. If a change is needed, do so in the DB Admin Panel."
@@ -117,6 +199,7 @@ def analysis_assembly_study(
             pipeline=analyses.models.Analysis.PipelineVersions.v6,
             max_analyses=EMG_CONFIG.assembly_analysis_pipeline.max_analyses_per_study,
             workspace_dir=Path(workspace_dir),
+            contaminant_reference=contaminant_reference,
         )
     )
 

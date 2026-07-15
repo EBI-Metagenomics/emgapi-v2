@@ -17,9 +17,12 @@ import analyses.models
 import ena.models
 from emgapiv2.enum_utils import FutureStrEnum
 from workflows.ena_utils.ena_api_requests import (
-    ENALibraryStrategyPolicy,
     get_study_from_ena,
     get_study_readruns_from_ena,
+)
+from workflows.ena_utils.ena_policies import (
+    ENALibrarySourcePolicy,
+    ENALibraryStrategyPolicy,
 )
 from workflows.ena_utils.webin_owner_utils import validate_and_set_webin_owner
 from workflows.flows.analyse_study_tasks.cleanup_pipeline_directories import (
@@ -40,6 +43,7 @@ from workflows.prefect_utils.analyses_models_helpers import (
     get_users_as_choices,
 )
 from workflows.prefect_utils.flows_utils import django_db_flow as flow
+from workflows.prefect_utils.input_helpers import ask_every_time_suspend_for_input_key
 from workflows.views import encode_samplesheet_path
 
 
@@ -98,7 +102,8 @@ def assemble_study(
 
     read_runs = get_study_readruns_from_ena(
         ena_study.accession,
-        limit=5000,
+        limit=EMG_CONFIG.ena.portal_max_readruns_to_fetch,
+        expected_experiment_type=analyses.models.Run.ExperimentTypes.METAGENOMIC,
     )
     logger.info(f"Have {len(read_runs)} from ENA portal API")
 
@@ -131,6 +136,10 @@ def assemble_study(
             ENALibraryStrategyPolicy.ONLY_IF_CORRECT_IN_ENA,
             description="Optionally treat read-runs with incorrect library strategy metadata as assemblable.",
         )
+        library_source_policy: ENALibrarySourcePolicy = Field(
+            ENALibrarySourcePolicy.OVERRIDE_GENOMIC_IF_METAGENOMIC_SCIENTIFIC_NAME,
+            description="How to handle the library source metadata (e.g. if it is GENOMIC instead of METAGENOMIC).",
+        )
         wait_for_samplesheet_editing: bool = Field(
             False,
             description="If True, the execution will be suspended after the samplesheets are created, to allow editing.",
@@ -158,10 +167,29 @@ def assemble_study(
                 """),
         ),
         timeout=EMG_CONFIG.slurm.default_flow_suspend_awaiting_input_timeout_secs,
+        key=ask_every_time_suspend_for_input_key(),
     )
 
     validate_and_set_webin_owner(ena_study, assemble_study_input.webin_owner)
     mgnify_study.refresh_from_db()
+
+    if (
+        assemble_study_input.library_strategy_policy
+        != ENALibraryStrategyPolicy.ONLY_IF_CORRECT_IN_ENA
+        or assemble_study_input.library_source_policy
+        != ENALibrarySourcePolicy.OVERRIDE_GENOMIC_IF_METAGENOMIC_SCIENTIFIC_NAME
+    ):
+        read_runs = get_study_readruns_from_ena(
+            ena_study.accession,
+            limit=EMG_CONFIG.ena.portal_max_readruns_to_fetch,
+            library_strategy_policy=assemble_study_input.library_strategy_policy,
+            library_source_policy=assemble_study_input.library_source_policy,
+            expected_experiment_type=analyses.models.Run.ExperimentTypes.METAGENOMIC,
+        )
+        logger.info(
+            f"Using policies strategy:{assemble_study_input.library_strategy_policy} source:{assemble_study_input.library_source_policy}, "
+            f"now returned {len(read_runs)} runs from ENA portal API."
+        )
 
     if assemble_study_input.watchers:
         add_study_watchers(mgnify_study, assemble_study_input.watchers)
@@ -232,6 +260,7 @@ def assemble_study(
             wait_for_input=ResumeAfterSamplesheetEditingInput.with_initial_data(
                 description=suspend_message
             ),
+            key=f"samplesheets-editing-{ask_every_time_suspend_for_input_key()}",
         )
 
     logger.info("Flow resumed after samplesheet editing")

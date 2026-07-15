@@ -20,7 +20,10 @@ import analyses.models
 from workflows.data_io_utils.file_rules.base_rules import FileRule, GlobRule
 from workflows.data_io_utils.file_rules.common_rules import GlobHasFilesCountRule
 from workflows.data_io_utils.file_rules.nodes import Directory
-from workflows.ena_utils.ena_api_requests import ENALibraryStrategyPolicy
+from workflows.ena_utils.ena_policies import (
+    ENALibrarySourcePolicy,
+    ENALibraryStrategyPolicy,
+)
 from workflows.flows.analyse_study_tasks.cleanup_pipeline_directories import (
     # delete_study_results_dir,
     delete_study_nextflow_workdir,
@@ -275,10 +278,10 @@ def generate_fake_pipeline_all_results(amplicon_run_folder: Path, run):
         / "SILVA-SSU"
     )
     (ssu_dir / f"{run}_SILVA-SSU.mseq").touch()
-    (ssu_dir / f"{run}_SILVA-SSU.txt").touch()
     with (
         (ssu_dir / f"{run}.html").open("w") as ssu_krona,
         (ssu_dir / f"{run}_SILVA-SSU.tsv").open("w") as ssu_tsv,
+        (ssu_dir / f"{run}_SILVA-SSU.txt").open("w") as ssu_tax,
     ):
         ssu_tsv.writelines(
             [
@@ -290,6 +293,11 @@ def generate_fake_pipeline_all_results(amplicon_run_folder: Path, run):
             ]
         )
         ssu_krona.write("<html></html>")
+        ssu_tax.write(dedent("""\
+            1	sk__Bacteria	k__	p__Bacillota	c__Bacilli
+            2	sk__Bacteria	k__	p__Bacillota	c__Bacilli	o__Lactobacillales	f__Carnobacteriaceae	g__Trichococcus
+            1	sk__Bacteria	k__	p__Bacillota	c__Clostridia	o__Eubacteriales	f__Eubacteriaceae	g__Eubacterium	s__Eubacterium_coprostanoligenes
+            """))
     pr2_dir = (
         amplicon_run_folder
         / EMG_CONFIG.amplicon_pipeline.taxonomy_summary_folder
@@ -430,13 +438,13 @@ def generate_fake_pipeline_no_asvs(amplicon_run_folder, run):
         open(
             f"{amplicon_run_folder}/{EMG_CONFIG.amplicon_pipeline.qc_folder}/{run}.fastp.json",
             "w",
-        ),
+        ) as fastp,
         open(
             f"{amplicon_run_folder}/{EMG_CONFIG.amplicon_pipeline.qc_folder}/{run}_multiqc_report.html",
             "w",
         ),
     ):
-        pass
+        json.dump({}, fastp)  # to get valid json
 
     # AMPLIFIED REGION INFERENCE
     os.makedirs(
@@ -579,6 +587,7 @@ def analysis_study_input_mocker(biome_choices, user_choices):
         webin_owner: Optional[str]
         watchers: List[user_choices]
         library_strategy_policy: ENALibraryStrategyPolicy
+        library_source_policy: ENALibrarySourcePolicy
 
     return MockAnalyseStudyInput
 
@@ -754,32 +763,6 @@ def test_prefect_analyse_amplicon_flow(
         ],
     )
 
-    # Mock the read_run ENA API requests that `dwc_summary_generator` uses
-    responses.add(
-        responses.GET,
-        EMG_CONFIG.ena.portal_search_api,
-        json=[
-            {
-                "run_accession": amplicon_run_all_results,
-                "secondary_study_accession": "PRJNA398089",
-                "sample_accession": "SAMN08514017",
-                "instrument_model": "Illumina MiSeq",
-            }
-        ],
-        match=[
-            responses.matchers.query_param_matcher(
-                {
-                    "result": "read_run",
-                    "includeAccessions": amplicon_run_all_results,
-                    "fields": "secondary_study_accession,sample_accession,instrument_model",
-                    "limit": "10",
-                    "format": "json",
-                    "download": "false",
-                }
-            )
-        ],
-    )
-
     responses.add(
         responses.GET,
         EMG_CONFIG.ena.portal_search_api,
@@ -872,36 +855,6 @@ def test_prefect_analyse_amplicon_flow(
                     "result": "read_run",
                     "includeAccessions": amplicon_run_extra_dada2,
                     "fields": "secondary_study_accession,sample_accession,instrument_model",
-                    "limit": "10",
-                    "format": "json",
-                    "download": "false",
-                }
-            )
-        ],
-    )
-
-    # mock the sample ENA API requests that `dwc_summary_generator` uses
-    responses.add(
-        responses.GET,
-        EMG_CONFIG.ena.portal_search_api,
-        json=[
-            {
-                "lat": "52",
-                "lon": "0",
-                "collection_date": "2025-05-25",
-                "depth": 0.12,
-                "center_name": "Devonshire Building",
-                "temperature": 12,
-                "salinity": 0.12,
-                "country": "United Kingdom",
-            }
-        ],
-        match=[
-            responses.matchers.query_param_matcher(
-                {
-                    "result": "sample",
-                    "includeAccessions": "SAMN08514017",
-                    "fields": "lat,lon,collection_date,depth,center_name,temperature,salinity,country",
                     "limit": "10",
                     "format": "json",
                     "download": "false",
@@ -1110,6 +1063,7 @@ def test_prefect_analyse_amplicon_flow(
                 biome=biome_choices["root.engineered"],
                 watchers=[user_choices[admin_user.username]],
                 library_strategy_policy=ENALibraryStrategyPolicy.ONLY_IF_CORRECT_IN_ENA,
+                library_source_policy=ENALibrarySourcePolicy.OVERRIDE_GENOMIC_IF_METAGENOMIC_SCIENTIFIC_NAME,
                 webin_owner=None,
             )
 
@@ -1160,7 +1114,7 @@ def test_prefect_analyse_amplicon_flow(
     # check sanity check runs
     assert (
         study.analyses.filter(status__analysis_post_sanity_check_failed=True).count()
-        == 3  # 2 fail sanity check for missing qc, a third fails import
+        == 2  # 2 fail sanity check for missing qc
     )
     assert (
         study.analyses.filter(status__analysis_completed_reason="all_results").count()
@@ -1233,13 +1187,13 @@ def test_prefect_analyse_amplicon_flow(
         / f"{EMG_CONFIG.amplicon_pipeline.pipeline_name}_{EMG_CONFIG.amplicon_pipeline.pipeline_version}"
     )
 
-    merge_study_summary_count = 6
+    merge_study_summary_count = 7
     merge_dwcr_summary_count = 6
     directory_count = 2
 
     total_expected_summary_count = (
         merge_study_summary_count + merge_dwcr_summary_count + directory_count
-    )  # adds up to 14
+    )  # adds up to 15
 
     Directory(
         path=summary_dir,
@@ -1275,13 +1229,13 @@ def test_prefect_analyse_amplicon_flow(
             GlobRule(
                 rule_name="All study level files are present",
                 glob_pattern=f"{study.first_accession}*{STUDY_SUMMARY_TSV}",
-                test=lambda f: len(list(f)) == 6,
+                test=lambda f: len(list(f)) == 7,
             ),
         ],
     )
 
     study.refresh_from_db()
-    assert len(study.downloads_as_objects) == 12
+    assert len(study.downloads_as_objects) == 13
 
     # test merging of study summaries again – expect default bludgeon should overwrite the existing ones
     logged_run = run_flow_and_capture_logs(
@@ -1294,7 +1248,7 @@ def test_prefect_analyse_amplicon_flow(
         logged_run.logs.count(
             f"Deleting {str(Path(summary_dir) / study.first_accession)}"
         )
-        == 6
+        == 7
     )
     Directory(
         path=summary_dir,
@@ -1305,7 +1259,7 @@ def test_prefect_analyse_amplicon_flow(
             GlobRule(
                 rule_name="All files are study level",
                 glob_pattern=f"{study.first_accession}*{STUDY_SUMMARY_TSV}",
-                test=lambda f: len(list(f)) == 6,
+                test=lambda f: len(list(f)) == 7,
             ),
             GlobRule(
                 rule_name="Samplesheet-specific DwC Ready files are present",
@@ -1316,7 +1270,7 @@ def test_prefect_analyse_amplicon_flow(
     )
 
     study.refresh_from_db()
-    assert len(study.downloads_as_objects) == 12
+    assert len(study.downloads_as_objects) == 13
     assert study.features.has_v6_analyses
 
     # simulate copy_v6_pipeline_results and copy_v6_summaries
@@ -1386,7 +1340,7 @@ def test_prefect_analyse_amplicon_flow(
             GlobRule(
                 rule_name="Recursive number of files",
                 glob_pattern="**/*",
-                test=lambda x: len(list(x)) == 155,
+                test=lambda x: len(list(x)) == 157,
             )
         ],
     )
@@ -1644,6 +1598,7 @@ def test_prefect_analyse_amplicon_flow_private_data(
                 biome=biome_choices["root.engineered"],
                 watchers=[user_choices[admin_user.username]],
                 library_strategy_policy=ENALibraryStrategyPolicy.ONLY_IF_CORRECT_IN_ENA,
+                library_source_policy=ENALibrarySourcePolicy.OVERRIDE_GENOMIC_IF_METAGENOMIC_SCIENTIFIC_NAME,
                 webin_owner="webin-1",
             )
 
@@ -1739,12 +1694,12 @@ def test_prefect_analyse_amplicon_flow_private_data(
     )
 
     merge_study_summary_count = 6
-    merge_dwcr_summary_count = 5
+    merge_dwcr_summary_count = 6
     directory_count = 2
 
     total_expected_summary_count = (
         merge_study_summary_count + merge_dwcr_summary_count + directory_count
-    )  # adds up to 13
+    )  # adds up to 14
 
     Directory(
         path=summary_dir,
@@ -1780,13 +1735,13 @@ def test_prefect_analyse_amplicon_flow_private_data(
             GlobRule(
                 rule_name="All study level files are present",
                 glob_pattern=f"{study.first_accession}*{STUDY_SUMMARY_TSV}",
-                test=lambda f: len(list(f)) == 5,
+                test=lambda f: len(list(f)) == 6,
             ),
         ],
     )
 
     study.refresh_from_db()
-    assert len(study.downloads_as_objects) == 11
+    assert len(study.downloads_as_objects) == 12
 
     # test merging of study summaries again – expect default bludgeon should overwrite the existing ones
     logged_run = run_flow_and_capture_logs(
@@ -1799,7 +1754,7 @@ def test_prefect_analyse_amplicon_flow_private_data(
         logged_run.logs.count(
             f"Deleting {str(Path(summary_dir) / study.first_accession)}"
         )
-        == 5
+        == 6
     )
     Directory(
         path=summary_dir,
@@ -1810,7 +1765,7 @@ def test_prefect_analyse_amplicon_flow_private_data(
             GlobRule(
                 rule_name="All files are study level",
                 glob_pattern=f"{study.first_accession}*{STUDY_SUMMARY_TSV}",
-                test=lambda f: len(list(f)) == 5,
+                test=lambda f: len(list(f)) == 6,
             ),
             GlobRule(
                 rule_name="Samplesheet-specific DwC Ready files are present",
@@ -1821,7 +1776,7 @@ def test_prefect_analyse_amplicon_flow_private_data(
     )
 
     study.refresh_from_db()
-    assert len(study.downloads_as_objects) == 11
+    assert len(study.downloads_as_objects) == 12
     assert study.features.has_v6_analyses
 
     assert study.is_private

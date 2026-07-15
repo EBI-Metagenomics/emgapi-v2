@@ -55,6 +55,7 @@ class AssemblyAnalysisBatchAnalysisAdmin(ModelAdmin):
         "asa_status_badge",
         "virify_status_badge",
         "map_status_badge",
+        "contaminant_reference",
         "disabled_badge",
         "order",
     ]
@@ -69,6 +70,7 @@ class AssemblyAnalysisBatchAnalysisAdmin(ModelAdmin):
         "asa_status",
         "virify_status",
         "map_status",
+        "contaminant_reference",
         "disabled",
         "created_at",
     ]
@@ -76,6 +78,7 @@ class AssemblyAnalysisBatchAnalysisAdmin(ModelAdmin):
     search_fields = [
         "analysis__accession",
         "analysis__assembly__ena_accessions",
+        "contaminant_reference",
         "batch__study__accession",
         "batch__id",
     ]
@@ -113,6 +116,7 @@ class AssemblyAnalysisBatchAnalysisAdmin(ModelAdmin):
                     "batch",
                     "analysis",
                     "order",
+                    "contaminant_reference",
                 ]
             },
         ),

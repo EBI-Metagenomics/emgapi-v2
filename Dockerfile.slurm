@@ -21,6 +21,7 @@ RUN apt-get install -y \
     libjson-c-dev \
     libyaml-dev \
     libjwt-dev \
+    libpq-dev \
     libmariadb-dev \
     libmariadb-dev-compat \
     lua5.4 \
@@ -70,6 +71,8 @@ COPY requirements.txt .
 RUN python -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 RUN pip install --use-pep517 --upgrade -r requirements.txt
+COPY slurm-dev-environment/configs/prefect-flow-environment.sh /usr/local/bin/prefect-flow-environment.sh
+RUN chmod 0555 /usr/local/bin/prefect-flow-environment.sh
 
 RUN mkdir -p /usr/bin/webin-cli
 RUN wget https://github.com/enasequence/webin-cli/releases/download/7.3.0/webin-cli-7.3.0.jar -O /usr/bin/webin-cli/webin-cli.jar

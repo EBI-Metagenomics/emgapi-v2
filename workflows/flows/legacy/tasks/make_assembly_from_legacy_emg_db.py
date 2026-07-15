@@ -18,6 +18,34 @@ from workflows.flows.legacy.tasks.make_sample_from_legacy_emg_db import (
 )
 
 
+def get_or_create_assembly_for_legacy_accession(
+    legacy_assembly: LegacyAssembly,
+    study: Study,
+    sample: Sample,
+) -> tuple[Assembly, bool]:
+    matching_assemblies = Assembly.objects.filter(
+        ena_accessions__contains=[legacy_assembly.accession]
+    )
+    if matching_assemblies.count() > 1:
+        raise Assembly.MultipleObjectsReturned(
+            f"Multiple assemblies found with accession {legacy_assembly.accession}"
+        )
+
+    assembly = matching_assemblies.first()
+    if assembly:
+        return assembly, False
+
+    return (
+        Assembly.objects.create(
+            ena_study=study.ena_study,
+            assembly_study=study,  # could also be reads study, but unclear from information present for legacy cases
+            sample=sample,
+            ena_accessions=[legacy_assembly.accession],
+        ),
+        True,
+    )
+
+
 @task
 def make_assembly_from_legacy_emg_db(
     legacy_assembly: LegacyAssembly,
@@ -32,13 +60,10 @@ def make_assembly_from_legacy_emg_db(
         # In this new schema, Assembly has a sample field and runs ManyToMany.
         # A co-assembly might have multiple runs and samples.
         # For now we use the analysis job's primary sample for the assembly.
-        assembly, created = Assembly.objects.get_or_create(
-            ena_study=study.ena_study,
-            assembly_study=study,  # could also be reads study, but unclear from information present for legacy cases
-            sample=sample,
-            defaults={
-                "ena_accessions": [legacy_assembly.accession],
-            },
+        assembly, created = get_or_create_assembly_for_legacy_accession(
+            legacy_assembly,
+            study,
+            sample,
         )
         if created:
             logger.info(f"Created new Assembly object {assembly}")
