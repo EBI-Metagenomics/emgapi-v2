@@ -1,13 +1,21 @@
 import re
 from pathlib import Path
 from typing import List
+from unittest.mock import patch
 
 import pytest
 from django.conf import settings
 
+from analyses.models import Analysis
 from analyses.models import Study as AnalysisStudy
+from workflows.flows.analyse_study_tasks.shared.copy_v6_pipeline_results import (
+    BatchCopyResult,
+    CopyError,
+)
 from workflows.flows.analysis.assembly.flows.import_out_of_production_assembly_analysis_results import (
+    _parse_and_validate_samplesheet,
     _validate_results_structure,
+    copy_out_of_production_analysis_results_to_destination_folder,
     import_out_of_production_assembly_analysis_results,
 )
 from workflows.prefect_utils.testing_utils import (
@@ -46,6 +54,201 @@ class TestImportOutOfProductionAssemblyAnalysisResults:
             FileNotFoundError, match="Pipeline directory map not found "
         ):
             _validate_results_structure(results_path, [accession])
+
+    def test_flow_raises_when_results_dir_missing(self, tmp_path, prefect_harness):
+        """Flow should fail fast if the results directory does not exist."""
+        missing_results_dir = tmp_path / "does-not-exist"
+        samplesheet_path = tmp_path / "samplesheet.csv"
+        samplesheet_path.write_text(
+            "sample,assembly_fasta\nERZ18440741,/path/to/ERZ18440741.fa.gz\n"
+        )
+
+        with pytest.raises(FileNotFoundError, match="Results directory does not exist"):
+            import_out_of_production_assembly_analysis_results(
+                results_dir=str(missing_results_dir),
+                samplesheet_path=str(samplesheet_path),
+            )
+
+    def test_flow_raises_when_samplesheet_missing(self, tmp_path, prefect_harness):
+        """Flow should fail fast if the samplesheet file does not exist."""
+        results_dir = tmp_path / "results"
+        results_dir.mkdir()
+        missing_samplesheet_path = tmp_path / "does-not-exist.csv"
+
+        with pytest.raises(FileNotFoundError, match="Samplesheet file does not exist"):
+            import_out_of_production_assembly_analysis_results(
+                results_dir=str(results_dir),
+                samplesheet_path=str(missing_samplesheet_path),
+            )
+
+    def test_parse_and_validate_samplesheet_missing_required_columns_error(
+        self, tmp_path, prefect_harness
+    ):
+        """Test error when the samplesheet is missing a required column."""
+        samplesheet_path = tmp_path / "samplesheet.csv"
+        samplesheet_path.write_text(
+            "sample,contaminant_reference,human_reference,phix_reference\n"
+            "ERZ18440741,,,\n"
+        )
+
+        with pytest.raises(ValueError, match="missing required columns"):
+            _parse_and_validate_samplesheet(samplesheet_path)
+
+    def test_parse_and_validate_samplesheet_no_assembly_accessions_error(
+        self, tmp_path, prefect_harness
+    ):
+        """Test error when the samplesheet has no rows with a sample accession."""
+        samplesheet_path = tmp_path / "samplesheet.csv"
+        samplesheet_path.write_text(
+            "sample,assembly_fasta,contaminant_reference,human_reference,phix_reference\n"
+            ",/path/to/some.fa.gz,,,\n"
+        )
+
+        with pytest.raises(ValueError, match="No assembly accessions found"):
+            _parse_and_validate_samplesheet(samplesheet_path)
+
+
+@pytest.mark.django_db
+class TestCopyOutOfProductionAnalysisResultsToDestinationFolder:
+
+    @pytest.fixture
+    def setup_analysis(
+        self,
+        raw_reads_mgnify_study,
+        raw_reads_mgnify_sample,
+        mgnify_assemblies,
+    ):
+        analysis = Analysis.objects.create(
+            study=raw_reads_mgnify_study,
+            sample=raw_reads_mgnify_sample[0],
+            ena_study=raw_reads_mgnify_study.ena_study,
+            assembly=mgnify_assemblies[0],
+            pipeline_version="6.0",
+        )
+        return analysis
+
+    @patch(
+        "workflows.flows.analysis.assembly.flows.import_out_of_production_assembly_analysis_results.copy_single_analysis_results"
+    )
+    def test_copy_success_returns_result(
+        self,
+        mock_copy_single,
+        setup_analysis,
+        prefect_harness,
+        tmp_path,
+    ):
+        """Test that a successful copy is returned for the analysis."""
+        analysis = setup_analysis
+        results_workspace = tmp_path / "results"
+
+        copy_result = BatchCopyResult(
+            analysis_id=analysis.id,
+            destination_folder=tmp_path / "ftp" / "analysis",
+            success=True,
+        )
+        mock_copy_single.return_value = copy_result
+
+        results = copy_out_of_production_analysis_results_to_destination_folder(
+            analyses=[analysis],
+            results_workspace=results_workspace,
+            destination_root=tmp_path / "ftp",
+        )
+
+        assert results == [copy_result]
+        mock_copy_single.assert_called_once()
+        assert mock_copy_single.call_args.kwargs["analysis"] == analysis
+        assert (
+            mock_copy_single.call_args.kwargs["results_workspace"] == results_workspace
+        )
+        assert mock_copy_single.call_args.kwargs["destination_root"] == tmp_path / "ftp"
+        # Out-of-production copies do not go through the batch context
+        assert "batch" not in mock_copy_single.call_args.kwargs
+        assert "batch_analysis_job" not in mock_copy_single.call_args.kwargs
+
+    @patch(
+        "workflows.flows.analysis.assembly.flows.import_out_of_production_assembly_analysis_results.copy_single_analysis_results"
+    )
+    def test_copy_failed_returns_result(
+        self,
+        mock_copy_single,
+        setup_analysis,
+        prefect_harness,
+        tmp_path,
+    ):
+        """Test that a failed copy is returned rather than raised."""
+        analysis = setup_analysis
+        results_workspace = tmp_path / "results"
+
+        copy_result = BatchCopyResult(
+            analysis_id=analysis.id,
+            destination_folder=tmp_path / "ftp" / "analysis",
+            success=False,
+            errors=[
+                CopyError(
+                    pipeline_name="asa",
+                    source=results_workspace / "asa" / "ERZ000000",
+                    message="ASA results are missing",
+                )
+            ],
+        )
+        mock_copy_single.return_value = copy_result
+
+        results = copy_out_of_production_analysis_results_to_destination_folder(
+            analyses=[analysis],
+            results_workspace=results_workspace,
+            destination_root=tmp_path / "ftp",
+        )
+
+        assert results == [copy_result]
+        assert results[0].success is False
+        assert results[0].errors[0].message == "ASA results are missing"
+
+    @patch(
+        "workflows.flows.analysis.assembly.flows.import_out_of_production_assembly_analysis_results.copy_single_analysis_results"
+    )
+    def test_copy_processes_all_analyses(
+        self,
+        mock_copy_single,
+        raw_reads_mgnify_study,
+        raw_reads_mgnify_sample,
+        mgnify_assemblies,
+        prefect_harness,
+        tmp_path,
+    ):
+        """Test that one copy result is returned per analysis, preserving order."""
+        analyses = [
+            Analysis.objects.create(
+                study=raw_reads_mgnify_study,
+                sample=raw_reads_mgnify_sample[0],
+                ena_study=raw_reads_mgnify_study.ena_study,
+                assembly=assembly,
+                pipeline_version="6.0",
+            )
+            for assembly in mgnify_assemblies[:2]
+        ]
+        results_workspace = tmp_path / "results"
+
+        copy_results = [
+            BatchCopyResult(
+                analysis_id=analysis.id,
+                destination_folder=tmp_path / "ftp" / str(analysis.id),
+                success=True,
+            )
+            for analysis in analyses
+        ]
+        mock_copy_single.side_effect = copy_results
+
+        results = copy_out_of_production_analysis_results_to_destination_folder(
+            analyses=analyses,
+            results_workspace=results_workspace,
+            destination_root=tmp_path / "ftp",
+        )
+
+        assert results == copy_results
+        assert mock_copy_single.call_count == 2
+        for call, analysis in zip(mock_copy_single.call_args_list, analyses):
+            assert call.kwargs["analysis"] == analysis
+            assert call.kwargs["results_workspace"] == results_workspace
 
 
 # ============================================================================
@@ -316,3 +519,51 @@ class TestImportOutOfProductionAssemblyAnalysisResultsRealData:
             ]
         ).first()
         assert analysis is not None, "Analysis for assembly was not created"
+
+    @pytest.mark.django_db(transaction=True)
+    @pytest.mark.httpx_mock(
+        should_mock=should_not_mock_httpx_requests_to_prefect_server
+    )
+    @pytest.mark.prefect_harness
+    def test_import_out_of_production_assembly_analysis_results_multiple_studies_error(
+        self, httpx_mock, prefect_harness, tmp_path
+    ):
+        """Flow should refuse a samplesheet whose assemblies belong to different studies."""
+        assembly_accession_1 = "ERZ18440741"
+        assembly_accession_2 = "ERZ18440742"
+        study_accession_1 = "PRJEB00001"
+        study_accession_2 = "PRJEB00002"
+
+        results_dir = tmp_path / "results"
+        for pipeline in ["asa", "virify", "map"]:
+            for accession in [assembly_accession_1, assembly_accession_2]:
+                (results_dir / pipeline / accession).mkdir(parents=True, exist_ok=True)
+
+        samplesheet_path = tmp_path / "samplesheet.csv"
+        samplesheet_path.write_text(
+            "sample,assembly_fasta\n"
+            f"{assembly_accession_1},/path/to/{assembly_accession_1}.fa.gz\n"
+            f"{assembly_accession_2},/path/to/{assembly_accession_2}.fa.gz\n"
+        )
+
+        httpx_mock.add_response(
+            url=re.compile(
+                f"{re.escape(EMG_CONFIG.ena.portal_search_api)}\\?result=analysis&query=.*{re.escape(assembly_accession_1)}.*"
+            ),
+            json=[{"study_accession": study_accession_1}],
+        )
+        httpx_mock.add_response(
+            url=re.compile(
+                f"{re.escape(EMG_CONFIG.ena.portal_search_api)}\\?result=analysis&query=.*{re.escape(assembly_accession_2)}.*"
+            ),
+            json=[{"study_accession": study_accession_2}],
+        )
+
+        with pytest.raises(
+            ValueError,
+            match="Samplesheet contains assemblies from multiple studies",
+        ):
+            import_out_of_production_assembly_analysis_results(
+                results_dir=str(results_dir),
+                samplesheet_path=str(samplesheet_path),
+            )
