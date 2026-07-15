@@ -1,6 +1,6 @@
 from pathlib import Path
 from textwrap import dedent as _
-from typing import List, Optional, Tuple
+from typing import List, Optional, Type
 
 from prefect import get_run_logger, suspend_flow_run
 from prefect.deployments import run_deployment
@@ -86,35 +86,75 @@ def analysis_assembly_study(
     needs_webin = mgnify_study.is_private and not ena_study.webin_submitter
 
     if needs_biome or needs_webin:
-        library_strategy_policy, library_source_policy = (
-            set_study_biome_webin_and_watchers(
-                mgnify_study,
-                ena_study,
-                needs_biome,
-                needs_webin,
-                logger,
-                prompt_description=(f"""\
+        BiomeChoices = get_biomes_as_choices()
+        UserChoices = get_users_as_choices()
+
+        class AnalyseStudyInput(RunInput):
+            biome: BiomeChoices
+            watchers: Optional[List[Type[UserChoices]]] = Field(
+                None,
+                description="Admin users watching this study will get status notifications.",
+            )
+            library_strategy_policy: ENALibraryStrategyPolicy = Field(
+                ENALibraryStrategyPolicy.ONLY_IF_CORRECT_IN_ENA,
+                description="Optionally treat assemblies with incorrect library strategy metadata as raw-reads.",
+            )
+            library_source_policy: ENALibrarySourcePolicy = Field(
+                ENALibrarySourcePolicy.OVERRIDE_GENOMIC_IF_METAGENOMIC_SCIENTIFIC_NAME,
+                description="How to handle the library source metadata (e.g. if it is GENOMIC instead of METAGENOMIC).",
+            )
+            webin_owner: Optional[str] = Field(
+                None,
+                description="Webin ID of study owner, if data is private. Can be left as None if public.",
+            )
+
+        initial_data = {}
+        if not needs_biome:
+            initial_data["biome"] = BiomeChoices[str(mgnify_study.biome.path)]
+
+        analyse_study_input: AnalyseStudyInput = suspend_flow_run(
+            wait_for_input=AnalyseStudyInput.with_initial_data(
+                **initial_data,
+                description=_(f"""\
                         **Assembly Analysis V6**
                         This will analyse all {len(assemblies_accessions)} assemblies of study {ena_study.accession} \
                         using [Assembly Analysis Pipeline V6](https://github.com/EBI-Metagenomics/assembly-analysis-pipeline).
-                    """),
-                include_library_policy_fields=True,
-            )
+
+                        {"**Biome tagger** Please select a Biome for the entire study " + f"[{ena_study.accession}: {ena_study.title}](https://www.ebi.ac.uk/ena/browser/view/{ena_study.accession})." if needs_biome else f"Biome is already set to {mgnify_study.biome} — change here if needed."}
+
+                        {"**Webin owner** The study is private. Please provide the Webin account ID of the study owner so they can view their study." if needs_webin else ""}
+                        """),
+            ),
+            timeout=EMG_CONFIG.slurm.default_flow_suspend_awaiting_input_timeout_secs,
+            key=ask_every_time_suspend_for_input_key(),
         )
+
+        biome = analyses.models.Biome.objects.get(path=analyse_study_input.biome.name)
+        mgnify_study.biome = biome
+        mgnify_study.save()
+        logger.info(f"MGnify study {mgnify_study.accession} has biome {biome.path}.")
+
+        if analyse_study_input.watchers:
+            add_study_watchers(mgnify_study, analyse_study_input.watchers)
+
+        validate_and_set_webin_owner(ena_study, analyse_study_input.webin_owner)
+        mgnify_study.refresh_from_db()
+
         if (
-            library_strategy_policy != ENALibraryStrategyPolicy.ONLY_IF_CORRECT_IN_ENA
-            or library_source_policy
+            analyse_study_input.library_strategy_policy
+            != ENALibraryStrategyPolicy.ONLY_IF_CORRECT_IN_ENA
+            or analyse_study_input.library_source_policy
             != ENALibrarySourcePolicy.OVERRIDE_GENOMIC_IF_METAGENOMIC_SCIENTIFIC_NAME
         ):
             assemblies_accessions = get_study_assemblies_from_ena(
                 ena_study.accession,
                 limit=EMG_CONFIG.ena.portal_max_readruns_to_fetch,
-                library_strategy_policy=library_strategy_policy,
-                library_source_policy=library_source_policy,
+                library_strategy_policy=analyse_study_input.library_strategy_policy,
+                library_source_policy=analyse_study_input.library_source_policy,
                 expected_experiment_type=analyses.models.Run.ExperimentTypes.METAGENOMIC,
             )
             logger.info(
-                f"Using policies strategy:{library_strategy_policy} source:{library_source_policy}, "
+                f"Using policies strategy:{analyse_study_input.library_strategy_policy} source:{analyse_study_input.library_source_policy}, "
                 f"now returned {len(assemblies_accessions)} assemblies from ENA portal API."
             )
     else:
@@ -165,104 +205,3 @@ def analysis_assembly_study(
         f"All {len(batches)} batches submitted successfully. "
         "Finalization will be triggered automatically when all batches complete."
     )
-
-
-def set_study_biome_webin_and_watchers(
-    mgnify_study: analyses.models.Study,
-    ena_study: ena.models.Study,
-    needs_biome: bool,
-    needs_webin: bool,
-    logger,
-    prompt_description: str,
-    include_library_policy_fields: bool = False,
-) -> Tuple[
-    Optional[ENALibraryStrategyPolicy], Optional[ENALibrarySourcePolicy]
-]:
-    """Set biome and optionally add watchers, or log existing settings if already configured.
-
-    Returns a tuple of (library_strategy_policy, library_source_policy) when
-    include_library_policy_fields is True; otherwise returns (None, None).
-    """
-    BiomeChoices = get_biomes_as_choices()
-    UserChoices = get_users_as_choices()
-
-    if include_library_policy_fields:
-
-        class AnalyseStudyInput(RunInput):
-            biome: BiomeChoices
-            watchers: Optional[List[UserChoices]] = Field(
-                None,
-                description="Admin users watching this study will get status notifications.",
-            )
-            library_strategy_policy: ENALibraryStrategyPolicy = Field(
-                ENALibraryStrategyPolicy.ONLY_IF_CORRECT_IN_ENA,
-                description="Optionally treat assemblies with incorrect library strategy metadata as raw-reads.",
-            )
-            library_source_policy: ENALibrarySourcePolicy = Field(
-                ENALibrarySourcePolicy.OVERRIDE_GENOMIC_IF_METAGENOMIC_SCIENTIFIC_NAME,
-                description="How to handle the library source metadata (e.g. if it is GENOMIC instead of METAGENOMIC).",
-            )
-            webin_owner: Optional[str] = Field(
-                None,
-                description="Webin ID of study owner, if data is private. Can be left as None if public.",
-            )
-
-    else:
-
-        class AnalyseStudyInput(RunInput):
-            biome: BiomeChoices
-            watchers: Optional[List[UserChoices]] = Field(
-                None,
-                description="Admin users watching this study will get status notifications.",
-            )
-            webin_owner: Optional[str] = Field(
-                None,
-                description="Webin ID of study owner, if data is private. Can be left as None if public.",
-            )
-
-    initial_data = {}
-    if not needs_biome:
-        initial_data["biome"] = BiomeChoices[str(mgnify_study.biome.path)]
-
-    biome_description = (
-        f"**Biome tagger** Please select a Biome for the entire study "
-        f"[{ena_study.accession}: {ena_study.title}](https://www.ebi.ac.uk/ena/browser/view/{ena_study.accession})."
-        if needs_biome
-        else f"Biome is already set to {mgnify_study.biome} — change here if needed."
-    )
-
-    webin_description = (
-        "**Webin owner** The study is private. Please provide the Webin account ID..."
-        if needs_webin
-        else ""
-    )
-
-    description = _(
-        f"{prompt_description}\n\n{biome_description}\n\n{webin_description}"
-    )
-
-    analyse_study_input: AnalyseStudyInput = suspend_flow_run(
-        wait_for_input=AnalyseStudyInput.with_initial_data(
-            **initial_data,
-            description=description,
-        ),
-        timeout=EMG_CONFIG.slurm.default_flow_suspend_awaiting_input_timeout_secs,
-    )
-
-    biome = analyses.models.Biome.objects.get(path=analyse_study_input.biome.name)
-    mgnify_study.biome = biome
-    mgnify_study.save()
-    logger.info(f"MGnify study {mgnify_study.accession} has biome {biome.path}.")
-
-    if analyse_study_input.watchers:
-        add_study_watchers(mgnify_study, analyse_study_input.watchers)
-
-    validate_and_set_webin_owner(ena_study, analyse_study_input.webin_owner)
-    mgnify_study.refresh_from_db()
-
-    if include_library_policy_fields:
-        return (
-            analyse_study_input.library_strategy_policy,
-            analyse_study_input.library_source_policy,
-        )
-    return (None, None)

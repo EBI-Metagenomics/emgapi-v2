@@ -128,7 +128,9 @@ class TestImportOutOfProductionAssemblyAnalysisResultsRealData:
     )
     @pytest.mark.parametrize(
         "mock_suspend_flow_run",
-        ["workflows.flows.analysis.assembly.flows.analysis_assembly_study"],
+        [
+            "workflows.flows.analysis.assembly.flows.import_out_of_production_assembly_analysis_results"
+        ],
         indirect=True,
     )
     @pytest.mark.prefect_harness
@@ -263,7 +265,7 @@ class TestImportOutOfProductionAssemblyAnalysisResultsRealData:
         )
 
         def suspend_side_effect(wait_for_input=None, **kwargs):
-            if wait_for_input.__name__ == "AnalyseStudyInput":
+            if wait_for_input.__name__ == "ImportAssemblyAnalysisInput":
                 return analyse_study_input_mocker(
                     biome=biome_choices[assembly_test_scenario.biome_path],
                     watchers=[user_choices[admin_user.username]],
