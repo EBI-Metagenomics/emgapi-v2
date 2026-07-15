@@ -13,10 +13,6 @@ import ena.models
 from analyses.base_models.with_downloads_models import DownloadType
 from analyses.models import Analysis, Study
 from workflows.data_io_utils.filenames import accession_prefix_separated_dir_path
-from workflows.ena_utils.ena_policies import (
-    ENALibrarySourcePolicy,
-    ENALibraryStrategyPolicy,
-)
 from workflows.fixtures.assembly_analysis.conftest import AssemblyTestScenario
 from workflows.flows.analysis.assembly.flows.analysis_assembly_study import (
     analysis_assembly_study,
@@ -42,8 +38,6 @@ from workflows.prefect_utils.testing_utils import (
 )
 
 EMG_CONFIG = settings.EMG_CONFIG
-
-
 
 
 def setup_assembly_batch_fixtures(scenario: AssemblyTestScenario):
