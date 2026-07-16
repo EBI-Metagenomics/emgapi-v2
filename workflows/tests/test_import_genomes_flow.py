@@ -98,6 +98,7 @@ from workflows.flows.import_genomes_flow import (
     gather_genome_dirs,
     get_catalogue,
     import_genomes_flow,
+    move_catalogue_files_to_web_results,
     parse_options,
     validate_pipeline_version,
 )
@@ -126,11 +127,49 @@ def test_parse_options():
         assert parsed_options["pipeline_version"] == "v3.0.0dev"
         assert parsed_options["catalogue_type"] == "prokaryotes"
         assert parsed_options["catalogue_biome_label"] == "Sheep Rumen"
+        assert parsed_options["destination_dir_name"] == "sheep-rumen"
+        assert parsed_options["catalogue_slug"] == "sheep-rumen-v1-0"
+
+        options = get_default_options(catalogue_biome_label=None)
+        parsed_options = parse_options(options)
+        assert parsed_options["catalogue_biome_label"] == "Sheep rumen"
 
     with patch("os.path.exists", return_value=False):
         options = get_default_options()
         with pytest.raises(FileNotFoundError):
             parse_options(options)
+
+
+def test_move_catalogue_files_to_web_results_uses_slurm_ftp_results_dir():
+    options = {
+        "results_directory": "/nfs/donco/results/soil/1.0",
+        "destination_dir_name": "soil",
+        "catalogue_version": "1.0",
+    }
+
+    with (
+        patch(
+            "workflows.flows.import_genomes_flow.EMG_CONFIG.slurm.ftp_results_dir",
+            "/nfs/ftp/public/databases/metagenomics/mgnify_results",
+        ),
+        patch("workflows.flows.import_genomes_flow.get_run_logger") as logger,
+        patch("workflows.flows.import_genomes_flow.run_deployment") as run_deployment,
+    ):
+        run_deployment.return_value = "flow-run"
+
+        move_catalogue_files_to_web_results.fn(options)
+
+    run_deployment.assert_called_once()
+    assert run_deployment.call_args.kwargs["parameters"]["source"] == (
+        "/nfs/donco/results/soil/1.0/website/"
+    )
+    assert run_deployment.call_args.kwargs["parameters"]["target"] == (
+        "/nfs/ftp/public/databases/metagenomics/mgnify_results/"
+        "mgnify_genomes/soil/1.0"
+    )
+    logger.return_value.info.assert_called_once_with(
+        "Web results mover flowrun is flow-run"
+    )
 
 
 @pytest.mark.django_db
@@ -247,6 +286,8 @@ def get_default_options(
     pipeline_version: str = "v3.0.0dev",
     catalogue_type: str = "prokaryotes",
     catalogue_biome_label: str = "Sheep Rumen",
+    destination_dir_name: str = None,
+    catalogue_slug: str = None,
 ):
     return {
         "results_directory": results_directory,
@@ -257,4 +298,6 @@ def get_default_options(
         "pipeline_version": pipeline_version,
         "catalogue_type": catalogue_type,
         "catalogue_biome_label": catalogue_biome_label,
+        "destination_dir_name": destination_dir_name,
+        "catalogue_slug": catalogue_slug,
     }

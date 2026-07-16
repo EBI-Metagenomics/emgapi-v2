@@ -66,7 +66,7 @@ fileignoreconfig:
   allowed_patterns: [key]
 
 - filename: emgapiv2/config.py
-  checksum: 3afe465b36e4e141124bd84c8459c5aa81332eedf49b691eff22c74df63a0f18
+  checksum: 08e2680598ee0719f717dc73019948001ebfcbaf700a3ee2dfb0e442acaebd26
 
 - filename: emgapiv2/settings.py
   checksum: c6b5a727cf8a2638879787d5670b7f198574be0c31878a6bc92e652ce298af70
@@ -193,6 +193,9 @@ fileignoreconfig:
 
 - filename: workflows/flows/assemble_study_tasks/make_samplesheets.py
   allowed_patterns: [key, InstrumentPlatformKeys]
+
+- filename: workflows/flows/import_genomes_flow.py
+  checksum: 26802040107ed033a32ae3209bb856a6f52e5d1ffe112d7fed11f177f094a651
 
 - filename: workflows/flows/update_ena_accession_from_json_flow.py
   allowed_patterns: [total_missing_key_or_parse_error]

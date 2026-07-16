@@ -1,8 +1,11 @@
 import os
 import re
+import shlex
+from datetime import timedelta
 from pathlib import Path
 
 from prefect import flow, get_run_logger, task
+from prefect.deployments import run_deployment
 
 from activate_django_first import EMG_CONFIG
 
@@ -23,6 +26,26 @@ from genomes.management.lib.genome_util import (
     upload_kegg_module_results,
 )
 from genomes.models import Genome, GenomeCatalogue
+from workflows.data_io_utils.filenames import trailing_slash_ensured_dir
+from workflows.prefect_utils.build_cli_command import cli_command
+from workflows.prefect_utils.slurm_flow import run_cluster_job
+from workflows.prefect_utils.slurm_policies import ResubmitAlwaysPolicy
+
+
+def shell_join(commands: list[str]) -> str:
+    return " && ".join(commands)
+
+
+def shell_quote(value) -> str:
+    return shlex.quote(str(value))
+
+
+def catalogue_dirname_from_results_directory(results_directory: str) -> str:
+    return os.path.basename(os.path.dirname(os.path.normpath(results_directory)))
+
+
+def catalogue_slug_from_options(options: dict) -> str:
+    return f"{options['catalogue_name'].replace(' ', '-')}-v{options['catalogue_version'].replace('.', '-')}".lower()
 
 
 def validate_pipeline_version(version: str) -> int:
@@ -45,8 +68,14 @@ def parse_options(options):
     options["pipeline_version"] = options["pipeline_version"].strip()
     options["catalogue_type"] = options["catalogue_type"].strip()
     options["catalogue_biome_label"] = (
-        options.get("catalogue_biome_label", "").strip() or options["catalogue_name"]
-    )
+        options.get("catalogue_biome_label") or ""
+    ).strip() or options["catalogue_name"]
+    options["destination_dir_name"] = (
+        options.get("destination_dir_name") or ""
+    ).strip() or catalogue_dirname_from_results_directory(options["results_directory"])
+    options["catalogue_slug"] = (
+        options.get("catalogue_slug") or ""
+    ).strip() or catalogue_slug_from_options(options)
 
     return options
 
@@ -57,11 +86,14 @@ def get_catalogue(options):
     if not biome:
         raise Biome.DoesNotExist()
 
-    catalogue_dirname = os.path.basename(
-        os.path.dirname(os.path.normpath(options["results_directory"]))
+    destination_dir_name = options.get(
+        "destination_dir_name"
+    ) or catalogue_dirname_from_results_directory(options["results_directory"])
+    catalogue_slug = options.get("catalogue_slug") or catalogue_slug_from_options(
+        options
     )
-    results_path_to_save = f"/{genome_config.genomes_ftp_results_subpath}/{catalogue_dirname}/{options['catalogue_version']}"
-    catalogue_id = f"{options['catalogue_name'].replace(' ', '-')}-v{options['catalogue_version'].replace('.', '-')}".lower()
+    results_path_to_save = f"/{genome_config.genomes_ftp_results_subpath}/{destination_dir_name}/{options['catalogue_version']}"
+    catalogue_id = catalogue_slug
 
     catalogue, _ = GenomeCatalogue.objects.get_or_create(
         catalogue_id=catalogue_id,
@@ -93,6 +125,250 @@ def gather_genome_dirs(catalogue_dir, catalogue_type):
 
     sanity_check_catalogue_dir(catalogue_dir)
     return genome_dirs
+
+
+@task
+def move_catalogue_files_to_web_results(options: dict, timeout: int = 28800):
+    logger = get_run_logger()
+    source = trailing_slash_ensured_dir(
+        str(Path(options["results_directory"]) / "website")
+    )
+    target = str(
+        Path(EMG_CONFIG.slurm.ftp_results_dir)
+        / genome_config.genomes_ftp_results_subpath
+        / options["destination_dir_name"]
+        / options["catalogue_version"]
+    )
+    flowrun = run_deployment(
+        name="move-data/move_data_deployment",
+        parameters={
+            "move_command": cli_command(["rsync", "-av"]),
+            "source": source,
+            "target": target,
+            "make_target": True,
+        },
+        job_variables={"partition": EMG_CONFIG.slurm.datamover_partition},
+        timeout=timeout,
+    )
+    logger.info(f"Web results mover flowrun is {flowrun}")
+
+
+@task
+def move_catalogue_files_to_ftp(options: dict, timeout: int = 86400):
+    logger = get_run_logger()
+    source = trailing_slash_ensured_dir(str(Path(options["results_directory"]) / "ftp"))
+    target = str(
+        Path(genome_config.ftp_genomes_root)
+        / options["destination_dir_name"]
+        / f"v{options['catalogue_version']}"
+    )
+    flowrun = run_deployment(
+        name="move-data/move_data_deployment",
+        parameters={
+            "move_command": cli_command(["rsync", "-av"]),
+            "source": source,
+            "target": target,
+            "make_target": True,
+        },
+        job_variables={"partition": EMG_CONFIG.slurm.datamover_partition},
+        timeout=timeout,
+    )
+    logger.info(f"FTP mover flowrun is {flowrun}")
+
+
+@task
+def make_cobs_index(options: dict):
+    catalogue_slug = options["catalogue_slug"]
+    catalogue_dir = (
+        Path(genome_config.genome_search_project_dir) / "catalogues" / catalogue_slug
+    )
+    command = shell_join(
+        [
+            f"mkdir -p {shell_quote(catalogue_dir)}",
+            f"cd {shell_quote(catalogue_dir)}",
+            f"singularity run {genome_config.genome_search_singularity_image} -c index create {shell_quote(Path(options['results_directory']) / 'website')} {shell_quote(catalogue_slug)} --fasta_glob_filter '**/MGYG*.fna'",
+        ]
+    )
+    return run_cluster_job(
+        name=f"Make COBS index for {catalogue_slug}",
+        command=command,
+        expected_time=timedelta(hours=24),
+        memory="32G",
+        working_dir=catalogue_dir,
+        environment={},
+        resubmit_policy=ResubmitAlwaysPolicy,
+    )
+
+
+@task
+def make_sourmash_sketches(options: dict):
+    catalogue_slug = options["catalogue_slug"]
+    catalogue_dir = (
+        Path(genome_config.genome_search_project_dir) / "catalogues" / catalogue_slug
+    )
+    sketch_dir = catalogue_dir / "sourmash_sketches"
+    command = shell_join(
+        [
+            "mitload miniconda",
+            f"mkdir -p {shell_quote(sketch_dir)}",
+            f"cd {shell_quote(catalogue_dir)}",
+            f"conda activate {shell_quote(genome_config.sourmash_conda_environment)}",
+            f"find {shell_quote(Path(options['results_directory']) / 'website')} -path '*/genome/MGYG*.fna' > sourmash_sketches/all_fasta.txt",
+            "sourmash sketch dna --from-file sourmash_sketches/all_fasta.txt --outdir sourmash_sketches --name-from-first",
+        ]
+    )
+    return run_cluster_job(
+        name=f"Make Sourmash sketches for {catalogue_slug}",
+        command=command,
+        expected_time=timedelta(hours=24),
+        memory="32G",
+        working_dir=catalogue_dir,
+        environment={},
+        resubmit_policy=ResubmitAlwaysPolicy,
+        cpus_per_task=8,
+    )
+
+
+@task
+def make_sourmash_index(options: dict):
+    catalogue_slug = options["catalogue_slug"]
+    catalogue_dir = (
+        Path(genome_config.genome_search_project_dir) / "catalogues" / catalogue_slug
+    )
+    command = shell_join(
+        [
+            "mitload miniconda",
+            f"cd {shell_quote(catalogue_dir)}",
+            f"conda activate {shell_quote(genome_config.sourmash_conda_environment)}",
+            "cd sourmash_sketches",
+            "sourmash index -k 31 --scaled 1000 --dna genome_index *.sig",
+        ]
+    )
+    return run_cluster_job(
+        name=f"Make Sourmash index for {catalogue_slug}",
+        command=command,
+        expected_time=timedelta(hours=24),
+        memory="32G",
+        working_dir=catalogue_dir,
+        environment={},
+        resubmit_policy=ResubmitAlwaysPolicy,
+        cpus_per_task=8,
+    )
+
+
+@task
+def place_cobs_index_on_embassy(options: dict):
+    # TODO: move COBS to k8s
+    catalogue_slug = options["catalogue_slug"]
+    project_dir = Path(genome_config.genome_search_project_dir)
+    key = shell_quote(project_dir / genome_config.cobs_search_ssh_key)
+    local_index = shell_quote(
+        project_dir / "catalogues" / catalogue_slug / f"{catalogue_slug}.cobs_compact"
+    )
+    host = shell_quote(genome_config.cobs_search_host)
+    remote_index = f"{host}:{shell_quote(Path(genome_config.cobs_remote_index_dir) / f'{catalogue_slug}.cobs_compact')}"
+    remote_command = shell_join(
+        [
+            f"grep -qxF '  {catalogue_slug}: {Path(genome_config.cobs_remote_index_dir) / f'{catalogue_slug}.cobs_compact'}' {shell_quote(genome_config.cobs_remote_config_path)} || echo '  {catalogue_slug}: {Path(genome_config.cobs_remote_index_dir) / f'{catalogue_slug}.cobs_compact'}' >> {shell_quote(genome_config.cobs_remote_config_path)}",
+            f"sudo systemctl restart {shell_quote(genome_config.cobs_remote_service)}",
+            "echo 'COBS was restarted'",
+        ]
+    )
+    command = shell_join(
+        [
+            f"scp -i {key} {local_index} {remote_index}",
+            f"ssh -i {key} {host} {shell_quote(remote_command)}",
+        ]
+    )
+    return run_cluster_job(
+        name=f"Place COBS index for {catalogue_slug} on Embassy",
+        command=command,
+        expected_time=timedelta(hours=2),
+        memory="1G",
+        working_dir=project_dir,
+        environment={},
+        resubmit_policy=ResubmitAlwaysPolicy,
+    )
+
+
+@task
+def place_sourmash_signatures(options: dict):
+    catalogue_slug = options["catalogue_slug"]
+    source = (
+        Path(genome_config.genome_search_project_dir)
+        / "catalogues"
+        / catalogue_slug
+        / "sourmash_sketches"
+    )
+    target = Path(genome_config.sourmash_public_signatures_dir) / catalogue_slug
+    command = shell_join(
+        [
+            f"mkdir -p {shell_quote(target)}",
+            f"rsync -av {shell_quote(trailing_slash_ensured_dir(str(source)))} {shell_quote(target)}",
+            f"cd {shell_quote(target)}",
+            "unzip -o genome_index.sbt.zip",
+        ]
+    )
+    return run_cluster_job(
+        name=f"Place Sourmash signatures for {catalogue_slug}",
+        command=command,
+        expected_time=timedelta(hours=24),
+        memory="1G",
+        environment={},
+        resubmit_policy=ResubmitAlwaysPolicy,
+        partition=EMG_CONFIG.slurm.datamover_partition,
+    )
+
+
+@task
+def release_rnacentral_json(options: dict):
+    command = (
+        f"cp {shell_quote(Path(options['results_directory']) / 'additional_data' / 'rnacentral')}/*json "
+        f"{shell_quote(genome_config.rnacentral_ftp_dir)}"
+    )
+    return run_cluster_job(
+        name=f"Release RNA Central JSON for {options['catalogue_slug']}",
+        command=command,
+        expected_time=timedelta(hours=8),
+        memory="1G",
+        environment={},
+        resubmit_policy=ResubmitAlwaysPolicy,
+        partition=EMG_CONFIG.slurm.datamover_partition,
+    )
+
+
+@task
+def release_uniprot(options: dict):
+    catalogue_slug = options["catalogue_slug"]
+    source = Path(options["results_directory"]) / "additional_data" / "uniprot"
+    target = Path(genome_config.uniprot_ftp_dir) / catalogue_slug
+    command = shell_join(
+        [
+            f"mkdir -p {shell_quote(target)}",
+            f"cp -r {shell_quote(source / 'uniprot-files')} {shell_quote(target)}",
+            f"cp {shell_quote(source)}/*metadata.tsv {shell_quote(target)}",
+            f"cp {shell_quote(source / 'VERSION.txt')} {shell_quote(target)}",
+        ]
+    )
+    return run_cluster_job(
+        name=f"Release UniProt for {catalogue_slug}",
+        command=command,
+        expected_time=timedelta(hours=8),
+        memory="1G",
+        environment={},
+        resubmit_policy=ResubmitAlwaysPolicy,
+        partition=EMG_CONFIG.slurm.datamover_partition,
+    )
+
+
+def run_genome_release_tasks(options: dict):
+    move_catalogue_files_to_web_results(options)
+    move_catalogue_files_to_ftp(options)
+    make_cobs_index(options)
+    make_sourmash_sketches(options)
+    make_sourmash_index(options)
+    place_cobs_index_on_embassy(options)
+    place_sourmash_signatures(options)
 
 
 @task
@@ -138,7 +414,11 @@ def import_genomes_flow(
     gold_biome: str,
     pipeline_version: str,
     catalogue_type: str,
-    catalogue_biome_label: str = None,
+    catalogue_biome_label: str | None = None,
+    destination_dir_name: str | None = None,
+    catalogue_slug: str | None = None,
+    run_release_tasks: bool | None = None,
+    release_third_party_data: bool = True,
 ):
     # Reconstruct options dictionary for backward compatibility with existing functions
     options = {
@@ -149,9 +429,17 @@ def import_genomes_flow(
         "pipeline_version": pipeline_version,
         "catalogue_type": catalogue_type,
         "catalogue_biome_label": catalogue_biome_label,
+        "destination_dir_name": destination_dir_name,
+        "catalogue_slug": catalogue_slug,
     }
 
     options = parse_options(options)
+    if run_release_tasks is None:
+        run_release_tasks = genome_config.run_release_tasks_during_import
+
+    if run_release_tasks:
+        run_genome_release_tasks(options)
+
     catalogue = get_catalogue(options)
     upload_catalogue_summary(catalogue, options["catalogue_dir"])
     upload_catalogue_files(catalogue, options["catalogue_dir"])
@@ -167,6 +455,10 @@ def import_genomes_flow(
         f"Processed {len(genome_accessions)} genomes in catalogue {catalogue.name}"
     )
     validate_import_summary(catalogue)
+
+    if run_release_tasks and release_third_party_data:
+        release_rnacentral_json(options)
+        release_uniprot(options)
 
 
 @task
