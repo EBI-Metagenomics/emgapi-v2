@@ -90,6 +90,8 @@ INSTALLED_APPS = [
     "debug_toolbar",
     "django_json_widget",
     "corsheaders",
+    "django_tasks",
+    "django_tasks_db",
     "ninja_extra",
     "ninja_jwt",
     "ena",
@@ -173,6 +175,13 @@ DATABASES = {
         conn_health_checks=True,
         default="postgres://postgres:postgres@localhost:5432/emg_test",
     ),
+}
+
+TASKS = {
+    "default": {
+        "BACKEND": "django_tasks_db.DatabaseBackend",
+        "QUEUES": ["default"],
+    }
 }
 
 

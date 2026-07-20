@@ -1,0 +1,5 @@
+-r requirements-common.txt
+
+# Sourmash runtime for the Django Tasks worker
+setuptools
+sourmash==4.1.2

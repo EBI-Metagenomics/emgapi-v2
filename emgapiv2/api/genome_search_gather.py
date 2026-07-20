@@ -2,32 +2,34 @@ import hashlib
 import json
 import logging
 import tarfile
+import uuid
+from functools import partial
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from celery import Celery, group
-from celery.app.control import Control
 from django.conf import settings
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.db import transaction
 from django.http import FileResponse, Http404
-from kombu.exceptions import OperationalError
 from ninja import Schema
 from ninja.errors import HttpError
 from ninja_extra import api_controller, http_get, http_post
 
 from emgapiv2.api.schema_utils import ApiSections
-from genomes.models import GenomeCatalogue
+from genomes.models import GenomeSearchIndex, SourmashSearchJob, SourmashSearchJobItem
+from genomes.tasks import mark_sourmash_items_enqueue_failed, run_sourmash_gather_item
 
 logger = logging.getLogger(__name__)
 EMG_CONFIG = settings.EMG_CONFIG
-RESULTS_EXPIRE = 60 * 60 * 24 * 30
 
 
 class SourmashGatherSubmissionData(Schema):
     message: str
     job_id: str
+    status: str
     children_ids: Dict[str, str]
     signatures_received: List[str]
+    requested_catalogues: List[str]
     status_url: str
 
 
@@ -60,6 +62,7 @@ class SourmashGatherSignatureStatus(Schema):
 
 class SourmashGatherStatusData(Schema):
     group_id: str
+    status: str
     signatures: List[SourmashGatherSignatureStatus]
     results_url: Optional[str] = None
     worker_status: str
@@ -67,23 +70,6 @@ class SourmashGatherStatusData(Schema):
 
 class SourmashGatherStatusOut(Schema):
     data: SourmashGatherStatusData
-
-
-def _build_celery_app() -> Celery:
-    app = Celery(
-        "sourmash_tasks",
-        broker=EMG_CONFIG.sourmash.celery_broker,
-        backend=EMG_CONFIG.sourmash.celery_backend,
-    )
-    app.conf.update(
-        result_extended=True,
-        result_expires=RESULTS_EXPIRE,
-    )
-    return app
-
-
-app = _build_celery_app()
-control = Control(app=app)
 
 
 def _api_path(path_suffix: str) -> str:
@@ -177,11 +163,13 @@ def _get_unique_name(uploaded_file) -> str:
     return f"{md5_hash.hexdigest()}.sig"
 
 
-def _save_signature(uploaded_file) -> str:
-    query_dir = Path(EMG_CONFIG.sourmash.queries_path)
+def _save_signature(uploaded_file, job_id: str) -> str:
+    query_dir = Path(EMG_CONFIG.sourmash.queries_path) / job_id
     query_dir.mkdir(parents=True, exist_ok=True)
-    name = _get_unique_name(uploaded_file)
-    destination_path = query_dir / name
+    destination_path = query_dir / _get_unique_name(uploaded_file)
+    if destination_path.exists():
+        return str(destination_path)
+
     with destination_path.open("wb") as destination:
         if hasattr(uploaded_file, "seek"):
             uploaded_file.seek(0)
@@ -189,192 +177,164 @@ def _save_signature(uploaded_file) -> str:
             destination.write(chunk)
     if hasattr(uploaded_file, "seek"):
         uploaded_file.seek(0)
-    return name
+    return str(destination_path)
 
 
-def _send_sourmash_jobs(
-    uploads: List[Dict[str, str]], mag_catalogues: set[str]
-) -> tuple[str, Dict[str, str]]:
-    pairs = [
-        (upload["original_name"], upload["saved_name"], catalogue)
-        for upload in uploads
-        for catalogue in mag_catalogues
-    ]
-    job = group(
-        [
-            app.signature(
-                "tasks.run_gather",
-                args=(saved_name, original_name, catalogue),
-            )
-            for original_name, saved_name, catalogue in pairs
-        ],
-        app=app,
-    )
-    result = job.apply_async()
-    result.save()
-    children_ids = {
-        f"{original_name}:{catalogue}": child_result.id
-        for (original_name, _, catalogue), child_result in zip(pairs, result.results)
-    }
-    return result.id, children_ids
+def _build_item_results_path(job_id: str, item_id: uuid.UUID) -> str:
+    return str(Path(EMG_CONFIG.sourmash.results_path) / job_id / f"{item_id}.csv")
 
 
-def _get_task_pos_in_reserved(
-    task_id: str, reserved: Dict[str, List[Dict]]
-) -> int | None:
-    pos = 0
-    for tasks in reserved.values():
-        for task in tasks:
-            if task.get("id") == task_id:
-                return pos + 1
-            pos += 1
-    return None
+def _build_job_archive_path(job_id: str) -> Path:
+    return Path(EMG_CONFIG.sourmash.results_path) / job_id / f"{job_id}.tgz"
 
 
-def _get_task_details_by_worker(task_id: str, inspect) -> Dict[str, Any]:
+def _parse_uuid(raw_id: str) -> Optional[uuid.UUID]:
     try:
-        tasks_by_worker = inspect.query_task(task_id)
-    except Exception:
-        logger.exception("Failed to query worker status for task %s", task_id)
-        return {}
-    return tasks_by_worker or {}
+        return uuid.UUID(str(raw_id))
+    except (TypeError, ValueError):
+        return None
 
 
-def _get_task_worker_status(task_id: str, inspect) -> str:
-    tasks_by_worker = _get_task_details_by_worker(task_id, inspect)
-    for worker_tasks in tasks_by_worker.values():
-        if task_id not in worker_tasks:
-            continue
-        status = worker_tasks[task_id][0]
-        if status == "reserved":
-            return "IN_QUEUE"
-        if status == "active":
-            return "RUNNING"
-        return str(status).upper()
-    return "UNKNOWN"
+def _get_active_sourmash_indexes(mag_catalogues: set[str]) -> List[GenomeSearchIndex]:
+    return list(
+        GenomeSearchIndex.objects.select_related("catalogue")
+        .filter(
+            backend=GenomeSearchIndex.Backend.SOURMASH,
+            status=GenomeSearchIndex.Status.ACTIVE,
+            is_active=True,
+            ksize=EMG_CONFIG.sourmash.default_ksize,
+            catalogue__catalogue_id__in=mag_catalogues,
+        )
+        .order_by("catalogue__catalogue_id", "created_at")
+    )
 
 
-def _get_task_catalogue(task_id: str, inspect) -> Optional[str]:
-    tasks_by_worker = _get_task_details_by_worker(task_id, inspect)
-    for worker_tasks in tasks_by_worker.values():
-        if task_id not in worker_tasks:
-            continue
-        args = worker_tasks[task_id][1].get("args", [])
-        if len(args) >= 3:
-            return args[2]
-    return None
+def _enqueue_sourmash_job_items(item_ids: list[str]) -> None:
+    enqueued_item_ids: list[str] = []
+    try:
+        for item_id in item_ids:
+            task_result = run_sourmash_gather_item.enqueue(job_item_id=item_id)
+            enqueued_item_ids.append(item_id)
+            SourmashSearchJobItem.objects.filter(
+                id=item_id,
+                task_result_id="",
+            ).update(task_result_id=task_result.id)
+    except Exception as exc:
+        logger.exception("Failed to enqueue sourmash search items")
+        pending_item_ids = [
+            item_id for item_id in item_ids if item_id not in enqueued_item_ids
+        ]
+        if pending_item_ids:
+            mark_sourmash_items_enqueue_failed(pending_item_ids, exc)
+        raise
 
 
 def _get_sourmash_job_status(
     job_id: str, request
 ) -> Optional[SourmashGatherStatusData]:
-    inspect = control.inspect()
-    ping = inspect.ping() if inspect else None
-    reserved = None
-    group_result = app.GroupResult.restore(job_id, app=app)
-    if group_result is None:
+    job_uuid = _parse_uuid(job_id)
+    if job_uuid is None:
         return None
 
+    job = (
+        SourmashSearchJob.objects.prefetch_related("items__search_index__catalogue")
+        .filter(id=job_uuid)
+        .first()
+    )
+    if job is None:
+        return None
+
+    job.recalculate_status()
     signatures = []
     has_results = False
-    for result in group_result.results:
+
+    for item in job.items.all():
         signature: Dict[str, Any] = {
-            "job_id": result.id,
-            "status": result.status,
+            "job_id": str(item.id),
+            "status": item.status,
+            "filename": item.query_original_name,
+            "catalogue": item.search_index.catalogue.catalogue_id,
         }
 
-        filename = getattr(result, "args", [None, None])[1]
-        if filename:
-            signature["filename"] = filename
+        if item.result_summary:
+            signature["result"] = item.result_summary
 
-        if result.status == "SUCCESS":
-            payload = result.result or {}
-            signature["result"] = payload
+        if item.raw_csv_path and Path(item.raw_csv_path).exists():
             signature["results_url"] = _absolute_api_url(
-                request, f"genomes-search/results/{result.id}/"
-            )
-            signature["catalogue"] = payload.get("catalog")
-            signature["filename"] = signature.get("filename") or payload.get(
-                "query_filename"
+                request, f"genomes-search/results/{item.id}/"
             )
             has_results = True
-        elif result.status == "FAILURE":
-            signature["reason"] = str(result.result)
-            signature["catalogue"] = None
-        elif result.status == "PENDING" and ping is not None:
-            signature["status"] = _get_task_worker_status(result.id, inspect)
-            signature["catalogue"] = _get_task_catalogue(result.id, inspect)
-            if signature["status"] == "IN_QUEUE":
-                if reserved is None:
-                    reserved = inspect.reserved() or {}
-                signature["position_in_queue"] = _get_task_pos_in_reserved(
-                    result.id, reserved
-                )
+
+        if item.status == SourmashSearchJobItem.Status.FAILED and item.error_message:
+            signature["reason"] = item.error_message
 
         signatures.append(SourmashGatherSignatureStatus(**signature))
 
     return SourmashGatherStatusData(
-        group_id=job_id,
+        group_id=str(job.id),
+        status=job.status,
         signatures=signatures,
         results_url=(
-            _absolute_api_url(request, f"genomes-search/results/{job_id}/")
+            _absolute_api_url(request, f"genomes-search/results/{job.id}/")
             if has_results
             else None
         ),
-        worker_status="OFFLINE" if ping is None else "OK",
+        worker_status="UNKNOWN",
     )
 
 
-def _generate_tgz_from_group_id(group_id: str) -> Optional[Path]:
-    group_result = app.GroupResult.restore(group_id, app=app)
-    if group_result is None:
-        return None
-
-    results_dir = Path(EMG_CONFIG.sourmash.results_path)
-    results_dir.mkdir(parents=True, exist_ok=True)
-    archive_path = results_dir / f"{group_id}.tgz"
+def _generate_tgz_from_job(job: SourmashSearchJob) -> Optional[Path]:
+    archive_path = _build_job_archive_path(str(job.id))
+    archive_path.parent.mkdir(parents=True, exist_ok=True)
+    added = False
 
     with tarfile.open(archive_path, "w:gz") as tar:
-        added = False
-        for result in group_result.results:
-            if result.status != "SUCCESS":
+        for item in job.items.all():
+            if not item.raw_csv_path:
                 continue
-            csv_path = results_dir / f"{result.id}.csv"
+            csv_path = Path(item.raw_csv_path)
             if csv_path.exists():
-                tar.add(csv_path, arcname=f"{result.id}.csv")
+                tar.add(csv_path, arcname=f"{item.id}.csv")
                 added = True
 
-    return archive_path if archive_path.exists() and added else None
+    if not added:
+        archive_path.unlink(missing_ok=True)
+        return None
+
+    SourmashSearchJob.objects.filter(id=job.id).update(
+        raw_results_archive_path=str(archive_path)
+    )
+    return archive_path
 
 
 def _get_result_file(job_id: str) -> tuple[Optional[Path], Optional[str]]:
-    results_dir = Path(EMG_CONFIG.sourmash.results_path)
-    csv_path = results_dir / f"{job_id}.csv"
-    if csv_path.exists():
-        return csv_path, "text/csv"
+    job_uuid = _parse_uuid(job_id)
+    if job_uuid is None:
+        return None, None
 
-    tgz_path = results_dir / f"{job_id}.tgz"
-    if tgz_path.exists():
-        return tgz_path, "application/gzip"
+    item = (
+        SourmashSearchJobItem.objects.filter(id=job_uuid).only("raw_csv_path").first()
+    )
+    if item and item.raw_csv_path:
+        csv_path = Path(item.raw_csv_path)
+        if csv_path.exists():
+            return csv_path, "text/csv"
 
-    archive = _generate_tgz_from_group_id(job_id)
-    if archive and archive.exists():
-        return archive, "application/gzip"
+    job = (
+        SourmashSearchJob.objects.prefetch_related("items").filter(id=job_uuid).first()
+    )
+    if job is None:
+        return None, None
+
+    archive_path = _generate_tgz_from_job(job)
+    if archive_path and archive_path.exists():
+        return archive_path, "application/gzip"
 
     return None, None
 
 
 @api_controller("genomes-search", tags=[ApiSections.GENOMES])
 class GenomeSearchGatherController:
-    @http_get(
-        "/gather/",
-        response=Dict[str, str],
-        summary="Describe the sourmash gather submission endpoint",
-        operation_id="genome_search_gather_info",
-    )
-    def gather_info(self):
-        return {"message": "Use POST on this endpoint to submit sourmash gather jobs."}
-
     @http_post(
         "/gather/",
         response=SourmashGatherSubmissionOut,
@@ -382,69 +342,102 @@ class GenomeSearchGatherController:
         operation_id="genome_search_gather_submit",
     )
     def submit_gather(self, request):
-        mag_catalogues = set(
-            _normalize_form_list(request.POST.getlist("mag_catalogues"))
-        )
+        # mag_catalogues = set(
+        #     _normalize_form_list(request.POST.getlist("mag_catalogues"))
+        # )
+        mag_catalogues = set(request.POST.getlist("mag_catalogues"))
         if not mag_catalogues:
             raise HttpError(
                 400, "A list of mag_catalogues to search against must be provided."
             )
 
-        catalogue_choices = set(
-            GenomeCatalogue.objects.values_list("catalogue_id", flat=True)
+        searchable_catalogues = set(
+            GenomeSearchIndex.objects.filter(
+                backend=GenomeSearchIndex.Backend.SOURMASH,
+                status=GenomeSearchIndex.Status.ACTIVE,
+                is_active=True,
+                ksize=EMG_CONFIG.sourmash.default_ksize,
+            ).values_list("catalogue__catalogue_id", flat=True)
         )
-        bad_catalogues = mag_catalogues.difference(catalogue_choices)
+        bad_catalogues = mag_catalogues.difference(searchable_catalogues)
         if bad_catalogues:
             raise HttpError(
                 400,
-                "The provided mag_catalogues are not valid. "
-                f"Available: {sorted(catalogue_choices)}; "
+                "The provided mag_catalogues are not searchable. "
+                f"Available searchable catalogues: {sorted(searchable_catalogues)}; "
                 f"Unavailable: {sorted(bad_catalogues)}",
             )
 
+        search_indexes = _get_active_sourmash_indexes(mag_catalogues)
         uploaded_files = _get_uploaded_files(request)
         if not uploaded_files:
             raise HttpError(400, "At least one file_uploaded entry must be provided.")
 
-        uploads = []
         for uploaded_file in uploaded_files:
             try:
                 content = uploaded_file.read().decode("utf-8")
                 _validate_sourmash_signature(content)
-            except Exception as ex:
-                raise HttpError(400, "Unable to parse the uploaded file.") from ex
+            except Exception as exc:
+                raise HttpError(400, "Unable to parse the uploaded file.") from exc
             finally:
                 if hasattr(uploaded_file, "seek"):
                     uploaded_file.seek(0)
 
-            uploads.append(
-                {
-                    "original_name": uploaded_file.name,
-                    "saved_name": _save_signature(uploaded_file),
-                }
-            )
+        signature_names = [uploaded_file.name for uploaded_file in uploaded_files]
+        requested_catalogues = sorted(mag_catalogues)
+        children_ids: Dict[str, str] = {}
+        item_ids: list[str] = []
 
         try:
-            job_id, children_ids = _send_sourmash_jobs(uploads, mag_catalogues)
-        except OperationalError as ex:
-            logger.exception("Sourmash queue backend is unavailable")
+            with transaction.atomic():
+                job = SourmashSearchJob.objects.create(
+                    status=SourmashSearchJob.Status.QUEUED,
+                    request_payload={
+                        "mag_catalogues": requested_catalogues,
+                        "signatures_received": signature_names,
+                    },
+                )
+
+                for uploaded_file in uploaded_files:
+                    staged_path = _save_signature(uploaded_file, str(job.id))
+                    for search_index in search_indexes:
+                        item_id = uuid.uuid4()
+                        item = SourmashSearchJobItem.objects.create(
+                            id=item_id,
+                            job=job,
+                            search_index=search_index,
+                            status=SourmashSearchJobItem.Status.QUEUED,
+                            query_original_name=uploaded_file.name,
+                            query_staged_path=staged_path,
+                            raw_csv_path=_build_item_results_path(str(job.id), item_id),
+                        )
+                        item_ids.append(str(item.id))
+                        children_ids[
+                            f"{uploaded_file.name}:{search_index.catalogue.catalogue_id}"
+                        ] = str(item.id)
+
+                transaction.on_commit(partial(_enqueue_sourmash_job_items, item_ids))
+        except Exception as exc:
+            logger.exception("Sourmash task backend is unavailable")
             raise HttpError(
                 503,
-                "Sourmash queue backend is unavailable. "
-                "Check Redis/Celery configuration and worker availability.",
-            ) from ex
+                "Sourmash task backend is unavailable. "
+                "Check Django Tasks configuration and worker availability.",
+            ) from exc
 
         return SourmashGatherSubmissionOut(
             data=SourmashGatherSubmissionData(
                 message=(
-                    f"Your files {','.join(upload['original_name'] for upload in uploads)} "
-                    "were successfully uploaded. Use the given URL to check the status of the new job."
+                    f"Your files {','.join(signature_names)} were successfully uploaded. "
+                    "Use the given URL to check the status of the new job."
                 ),
-                job_id=job_id,
+                job_id=str(job.id),
+                status=SourmashSearchJob.Status.QUEUED,
                 children_ids=children_ids,
-                signatures_received=[upload["original_name"] for upload in uploads],
+                signatures_received=signature_names,
+                requested_catalogues=requested_catalogues,
                 status_url=_absolute_api_url(
-                    request, f"genomes-search/status/{job_id}/"
+                    request, f"genomes-search/status/{job.id}/"
                 ),
             )
         )

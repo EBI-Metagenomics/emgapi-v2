@@ -292,8 +292,10 @@ class ServiceURLsConfig(BaseModel):
 class SourmashConfig(BaseModel):
     queries_path: str = "/tmp/sourmash/queries"
     results_path: str = "/tmp/sourmash/results"
-    celery_broker: str = "redis://localhost:6379/0"
-    celery_backend: str = "redis://localhost:6379/1"
+    index_root: str = "/app/data/sourmash/indexes"
+    default_ksize: int = 31
+    result_retention_days: int = 30
+    name_map_path: str = ""
 
 
 class DataDistributionConfig(BaseModel):
