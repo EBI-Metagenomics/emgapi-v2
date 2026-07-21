@@ -3,22 +3,56 @@ import pathlib
 from textwrap import dedent
 
 import pytest
-import responses
 
 from activate_django_first import EMG_CONFIG
 
-from analyses.models import Study
+from analyses.models import Run, Study
 from workflows.flows.analyse_study_tasks.shared.dwcr_generator import (
     generate_dwc_ready_summary_for_pipeline_run,
     merge_dwc_ready_summaries,
 )
 
 
+def _ensure_flow_like_amplicon_objects_for_dwcr(study: Study):
+    """
+    Ensure the minimum Study/Sample/Run metadata exists as it would after
+    `analysis_amplicon_study` ingests run data from ENA.
+
+    Assumes a Run (e.g. from the `amplicon_analysis_with_downloads` fixture)
+    already exists for the study.
+    """
+    sample_metadata = {
+        "lat": 52,
+        "lon": 0,
+        "collection_date": "2025-05-25",
+        "depth": 0.12,
+        "center_name": "Devonshire Building",
+        "temperature": 12,
+        "salinity": 0.12,
+        "country": "United Kingdom",
+    }
+
+    study.inherit_accessions_from_related_ena_object("ena_study")
+
+    run = study.runs.select_related("sample__ena_sample").get()
+
+    sample = run.sample
+    sample.studies.add(study)
+    sample.inherit_accessions_from_related_ena_object("ena_sample")
+    sample.metadata.update(sample_metadata)
+    sample.save()
+
+    run.instrument_platform = run.instrument_platform or "ILLUMINA"
+    run.instrument_model = run.instrument_model or "Illumina MiSeq"
+    run.experiment_type = Run.ExperimentTypes.AMPLICON
+    run.save()
+
+
 @pytest.mark.django_db(transaction=True)
-@responses.activate
 def test_dwcr_generator(
     amplicon_analysis_with_downloads,
     raw_reads_mgnify_study: Study,
+    raw_reads_mgnify_sample,
     prefect_harness,
     completed_runs_filename: str = EMG_CONFIG.amplicon_pipeline.completed_runs_csv,
 ):
@@ -27,114 +61,23 @@ def test_dwcr_generator(
     )
     refdb_otus = pathlib.Path(EMG_CONFIG.amplicon_pipeline.refdb_otus_dir)
 
-    # Mock the read_run ENA API requests
-    responses.add(
-        responses.GET,
-        EMG_CONFIG.ena.portal_search_api,
-        json=[
-            {
-                "run_accession": "SRR1111111",
-                "secondary_study_accession": "SRP2222222",
-                "sample_accession": "SAMN3333333",
-                "instrument_model": "Illumina MiSeq",
-            }
-        ],
-        match=[
-            responses.matchers.query_param_matcher(
-                {
-                    "result": "read_run",
-                    "includeAccessions": "SRR1111111",
-                    "fields": "secondary_study_accession,sample_accession,instrument_model",
-                    "limit": "10",
-                    "format": "json",
-                    "download": "false",
-                }
-            )
-        ],
-    )
+    # Ensure there is at least one Run/Sample for the study so the generator
+    # can build per-run metadata JSON. Create minimal ENA and analysis objects
+    # when the study has no runs.
+    _ensure_flow_like_amplicon_objects_for_dwcr(raw_reads_mgnify_study)
 
-    responses.add(
-        responses.GET,
-        EMG_CONFIG.ena.portal_search_api,
-        json=[
-            {
-                "run_accession": "SRR6180434",
-                "secondary_study_accession": "SRP4444444",
-                "sample_accession": "SAMN5555555",
-                "instrument_model": "Illumina MiSeq",
-            }
-        ],
-        match=[
-            responses.matchers.query_param_matcher(
-                {
-                    "result": "read_run",
-                    "includeAccessions": "SRR6180434",
-                    "fields": "secondary_study_accession,sample_accession,instrument_model",
-                    "limit": "10",
-                    "format": "json",
-                    "download": "false",
-                }
-            )
-        ],
-    )
-
-    # mock the sample ENA API requests
-    responses.add(
-        responses.GET,
-        EMG_CONFIG.ena.portal_search_api,
-        json=[
-            {
-                "lat": 12,
-                "lon": 22,
-                "collection_date": "2025-05-25",
-                "depth": 0.12,
-                "center_name": "Devonshire Building",
-                "temperature": 12,
-                "salinity": 0.12,
-                "country": "United Kingdom",
-            }
-        ],
-        match=[
-            responses.matchers.query_param_matcher(
-                {
-                    "result": "sample",
-                    "includeAccessions": "SAMN3333333",
-                    "fields": "lat,lon,collection_date,depth,center_name,temperature,salinity,country",
-                    "limit": "10",
-                    "format": "json",
-                    "download": "false",
-                }
-            )
-        ],
-    )
-
-    responses.add(
-        responses.GET,
-        EMG_CONFIG.ena.portal_search_api,
-        json=[
-            {
-                "lat": 12,
-                "lon": 22,
-                "collection_date": "2025-05-25",
-                "depth": 0.12,
-                "center_name": "Devonshire Building",
-                "temperature": 12,
-                "salinity": 0.12,
-                "country": "United Kingdom",
-            }
-        ],
-        match=[
-            responses.matchers.query_param_matcher(
-                {
-                    "result": "sample",
-                    "includeAccessions": "SAMN5555555",
-                    "fields": "lat,lon,collection_date,depth,center_name,temperature,salinity,country",
-                    "limit": "10",
-                    "format": "json",
-                    "download": "false",
-                }
-            )
-        ],
+    # qc_passed_runs.csv also lists SRR6180434, which has no amplicon results and will be skipped by the generator.
+    # However, it should be present in JSON metadata.
+    # Give it a placeholder object referencing existing sample so the generator
+    # finds metadata for both runs.
+    placeholder_sample = raw_reads_mgnify_sample[1]
+    placeholder_sample.studies.add(raw_reads_mgnify_study)
+    Run.objects.get_or_create(
+        ena_accessions=["SRR6180434"],
+        study=raw_reads_mgnify_study,
+        ena_study=raw_reads_mgnify_study.ena_study,
+        sample=placeholder_sample,
+        experiment_type=Run.ExperimentTypes.AMPLICON,
     )
 
     generate_dwc_ready_summary_for_pipeline_run(
@@ -159,8 +102,15 @@ def test_dwcr_merge(
     logging.info(amplicon_folder)
     logging.info(amplicon_folder.exists())
 
+    summaries_folder = amplicon_folder / "summaries"
+    summaries_folder.mkdir(exist_ok=True, parents=True)
+    logging.info(summaries_folder)
+    logging.info(summaries_folder.exists())
+
     # create fake dwcr files for testing
-    with open(amplicon_folder / "abc123_DADA2_SILVA_16S-V3-V4_dwcready.csv", "w") as fw:
+    with open(
+        summaries_folder / "abc123_DADA2_SILVA_16S-V3-V4_dwcready.csv", "w"
+    ) as fw:
         fw.write(dedent("""\
         ASVID,StudyID,SampleID,RunID,decimalLongitude,decimalLatitude,depth,temperature,salinity,collectionDate,seq_meth,country,InstitutionCode,amplifiedRegion,ASVCaller,ReferenceDatabase,TaxAnnotationTool,Superkingdom,Kingdom,Phylum,Class,Order,Family,Genus,Species,taxonID,MeasurementUnit,MeasurementValue,dbhit,dbhitIdentity,dbhitStart,dbhitEnd,ASVSeq
         seq_1,ERP122862,SAMEA7057179,ERR4334351,10.408889,51.112278,0.1,NA,NA,2018-05-02,Illumina MiSeq,Germany,FRIEDRICH SCHILLER UNIVERSITY JENA,16S-V3-V4,DADA2,SILVA,MAPseq,Bacteria,NA,Pseudomonadota,Alphaproteobacteria,Hyphomicrobiales,Nitrobacteraceae,Bradyrhizobium,NA,374,Number of reads,308,HE818674.1.1466,1.0,284,686,TGGGGAATATTGGACAATGGGCGCAAGCCTGATCCAGCCATGCCGCGTGAGTGATGAAGGCCCTAGGGTTGTAAAGCTCTTTTGTGCGGGAAGATAATGACGGTACCGCAAGAATAAGCCCCGGCTAACTTCGTGCCAGCAGCCGCGGTAATACGAAGGGGGCTAGCGTTGCTCGGAATCACTGGGCGTAAAGGGTGCGTAGGCGGGTCTTTAAGTCAGGGGTGAAATCCTGGAGCTCAACTCCAGAACTGCCTTTGATACTGAGGATCTTGAGTTCGGGAGAGGTGAGTGGAACTGCGAGTGTAGAGGTGAAATTCGTAGATATTCGCAAGAACACCAGTGGCGAAGGCGGCTCACTGGCCCGATACTGACGCTGAGGCACGAAAGCGTGGGGAGCAAACA
@@ -170,7 +120,9 @@ def test_dwcr_merge(
         seq_103,ERP122862,SAMEA7057179,ERR4334351,10.408889,51.112278,0.1,NA,NA,2018-05-02,Illumina MiSeq,Germany,FRIEDRICH SCHILLER UNIVERSITY JENA,16S-V3-V4,DADA2,SILVA,MAPseq,Bacteria,NA,Acidobacteriota,NA,NA,NA,NA,NA,57723,Number of reads,45,GQ339135.1.1517,0.9953271150588988,360,788,TGAGGAATCTTGCGCAATGGGCGAAAGCCTGACGCAGCGACGCCGCGTGGAGGATGAAGGTCTTCGGATTGTAAACTCCTGTCGAGTGGGACGAATGCCGTGAGGGTGAACAATCCTTACGGTTGACGGTACCGCTGGAGGAAGCCCCGGCTAACTCCGTGCCAGCAGCCGCGGTAATACGGAGGGGGCTAGCGTTGTTCGGAATCATTGGGCGTAAAGGGCGCGTAGGCGGCCGATCAAGTCGGAGGTGAAATCCCTCGGCTCAACTGAGGAATTGCCTTCGATACTGTTCGGCTTGAGTCCTGGAGAGGGTAGCGGAATTCCCGGTGTAGCGGTGAAATGCGTAGAGACCGGGAAGAACACCAGTGGCGAAGGCGGCTACCTGGACAGGTACTGACGCTGAAGCGCGAAAGCTAGGGGAGCAAACA
                 """))
 
-    with open(amplicon_folder / "def456_DADA2_SILVA_16S-V3-V4_dwcready.csv", "w") as fw:
+    with open(
+        summaries_folder / "def456_DADA2_SILVA_16S-V3-V4_dwcready.csv", "w"
+    ) as fw:
         fw.write(dedent("""\
         ASVID,StudyID,SampleID,RunID,decimalLongitude,decimalLatitude,depth,temperature,salinity,collectionDate,seq_meth,country,InstitutionCode,amplifiedRegion,ASVCaller,ReferenceDatabase,TaxAnnotationTool,Superkingdom,Kingdom,Phylum,Class,Order,Family,Genus,Species,taxonID,MeasurementUnit,MeasurementValue,dbhit,dbhitIdentity,dbhitStart,dbhitEnd,ASVSeq
         seq_1,ERP122862,SAMEA7057179,ERR4334351,10.408889,51.112278,0.1,NA,NA,2018-05-02,Illumina MiSeq,Germany,FRIEDRICH SCHILLER UNIVERSITY JENA,16S-V3-V4,DADA2,SILVA,MAPseq,Bacteria,NA,Pseudomonadota,Alphaproteobacteria,Hyphomicrobiales,Nitrobacteraceae,Bradyrhizobium,NA,374,Number of reads,308,HE818674.1.1466,1.0,284,686,TGGGGAATATTGGACAATGGGCGCAAGCCTGATCCAGCCATGCCGCGTGAGTGATGAAGGCCCTAGGGTTGTAAAGCTCTTTTGTGCGGGAAGATAATGACGGTACCGCAAGAATAAGCCCCGGCTAACTTCGTGCCAGCAGCCGCGGTAATACGAAGGGGGCTAGCGTTGCTCGGAATCACTGGGCGTAAAGGGTGCGTAGGCGGGTCTTTAAGTCAGGGGTGAAATCCTGGAGCTCAACTCCAGAACTGCCTTTGATACTGAGGATCTTGAGTTCGGGAGAGGTGAGTGGAACTGCGAGTGTAGAGGTGAAATTCGTAGATATTCGCAAGAACACCAGTGGCGAAGGCGGCTCACTGGCCCGATACTGACGCTGAGGCACGAAAGCGTGGGGAGCAAACA

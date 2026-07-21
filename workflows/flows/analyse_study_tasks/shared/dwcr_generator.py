@@ -1,4 +1,6 @@
+import json
 from pathlib import Path
+from typing import Dict
 
 import click
 from mgnify_pipelines_toolkit.analysis.shared.dwc_summary_generator import (
@@ -14,7 +16,7 @@ from analyses.base_models.with_downloads_models import (
     DownloadFileType,
     DownloadType,
 )
-from analyses.models import Study
+from analyses.models import Sample, Study
 from workflows.data_io_utils.file_rules.common_rules import (
     DirectoryExistsRule,
     FileExistsRule,
@@ -33,6 +35,51 @@ from workflows.prefect_utils.flows_utils import (
 from workflows.prefect_utils.flows_utils import (
     django_db_task as task,
 )
+
+
+def build_run_metadata_json(study) -> Dict[str, dict]:
+    """
+    Build a per-run metadata mapping for a study.
+
+    Returns a dict mapping run accession -> metadata dict. The metadata keys
+    match those expected by the DwC-R summary generator (e.g. `RunID`,
+    `SampleID`, `StudyID`, `decimalLatitude`, `decimalLongitude`,
+    `collectionDate`, `depth`, `temperature`, `salinity`, `country`,
+    `InstitutionCode`, `seq_meth`). Values are taken from `run`, `run.sample`
+    and `study` where available. Missing or empty values are set to the string
+    "NA".
+    """
+    metadata_out: Dict[str, dict] = {}
+
+    for run_obj in study.runs.all():
+        run_acc = run_obj.first_accession
+        sample_obj = run_obj.sample
+        sample_metadata = sample_obj.metadata
+
+        metadata = {
+            "RunID": run_acc,
+            "SampleID": sample_obj.first_accession,
+            "StudyID": study.first_accession,
+            "decimalLatitude": sample_metadata.get(Sample.CommonMetadataKeys.LAT),
+            "decimalLongitude": sample_metadata.get(Sample.CommonMetadataKeys.LON),
+            "collectionDate": sample_metadata.get(
+                Sample.CommonMetadataKeys.COLLECTION_DATE
+            ),
+            "depth": sample_metadata.get(Sample.CommonMetadataKeys.DEPTH),
+            "temperature": sample_metadata.get(Sample.CommonMetadataKeys.TEMPERATURE),
+            "salinity": sample_metadata.get(Sample.CommonMetadataKeys.SALINITY),
+            "country": sample_metadata.get(Sample.CommonMetadataKeys.COUNTRY),
+            "InstitutionCode": sample_metadata.get(
+                Sample.CommonMetadataKeys.CENTER_NAME
+            ),
+            "seq_meth": run_obj.instrument_model,
+        }
+        metadata = {
+            k: ("NA" if v in (None, "") else str(v)) for k, v in metadata.items()
+        }
+        metadata_out[run_acc] = metadata
+
+    return metadata_out
 
 
 @flow()
@@ -90,12 +137,24 @@ def generate_dwc_ready_summary_for_pipeline_run(
         content = runs.read_text()
         logger.debug(f"Content of runs file is\n{content}")
 
+        # Build per-run metadata JSON from Study and Run objects so the summary
+        # generator doesn't need to call the ENA API.
+        metadata_out = build_run_metadata_json(study)
+
+        metadata_file = pipeline_run_dir.path / "dwc_metadata.json"
+        try:
+            with metadata_file.open("w") as fh:
+                json.dump(metadata_out, fh)
+        except Exception:
+            logger.exception(f"Failed to write metadata JSON to {metadata_file}")
+
         with click.Context(generate_dwcready_summaries) as ctx:
             ctx.invoke(
                 generate_dwcready_summaries,
                 runs=runs,
                 analyses_dir=pipeline_run_dir.path,
                 otu_dir=refdb_otus_dir,
+                metadata=metadata_file,
                 output_prefix=prefix,
             )
 

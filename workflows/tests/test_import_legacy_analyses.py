@@ -5,8 +5,9 @@ import pytest
 from sqlalchemy import select
 
 import ena.models
-from analyses.models import Analysis, Sample, Study
+from analyses.models import Analysis, Assembly, Sample, Study
 from workflows.data_io_utils.legacy_emg_dbs import (
+    LegacyAssembly,
     LegacySample,
     LegacyStudy,
     legacy_emg_db_session,
@@ -14,6 +15,9 @@ from workflows.data_io_utils.legacy_emg_dbs import (
 from workflows.flows.legacy.flows.import_legacy_analyses import (
     import_all_legacy_analyses,
     import_legacy_analyses,
+)
+from workflows.flows.legacy.tasks.make_assembly_from_legacy_emg_db import (
+    get_or_create_assembly_for_legacy_accession,
 )
 from workflows.flows.legacy.tasks.make_sample_from_legacy_emg_db import (
     make_sample_from_legacy_emg_db,
@@ -300,6 +304,53 @@ def test_make_sample_from_legacy_emg_db_multiple_studies(prefect_harness):
 
     # Also check ena_sample has NOT changed its study (ENA samples are 1:1 with ENA studies in our simplified data model)
     assert returned_sample.ena_sample.study == ena_study_1
+
+
+@pytest.mark.django_db
+def test_legacy_assembly_import_matches_by_erz_accession(prefect_harness):
+    ena_study = ena.models.Study.objects.create(accession="ERP1", title="Study 1")
+    mg_study = Study.objects.create(
+        ena_study=ena_study,
+        title="Study 1",
+        ena_accessions=["ERP1"],
+    )
+
+    ena_sample = ena.models.Sample.objects.create(
+        accession="SAMEA1",
+        additional_accessions=["ERS1"],
+        study=ena_study,
+    )
+    sample = Sample.objects.create(
+        ena_sample=ena_sample,
+        ena_study=ena_study,
+        ena_accessions=["SAMEA1", "ERS1"],
+    )
+    sample.studies.add(mg_study)
+
+    wrong_existing_assembly = Assembly.objects.create(
+        ena_study=ena_study,
+        assembly_study=mg_study,
+        sample=sample,
+        ena_accessions=["ERZ_WRONG_ASSEMBLER"],
+    )
+
+    legacy_assembly = LegacyAssembly(
+        assembly_id=1,
+        accession="ERZ_RIGHT_ASSEMBLER",
+        study_id=5000,
+        experiment_type_id=4,
+    )
+
+    assembly, created = get_or_create_assembly_for_legacy_accession(
+        legacy_assembly,
+        mg_study,
+        sample,
+    )
+
+    assert created is True
+    assert assembly.id != wrong_existing_assembly.id
+    assert assembly.ena_accessions == ["ERZ_RIGHT_ASSEMBLER"]
+    assert Assembly.objects.count() == 2
 
 
 @pytest.mark.httpx_mock(should_mock=should_not_mock_httpx_requests_to_prefect_server)
