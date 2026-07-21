@@ -8,5 +8,6 @@ pytest-env
 pytest-sugar
 pytest-responses
 pytest-xdist
+pytest-mock
 mitmproxy
 pytest-rerunfailures

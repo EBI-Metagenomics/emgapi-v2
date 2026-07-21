@@ -271,24 +271,39 @@ def copy_assembly_batch_results_to_destination_folder(
 @task
 def copy_single_analysis_results(
     analysis: Analysis,
-    batch_analysis_job,
-    batch: AssemblyAnalysisBatch,
     destination_root: Path,
+    batch_analysis_job=None,
+    batch: AssemblyAnalysisBatch | None = None,
+    results_workspace: Path | None = None,
     timeout: int = 14400,
 ) -> BatchCopyResult:
     """
-    Copy results for a single assembly analysis from the batch workspace to external results.
+    Copy results for a single assembly analysis to external results.
 
-    This only considers the batch analysis that are COMPLETED (as pre the status in the batch analysis).
+    Supports two contexts:
+    - Batch context: provide both ``batch_analysis_job`` and ``batch``.
+        Results are copied only when batch analysis is COMPLETED (as per the status in the batch analysis).
+    - Out-of-production context: provide ``results_workspace``.
+        ASA is required, VIRify and MAP are optional based on directory presence.
 
     :param analysis: The analysis to copy results for
     :param batch_analysis_job: The batch relation containing per-pipeline statuses
     :param batch: The batch containing the analysis
+    :param results_workspace: Source workspace with ``asa/``, ``virify/``, ``map/``
+                              subdirectories (used when batch context is absent)
     :param destination_root: The root directory for copied results
     :param timeout: Timeout in seconds for each move operation (default: 4 hours)
     :return: Copy result for this analysis
     """
     logger = get_run_logger()
+
+    has_batch_context = batch_analysis_job is not None and batch is not None
+    if has_batch_context and results_workspace is not None:
+        raise ValueError("results_workspace cannot be used together with batch context")
+    if not has_batch_context and results_workspace is None:
+        raise ValueError(
+            "Provide either batch context (batch + batch_analysis_job) or results_workspace"
+        )
 
     # The results folder looks like ERPxxxx/ERZyyy/ERZyyyyy
 
@@ -309,11 +324,27 @@ def copy_single_analysis_results(
 
     copy_errors: list[CopyError] = []
 
-    if batch_analysis_job.asa_status == AssemblyAnalysisPipelineStatus.COMPLETED:
+    def pipeline_source_base(pipeline: AssemblyAnalysisPipeline) -> Path:
+        if has_batch_context:
+            return batch.get_pipeline_workspace(pipeline) / assembly_accession
+
+        pipeline_workspace_names = {
+            AssemblyAnalysisPipeline.ASA: "asa",
+            AssemblyAnalysisPipeline.VIRIFY: "virify",
+            AssemblyAnalysisPipeline.MAP: "map",
+        }
+        return (
+            results_workspace / pipeline_workspace_names[pipeline] / assembly_accession
+        )
+
+    asa_source_base = pipeline_source_base(AssemblyAnalysisPipeline.ASA)
+    if (
+        not has_batch_context
+        or batch_analysis_job.asa_status == AssemblyAnalysisPipelineStatus.COMPLETED
+    ):
         asa_copy_success, asa_copy_errors = copy_schema_directories(
             schema=AssemblyResultSchema(),
-            source_base=batch.get_pipeline_workspace(AssemblyAnalysisPipeline.ASA)
-            / assembly_accession,
+            source_base=asa_source_base,
             destination_base=destination_base,
             timeout=timeout,
         )
@@ -332,8 +363,7 @@ def copy_single_analysis_results(
             success=False,
             errors=[
                 CopyError(
-                    source=batch.get_pipeline_workspace(AssemblyAnalysisPipeline.ASA)
-                    / assembly_accession,
+                    source=asa_source_base,
                     message=f"Analysis {analysis.accession} files cannot be synced because ASA is not completed",
                     pipeline_name=AssemblyAnalysisPipeline.ASA.value,
                 )
@@ -345,11 +375,11 @@ def copy_single_analysis_results(
     # Optional pipelines are controlled by the workflow state first. A directory merely
     # existing on disk is not enough because stale or partial outputs may be
     # present for non-completed runs.
-    if batch_analysis_job.virify_status == AssemblyAnalysisPipelineStatus.COMPLETED:
-        virify_source_base = (
-            batch.get_pipeline_workspace(AssemblyAnalysisPipeline.VIRIFY)
-            / assembly_accession
-        )
+    if (
+        not has_batch_context
+        or batch_analysis_job.virify_status == AssemblyAnalysisPipelineStatus.COMPLETED
+    ):
+        virify_source_base = pipeline_source_base(AssemblyAnalysisPipeline.VIRIFY)
         if virify_source_base.exists():
             virify_copy_success, virify_copy_errors = copy_schema_directories(
                 schema=VirifyResultSchema(),
@@ -369,11 +399,11 @@ def copy_single_analysis_results(
 
     # MAP follows the same rule: only publish outputs that the batch relation
     # recorded as completed, then treat a missing optional directory as a no-op.
-    if batch_analysis_job.map_status == AssemblyAnalysisPipelineStatus.COMPLETED:
-        map_source_base = (
-            batch.get_pipeline_workspace(AssemblyAnalysisPipeline.MAP)
-            / assembly_accession
-        )
+    if (
+        not has_batch_context
+        or batch_analysis_job.map_status == AssemblyAnalysisPipelineStatus.COMPLETED
+    ):
+        map_source_base = pipeline_source_base(AssemblyAnalysisPipeline.MAP)
         if map_source_base.exists():
             map_copy_success, map_copy_errors = copy_schema_directories(
                 schema=MapResultSchema(),

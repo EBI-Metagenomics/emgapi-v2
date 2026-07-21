@@ -1,6 +1,6 @@
 import csv
 from pathlib import Path
-from typing import List
+from typing import Iterable, List
 
 from prefect import get_run_logger
 
@@ -11,6 +11,98 @@ from workflows.models import (
     AssemblyAnalysisPipelineStatus,
 )
 from workflows.prefect_utils.flows_utils import django_db_task as task
+
+
+def _read_report_csv(report_csv_path: Path) -> dict[str, str]:
+    report_entries = {}
+    with report_csv_path.open(mode="r") as file_handle:
+        for row in csv.reader(file_handle, delimiter=","):
+            assembly_accession, info = row
+            report_entries[assembly_accession] = info
+    return report_entries
+
+
+def parse_asa_end_of_run_reports(
+    qc_failed_csv: Path,
+    analysed_assemblies_csv: Path,
+    logger,
+) -> tuple[dict[str, str], dict[str, str]]:
+    qc_failed_assemblies = {}
+    if qc_failed_csv.is_file():
+        logger.info("Reading qc failed assemblies...")
+        qc_failed_assemblies = _read_report_csv(qc_failed_csv)
+
+    if not analysed_assemblies_csv.is_file():
+        raise ValueError(
+            "The end of run execution CSV file is missing. "
+            f"Expected path: {analysed_assemblies_csv}"
+        )
+
+    analysed_assemblies = _read_report_csv(analysed_assemblies_csv)
+    return qc_failed_assemblies, analysed_assemblies
+
+
+def update_asa_batch_relations_from_reports(
+    batch_relations: Iterable[AssemblyAnalysisBatchAnalysis],
+    qc_failed_assemblies: dict[str, str],
+    analysed_assemblies: dict[str, str],
+    logger,
+) -> list[AssemblyAnalysisBatchAnalysis]:
+    relations_to_update = []
+
+    for batch_relation in batch_relations:
+        analysis = batch_relation.analysis
+        assembly_accession = analysis.assembly.first_accession
+
+        if assembly_accession in analysed_assemblies:
+            logger.info(f"{analysis} marked as analyzed in the end of run CSV.")
+            batch_relation.asa_status = AssemblyAnalysisPipelineStatus.COMPLETED
+        else:
+            if assembly_accession in qc_failed_assemblies:
+                logger.error(f"QC failed - {analysis}")
+            else:
+                logger.error(f"Assembly {analysis} missing from CSV.")
+            batch_relation.asa_status = AssemblyAnalysisPipelineStatus.FAILED
+
+        relations_to_update.append(batch_relation)
+
+    return relations_to_update
+
+
+def update_analyses_from_asa_reports(
+    analyses: Iterable[Analysis],
+    qc_failed_assemblies: dict[str, str],
+    analysed_assemblies: dict[str, str],
+    analysed_assemblies_csv: Path,
+    logger,
+) -> list[Analysis]:
+    analyses_to_update = []
+
+    for analysis in analyses:
+        assembly_accession = analysis.assembly.first_accession
+
+        if assembly_accession in analysed_assemblies:
+            logger.info(
+                f"{assembly_accession} marked as analyzed in the end of run CSV."
+            )
+            continue
+
+        if assembly_accession in qc_failed_assemblies:
+            logger.error(f"QC failed - {assembly_accession}")
+            reason = qc_failed_assemblies[assembly_accession]
+        else:
+            logger.error(f"Assembly {assembly_accession} missing from CSV.")
+            reason = f"Assembly missing from {analysed_assemblies_csv}."
+
+        analysis.mark_status(
+            AnalysisStates.ANALYSIS_QC_FAILED,
+            set_status_as=True,
+            save=False,
+            reason=reason,
+        )
+        analyses_to_update.append(analysis)
+
+    return analyses_to_update
 
 
 @task()
@@ -47,69 +139,30 @@ def set_post_assembly_analysis_states(
 
     logger = get_run_logger()
 
-    # qc_failed_assemblies.csv: assemblyID,reason
-    qc_failed_csv = Path(f"{assembly_current_outdir}/qc_failed_assemblies.csv")
-    qc_failed_assemblies = {}  # Stores {assembly_accession, qc_fail_reason}
-
-    if qc_failed_csv.is_file():
-        logger.info("Reading qc failed assemblies...")
-        with qc_failed_csv.open(mode="r") as file_handle:
-            for row in csv.reader(file_handle, delimiter=","):
-                assembly_accession, fail_reason = row
-                qc_failed_assemblies[assembly_accession] = fail_reason
-
-    # analysed_assemblies.csv: assemblyID, info
-    analysed_assemblies_csv = Path(f"{assembly_current_outdir}/analysed_assemblies.csv")
-    analysed_assemblies = {}  # Stores {assembly_accession, info}
-
-    if analysed_assemblies_csv.is_file():
-        with analysed_assemblies_csv.open(mode="r") as file_handle:
-            for row in csv.reader(file_handle, delimiter=","):
-                assembly_accession, info = row
-                analysed_assemblies[assembly_accession] = info
-    else:
-        # The caller is responsible for handling this error -- which is quite catastrophic.
-        raise ValueError(
-            f"The end of run execution CSV file is missing. Expected path: {analysed_assemblies_csv}"
-        )
+    qc_failed_csv = assembly_current_outdir / "qc_failed_assemblies.csv"
+    analysed_assemblies_csv = assembly_current_outdir / "analysed_assemblies.csv"
+    qc_failed_assemblies, analysed_assemblies = parse_asa_end_of_run_reports(
+        qc_failed_csv, analysed_assemblies_csv, logger=logger
+    )
 
     batch_relations = AssemblyAnalysisBatchAnalysis.objects.filter(
         analysis_id__in=assembly_analyses_ids
     ).select_related("analysis__assembly")
 
-    relations_to_update = []
-    analyses_to_update = []
+    relations_to_update = update_asa_batch_relations_from_reports(
+        batch_relations,
+        qc_failed_assemblies,
+        analysed_assemblies,
+        logger=logger,
+    )
 
-    for batch_relation in batch_relations:
-        analysis = batch_relation.analysis
-        assembly_accession = analysis.assembly.first_accession
-
-        if assembly_accession in qc_failed_assemblies:
-            logger.error(f"QC failed - {analysis}")
-            batch_relation.asa_status = AssemblyAnalysisPipelineStatus.FAILED
-            relations_to_update.append(batch_relation)
-            analysis.mark_status(
-                AnalysisStates.ANALYSIS_QC_FAILED,
-                set_status_as=True,
-                reason=qc_failed_assemblies[assembly_accession],
-                save=False,
-            )
-            analyses_to_update.append(analysis)
-        elif assembly_accession in analysed_assemblies:
-            logger.info(f"{analysis} marked as analyzed in the end of run CSV.")
-            batch_relation.asa_status = AssemblyAnalysisPipelineStatus.COMPLETED
-            relations_to_update.append(batch_relation)
-        else:
-            logger.error(f"Assembly {analysis} missing from CSV.")
-            batch_relation.asa_status = AssemblyAnalysisPipelineStatus.FAILED
-            relations_to_update.append(batch_relation)
-            analysis.mark_status(
-                AnalysisStates.ANALYSIS_QC_FAILED,
-                set_status_as=True,
-                save=False,
-                reason=f"Assembly missing from {analysed_assemblies_csv}.",
-            )
-            analyses_to_update.append(analysis)
+    analyses_to_update = update_analyses_from_asa_reports(
+        [batch_relation.analysis for batch_relation in batch_relations],
+        qc_failed_assemblies,
+        analysed_assemblies,
+        analysed_assemblies_csv,
+        logger=logger,
+    )
 
     # Bulk update - slightly gentler on the DB
     AssemblyAnalysisBatchAnalysis.objects.bulk_update(

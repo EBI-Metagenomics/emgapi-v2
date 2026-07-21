@@ -1,5 +1,6 @@
 import logging
 import uuid
+from pathlib import Path
 from typing import List
 
 from prefect import get_run_logger
@@ -94,8 +95,6 @@ def assembly_analysis_batch_results_importer(
     :rtype: List[ImportResult]
     :raises DoesNotExist: If the specified AssemblyAnalysisBatch does not exist.
     """
-    logger = get_run_logger()
-
     batch: AssemblyAnalysisBatch = AssemblyAnalysisBatch.objects.get(
         id=assembly_analyses_batch_id
     )
@@ -126,27 +125,52 @@ def assembly_analysis_batch_results_importer(
         "assembly"
     )
 
-    results = []
-    for analysis in analyses:
-        if validation_only:
-            logger.info(
-                f"Validating (without import) results for {analysis} using schema {schema}"
-            )
-        else:
-            logger.info(
-                f"Validating and importing results into the DB the downloads for {analysis} using schema {schema}"
-            )
+    results = assembly_analysis_results_importer(
+        analyses, schema, base_path, pipeline_type, validation_only
+    )
 
+    return results
+
+
+def assembly_analysis_results_importer(
+    analyses: List[Analysis],
+    schema,
+    base_path: Path,
+    pipeline_type: AssemblyAnalysisPipeline,
+    validation_only: bool = False,
+) -> List[ImportResult]:
+    """
+    Processes validation and/or import for a list of analyses.
+
+    This can be reused in different contexts for processing of analyses.
+
+    :param analyses: List of Analysis objects to process
+    :param schema: The validation schema to use
+    :param base_path: The base path to pipeline results
+    :param pipeline_type: The pipeline type (ASA, VIRify, or MAP)
+    :param validation_only: If True, only validate without importing
+    :return: List of ImportResult objects with success status and details
+    """
+    logger = get_run_logger()
+    results = []
+
+    for analysis in analyses:
         try:
             # TODO: I think this needs a bit of thought, it just doesn't feel right. I smell repetition and things
             #       that just don't feel "natural"
             if validation_only:
                 # Only validate, don't import
+                logger.info(
+                    f"Validating (without import) results for {analysis} using schema {schema}"
+                )
                 schema.validate_results(base_path, analysis.assembly.first_accession)
                 logger.info(f"Validation successful for {analysis}")
                 results.append(ImportResult(analysis_id=analysis.id, success=True))
             else:
                 # Validate and import
+                logger.info(
+                    f"Validating and importing results into the DB the downloads for {analysis} using schema {schema}"
+                )
                 importer = AssemblyResultImporter(analysis)
 
                 # Clear existing downloads for this pipeline to ensure idempotency
