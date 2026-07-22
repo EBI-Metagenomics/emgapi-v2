@@ -228,6 +228,38 @@ services:
     profiles: ["slurm", "all"]
     networks: [slurm, "emg"]
 
+  slurm-web-agent:
+    image: ghcr.io/rackslab/slurm-web-agent:v7.0.0
+    platform: linux/amd64  # Slurm-web does not currently publish an arm64 image
+    container_name: slurm-web-agent
+    restart: unless-stopped
+    depends_on:
+      slurm_node:
+        condition: service_started
+    volumes:
+      - "./slurm-dev-environment/configs/slurm-web-agent.ini:/etc/slurm-web/agent.ini:ro"
+      - "./slurm-dev-environment/configs/slurm-web.key:/var/lib/slurm-web/jwt.key:ro"
+      - "./slurm-dev-environment/configs/jwt_hs256.key:/var/lib/slurm-web/slurmrestd.key:ro"
+    profiles: ["slurm", "all"]
+    networks: [slurm]
+
+  slurm-web-gateway:
+    image: ghcr.io/rackslab/slurm-web-gateway:v7.0.0
+    platform: linux/amd64  # Slurm-web does not currently publish an arm64 image
+    container_name: slurm-web-gateway
+    restart: unless-stopped
+    depends_on:
+      slurm-web-agent:
+        condition: service_started
+    volumes:
+      - "./slurm-dev-environment/configs/slurm-web-gateway.ini:/etc/slurm-web/gateway.ini:ro"
+      - "./slurm-dev-environment/configs/slurm-web.key:/var/lib/slurm-web/jwt.key:ro"
+      - "./slurm-dev-environment/configs/slurm-web.key:/var/lib/slurm-web/session.key:ro"
+    ports:
+      - "5011:5011"
+    profiles: ["slurm", "all"]
+    networks: [slurm]
+
 volumes:
   prefectdb:
   appdb:
