@@ -1,0 +1,24 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+
+{% block content %}
+  <div class="max-w-4xl">
+    <p class="mb-6">
+      {% blocktranslate with catalogue_name=catalogue.name catalogue_version=catalogue.version %}
+        Publish {{ catalogue_name }} {{ catalogue_version }}? Its currently published release will be retired.
+      {% endblocktranslate %}
+    </p>
+
+    <form method="post">
+      {% csrf_token %}
+      <div class="flex gap-3">
+        <button type="submit" class="bg-primary-600 border border-transparent font-medium px-3 py-2 rounded-default text-sm text-white">
+          {% translate "Publish catalogue" %}
+        </button>
+        <a href="{{ change_url }}" class="border border-base-200 font-medium px-3 py-2 rounded-default text-sm dark:border-base-700">
+          {% translate "Cancel" %}
+        </a>
+      </div>
+    </form>
+  </div>
+{% endblock %}

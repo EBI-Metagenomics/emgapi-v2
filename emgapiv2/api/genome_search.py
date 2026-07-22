@@ -10,7 +10,7 @@ from ninja.errors import HttpError
 from ninja_extra import api_controller, http_post
 
 from emgapiv2.api.schema_utils import ApiSections
-from genomes.models import Genome
+from genomes.models import CatalogueGenome
 from genomes.schemas import GenomeList
 
 logger = logging.getLogger(__name__)
@@ -163,8 +163,10 @@ def _annotate_results(raw_results: List[Dict[str, Any]]) -> List[AnnotatedResult
         return []
 
     genomes = (
-        Genome.objects.filter(accession__in=list(cobs_result_by_accession.keys()))
-        .select_related("catalogue", "biome")
+        CatalogueGenome.public_objects.filter(
+            genome__accession__in=list(cobs_result_by_accession.keys())
+        )
+        .select_related("genome", "catalogue", "catalogue__series", "biome")
         .all()
     )
 

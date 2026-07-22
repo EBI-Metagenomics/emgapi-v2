@@ -25,7 +25,12 @@ from genomes.management.lib.genome_util import (
     upload_kegg_class_results,
     upload_kegg_module_results,
 )
-from genomes.models import Genome, GenomeCatalogue
+from genomes.models import (
+    CatalogueGenome,
+    Genome,
+    GenomeCatalogue,
+    GenomeCatalogueSeries,
+)
 from workflows.data_io_utils.filenames import trailing_slash_ensured_dir
 from workflows.prefect_utils.build_cli_command import cli_command
 from workflows.prefect_utils.slurm_flow import run_cluster_job
@@ -81,10 +86,7 @@ def parse_options(options):
 
 
 def get_catalogue(options):
-    path = Biome.lineage_to_path(options["gold_biome"])
-    biome = Biome.objects.filter(path=path).first()
-    if not biome:
-        raise Biome.DoesNotExist()
+    biome = Biome.objects.get(path=Biome.lineage_to_path(options["gold_biome"]))
 
     destination_dir_name = options.get(
         "destination_dir_name"
@@ -95,19 +97,33 @@ def get_catalogue(options):
     results_path_to_save = f"/{genome_config.genomes_ftp_results_subpath}/{destination_dir_name}/{options['catalogue_version']}"
     catalogue_id = catalogue_slug
 
+    series, _ = GenomeCatalogueSeries.objects.get_or_create(
+        catalogue_biome_label=options["catalogue_biome_label"],
+        catalogue_type=options["catalogue_type"],
+        defaults={
+            "name": options["catalogue_name"],
+            "biome": biome,
+        },
+    )
+    if series.biome_id != biome.pk:
+        raise ValueError(f"Catalogue series {series} already uses a different biome")
+
     catalogue, _ = GenomeCatalogue.objects.get_or_create(
         catalogue_id=catalogue_id,
         defaults={
+            "series": series,
             "version": options["catalogue_version"],
             "name": f"{options['catalogue_name']} v{options['catalogue_version']}",
-            "biome": biome,
             "result_directory": results_path_to_save,
             "ftp_url": genome_config.mags_ftp_site,
             "pipeline_version_tag": options["pipeline_version"],
-            "catalogue_biome_label": options["catalogue_biome_label"],
-            "catalogue_type": options["catalogue_type"],
         },
     )
+    if catalogue.status in {
+        GenomeCatalogue.Status.PUBLISHED,
+        GenomeCatalogue.Status.RETIRED,
+    }:
+        raise ValueError(f"Released catalogue {catalogue} cannot be re-imported")
     return catalogue
 
 
@@ -361,9 +377,15 @@ def release_uniprot(options: dict):
     )
 
 
-def run_genome_release_tasks(options: dict):
+def run_genome_release_tasks(
+    options: dict,
+    *,
+    run_genome_search_tasks: bool = True,
+):
     move_catalogue_files_to_web_results(options)
     move_catalogue_files_to_ftp(options)
+    if not run_genome_search_tasks:
+        return
     make_cobs_index(options)
     make_sourmash_sketches(options)
     make_sourmash_index(options)
@@ -380,30 +402,50 @@ def process_genome_dir(catalogue, genome_dir):
     genome_data = read_json(os.path.join(genome_dir, f"{accession}.json"))
     has_pangenome = "pangenome" in genome_data
 
-    path = Biome.lineage_to_path(genome_data["gold_biome"])
-
-    genome_data["catalogue"] = catalogue
-
     genome_data["result_directory"] = Path(catalogue.result_directory) / accession
+    genome_data["biome"] = Biome.objects.get(
+        path=Biome.lineage_to_path(genome_data["gold_biome"])
+    )
 
-    genome_data["biome"] = Biome.objects.filter(path=path).first()
+    identity_data = {
+        field.name: genome_data.pop(field.name)
+        for field in Genome._meta.fields
+        if field.editable and field.name != "accession" and field.name in genome_data
+    }
+    genome, identity_created = Genome.objects.get_or_create(
+        accession=accession, defaults=identity_data
+    )
+    if not identity_created:
+        changed_fields = []
+        for field, value in identity_data.items():
+            existing = getattr(genome, field)
+            if not value or value == existing:
+                continue
+            if existing:
+                raise ValueError(
+                    f"Genome {accession} has conflicting identity field {field}: "
+                    f"{existing!r} != {value!r}"
+                )
+            setattr(genome, field, value)
+            changed_fields.append(field)
+        if changed_fields:
+            genome.save(update_fields=changed_fields + ["updated_at"])
 
-    genome_data = Genome.clean_data(genome_data)
-    logger.info(f"UPDATED Writing genome data: {genome_data}")
+    genome_data = CatalogueGenome.clean_data(genome_data)
 
-    genome, _ = Genome.objects.update_or_create(
-        accession=accession, defaults=genome_data
+    catalogue_genome, _ = CatalogueGenome.objects.update_or_create(
+        catalogue=catalogue,
+        genome=genome,
+        defaults=genome_data,
     )
 
     logger.info(f"Uploaded genome and metadata for {accession}")
 
-    upload_cog_results(genome, genome_dir)
-    upload_kegg_class_results(genome, genome_dir)
-    upload_kegg_module_results(genome, genome_dir)
-    upload_antismash_geneclusters(genome, genome_dir)
-    upload_genome_files(genome, genome_dir, has_pangenome)
-
-    return accession
+    upload_cog_results(catalogue_genome, genome_dir)
+    upload_kegg_class_results(catalogue_genome, genome_dir)
+    upload_kegg_module_results(catalogue_genome, genome_dir)
+    upload_antismash_geneclusters(catalogue_genome, genome_dir)
+    upload_genome_files(catalogue_genome, genome_dir, has_pangenome)
 
 
 @flow(name="import_genomes_flow")
@@ -418,6 +460,7 @@ def import_genomes_flow(
     destination_dir_name: str | None = None,
     catalogue_slug: str | None = None,
     run_release_tasks: bool | None = None,
+    run_genome_search_tasks: bool = True,
     release_third_party_data: bool = True,
 ):
     # Reconstruct options dictionary for backward compatibility with existing functions
@@ -434,31 +477,38 @@ def import_genomes_flow(
     }
 
     options = parse_options(options)
-    if run_release_tasks is None:
-        run_release_tasks = genome_config.run_release_tasks_during_import
-
-    if run_release_tasks:
-        run_genome_release_tasks(options)
 
     catalogue = get_catalogue(options)
+    catalogue.genomes.all().delete()
+    catalogue.downloads = []
+    catalogue.other_stats = {}
+    catalogue.status = GenomeCatalogue.Status.DRAFT
+    catalogue.save(update_fields=["downloads", "other_stats", "status"])
+
+    if run_release_tasks:
+        run_genome_release_tasks(
+            options,
+            run_genome_search_tasks=run_genome_search_tasks,
+        )
+
     upload_catalogue_summary(catalogue, options["catalogue_dir"])
     upload_catalogue_files(catalogue, options["catalogue_dir"])
     genome_dirs = gather_genome_dirs(
         options["catalogue_dir"], options["catalogue_type"]
     )
-    genome_accessions = []
     for genome_dir in genome_dirs:
-        genome_accession = process_genome_dir(catalogue, genome_dir)
-        genome_accessions.append(genome_accession)
-    logger = get_run_logger()
-    logger.info(
-        f"Processed {len(genome_accessions)} genomes in catalogue {catalogue.name}"
+        process_genome_dir(catalogue, genome_dir)
+    get_run_logger().info(
+        f"Processed {len(genome_dirs)} genomes in catalogue {catalogue.name}"
     )
-    validate_import_summary(catalogue)
+    validate_import_summary(catalogue, expected_count=len(genome_dirs))
 
     if run_release_tasks and release_third_party_data:
         release_rnacentral_json(options)
         release_uniprot(options)
+
+    catalogue.status = GenomeCatalogue.Status.READY
+    catalogue.save(update_fields=["status"])
 
 
 @task
@@ -472,104 +522,6 @@ def upload_catalogue_summary(catalogue, catalogue_dir):
         catalogue.other_stats = {}
         logger.warning(f"No catalogue summary found at {summary_file}")
     catalogue.save()
-
-
-@task
-def upload_genome_downloads(genome, genome_dir, has_pangenome):
-    logger = get_run_logger()
-    from analyses.base_models.with_downloads_models import (
-        DownloadFile,
-        DownloadFileType,
-        DownloadType,
-    )
-
-    genome_file_specs = [
-        (
-            "Predicted CDS (aa)",
-            "fasta",
-            f"{genome.accession}.faa",
-            "Genome analysis",
-            "genome",
-            True,
-        ),
-        (
-            "Nucleic Acid Sequence",
-            "fasta",
-            f"{genome.accession}.fna",
-            "Genome analysis",
-            "genome",
-            True,
-        ),
-        (
-            "Nucleic Acid Sequence index",
-            "fai",
-            f"{genome.accession}.fna.fai",
-            "Genome analysis",
-            "genome",
-            True,
-        ),
-        (
-            "Genome Annotation",
-            "gff",
-            f"{genome.accession}.gff",
-            "Genome analysis",
-            "genome",
-            True,
-        ),
-    ]
-
-    if has_pangenome:
-        genome_file_specs.append(
-            (
-                "Pangenome core genes list",
-                "tab",
-                "core_genes.txt",
-                "Pan-Genome analysis",
-                "pan-genome",
-                False,
-            )
-        )
-
-    for (
-        desc_label,
-        file_format,
-        filename,
-        group_type,
-        subdir,
-        required,
-    ) in genome_file_specs:
-        filepath = os.path.join(genome_dir, subdir, filename)
-        if not (os.path.isfile(filepath) and os.path.getsize(filepath) > 0):
-            if required:
-                logger.error(f"Required file missing or empty: {filepath}")
-            continue
-        file_type_map = {
-            "fasta": DownloadFileType.FASTA,
-            "fna": DownloadFileType.FASTA,
-            "fai": DownloadFileType.OTHER,
-            "gff": DownloadFileType.OTHER,
-            "tsv": DownloadFileType.TSV,
-            "csv": DownloadFileType.CSV,
-            "json": DownloadFileType.JSON,
-            "tab": DownloadFileType.TSV,
-            "nwk": DownloadFileType.TREE,
-        }
-        download_file = DownloadFile(
-            path=os.path.join(subdir, filename),
-            alias=filename,
-            download_type=DownloadType.GENOME_ANALYSIS,
-            file_type=file_type_map.get(file_format, DownloadFileType.OTHER),
-            long_description=desc_label,
-            short_description=desc_label,
-            download_group=group_type,
-        )
-        try:
-            genome.add_download(download_file)
-            logger.info(f"Attached {filename} to genome {genome.accession}")
-        except FileExistsError:
-            logger.warning(
-                f"Download file already exists for {filename} on genome {genome.accession}"
-            )
 
 
 @task
@@ -604,16 +556,20 @@ def upload_catalogue_files(catalogue, catalogue_dir):
         logger.warning("No phylogenetic tree file found in catalogue directory.")
 
 
-def validate_import_summary(catalogue):
+def validate_import_summary(catalogue, expected_count):
     logger = get_run_logger()
-    genomes = Genome.objects.filter(catalogue=catalogue)
+    genomes = CatalogueGenome.objects.filter(catalogue=catalogue)
     total = genomes.count()
-    with_annot = sum(1 for g in genomes if g.annotations)
-    with_files = sum(1 for g in genomes if g.downloads)
-    logger.info(
-        f"Final Report: {total} genomes imported. {with_annot} with annotations, {with_files} with downloads."
-    )
-    if total != with_annot:
-        logger.error("Some genomes are missing annotations!")
+    with_files = genomes.exclude(downloads=[]).count()
+    logger.info(f"Final Report: {total} genomes imported. {with_files} with downloads.")
+    validation_errors = []
+    if total != expected_count:
+        validation_errors.append(
+            f"Expected {expected_count} genomes but imported {total}."
+        )
     if total != with_files:
-        logger.error("Some genomes are missing downloads!")
+        validation_errors.append("Some genomes are missing downloads.")
+    if validation_errors:
+        message = " ".join(validation_errors)
+        logger.error(message)
+        raise ValueError(message)

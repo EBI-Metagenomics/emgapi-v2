@@ -4,7 +4,12 @@ from typing import Optional
 import pytest
 
 from analyses.models import Biome
-from genomes.models import Genome, GenomeCatalogue
+from genomes.models import (
+    CatalogueGenome,
+    Genome,
+    GenomeCatalogue,
+    GenomeCatalogueSeries,
+)
 from workflows.flows.update_ena_accession_from_json_flow import (
     update_ena_accession_from_json_flow,
 )
@@ -16,12 +21,17 @@ from workflows.prefect_utils.testing_utils import (
 
 def _make_basic_genome_env():
     biome = Biome.objects.create(biome_name="root")
-    catalogue = GenomeCatalogue.objects.create(
-        catalogue_id="cat-a",
-        version="v1",
+    series = GenomeCatalogueSeries.objects.create(
         name="Catalogue A",
         catalogue_biome_label="root",
         catalogue_type=GenomeCatalogue.PROK,
+        biome=biome,
+    )
+    catalogue = GenomeCatalogue.objects.create(
+        catalogue_id="cat-a",
+        series=series,
+        version="v1",
+        name="Catalogue A",
     )
     return biome, catalogue
 
@@ -32,8 +42,13 @@ def _create_genome(
     catalogue: GenomeCatalogue,
     ena_genome_accession: Optional[str] = None,
 ):
-    return Genome.objects.create(
+    genome = Genome.objects.create(
         accession=accession,
+        ena_genome_accession=ena_genome_accession,
+    )
+    CatalogueGenome.objects.create(
+        genome=genome,
+        catalogue=catalogue,
         biome=biome,
         length=100000,
         num_contigs=10,
@@ -48,9 +63,8 @@ def _create_genome(
         eggnog_coverage=80.0,
         ipr_coverage=70.0,
         taxon_lineage="Bacteria;Firmicutes",
-        catalogue=catalogue,
-        ena_genome_accession=ena_genome_accession,
     )
+    return genome
 
 
 @pytest.mark.django_db(transaction=True)
@@ -127,19 +141,23 @@ def test_update_ena_accession_from_json_flow_catalogue_filter(
 ):
     # Two catalogues
     biome = Biome.objects.create(biome_name="root")
-    cat_a = GenomeCatalogue.objects.create(
-        catalogue_id="cat-a",
-        version="v1",
-        name="Catalogue A",
+    series = GenomeCatalogueSeries.objects.create(
+        name="Catalogue",
         catalogue_biome_label="root",
         catalogue_type=GenomeCatalogue.PROK,
+        biome=biome,
+    )
+    cat_a = GenomeCatalogue.objects.create(
+        catalogue_id="cat-a",
+        series=series,
+        version="v1",
+        name="Catalogue A",
     )
     cat_b = GenomeCatalogue.objects.create(
         catalogue_id="cat-b",
+        series=series,
         version="v2",
         name="Catalogue B",
-        catalogue_biome_label="root",
-        catalogue_type=GenomeCatalogue.PROK,
     )
 
     gA1 = _create_genome("MGYG000010001", biome, cat_a)  # should update

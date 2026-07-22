@@ -4,6 +4,7 @@ from typing import Callable, Optional, TypeVar, Union
 import pytest
 from django.conf import settings
 from ninja.testing import TestClient
+from ninja_jwt.tokens import SlidingToken
 
 from analyses.base_models.with_downloads_models import (
     DownloadFile,
@@ -12,7 +13,12 @@ from analyses.base_models.with_downloads_models import (
     DownloadType,
 )
 from analyses.models import Analysis, Sample
-from genomes.models import AdditionalContainedGenomes, GenomeAssemblyLink
+from genomes.models import (
+    AdditionalContainedGenomes,
+    CatalogueGenome,
+    GenomeAssemblyLink,
+    GenomeCatalogue,
+)
 
 R = TypeVar("R")
 
@@ -33,6 +39,7 @@ def call_endpoint_and_get_data(
     status_code: int = 200,
     count: Optional[int] = None,
     getter: Callable[[Union[dict, list]], R] = lambda response: response["items"],
+    headers: Optional[dict] = None,
 ) -> R:
     """
     Call an endpoint of the API. Check the status and response is expected.
@@ -43,7 +50,7 @@ def call_endpoint_and_get_data(
     :param endpoint: path from APIP root, e.g. "/studies"
     :return: the API response passed through getter
     """
-    response = client.get(endpoint)
+    response = client.get(endpoint, headers=headers or {})
     assert response.status_code == status_code
     j = response.json()
     if count is not None:
@@ -291,7 +298,7 @@ def test_api_super_study_detail(
 @pytest.mark.django_db
 def test_api_genome_list(ninja_api_client, genomes):
     first_of_all_genomes = call_endpoint_and_get_data(
-        ninja_api_client, "/genomes/", count=3, getter=_first_item
+        ninja_api_client, "/genomes/", count=4, getter=_first_item
     )
     assert first_of_all_genomes["accession"].startswith("MGYG")
 
@@ -310,6 +317,35 @@ def test_api_genome_list(ninja_api_client, genomes):
         getter=_first_item,
     )
     assert first_ordered_genome["length"] == 2000000
+
+    first_by_descending_accession = call_endpoint_and_get_data(
+        ninja_api_client,
+        "/genomes/?order=-accession",
+        count=4,
+        getter=_first_item,
+    )
+    assert first_by_descending_accession["accession"] == max(
+        genome.accession for genome in genomes
+    )
+
+
+@pytest.mark.django_db
+def test_api_genome_real_download(ninja_api_client, real_genome_catalogue_files):
+    genome = call_endpoint_and_get_data(
+        ninja_api_client,
+        "/genomes/MGYG000000003",
+        getter=_whole_object,
+    )
+    nucleotide_fasta = next(
+        download
+        for download in genome["downloads"]
+        if download["alias"] == "MGYG000000003.fna"
+    )
+    assert nucleotide_fasta["url"] == (
+        "http://localhost:8080/pub/databases/metagenomics/mgnify_results/"
+        "mgnify_genomes/ocean-prokaryotes/1.0/MGYG000000003/"
+        "genome/MGYG000000003.fna"
+    )
 
 
 @pytest.mark.django_db
@@ -331,6 +367,157 @@ def test_api_genome_catalogues(ninja_api_client, genomes, genome_catalogues):
         ninja_api_client, f"/genomes/catalogues/{cat_id}/genomes/", count=2
     )
     assert catalogue_genomes[0]["accession"] == genomes[0].accession
+
+
+@pytest.mark.django_db
+def test_webin_admin_can_preview_an_unpublished_catalogue(
+    ninja_api_client, genomes, genome_catalogues
+):
+    published_catalogue = genome_catalogues[1]
+    published_entry = CatalogueGenome.objects.get(
+        catalogue=published_catalogue,
+        genome=genomes[2],
+    )
+    draft_catalogue = GenomeCatalogue.objects.create(
+        catalogue_id="ocean-prokaryotes-v2-0",
+        series=published_catalogue.series,
+        version="2.0",
+        name="Ocean Prokaryotes v2.0",
+        status=GenomeCatalogue.Status.READY,
+        result_directory="mgnify_genomes/ocean-prokaryotes/2.0",
+    )
+    draft_entry = CatalogueGenome.objects.create(
+        genome=genomes[2],
+        catalogue=draft_catalogue,
+        biome=published_entry.biome,
+        length=4000000,
+        num_contigs=published_entry.num_contigs,
+        n_50=published_entry.n_50,
+        gc_content=published_entry.gc_content,
+        type=published_entry.type,
+        completeness=published_entry.completeness,
+        contamination=published_entry.contamination,
+        trnas=published_entry.trnas,
+        nc_rnas=published_entry.nc_rnas,
+        num_proteins=published_entry.num_proteins,
+        eggnog_coverage=published_entry.eggnog_coverage,
+        ipr_coverage=published_entry.ipr_coverage,
+        taxon_lineage="Draft lineage",
+        annotations={"draft": True},
+        result_directory="mgnify_genomes/ocean-prokaryotes/2.0/MGYG000000003",
+    )
+    draft_entry.add_download(
+        DownloadFile(
+            path="genome/MGYG000000003.fna",
+            alias="MGYG000000003.fna",
+            download_type=DownloadType.GENOME_ANALYSIS,
+            file_type=DownloadFileType.FASTA,
+            short_description="Genome",
+            long_description="Genome nucleotide sequence",
+        )
+    )
+    draft_catalogue.add_download(
+        DownloadFile(
+            path="summary.tsv",
+            alias="summary.tsv",
+            download_type=DownloadType.OTHER,
+            file_type=DownloadFileType.TSV,
+            short_description="Summary",
+            long_description="Catalogue summary",
+        )
+    )
+
+    regular_token = SlidingToken()
+    regular_token["username"] = "Webin-regular"
+    regular_headers = {"Authorization": f"Bearer {regular_token}"}
+    admin_token = SlidingToken()
+    admin_token["username"] = "Webin-admin"
+    admin_token["is_admin"] = True
+    admin_headers = {"Authorization": f"Bearer {admin_token}"}
+
+    for headers in ({}, regular_headers):
+        public_catalogues = call_endpoint_and_get_data(
+            ninja_api_client,
+            "/genomes/catalogues/",
+            headers=headers,
+            count=2,
+        )
+        assert draft_catalogue.pk not in {
+            catalogue["catalogue_id"] for catalogue in public_catalogues
+        }
+        assert (
+            ninja_api_client.get(
+                f"/genomes/catalogues/{draft_catalogue.pk}", headers=headers
+            ).status_code
+            == 404
+        )
+        assert (
+            ninja_api_client.get(
+                f"/genomes/{genomes[2].accession}/annotations"
+                f"?catalogue_id={draft_catalogue.pk}",
+                headers=headers,
+            ).status_code
+            == 404
+        )
+        assert (
+            ninja_api_client.get(
+                f"/genomes/{genomes[2].accession}?catalogue_id={draft_catalogue.pk}",
+                headers=headers,
+            ).status_code
+            == 404
+        )
+
+    catalogue_list = call_endpoint_and_get_data(
+        ninja_api_client,
+        "/genomes/catalogues/",
+        headers=admin_headers,
+        count=3,
+    )
+    assert draft_catalogue.pk in {
+        catalogue["catalogue_id"] for catalogue in catalogue_list
+    }
+
+    catalogue = call_endpoint_and_get_data(
+        ninja_api_client,
+        f"/genomes/catalogues/{draft_catalogue.pk}",
+        headers=admin_headers,
+        getter=_whole_object,
+    )
+    assert catalogue["status"] == GenomeCatalogue.Status.READY
+    assert catalogue["downloads"][0]["url"] is not None
+
+    catalogue_genomes = call_endpoint_and_get_data(
+        ninja_api_client,
+        f"/genomes/catalogues/{draft_catalogue.pk}/genomes/",
+        headers=admin_headers,
+        count=1,
+    )
+    assert catalogue_genomes[0]["taxon_lineage"] == "Draft lineage"
+
+    published = call_endpoint_and_get_data(
+        ninja_api_client,
+        f"/genomes/{genomes[2].accession}",
+        headers=admin_headers,
+        getter=_whole_object,
+    )
+    assert published["length"] == published_entry.length
+
+    draft = call_endpoint_and_get_data(
+        ninja_api_client,
+        f"/genomes/{genomes[2].accession}?catalogue_id={draft_catalogue.pk}",
+        headers=admin_headers,
+        getter=_whole_object,
+    )
+    assert draft["length"] == draft_entry.length
+    assert draft["downloads"][0]["url"] is not None
+
+    annotations = call_endpoint_and_get_data(
+        ninja_api_client,
+        f"/genomes/{genomes[2].accession}/annotations?catalogue_id={draft_catalogue.pk}",
+        headers=admin_headers,
+        getter=_whole_object,
+    )
+    assert annotations["annotations"] == {"draft": True}
 
 
 @pytest.mark.django_db
@@ -540,7 +727,9 @@ def test_api_assembly_genome_links_with_data(
     assert item["mag_accession"] == "MAGS12345"
 
     assert item["genome"]["accession"] == genome.accession
-    assert item["genome"]["catalogue_version"] == genome.catalogue.version
+    assert item["genome"]["catalogue_version"] == (
+        CatalogueGenome.public_objects.get(genome=genome).catalogue.version
+    )
 
 
 @pytest.mark.django_db
@@ -593,7 +782,9 @@ def test_api_assembly_additional_contained_genomes_with_data(
 
     # Linked objects
     assert item["genome"]["accession"] == genome.accession
-    assert item["genome"]["catalogue_version"] == genome.catalogue.version
+    assert item["genome"]["catalogue_version"] == (
+        CatalogueGenome.public_objects.get(genome=genome).catalogue.version
+    )
     assert item["run_accession"] == assembly.runs.first().first_accession
 
 
