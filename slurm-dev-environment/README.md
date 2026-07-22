@@ -17,6 +17,7 @@ It starts:
   * [Slurm controller / central manager daemon](https://slurm.schedmd.com/slurmctld.html). This is the node workers poll for jobs.
   * [Slurm compute node daemon](https://slurm.schedmd.com/slurmd.html). Acts as a node that executes jobs in the queue.
   * [Slurm rest api daemon](https://slurm.schedmd.com/slurmrestd.html). Listens for requests on port `6820`.
+  * `slurm-web-agent` and `slurm-web-gateway`: a [Slurm-web](https://docs.rackslab.io/slurm-web/) dashboard available at http://localhost:5011.
 
 The `entrypoint.sh` scripts start the respective daemons.
 
@@ -34,6 +35,14 @@ This is to help with writing jobs for EBI Codon Slurm infrastructure, which look
 
 ### Data and filesystems
 There are dummy HPS and NFS filesystems at `/hps` and `/nfs/production`. On a `datamover` partitioned job, there is also `/nfs/public`.
+
+Flows that publish files (e.g. from a "production" or hps filesystem to ftp)
+call the nested `move-data/move_data_deployment`, which  runs on the `datamover` partition.
+Register it, along with the other Donco deployments, before running those flows:
+
+```shell
+task deploy-all
+```
 
 ## Using it
 ### Interactively on the nodes
