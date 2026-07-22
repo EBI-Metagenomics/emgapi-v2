@@ -1,10 +1,10 @@
 import pytest
 from prefect import flow
 
-from analyses.models import Assembly, Biome, Run, Sample, Study
+from analyses.models import Assembly, Run, Sample, Study
 from ena.models import Sample as ENASample
 from ena.models import Study as ENAStudy
-from genomes.models import AdditionalContainedGenomes, Genome, GenomeCatalogue
+from genomes.models import AdditionalContainedGenomes, Genome
 from workflows.flows.import_additional_contained_genomes_flow import (
     import_additional_contained_genomes_flow,
     validate_csv_file,
@@ -13,25 +13,6 @@ from workflows.prefect_utils.testing_utils import (
     run_flow_and_capture_logs,
     should_not_mock_httpx_requests_to_prefect_server,
 )
-
-
-def _make_basic_genome_env():
-    """
-    Create the minimal set of objects required to create Genomes referencing a catalogue and biome.
-    Returns (biome, catalogue)
-    """
-    biome = Biome.objects.create(
-        biome_name="Ocean", path="root.environmental.aquatic.marine.ocean"
-    )
-    catalogue = GenomeCatalogue.objects.create(
-        catalogue_id="ocean-prokaryotes",
-        version="1.0",
-        name="Ocean Prokaryotes",
-        catalogue_biome_label="Ocean",
-        catalogue_type=GenomeCatalogue.PROK,
-        biome=biome,
-    )
-    return biome, catalogue
 
 
 def _make_ena_study_sample_run(accession: str):
@@ -84,28 +65,8 @@ def test_validate_csv_file(prefect_harness, tmp_path):
 @pytest.mark.httpx_mock(should_mock=should_not_mock_httpx_requests_to_prefect_server)
 @pytest.mark.django_db(transaction=True)
 def test_import_additional_contained_genomes_flow_success(prefect_harness, tmp_path):
-    # Minimal genome/cataloque/biome setup
-    biome, catalogue = _make_basic_genome_env()
-
     # Genome to be linked
-    genome = Genome.objects.create(
-        accession="MGYG000000001",
-        biome=biome,
-        length=1000000,
-        num_contigs=100,
-        n_50=10000,
-        gc_content=0.5,
-        type="MAG",
-        completeness=95.0,
-        contamination=2.0,
-        trnas=20.0,
-        nc_rnas=10,
-        num_proteins=1000,
-        eggnog_coverage=80.0,
-        ipr_coverage=75.0,
-        taxon_lineage="Bacteria;Proteobacteria;Gammaproteobacteria",
-        catalogue=catalogue,
-    )
+    genome = Genome.objects.create(accession="MGYG000000001")
 
     # Create Run with accession and two Assemblies: one FK-linked, one by overlap with run accession
     run_acc = "SRR6180434"
@@ -167,25 +128,7 @@ def test_import_additional_contained_genomes_flow_success(prefect_harness, tmp_p
 @pytest.mark.django_db(transaction=True)
 def test_bom_header_is_accepted(prefect_harness, tmp_path):
     # Set up second run/genome to avoid unique conflicts from previous test
-    biome, catalogue = _make_basic_genome_env()
-    genome = Genome.objects.create(
-        accession="MGYG000000002",
-        biome=biome,
-        length=123,
-        num_contigs=1,
-        n_50=10,
-        gc_content=0.4,
-        type="MAG",
-        completeness=90.0,
-        contamination=1.0,
-        trnas=1.0,
-        nc_rnas=1,
-        num_proteins=10,
-        eggnog_coverage=10.0,
-        ipr_coverage=10.0,
-        taxon_lineage="Bacteria",
-        catalogue=catalogue,
-    )
+    genome = Genome.objects.create(accession="MGYG000000002")
 
     run_acc = "ERR11846481"
     ena_study, study, ena_sample, sample, run = _make_ena_study_sample_run(run_acc)

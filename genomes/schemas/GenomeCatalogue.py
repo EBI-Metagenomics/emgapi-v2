@@ -11,12 +11,14 @@ if TYPE_CHECKING:
     from analyses.schemas import Biome
 
 CatalogueType = Literal["prokaryotes", "eukaryotes", "viruses"]
+CatalogueStatus = Literal["draft", "ready", "published", "retired"]
 
 
 class GenomeCatalogueBase(Schema):
     catalogue_id: str = Field(..., examples=["marine-v1-0"])
     version: str = Field(..., examples=["v1.0"])
     name: str = Field(..., examples=["Marine"])
+    status: CatalogueStatus
     description: Optional[str]
     protein_catalogue_name: Optional[str] = Field(None, alias="Marine Proteins")
     protein_catalogue_description: Optional[str]

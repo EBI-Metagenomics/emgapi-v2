@@ -47,6 +47,7 @@ jobs:
         run: |
           docker run -v ${{ github.workspace }}/coverage:/app/coverage \
           -v ${{ github.workspace }}/slurm-dev-environment/fs/nfs/public:/app/data \
+          -v ${{ github.workspace }}/slurm-dev-environment/fs/nfs/production/catalogs:/nfs/donco/results:ro \
           --entrypoint bash \
           --add-host=host.docker.internal:host-gateway \
           -e DATABASE_URL=postgres://postgres:postgres@host.docker.internal:5432/emg --rm app:latest -c pytest

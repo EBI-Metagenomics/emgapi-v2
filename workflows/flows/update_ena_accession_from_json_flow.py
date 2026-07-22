@@ -89,7 +89,9 @@ def update_ena_accession_from_json_flow(
 
     qs_base = Genome.objects.all()
     if catalogue_name:
-        qs_base = qs_base.filter(catalogue__name=catalogue_name)
+        qs_base = qs_base.filter(
+            catalogue_entries__catalogue__name=catalogue_name
+        ).distinct()
 
     qs: QuerySet[Genome] = qs_base.only(
         "genome_id", "accession", "ena_genome_accession"
