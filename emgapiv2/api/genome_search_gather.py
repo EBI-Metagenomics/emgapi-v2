@@ -8,8 +8,10 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from django.conf import settings
+from django.core.cache import cache
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import transaction
+from django.db.models import Case, IntegerField, When
 from django.http import FileResponse, Http404
 from ninja import Schema
 from ninja.errors import HttpError
@@ -195,17 +197,47 @@ def _parse_uuid(raw_id: str) -> Optional[uuid.UUID]:
         return None
 
 
+def _active_sourmash_indexes_cache_identifier(mag_catalogues: set[str]) -> str:
+    ordered_catalogues = ",".join(sorted(mag_catalogues))
+    return (
+        "genomes-search:active-sourmash-indexes:"
+        f"{EMG_CONFIG.sourmash.default_ksize}:{ordered_catalogues}"
+    )
+
+
 def _get_active_sourmash_indexes(mag_catalogues: set[str]) -> List[GenomeSearchIndex]:
+    cache_identifier = _active_sourmash_indexes_cache_identifier(mag_catalogues)
+    cache_ttl = getattr(settings, "GENOME_SEARCH_INDEX_CACHE_TTL", 300)
+    cached_ids = cache.get(cache_identifier)
+
+    if cached_ids is None:
+        cached_ids = list(
+            GenomeSearchIndex.objects.filter(
+                backend=GenomeSearchIndex.Backend.SOURMASH,
+                status=GenomeSearchIndex.Status.ACTIVE,
+                is_active=True,
+                ksize=EMG_CONFIG.sourmash.default_ksize,
+                catalogue__catalogue_id__in=mag_catalogues,
+            )
+            .order_by("catalogue__catalogue_id", "created_at")
+            .values_list("id", flat=True)
+        )
+        cache.set(cache_identifier, cached_ids, timeout=cache_ttl)
+
+    if not cached_ids:
+        return []
+
+    preserved_order = Case(
+        *[
+            When(id=index_id, then=position)
+            for position, index_id in enumerate(cached_ids)
+        ],
+        output_field=IntegerField(),
+    )
     return list(
         GenomeSearchIndex.objects.select_related("catalogue")
-        .filter(
-            backend=GenomeSearchIndex.Backend.SOURMASH,
-            status=GenomeSearchIndex.Status.ACTIVE,
-            is_active=True,
-            ksize=EMG_CONFIG.sourmash.default_ksize,
-            catalogue__catalogue_id__in=mag_catalogues,
-        )
-        .order_by("catalogue__catalogue_id", "created_at")
+        .filter(id__in=cached_ids)
+        .order_by(preserved_order)
     )
 
 
