@@ -322,8 +322,6 @@ class GenomeConfig(BaseModel):
     results_directory_root: str = "/nfs/donco/results"
     genomes_ftp_results_subpath: str = "mgnify_genomes"
 
-    run_release_tasks_during_import: bool = False
-
     ftp_genomes_root: str = "/path/to/ftp-genomes"
 
     genome_search_project_dir: str = "/path/to/genome-search-project"

@@ -54,7 +54,7 @@ fileignoreconfig:
   checksum: be76261cc58f5ccea9a0b0d9179894ff3260cb5672aa69a4cfc66732200fed0d
 
 - filename: emgapiv2/test_auth.py
-  checksum: 70445b01e0fe46760e7fda5d7b4aa7762e55b60b3235ffa84fb1986fac24b1ec
+  checksum: c2c5d64aea2dbd4699cd2d79db58b8d260e3493da398283a3d65e7afc35e6866
 
 - filename: emgapiv2/api/token_controller.py
   checksum: a8e985d6b3167f60056b11e7f915153ded842bbaff59d109e4d17f85df97199d
@@ -79,6 +79,9 @@ fileignoreconfig:
 
 - filename: emgapiv2/widgets.py
   allowed_patterns: [key]
+
+- filename: genomes/migrations/0010_migrate_catalogue_releases_and_genomes.py
+  checksum: b5fac752c16577f1a2a1e5c3a4c646a2b73f2e15f8a23ff9a7dd61e66dc66bff
 
 - filename: kvstore/admin.py
   checksum: 6b7aaaf47569a4e81acab3b714ce8896a2ec470dd60d7d834852fc80ee56d798
@@ -142,6 +145,9 @@ fileignoreconfig:
 
 - filename: slurm-dev-environment/fs/nfs/public/tests/amplicon_v6_output/PRJNA398089_DADA2_SILVA_16S-V3-V4_dwcready.csv
   checksum: 64dc192bb898582c90eb5ff990f6df05ebb56f29d58d8483a10b6f49a6ca96f9
+
+- filename: slurm-dev-environment/fs/nfs/production/catalogs/ocean-prokaryotes/*/website/*/genome/*.tsv
+  ignore_detectors: [filecontent]
 
 - filename: Taskfile.yaml
   allowed_patterns: [a password in, slurm-dev-environment/fs/nfs/public/tests/assembly_v6_output/ERZ857107/ERZ857107, slurm-dev-environment/fs/nfs/ftp/public/databases/metagenomics/mgnify_results/PRJNA398/PRJNA398089/ERZ857/ERZ857107/V6/assembly]

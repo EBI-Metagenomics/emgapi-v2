@@ -9,7 +9,7 @@ import pytest
 from django.conf import settings
 
 from analyses.models import Biome
-from genomes.models import Genome, GenomeCatalogue
+from genomes.models import CatalogueGenome, GenomeCatalogue
 
 genome_config = settings.EMG_CONFIG.genomes
 
@@ -194,6 +194,12 @@ def test_get_catalogue():
         assert catalogue.pipeline_version_tag == "v3.0.0dev"
         assert catalogue.catalogue_biome_label == "Sheep Rumen"
         assert catalogue.catalogue_type == "prokaryotes"
+        assert catalogue.status == GenomeCatalogue.Status.DRAFT
+
+        catalogue.status = GenomeCatalogue.Status.PUBLISHED
+        catalogue.save(update_fields=["status"])
+        with pytest.raises(ValueError, match="cannot be re-imported"):
+            get_catalogue(options)
 
 
 @pytest.mark.django_db
@@ -260,15 +266,18 @@ def test_import_genomes_flow_with_mock_directory(
     assert catalogue.version == "1.0"
     assert catalogue.name == "Sheep rumen v1.0"
     assert catalogue.biome == biome
+    assert catalogue.status == GenomeCatalogue.Status.READY
 
-    genomes = Genome.objects.filter(catalogue=catalogue)
+    genomes = CatalogueGenome.objects.filter(catalogue=catalogue)
     assert genomes.count() == 2
 
     accessions = [g.accession for g in genomes]
     assert "MGYG000000001" in accessions
     assert "MGYG000000002" in accessions
 
-    genome = Genome.objects.get(accession="MGYG000000001")
+    genome = CatalogueGenome.objects.get(
+        catalogue=catalogue, genome__accession="MGYG000000001"
+    )
     assert genome.num_genomes_total == 6
     assert genome.pangenome_size == 4617
     assert genome.pangenome_core_size == 3041
@@ -276,6 +285,37 @@ def test_import_genomes_flow_with_mock_directory(
     assert genome.geographic_range == ["Europe", "Africa"]
     assert catalogue.result_directory == "/mgnify_genomes/sheep-rumen/1.0"
     assert genome.result_directory == "/mgnify_genomes/sheep-rumen/1.0/MGYG000000001"
+
+
+@pytest.mark.django_db(transaction=True)
+@patch("analyses.models.Biome.lineage_to_path")
+def test_failed_import_remains_draft(mock_lineage_to_path, mock_genome_directory):
+    biome = Biome.objects.create(
+        id=1,
+        biome_name="Rumen",
+        path="root.host_associated.mammals.digestive_system.stomach.rumen",
+    )
+    mock_lineage_to_path.return_value = biome.path
+    options = get_default_options(mock_genome_directory)
+
+    with patch(
+        "workflows.flows.import_genomes_flow.process_genome_dir",
+        side_effect=ValueError("Broken genome"),
+    ):
+        state = import_genomes_flow(
+            results_directory=options["results_directory"],
+            catalogue_name=options["catalogue_name"],
+            catalogue_version=options["catalogue_version"],
+            gold_biome=options["gold_biome"],
+            pipeline_version=options["pipeline_version"],
+            catalogue_type=options["catalogue_type"],
+            catalogue_biome_label=options["catalogue_biome_label"],
+            return_state=True,
+        )
+
+    assert state.is_failed()
+    catalogue = GenomeCatalogue.objects.get(catalogue_id="sheep-rumen-v1-0")
+    assert catalogue.status == GenomeCatalogue.Status.DRAFT
 
 
 def get_default_options(

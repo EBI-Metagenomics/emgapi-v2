@@ -63,6 +63,16 @@ class IsWebinOwner(IsPublic):
         return obj.webin_submitter == request.user.id
 
 
+class IsWebinAdmin(permissions.BasePermission):
+    """Permission granted by the signed ``is_admin`` Webin JWT claim."""
+
+    def has_permission(self, request: HttpRequest, controller) -> bool:
+        return getattr(request.user, "is_admin", False) is True
+
+    def has_object_permission(self, request: HttpRequest, controller, obj) -> bool:
+        return self.has_permission(request, controller)
+
+
 class IsAdminUserWithObjectPerms(IsAdminUser):
     """
     The built-in IsAdminUser does not check object permissions. This does.

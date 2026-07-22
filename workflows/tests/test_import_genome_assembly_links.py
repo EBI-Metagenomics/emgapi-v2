@@ -6,10 +6,10 @@ import pytest
 from django.core.exceptions import ObjectDoesNotExist
 from prefect import flow
 
-from analyses.models import Assembly, Biome, Run, Sample, Study
+from analyses.models import Assembly, Run, Sample, Study
 from ena.models import Sample as ENASample
 from ena.models import Study as ENAStudy
-from genomes.models import Genome, GenomeAssemblyLink, GenomeCatalogue
+from genomes.models import Genome, GenomeAssemblyLink
 from workflows.flows.import_genome_assembly_links_flow import (
     create_links,
     find_objects,
@@ -162,40 +162,8 @@ def test_process_tsv_records(prefect_harness):
 @pytest.mark.django_db
 def test_find_objects(prefect_harness):
     """Test the find_objects task."""
-    # Create test biome
-    biome = Biome.objects.create(
-        biome_name="Ocean", path="root.environmental.aquatic.marine.ocean"
-    )
-
-    # Create test catalogue
-    catalogue = GenomeCatalogue.objects.create(
-        catalogue_id="ocean-prokaryotes",
-        version="1.0",
-        name="Ocean Prokaryotes",
-        catalogue_biome_label="Ocean",
-        catalogue_type=GenomeCatalogue.PROK,
-        biome=biome,
-    )
-
     # Create test genomes
-    genome1 = Genome.objects.create(
-        accession="MGYG000000001",
-        biome=biome,
-        length=1000000,
-        num_contigs=100,
-        n_50=10000,
-        gc_content=0.5,
-        type="MAG",
-        completeness=95.0,
-        contamination=2.0,
-        trnas=20.0,
-        nc_rnas=10,
-        num_proteins=1000,
-        eggnog_coverage=80.0,
-        ipr_coverage=75.0,
-        taxon_lineage="Bacteria;Proteobacteria;Gammaproteobacteria",
-        catalogue=catalogue,
-    )
+    genome1 = Genome.objects.create(accession="MGYG000000001")
 
     # Create ENA study
     ena_study = ENAStudy.objects.create(
@@ -302,59 +270,10 @@ def test_find_objects(prefect_harness):
 @pytest.mark.django_db
 def test_create_links(prefect_harness):
     """Test the create_links task."""
-    # Create test biome
-    biome = Biome.objects.create(
-        biome_name="Ocean", path="root.environmental.aquatic.marine.ocean"
-    )
-
-    # Create test catalogue
-    catalogue = GenomeCatalogue.objects.create(
-        catalogue_id="ocean-prokaryotes",
-        version="1.0",
-        name="Ocean Prokaryotes",
-        catalogue_biome_label="Ocean",
-        catalogue_type=GenomeCatalogue.PROK,
-        biome=biome,
-    )
-
     # Create test genomes
-    genome1 = Genome.objects.create(
-        accession="MGYG000000001",
-        biome=biome,
-        length=1000000,
-        num_contigs=100,
-        n_50=10000,
-        gc_content=0.5,
-        type="MAG",
-        completeness=95.0,
-        contamination=2.0,
-        trnas=20.0,
-        nc_rnas=10,
-        num_proteins=1000,
-        eggnog_coverage=80.0,
-        ipr_coverage=75.0,
-        taxon_lineage="Bacteria;Proteobacteria;Gammaproteobacteria",
-        catalogue=catalogue,
-    )
+    genome1 = Genome.objects.create(accession="MGYG000000001")
 
-    genome2 = Genome.objects.create(
-        accession="MGYG000000002",
-        biome=biome,
-        length=2000000,
-        num_contigs=200,
-        n_50=20000,
-        gc_content=0.6,
-        type="Isolate",
-        completeness=90.0,
-        contamination=3.0,
-        trnas=25.0,
-        nc_rnas=15,
-        num_proteins=2000,
-        eggnog_coverage=85.0,
-        ipr_coverage=80.0,
-        taxon_lineage="Bacteria;Firmicutes;Bacilli",
-        catalogue=catalogue,
-    )
+    genome2 = Genome.objects.create(accession="MGYG000000002")
 
     # Create ENA study
     ena_study = ENAStudy.objects.create(
@@ -484,59 +403,10 @@ def test_create_links(prefect_harness):
 @pytest.mark.django_db
 def test_import_genome_assembly_links_flow(mock_tsv_file, prefect_harness):
     """Test the import_genome_assembly_links flow end-to-end."""
-    # Create test biome
-    biome = Biome.objects.create(
-        biome_name="Ocean", path="root.environmental.aquatic.marine.ocean"
-    )
-
-    # Create test catalogue
-    catalogue = GenomeCatalogue.objects.create(
-        catalogue_id="ocean-prokaryotes",
-        version="1.0",
-        name="Ocean Prokaryotes",
-        catalogue_biome_label="Ocean",
-        catalogue_type=GenomeCatalogue.PROK,
-        biome=biome,
-    )
-
     # Create test genomes
-    genome1 = Genome.objects.create(
-        accession="MGYG000000001",
-        biome=biome,
-        length=1000000,
-        num_contigs=100,
-        n_50=10000,
-        gc_content=0.5,
-        type="MAG",
-        completeness=95.0,
-        contamination=2.0,
-        trnas=20.0,
-        nc_rnas=10,
-        num_proteins=1000,
-        eggnog_coverage=80.0,
-        ipr_coverage=75.0,
-        taxon_lineage="Bacteria;Proteobacteria;Gammaproteobacteria",
-        catalogue=catalogue,
-    )
+    genome1 = Genome.objects.create(accession="MGYG000000001")
 
-    genome2 = Genome.objects.create(
-        accession="MGYG000000002",
-        biome=biome,
-        length=2000000,
-        num_contigs=200,
-        n_50=20000,
-        gc_content=0.6,
-        type="Isolate",
-        completeness=90.0,
-        contamination=3.0,
-        trnas=25.0,
-        nc_rnas=15,
-        num_proteins=2000,
-        eggnog_coverage=85.0,
-        ipr_coverage=80.0,
-        taxon_lineage="Bacteria;Firmicutes;Bacilli",
-        catalogue=catalogue,
-    )
+    genome2 = Genome.objects.create(accession="MGYG000000002")
 
     # Create ENA study
     ena_study = ENAStudy.objects.create(

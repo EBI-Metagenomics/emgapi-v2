@@ -116,6 +116,7 @@ services:
       - PREFECT_UI_URL=http://localhost:4200
       - DATABASE_URL=postgres://postgres:postgres@app-database:5432/emg
       - EMG_WEBIN__JWT_SECRET_KEY=dummy-key
+      - EMG_WEBIN__EMG_WEBIN_ACCOUNT="Webin-999999"
       - EMG_WEBIN__AUTH_ENDPOINT=http://httpbin/status/200
       - EMG_WEBIN__TOKEN_ENDPOINT=http://httpbin/status/200
       - EMG_WEBIN__ACCOUNT_DETAILS_ENDPOINT=http://httpbin/status/200
@@ -124,6 +125,7 @@ services:
     volumes:
       - ".:/app"
       - "./slurm-dev-environment/fs/nfs/public:/app/data"  # similar to the k8s volume mount in production
+      - "./slurm-dev-environment/fs/nfs/production/catalogs:/nfs/donco/results:ro"  # dissimilar to production - just used for some tests/local dev data
     depends_on:
       app-database:
         condition: service_started

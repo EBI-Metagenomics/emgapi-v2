@@ -663,6 +663,16 @@ class SuperStudyDetail(SuperStudy):
     genome_catalogues: List[GenomeCatalogueList] = Field(...)
 
     @staticmethod
+    def resolve_genome_catalogues(
+        obj: analyses.models.SuperStudy,
+    ) -> list[GenomeCatalogueList]:
+        return list(
+            obj.genome_catalogues.filter(status="published").select_related(
+                "series__biome"
+            )
+        )
+
+    @staticmethod
     def resolve_flagship_studies(obj: analyses.models.SuperStudy) -> list[MGnifyStudy]:
         return [
             MGnifyStudy.model_validate(sss.study)
