@@ -2,6 +2,15 @@ fileignoreconfig:
 - filename: .github/workflows/release_k8s.yml
   checksum: 0e93196d244417801fd40ad6bfa01f53a6bf04257371378a1dc3e14cbc7a04d8
 
+- filename: README.md
+  checksum: d8137e9ccf9810642995fd8874cda51b33a1bd41c90f968919e91b6483014d3c
+
+- filename: sourmash_django_tasks_detailed_design.md
+  checksum: d8abca58f2c51a145cf99b3fcc88b717d057c58ef0cb1c9a1a3588997cdac55b
+
+- filename: sourmash_search_architecture_plan.md
+  checksum: ce5701f35acc8cc05b00cb3d75d9d528ecb8a6d3dccb0c273274f07bc5cda7bc
+
 - filename: ena/models.py
   allowed_patterns: [accession key]
 
@@ -42,7 +51,7 @@ fileignoreconfig:
   allowed_patterns: [kubectl create secret generic nginx-private-data-config-secret --from-file=private-data-nginx.conf -n emgapiv2-hl-exp, google-maps-key-secret, create secret generic, google-maps-key]
 
 - filename: docker-compose.yaml
-  allowed_patterns: [EMG_WEBIN__JWT_SECRET_KEY=dummy-key, SECURE_LINK_SECRET=dummy-key]
+  allowed_patterns: [EMG_WEBIN__JWT_SECRET_KEY=dummy-key, SECURE_LINK_SECRET=dummy-key, PRIVATE_DATA_SECURE_LINK_SECRET_KEY=dummy-key]
 
 - filename: emgapiv2/api/__init__.py
   allowed_patterns: [OpenApiKeywords]
@@ -69,7 +78,7 @@ fileignoreconfig:
   checksum: 3afe465b36e4e141124bd84c8459c5aa81332eedf49b691eff22c74df63a0f18
 
 - filename: emgapiv2/settings.py
-  checksum: c6b5a727cf8a2638879787d5670b7f198574be0c31878a6bc92e652ce298af70
+  checksum: 04c858d32207b09431f1b238c41d82184faa7e4d3e1b44ee1ffb0722d6f1ded2
 
 - filename: emgapiv2/settings_test.py
   checksum: ded898400b4eda7e3cf75694af1b66235975a85eb5b8f49f3a2c708163a7aad4

@@ -96,6 +96,7 @@ tasks:
     cmds:
       - docker compose --profile all down
       - docker volume rm -f emgapiv2_appdb  # force so that no error if volume doesn't exist.
+      - docker compose --profile app up -d --wait app-database
       - docker compose run --entrypoint /bin/bash app -c "pytest -m dev_data_maker --no-cov -s"  # dumps a json to dev-db.json
       - docker compose run app python manage.py migrate
       - docker compose run app python manage.py loaddata dev-db.json

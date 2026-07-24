@@ -289,6 +289,15 @@ class ServiceURLsConfig(BaseModel):
     genome_search_proxy: str = "https://cobs-genome-search-01.mgnify.org/search"
 
 
+class SourmashConfig(BaseModel):
+    queries_path: str = "/tmp/sourmash/queries"
+    results_path: str = "/tmp/sourmash/results"
+    index_root: str = "/app/data/sourmash/indexes"
+    default_ksize: int = 31
+    result_retention_days: int = 30
+    name_map_path: str = ""
+
+
 class DataDistributionConfig(BaseModel):
     studies_url_root_for_permalinks: str = Field(
         "https://www.ebi.ac.uk/metagenomics/studies/"
@@ -359,6 +368,7 @@ class EMGConfig(BaseSettings):
     environment: str = "development"
     legacy_service: LegacyServiceConfig = LegacyServiceConfig()
     service_urls: ServiceURLsConfig = ServiceURLsConfig()
+    sourmash: SourmashConfig = SourmashConfig()
     slurm: SlurmConfig = SlurmConfig()
     webin: WebinConfig = WebinConfig()
     log_masking: LogMaskingConfig = LogMaskingConfig()

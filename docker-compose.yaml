@@ -33,6 +33,11 @@ services:
       - "5434:5432"
     volumes:
       - appdb:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d emg"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
     profiles: ["app", "prefect", "all"]
     networks: [emg]
 
@@ -78,11 +83,11 @@ services:
     command: prefect worker start --pool slurm --type slurm
     entrypoint: /usr/local/bin/prefect-slurm-entrypoint.sh
     environment:
+      - DATABASE_URL=postgres://postgres:postgres@app-database:5432/emg
       - PREFECT_SLURM_API_URL=http://slurm_node:6820
       - PREFECT_SLURM_USER_NAME=slurm
       - PREFECT_SLURM_TOKEN_FILE=/home/slurm/.prefect_slurm.jwt
       - PREFECT_API_URL=http://prefect-server:4200/api
-      - DATABASE_URL=postgres://postgres:postgres@app-database:5432/emg
       - DJANGO_DEBUG=1
       - DJANGO_SETTINGS_MODULE=emgapiv2.settings
     profiles: ["prefect", "all"]
@@ -92,8 +97,6 @@ services:
     depends_on:
       prefect-server:
         condition: service_healthy
-      app-database:
-        condition: service_started
     networks: [emg, slurm]
     volumes:
       - ".:/app"
@@ -111,10 +114,16 @@ services:
     container_name: app
     profiles: ["app", "all"]
     command: "python manage.py runserver 0:8000"
+    env_file:
+      - path: ./secrets-local.env
+        required: false
     environment:
+      - DATABASE_URL=postgres://postgres:postgres@app-database:5432/emg
       - PREFECT_API_URL=http://prefect-server:4200/api
       - PREFECT_UI_URL=http://localhost:4200
-      - DATABASE_URL=postgres://postgres:postgres@app-database:5432/emg
+      - EMG_SOURMASH__QUERIES_PATH=/app/tools/sourmash-local/data/queries
+      - EMG_SOURMASH__RESULTS_PATH=/app/tools/sourmash-local/data/results
+      - EMG_SOURMASH__INDEX_ROOT=/app/tools/sourmash-local/data/signatures
       - EMG_WEBIN__JWT_SECRET_KEY=dummy-key
       - EMG_WEBIN__AUTH_ENDPOINT=http://httpbin/status/200
       - EMG_WEBIN__TOKEN_ENDPOINT=http://httpbin/status/200
@@ -125,14 +134,38 @@ services:
       - ".:/app"
       - "./slurm-dev-environment/fs/nfs/public:/app/data"  # similar to the k8s volume mount in production
     depends_on:
-      app-database:
-        condition: service_started
-        # prefect-server:
-        # condition: service_healthy
       httpbin:
         condition: service_started
     ports:
       - "8000:8000"
+    networks: [emg]
+
+  app-worker:
+    # Django Tasks worker for sourmash searches
+    build:
+      context: .
+      target: sourmash_worker
+    container_name: app-worker
+    profiles: ["all"]
+    command: "python manage.py db_worker --skip-checks"
+    env_file:
+      - path: ./secrets-local.env
+        required: false
+    environment:
+      - DATABASE_URL=postgres://postgres:postgres@app-database:5432/emg
+      - PREFECT_API_URL=http://prefect-server:4200/api
+      - PREFECT_UI_URL=http://localhost:4200
+      - EMG_SOURMASH__QUERIES_PATH=/app/tools/sourmash-local/data/queries
+      - EMG_SOURMASH__RESULTS_PATH=/app/tools/sourmash-local/data/results
+      - EMG_SOURMASH__INDEX_ROOT=/app/tools/sourmash-local/data/signatures
+      - PRIVATE_DATA_SECURE_LINK_SECRET_KEY=dummy-key
+      - DJANGO_DEBUG=1
+    volumes:
+      - ".:/app"
+      - "./slurm-dev-environment/fs/nfs/public:/app/data"
+    depends_on:
+      app-database:
+        condition: service_started
     networks: [emg]
 
   transfer-services:

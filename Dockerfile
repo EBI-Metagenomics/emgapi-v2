@@ -20,12 +20,37 @@ RUN apt -y update && \
         python3-wheel
 
 WORKDIR /app
-COPY requirements.txt .
+COPY requirements.txt requirements-common.txt ./
 RUN python -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
+RUN pip install --upgrade pip setuptools wheel
+
+FROM base AS web_base
 RUN pip install --use-pep517 --upgrade -r requirements.txt
 
-FROM base AS django
+FROM python:3.11-slim AS sourmash_os_base
+ENV DEBIAN_FRONTEND="noninteractive" TZ="Etc/UTC"
+RUN apt-get update && \
+    apt-get install -y \
+        libpq-dev \
+        gcc \
+        git \
+        build-essential \
+        tzdata && \
+    rm -rf /var/lib/apt/lists/*
+WORKDIR /app
+COPY requirements-common.txt requirements-sourmash-worker.txt ./
+RUN python -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+RUN pip install --upgrade pip setuptools wheel
+
+FROM sourmash_os_base AS sourmash_base
+RUN pip install --use-pep517 --upgrade -r requirements-sourmash-worker.txt
+RUN pip --no-input uninstall pydantic; pip --no-input install pydantic==2.10.6
+RUN pip install --upgrade --force-reinstall "setuptools<81"
+RUN python -c "from importlib.metadata import version; print(version('sourmash'))"
+
+FROM web_base AS django
 COPY requirements* .
 RUN pip install --ignore-installed --use-pep517 -r requirements-dev.txt
 RUN pip install --ignore-installed --use-pep517 -r requirements-tools.txt
@@ -33,6 +58,9 @@ RUN pip --no-input uninstall pydantic; pip --no-input install pydantic==2.10.6
 #TODO: remove the above once https://github.com/eadwinCode/django-ninja-jwt/pull/151
 COPY . .
 RUN python manage.py collectstatic --noinput
+
+FROM sourmash_base AS sourmash_worker
+COPY . .
 
 FROM django AS agent
 

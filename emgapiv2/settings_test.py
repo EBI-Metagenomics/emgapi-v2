@@ -24,5 +24,12 @@ STORAGES["staticfiles"] = {
     "BACKEND": "whitenoise.storage.CompressedStaticFilesStorage",
 }
 
+TASKS = {
+    "default": {
+        "BACKEND": "django_tasks.backends.immediate.ImmediateBackend",
+        "QUEUES": ["default"],
+    }
+}
+
 LOGGING["loggers"]["prefect.events.clients"] = {"level": "WARNING"}
 LOGGING["loggers"]["httpx"] = {"level": "WARNING"}

@@ -3,13 +3,50 @@ from unittest.mock import Mock, patch
 
 import pytest
 from django.core.management import call_command
+from django.utils import timezone
 
 from analyses.models import Analysis, Biome, Run
+from genomes.models import GenomeCatalogue, GenomeSearchIndex
 from workflows.data_io_utils.mgnify_v6_utils.assembly import AssemblyResultImporter
 from workflows.data_io_utils.schemas import AssemblyResultSchema, MapResultSchema
 from workflows.flows.analyse_study_tasks.amplicon.import_completed_amplicon_analyses import (
     import_completed_analysis as import_completed_amplicon_analysis,
 )
+
+DEV_SOURMASH_CATALOGUE_ID = "human-gut-prokaryotes"
+DEV_SOURMASH_ARTIFACT_PATH = (
+    "/app/tools/sourmash-local/data/signatures/human-gut-v2-0/genomes_index.sbt.json"
+)
+
+
+def seed_dev_searchable_sourmash_catalogue(top_level_biomes):
+    catalogue, _ = GenomeCatalogue.objects.get_or_create(
+        catalogue_id=DEV_SOURMASH_CATALOGUE_ID,
+        defaults={
+            "version": "1.0",
+            "name": "Human Gut Prokaryotes",
+            "description": "Tiny local sourmash-search catalogue for development.",
+            "catalogue_biome_label": "Human Gut",
+            "catalogue_type": GenomeCatalogue.PROK,
+            "biome": top_level_biomes[3],
+        },
+    )
+    GenomeSearchIndex.objects.update_or_create(
+        catalogue=catalogue,
+        backend=GenomeSearchIndex.Backend.SOURMASH,
+        ksize=31,
+        moltype="DNA",
+        defaults={
+            "status": GenomeSearchIndex.Status.ACTIVE,
+            "is_active": True,
+            "artifact_path": DEV_SOURMASH_ARTIFACT_PATH,
+            "scaled": 1000,
+            "genome_count": 1,
+            "built_at": timezone.now(),
+            "activated_at": timezone.now(),
+        },
+    )
+    return catalogue
 
 
 @pytest.fixture
@@ -208,6 +245,14 @@ def test_make_dev_data(
     Stub test that just sets up fixtures and dumps them to JSON for using as dev data.
     """
 
+    seed_dev_searchable_sourmash_catalogue(top_level_biomes)
+
     assert Biome.objects.count() == 4
+    assert GenomeSearchIndex.objects.filter(
+        catalogue__catalogue_id=DEV_SOURMASH_CATALOGUE_ID,
+        backend=GenomeSearchIndex.Backend.SOURMASH,
+        status=GenomeSearchIndex.Status.ACTIVE,
+        is_active=True,
+    ).exists()
 
     call_command("dumpdata", "-o", "dev-db.json", "--indent", "2")
