@@ -146,7 +146,7 @@ services:
       context: .
       target: sourmash_worker
     container_name: app-worker
-    profiles: ["app", "all"]
+    profiles: ["all"]
     command: "python manage.py db_worker --skip-checks"
     env_file:
       - path: ./secrets-local.env
@@ -158,10 +158,6 @@ services:
       - EMG_SOURMASH__QUERIES_PATH=/app/tools/sourmash-local/data/queries
       - EMG_SOURMASH__RESULTS_PATH=/app/tools/sourmash-local/data/results
       - EMG_SOURMASH__INDEX_ROOT=/app/tools/sourmash-local/data/signatures
-      - EMG_WEBIN__JWT_SECRET_KEY=dummy-key
-      - EMG_WEBIN__AUTH_ENDPOINT=http://httpbin/status/200
-      - EMG_WEBIN__TOKEN_ENDPOINT=http://httpbin/status/200
-      - EMG_WEBIN__ACCOUNT_DETAILS_ENDPOINT=http://httpbin/status/200
       - PRIVATE_DATA_SECURE_LINK_SECRET_KEY=dummy-key
       - DJANGO_DEBUG=1
     volumes:

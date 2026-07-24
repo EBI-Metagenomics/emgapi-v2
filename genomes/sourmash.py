@@ -87,6 +87,18 @@ def run_sourmash_gather(
         load_query_signature,
     )
 
+    # log all received params
+    logger.info("Loading sourmash query signature from %s", query_path)
+    logger.info("Using original filename %s", original_filename)
+    logger.info("Using catalogue %s", catalogue_id)
+    logger.info("Using artifact %s", artifact_path)
+    logger.info("Using result path %s", result_path)
+    logger.info("Using ksize %s", ksize)
+    logger.info("Using moltype %s", moltype)
+    logger.info("Using threshold_bp %s", threshold_bp)
+    logger.info("Using ignore_abundance %s", ignore_abundance)
+    logger.info("Using name_map_path %s", name_map_path)
+
     query_file = Path(query_path)
     if not query_file.exists():
         raise FileNotFoundError(

@@ -2,4 +2,4 @@
 
 # Sourmash runtime for the Django Tasks worker
 setuptools
-sourmash==4.1.2
+sourmash==4.9.4

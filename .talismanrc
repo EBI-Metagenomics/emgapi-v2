@@ -5,9 +5,6 @@ fileignoreconfig:
 - filename: README.md
   checksum: d8137e9ccf9810642995fd8874cda51b33a1bd41c90f968919e91b6483014d3c
 
-- filename: emgapiv2/api/tests/test_genome_search_gather.py
-  checksum: 8abbfcb8385e1b453196bec8b1c003ce9977aa6f9d3b7ae356e2d27137e0c210
-
 - filename: sourmash_django_tasks_detailed_design.md
   checksum: d8abca58f2c51a145cf99b3fcc88b717d057c58ef0cb1c9a1a3588997cdac55b
 

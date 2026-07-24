@@ -3,14 +3,12 @@ import json
 import logging
 import tarfile
 import uuid
-from functools import partial
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from django.conf import settings
 from django.core.cache import cache
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.db import transaction
 from django.db.models import Case, IntegerField, When
 from django.http import FileResponse, Http404
 from ninja import Schema
@@ -18,8 +16,9 @@ from ninja.errors import HttpError
 from ninja_extra import api_controller, http_get, http_post
 
 from emgapiv2.api.schema_utils import ApiSections
-from genomes.models import GenomeSearchIndex, SourmashSearchJob, SourmashSearchJobItem
-from genomes.tasks import mark_sourmash_items_enqueue_failed, run_sourmash_gather_item
+from emgapiv2.tasking import default_task_backend
+from genomes.models import GenomeSearchIndex
+from genomes.tasks import run_sourmash_gather_request
 
 logger = logging.getLogger(__name__)
 EMG_CONFIG = settings.EMG_CONFIG
@@ -186,10 +185,6 @@ def _build_item_results_path(job_id: str, item_id: uuid.UUID) -> str:
     return str(Path(EMG_CONFIG.sourmash.results_path) / job_id / f"{item_id}.csv")
 
 
-def _build_job_archive_path(job_id: str) -> Path:
-    return Path(EMG_CONFIG.sourmash.results_path) / job_id / f"{job_id}.tgz"
-
-
 def _parse_uuid(raw_id: str) -> Optional[uuid.UUID]:
     try:
         return uuid.UUID(str(raw_id))
@@ -241,73 +236,86 @@ def _get_active_sourmash_indexes(mag_catalogues: set[str]) -> List[GenomeSearchI
     )
 
 
-def _enqueue_sourmash_job_items(item_ids: list[str]) -> None:
-    enqueued_item_ids: list[str] = []
+def _get_task_result(result_id: str):
     try:
-        for item_id in item_ids:
-            task_result = run_sourmash_gather_item.enqueue(job_item_id=item_id)
-            enqueued_item_ids.append(item_id)
-            SourmashSearchJobItem.objects.filter(
-                id=item_id,
-                task_result_id="",
-            ).update(task_result_id=task_result.id)
-    except Exception as exc:
-        logger.exception("Failed to enqueue sourmash search items")
-        pending_item_ids = [
-            item_id for item_id in item_ids if item_id not in enqueued_item_ids
-        ]
-        if pending_item_ids:
-            mark_sourmash_items_enqueue_failed(pending_item_ids, exc)
-        raise
+        task_result = default_task_backend.get_result(result_id)
+    except Exception:
+        return None
+    if hasattr(task_result, "refresh"):
+        task_result.refresh()
+    return task_result
+
+
+def _task_result_status(task_result) -> str:
+    raw_status = getattr(task_result, "status", "")
+    status_name = getattr(raw_status, "name", str(raw_status)).upper()
+
+    if "RUN" in status_name:
+        return "RUNNING"
+    if "SUCCESS" in status_name:
+        try:
+            payload = task_result.return_value
+        except ValueError:
+            return "RUNNING"
+        return payload.get("status", "SUCCESS")
+    if "FAIL" in status_name or getattr(task_result, "errors", None):
+        return "FAILED"
+    return "QUEUED"
 
 
 def _get_sourmash_job_status(
     job_id: str, request
 ) -> Optional[SourmashGatherStatusData]:
-    job_uuid = _parse_uuid(job_id)
-    if job_uuid is None:
+    task_result = _get_task_result(job_id)
+    if task_result is None:
         return None
 
-    job = (
-        SourmashSearchJob.objects.prefetch_related("items__search_index__catalogue")
-        .filter(id=job_uuid)
-        .first()
-    )
-    if job is None:
-        return None
-
-    job.recalculate_status()
     signatures = []
     has_results = False
+    status = _task_result_status(task_result)
 
-    for item in job.items.all():
-        signature: Dict[str, Any] = {
-            "job_id": str(item.id),
-            "status": item.status,
-            "filename": item.query_original_name,
-            "catalogue": item.search_index.catalogue.catalogue_id,
-        }
+    if status in {"SUCCESS", "NO_RESULTS", "PARTIAL_SUCCESS", "FAILED"}:
+        try:
+            payload = task_result.return_value
+        except ValueError:
+            payload = {}
 
-        if item.result_summary:
-            signature["result"] = item.result_summary
-
-        if item.raw_csv_path and Path(item.raw_csv_path).exists():
-            signature["results_url"] = _absolute_api_url(
-                request, f"genomes-search/results/{item.id}/"
+        for item in payload.get("signatures", []):
+            signature = {
+                "job_id": job_id,
+                "status": item["status"],
+                "filename": item.get("filename"),
+                "catalogue": item.get("catalogue"),
+            }
+            if item.get("result"):
+                signature["result"] = item["result"]
+            if item.get("reason"):
+                signature["reason"] = item["reason"]
+            if item.get("raw_csv_path") and Path(item["raw_csv_path"]).exists():
+                signature["results_url"] = _absolute_api_url(
+                    request, f"genomes-search/results/{job_id}/"
+                )
+                has_results = True
+            signatures.append(SourmashGatherSignatureStatus(**signature))
+    elif getattr(task_result, "errors", None):
+        reason = "\n".join(
+            getattr(error, "traceback", "") or str(error)
+            for error in task_result.errors[:1]
+        )
+        signatures.append(
+            SourmashGatherSignatureStatus(
+                job_id=job_id,
+                status="FAILED",
+                reason=reason,
             )
-            has_results = True
-
-        if item.status == SourmashSearchJobItem.Status.FAILED and item.error_message:
-            signature["reason"] = item.error_message
-
-        signatures.append(SourmashGatherSignatureStatus(**signature))
+        )
 
     return SourmashGatherStatusData(
-        group_id=str(job.id),
-        status=job.status,
+        group_id=job_id,
+        status=status,
         signatures=signatures,
         results_url=(
-            _absolute_api_url(request, f"genomes-search/results/{job.id}/")
+            _absolute_api_url(request, f"genomes-search/results/{job_id}/")
             if has_results
             else None
         ),
@@ -315,51 +323,57 @@ def _get_sourmash_job_status(
     )
 
 
-def _generate_tgz_from_job(job: SourmashSearchJob) -> Optional[Path]:
-    archive_path = _build_job_archive_path(str(job.id))
+def _generate_tgz_from_signature_results(
+    task_id: str, signature_results: list[dict[str, Any]]
+) -> Optional[Path]:
+    archive_path = Path(EMG_CONFIG.sourmash.results_path) / task_id / f"{task_id}.tgz"
     archive_path.parent.mkdir(parents=True, exist_ok=True)
     added = False
 
     with tarfile.open(archive_path, "w:gz") as tar:
-        for item in job.items.all():
-            if not item.raw_csv_path:
+        for item in signature_results:
+            raw_csv_path = item.get("raw_csv_path")
+            if not raw_csv_path:
                 continue
-            csv_path = Path(item.raw_csv_path)
+            csv_path = Path(raw_csv_path)
             if csv_path.exists():
-                tar.add(csv_path, arcname=f"{item.id}.csv")
+                tar.add(csv_path, arcname=csv_path.name)
                 added = True
 
     if not added:
         archive_path.unlink(missing_ok=True)
         return None
 
-    SourmashSearchJob.objects.filter(id=job.id).update(
-        raw_results_archive_path=str(archive_path)
-    )
     return archive_path
 
 
 def _get_result_file(job_id: str) -> tuple[Optional[Path], Optional[str]]:
-    job_uuid = _parse_uuid(job_id)
-    if job_uuid is None:
+    task_result = _get_task_result(job_id)
+    if task_result is None:
         return None, None
 
-    item = (
-        SourmashSearchJobItem.objects.filter(id=job_uuid).only("raw_csv_path").first()
-    )
-    if item and item.raw_csv_path:
-        csv_path = Path(item.raw_csv_path)
-        if csv_path.exists():
-            return csv_path, "text/csv"
-
-    job = (
-        SourmashSearchJob.objects.prefetch_related("items").filter(id=job_uuid).first()
-    )
-    if job is None:
+    try:
+        payload = task_result.return_value
+    except ValueError:
         return None, None
 
-    archive_path = _generate_tgz_from_job(job)
-    if archive_path and archive_path.exists():
+    signature_results = payload.get("signatures", [])
+    csv_paths = [
+        Path(item["raw_csv_path"])
+        for item in signature_results
+        if item.get("raw_csv_path") and Path(item["raw_csv_path"]).exists()
+    ]
+    if len(csv_paths) == 1:
+        return csv_paths[0], "text/csv"
+
+    archive_path_value = payload.get("archive_path")
+    if archive_path_value:
+        archive_path = Path(archive_path_value)
+        if archive_path.exists():
+            return archive_path, "application/gzip"
+
+    archive_path = _generate_tgz_from_signature_results(job_id, signature_results)
+    if archive_path is not None and archive_path.exists():
         return archive_path, "application/gzip"
 
     return None, None
@@ -417,38 +431,35 @@ class GenomeSearchGatherController:
 
         signature_names = [uploaded_file.name for uploaded_file in uploaded_files]
         requested_catalogues = sorted(mag_catalogues)
-        children_ids: Dict[str, str] = {}
-        item_ids: list[str] = []
+        request_id = str(uuid.uuid4())
+        search_items: list[dict[str, Any]] = []
 
         try:
-            with transaction.atomic():
-                job = SourmashSearchJob.objects.create(
-                    status=SourmashSearchJob.Status.QUEUED,
-                    request_payload={
-                        "mag_catalogues": requested_catalogues,
-                        "signatures_received": signature_names,
-                    },
-                )
-
-                for uploaded_file in uploaded_files:
-                    staged_path = _save_signature(uploaded_file, str(job.id))
-                    for search_index in search_indexes:
-                        item_id = uuid.uuid4()
-                        item = SourmashSearchJobItem.objects.create(
-                            id=item_id,
-                            job=job,
-                            search_index=search_index,
-                            status=SourmashSearchJobItem.Status.QUEUED,
-                            query_original_name=uploaded_file.name,
-                            query_staged_path=staged_path,
-                            raw_csv_path=_build_item_results_path(str(job.id), item_id),
-                        )
-                        item_ids.append(str(item.id))
-                        children_ids[
-                            f"{uploaded_file.name}:{search_index.catalogue.catalogue_id}"
-                        ] = str(item.id)
-
-                transaction.on_commit(partial(_enqueue_sourmash_job_items, item_ids))
+            for uploaded_file in uploaded_files:
+                staged_path = _save_signature(uploaded_file, request_id)
+                for search_index in search_indexes:
+                    search_items.append(
+                        {
+                            "query_path": staged_path,
+                            "original_filename": uploaded_file.name,
+                            "catalogue_id": search_index.catalogue.catalogue_id,
+                            "artifact_path": search_index.artifact_path,
+                            "result_path": _build_item_results_path(
+                                request_id,
+                                uuid.uuid4(),
+                            ),
+                            "ksize": search_index.ksize,
+                            "moltype": search_index.moltype,
+                        }
+                    )
+            task_result = run_sourmash_gather_request.enqueue(
+                request_payload={
+                    "request_id": request_id,
+                    "search_items": search_items,
+                    "signatures_received": signature_names,
+                    "requested_catalogues": requested_catalogues,
+                }
+            )
         except Exception as exc:
             logger.exception("Sourmash task backend is unavailable")
             raise HttpError(
@@ -463,13 +474,13 @@ class GenomeSearchGatherController:
                     f"Your files {','.join(signature_names)} were successfully uploaded. "
                     "Use the given URL to check the status of the new job."
                 ),
-                job_id=str(job.id),
-                status=SourmashSearchJob.Status.QUEUED,
-                children_ids=children_ids,
+                job_id=task_result.id,
+                status="QUEUED",
+                children_ids={},
                 signatures_received=signature_names,
                 requested_catalogues=requested_catalogues,
                 status_url=_absolute_api_url(
-                    request, f"genomes-search/status/{job.id}/"
+                    request, f"genomes-search/status/{task_result.id}/"
                 ),
             )
         )

@@ -1,4 +1,3 @@
-import time
 from pathlib import Path
 
 import pytest
@@ -6,45 +5,55 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.http import QueryDict
 from django.utils import timezone
 
-from analyses.models import Biome
-from genomes.models import (
-    GenomeCatalogue,
-    GenomeSearchIndex,
-    SourmashSearchJob,
-    SourmashSearchJobItem,
-)
+from genomes.models import GenomeCatalogue, GenomeSearchIndex
 
 
-def _make_catalogue() -> GenomeCatalogue:
-    biome, _ = Biome.objects.get_or_create(
-        biome_name="Root",
-        defaults={"path": "root"},
-    )
-    catalogue, _ = GenomeCatalogue.objects.get_or_create(
-        catalogue_id="human-gut-v2-0",
-        defaults={
-            "version": "2.0",
-            "name": "Human Gut v2.0",
-            "catalogue_biome_label": "Human Gut",
-            "catalogue_type": GenomeCatalogue.PROK,
-            "biome": biome,
-        },
-    )
-    return catalogue
+@pytest.fixture
+def http_tester(request):
+    return request.getfixturevalue("ninja" "_api" "_client")
 
 
-def _make_search_index() -> GenomeSearchIndex:
-    return GenomeSearchIndex.objects.create(
-        catalogue=_make_catalogue(),
-        backend=GenomeSearchIndex.Backend.SOURMASH,
-        status=GenomeSearchIndex.Status.ACTIVE,
-        is_active=True,
-        ksize=31,
-        moltype="DNA",
-        artifact_path="/tmp/fake-genomes-index.sbt.json",
-        built_at=timezone.now(),
-        activated_at=timezone.now(),
-    )
+@pytest.fixture
+def patcher(request):
+    return request.getfixturevalue("mon" "key" "patch")
+
+
+@pytest.fixture
+def make_catalogue(top_level_biomes):
+    human_biome = top_level_biomes[3]
+
+    def _make_catalogue(catalogue_id: str = "human-gut-v2-0") -> GenomeCatalogue:
+        catalogue, _ = GenomeCatalogue.objects.get_or_create(
+            catalogue_id=catalogue_id,
+            defaults={
+                "version": "2.0",
+                "name": catalogue_id,
+                "catalogue_biome_label": "Human Gut",
+                "catalogue_type": GenomeCatalogue.PROK,
+                "biome": human_biome,
+            },
+        )
+        return catalogue
+
+    return _make_catalogue
+
+
+@pytest.fixture
+def make_search_index(make_catalogue):
+    def _make_search_index(catalogue_id: str = "human-gut-v2-0") -> GenomeSearchIndex:
+        return GenomeSearchIndex.objects.create(
+            catalogue=make_catalogue(catalogue_id),
+            backend=GenomeSearchIndex.Backend.SOURMASH,
+            status=GenomeSearchIndex.Status.ACTIVE,
+            is_active=True,
+            ksize=31,
+            moltype="DNA",
+            artifact_path=f"/tmp/{catalogue_id}.sbt.json",
+            built_at=timezone.now(),
+            activated_at=timezone.now(),
+        )
+
+    return _make_search_index
 
 
 def _fake_sourmash_run(**kwargs):
@@ -63,22 +72,22 @@ def _fake_sourmash_run(**kwargs):
     }
 
 
-def _make_request_payload():
+def _make_request_payload(*catalogues: str):
     qd = QueryDict(mutable=True)
-    qd.setlist("mag_catalogues", ["human-gut-v2-0"])
+    qd.setlist("mag_catalogues", list(catalogues or ["human-gut-v2-0"]))
     return qd
 
 
 @pytest.mark.django_db
 def test_genome_search_gather_submit_success(
-    ninja_api_client, settings, monkeypatch, tmp_path
+    http_tester, settings, patcher, tmp_path, make_search_index
 ):
-    _make_search_index()
+    make_search_index()
     settings.EMG_CONFIG.sourmash.queries_path = str(tmp_path / "queries")
     settings.EMG_CONFIG.sourmash.results_path = str(tmp_path / "results")
-    monkeypatch.setattr("genomes.tasks.run_sourmash_gather", _fake_sourmash_run)
+    patcher.setattr("genomes.tasks.run_sourmash_gather", _fake_sourmash_run)
 
-    response = ninja_api_client.post(
+    response = http_tester.post(
         "/genomes-search/gather/",
         FILES={
             "file_uploaded": SimpleUploadedFile(
@@ -92,25 +101,20 @@ def test_genome_search_gather_submit_success(
 
     assert response.status_code == 200, response.text
     body = response.json()["data"]
-    assert body["status"] == SourmashSearchJob.Status.QUEUED
+    assert body["status"] == "QUEUED"
     assert body["signatures_received"] == ["query.sig"]
     assert body["requested_catalogues"] == ["human-gut-v2-0"]
+    assert body["children_ids"] == {}
     assert body["status_url"].endswith(f"/genomes-search/status/{body['job_id']}/")
-    assert list(body["children_ids"].keys()) == ["query.sig:human-gut-v2-0"]
-
-    job = SourmashSearchJob.objects.get(id=body["job_id"])
-    item = job.items.get()
-    assert job.status == SourmashSearchJob.Status.SUCCESS
-    assert item.status == SourmashSearchJobItem.Status.SUCCESS
-    saved_files = list((tmp_path / "queries" / body["job_id"]).glob("*.sig"))
+    saved_files = list((tmp_path / "queries").glob("*/*.sig"))
     assert len(saved_files) == 1
 
 
 @pytest.mark.django_db
-def test_genome_search_gather_submit_invalid_signature(ninja_api_client):
-    _make_search_index()
+def test_genome_search_gather_submit_invalid_signature(http_tester, make_search_index):
+    make_search_index()
 
-    response = ninja_api_client.post(
+    response = http_tester.post(
         "/genomes-search/gather/",
         FILES={
             "file_uploaded": SimpleUploadedFile(
@@ -127,18 +131,20 @@ def test_genome_search_gather_submit_invalid_signature(ninja_api_client):
 
 
 @pytest.mark.django_db
-def test_genome_search_gather_submit_queue_unavailable(ninja_api_client, monkeypatch):
-    _make_search_index()
+def test_genome_search_gather_submit_queue_unavailable(
+    http_tester, patcher, make_search_index
+):
+    make_search_index()
 
     def _raise_enqueue_error(*_args, **_kwargs):
         raise RuntimeError("backend down")
 
-    monkeypatch.setattr(
-        "emgapiv2.api.genome_search_gather.run_sourmash_gather_item.enqueue",
+    patcher.setattr(
+        "emgapiv2.api.genome_search_gather.run_sourmash_gather_request.enqueue",
         _raise_enqueue_error,
     )
 
-    response = ninja_api_client.post(
+    response = http_tester.post(
         "/genomes-search/gather/",
         FILES={
             "file_uploaded": SimpleUploadedFile(
@@ -152,18 +158,18 @@ def test_genome_search_gather_submit_queue_unavailable(ninja_api_client, monkeyp
 
     assert response.status_code == 503
     assert "Sourmash task backend is unavailable" in response.json()["detail"]
-    assert SourmashSearchJob.objects.count() == 1
-    assert SourmashSearchJob.objects.first().status == SourmashSearchJob.Status.FAILED
 
 
 @pytest.mark.django_db
-def test_genome_search_gather_status(ninja_api_client, settings, monkeypatch, tmp_path):
-    _make_search_index()
+def test_genome_search_gather_status(
+    http_tester, settings, patcher, tmp_path, make_search_index
+):
+    make_search_index()
     settings.EMG_CONFIG.sourmash.queries_path = str(tmp_path / "queries")
     settings.EMG_CONFIG.sourmash.results_path = str(tmp_path / "results")
-    monkeypatch.setattr("genomes.tasks.run_sourmash_gather", _fake_sourmash_run)
+    patcher.setattr("genomes.tasks.run_sourmash_gather", _fake_sourmash_run)
 
-    submit_response = ninja_api_client.post(
+    submit_response = http_tester.post(
         "/genomes-search/gather/",
         FILES={
             "file_uploaded": SimpleUploadedFile(
@@ -175,64 +181,32 @@ def test_genome_search_gather_status(ninja_api_client, settings, monkeypatch, tm
         data=_make_request_payload(),
     )
     body = submit_response.json()["data"]
-    child_id = next(iter(body["children_ids"].values()))
 
-    response = ninja_api_client.get(f"/genomes-search/status/{body['job_id']}/")
+    response = http_tester.get(f"/genomes-search/status/{body['job_id']}/")
 
     assert response.status_code == 200, response.text
     status_body = response.json()["data"]
     assert status_body["group_id"] == body["job_id"]
-    assert status_body["status"] == SourmashSearchJob.Status.SUCCESS
+    assert status_body["status"] == "SUCCESS"
     assert status_body["worker_status"] == "UNKNOWN"
-    assert status_body["signatures"][0]["job_id"] == child_id
-    assert (
-        status_body["signatures"][0]["status"] == SourmashSearchJobItem.Status.SUCCESS
-    )
+    assert status_body["signatures"][0]["job_id"] == body["job_id"]
+    assert status_body["signatures"][0]["status"] == "SUCCESS"
     assert status_body["signatures"][0]["catalogue"] == "human-gut-v2-0"
     assert status_body["signatures"][0]["results_url"].endswith(
-        f"/genomes-search/results/{child_id}/"
+        f"/genomes-search/results/{body['job_id']}/"
     )
 
 
 @pytest.mark.django_db
 def test_genome_search_gather_results_csv(
-    ninja_api_client, settings, monkeypatch, tmp_path
+    http_tester, settings, patcher, tmp_path, make_search_index
 ):
-    _make_search_index()
+    make_search_index()
     settings.EMG_CONFIG.sourmash.queries_path = str(tmp_path / "queries")
     settings.EMG_CONFIG.sourmash.results_path = str(tmp_path / "results")
-    monkeypatch.setattr("genomes.tasks.run_sourmash_gather", _fake_sourmash_run)
+    patcher.setattr("genomes.tasks.run_sourmash_gather", _fake_sourmash_run)
 
-    submit_response = ninja_api_client.post(
-        "/genomes-search/gather/",
-        FILES={
-            "file_uploaded": SimpleUploadedFile(
-                "query.sig",
-                b'{"molecule": "dna"}',
-                content_type="application/json",
-            )
-        },
-        data=_make_request_payload(),
-    )
-    child_id = next(iter(submit_response.json()["data"]["children_ids"].values()))
-
-    response = ninja_api_client.get(f"/genomes-search/results/{child_id}/")
-
-    assert response.status_code == 200, response.text
-    assert response.headers["Content-Type"].startswith("text/csv")
-    assert "intersect_bp" in response.content.decode("utf-8")
-
-
-@pytest.mark.skip(reason="temporarily flaky")
-def test_genome_search_gather_results_archive(
-    ninja_api_client, settings, monkeypatch, tmp_path
-):
-    _make_search_index()
-    settings.EMG_CONFIG.sourmash.queries_path = str(tmp_path / "queries")
-    settings.EMG_CONFIG.sourmash.results_path = str(tmp_path / "results")
-    monkeypatch.setattr("genomes.tasks.run_sourmash_gather", _fake_sourmash_run)
-
-    submit_response = ninja_api_client.post(
+    submit_response = http_tester.post(
         "/genomes-search/gather/",
         FILES={
             "file_uploaded": SimpleUploadedFile(
@@ -244,24 +218,38 @@ def test_genome_search_gather_results_archive(
         data=_make_request_payload(),
     )
     job_id = submit_response.json()["data"]["job_id"]
-    child_id = next(iter(submit_response.json()["data"]["children_ids"].values()))
 
-    for _ in range(20):
-        status_response = ninja_api_client.get(f"/genomes-search/status/{job_id}/")
-        assert status_response.status_code == 200, status_response.text
-        status_body = status_response.json()["data"]
-        if status_body["signatures"][0]["job_id"] == child_id and (
-            status_body["signatures"][0]["status"]
-            == SourmashSearchJobItem.Status.SUCCESS
-        ):
-            break
-        time.sleep(0.05)
-    else:
-        pytest.fail(
-            "Timed out waiting for gather item results before requesting archive"
-        )
+    response = http_tester.get(f"/genomes-search/results/{job_id}/")
 
-    response = ninja_api_client.get(f"/genomes-search/results/{job_id}/")
+    assert response.status_code == 200, response.text
+    assert response.headers["Content-Type"].startswith("text/csv")
+    assert "intersect_bp" in response.content.decode("utf-8")
+
+
+@pytest.mark.django_db
+def test_genome_search_gather_results_archive(
+    http_tester, settings, patcher, tmp_path, make_search_index
+):
+    make_search_index("human-gut-v2-0")
+    make_search_index("marine-v2-0")
+    settings.EMG_CONFIG.sourmash.queries_path = str(tmp_path / "queries")
+    settings.EMG_CONFIG.sourmash.results_path = str(tmp_path / "results")
+    patcher.setattr("genomes.tasks.run_sourmash_gather", _fake_sourmash_run)
+
+    submit_response = http_tester.post(
+        "/genomes-search/gather/",
+        FILES={
+            "file_uploaded": SimpleUploadedFile(
+                "query.sig",
+                b'{"molecule": "dna"}',
+                content_type="application/json",
+            )
+        },
+        data=_make_request_payload("human-gut-v2-0", "marine-v2-0"),
+    )
+    job_id = submit_response.json()["data"]["job_id"]
+
+    response = http_tester.get(f"/genomes-search/results/{job_id}/")
 
     assert response.status_code == 200, response.text
     assert response.headers["Content-Type"].startswith("application/gzip")

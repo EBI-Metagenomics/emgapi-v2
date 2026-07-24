@@ -20,7 +20,7 @@ RUN apt -y update && \
         python3-wheel
 
 WORKDIR /app
-COPY requirements-common.txt requirements.txt requirements-sourmash-worker.txt .
+COPY requirements.txt requirements-common.txt ./
 RUN python -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 RUN pip install --upgrade pip setuptools wheel
@@ -39,7 +39,7 @@ RUN apt-get update && \
         tzdata && \
     rm -rf /var/lib/apt/lists/*
 WORKDIR /app
-COPY requirements-common.txt requirements-sourmash-worker.txt .
+COPY requirements-common.txt requirements-sourmash-worker.txt ./
 RUN python -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 RUN pip install --upgrade pip setuptools wheel
@@ -48,7 +48,7 @@ FROM sourmash_os_base AS sourmash_base
 RUN pip install --use-pep517 --upgrade -r requirements-sourmash-worker.txt
 RUN pip --no-input uninstall pydantic; pip --no-input install pydantic==2.10.6
 RUN pip install --upgrade --force-reinstall "setuptools<81"
-RUN python -c "import pkg_resources; import sourmash"
+RUN python -c "from importlib.metadata import version; print(version('sourmash'))"
 
 FROM web_base AS django
 COPY requirements* .
