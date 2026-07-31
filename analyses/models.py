@@ -37,6 +37,7 @@ from analyses.base_models.with_experiment_type_models import WithExperimentTypeM
 from analyses.base_models.with_status_models import SelectByStatusManagerMixin
 from analyses.base_models.with_watchers_models import WithWatchersModel
 from emgapiv2.enum_utils import DjangoChoicesCompatibleStrEnum, FutureStrEnum
+from emgapiv2.model_manager_mixins import SuppressionFilterManagerMixin
 from emgapiv2.model_utils import JSONFieldWithSchema
 from workflows.ena_utils.ena_accession_matching import (
     ENA_ASSEMBLY_ACCESSION_REGEX,
@@ -116,6 +117,9 @@ class StudyManager(ENADerivedManager):
         return study
 
 
+class NotSuppressedStudyManager(SuppressionFilterManagerMixin, StudyManager): ...
+
+
 class PublicStudyManager(PrivacyFilterManagerMixin, StudyManager):
     """
     A custom manager that filters out private studies by default.
@@ -132,6 +136,7 @@ class Study(
     WithWatchersModel,
 ):
     objects: ClassVar[ENADerivedManager[Study]] = StudyManager()
+    objects_not_suppressed = NotSuppressedStudyManager()
     public_objects = PublicStudyManager()
 
     PREFERRED_ENA_ACCESSION_REGEX = INSDC_STUDY_ACCESSION_REGEX
@@ -214,6 +219,9 @@ class Study(
         ]
 
 
+class NotSuppressedSampleManager(SuppressionFilterManagerMixin, ENADerivedManager): ...
+
+
 class PublicSampleManager(PrivacyFilterManagerMixin, ENADerivedManager):
     """
     Manager for public samples, i.e. those not marked as private / pre-publication in ENA.
@@ -232,6 +240,7 @@ class Sample(InferredMetadataMixin, ENADerivedModel, TimeStampedModel):
     CommonMetadataKeys = ENASampleFields
 
     objects: ClassVar[ENADerivedManager[Sample]] = ENADerivedManager()
+    objects_not_suppressed = NotSuppressedSampleManager()
     public_objects = PublicSampleManager()
 
     id = models.AutoField(primary_key=True)
@@ -334,6 +343,9 @@ class SampleRelatedSample(models.Model):
         return f"{self.pk}: {self.declaring_sample} is {self.relation_type} {self.related_sample}"
 
 
+class NotSuppressedRunManager(SuppressionFilterManagerMixin, ENADerivedManager): ...
+
+
 class PublicRunManager(PrivacyFilterManagerMixin, models.Manager): ...
 
 
@@ -357,6 +369,7 @@ class Run(
         ION_TORRENT = "ION_TORRENT"
 
     objects: ClassVar[ENADerivedManager[Run]] = ENADerivedManager()
+    objects_not_suppressed = NotSuppressedRunManager()
     public_objects = PublicRunManager()
 
     id = models.AutoField(primary_key=True)
@@ -533,11 +546,15 @@ class AssemblyManager(SelectByStatusManagerMixin, ENADerivedManager):
             )
 
 
+class NotSuppressedAssemblyManager(SuppressionFilterManagerMixin, AssemblyManager): ...
+
+
 class PublicAssemblyManager(PrivacyFilterManagerMixin, AssemblyManager): ...
 
 
 class Assembly(InferredMetadataMixin, TimeStampedModel, ENADerivedModel):
     objects: ClassVar[ENADerivedManager[Assembly]] = AssemblyManager()
+    objects_not_suppressed = NotSuppressedAssemblyManager()
     public_objects = PublicAssemblyManager()
 
     PREFERRED_ENA_ACCESSION_REGEX = ENA_ASSEMBLY_ACCESSION_REGEX
@@ -830,6 +847,16 @@ class AnalysisManagerIncludingAnnotations(SelectByStatusManagerMixin, models.Man
         return super().get_queryset()
 
 
+class NotSuppressedAnalysisManager(
+    SuppressionFilterManagerMixin, AnalysisManagerDeferringAnnotations
+): ...
+
+
+class NotSuppressedAnalysisManagerIncludingAnnotations(
+    SuppressionFilterManagerMixin, AnalysisManagerIncludingAnnotations
+): ...
+
+
 class PublicAnalysisManager(
     PrivacyFilterManagerMixin, AnalysisManagerDeferringAnnotations
 ):
@@ -859,7 +886,8 @@ class Analysis(
     WithExperimentTypeModel,
 ):
     objects = AnalysisManagerDeferringAnnotations()
-    objects_and_annotations = AnalysisManagerIncludingAnnotations()
+    objects_not_suppressed = NotSuppressedAnalysisManager()
+    objects_and_annotations = NotSuppressedAnalysisManagerIncludingAnnotations()
 
     public_objects = PublicAnalysisManager()
     public_objects_and_annotations = PublicAnalysisManagerIncludingAnnotations()
@@ -1117,8 +1145,10 @@ def on_study_saved_update_analyses_suppression_states(
     This means there is no current way to suppress one analysis of a study, only entire studies.
     This is how ENA's documentation suggests suppression should work.
     """
-    analyses_to_update_suppression_of = instance.analyses.exclude(
-        is_suppressed=instance.is_suppressed
+    analyses_to_update_suppression_of = (
+        Analysis.objects.filter(study=instance)
+        .exclude(is_suppressed=instance.is_suppressed)
+        .only("pk", "accession", "is_suppressed")
     )
     for analysis in analyses_to_update_suppression_of:
         logger.info(

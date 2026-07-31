@@ -97,7 +97,7 @@ class StudyController(UnauthorisedIsUnfoundController):
     )
     def get_mgnify_study(self, accession: str):
         return self.get_object_or_exception(
-            analyses.models.Study.objects, accession=accession
+            analyses.models.Study.objects_not_suppressed, accession=accession
         )
 
     @http_get(
@@ -144,9 +144,12 @@ class StudyController(UnauthorisedIsUnfoundController):
     )
     @paginate()
     def list_mgnify_study_analyses(self, accession: str):
-        return self.get_object_or_exception(
-            analyses.models.Study.objects, accession=accession
-        ).analyses.filter(is_ready=True)
+        study = self.get_object_or_exception(
+            analyses.models.Study.objects_not_suppressed, accession=accession
+        )
+        return analyses.models.Analysis.objects_not_suppressed.filter(
+            study=study, is_ready=True
+        )
 
     @http_get(
         "/{accession}/publications/",
@@ -173,7 +176,7 @@ class StudyController(UnauthorisedIsUnfoundController):
     @paginate()
     def list_mgnify_study_publications(self, accession: str):
         return self.get_object_or_exception(
-            analyses.models.Study.objects, accession=accession
+            analyses.models.Study.objects_not_suppressed, accession=accession
         ).publications.all()
 
     @http_get(
@@ -200,6 +203,7 @@ class StudyController(UnauthorisedIsUnfoundController):
     )
     @paginate()
     def list_mgnify_study_samples(self, accession: str):
-        return self.get_object_or_exception(
-            analyses.models.Study.objects, accession=accession
-        ).samples.all()
+        study = self.get_object_or_exception(
+            analyses.models.Study.objects_not_suppressed, accession=accession
+        )
+        return analyses.models.Sample.objects_not_suppressed.filter(studies=study)

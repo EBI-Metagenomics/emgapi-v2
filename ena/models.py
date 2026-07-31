@@ -3,9 +3,11 @@ import logging
 from django.conf import settings
 from django.core.exceptions import MultipleObjectsReturned, ObjectDoesNotExist
 from django.db import models
-from django.db.models import Model, QuerySet
+from django.db.models import Model
 from django.db.models.signals import post_save
 from django.dispatch import receiver
+
+from emgapiv2.model_manager_mixins import SuppressionFilterManagerMixin
 
 # Some models that mirror ENA objects, like Study, Sample, Run etc
 
@@ -14,7 +16,6 @@ logger = logging.getLogger(__name__)
 
 
 class ENAModel(models.Model):
-
     accession = models.CharField(primary_key=True, max_length=20)
     fetched_at = models.DateTimeField(auto_now=True)
     additional_accessions = models.JSONField(default=list, blank=True)
@@ -91,6 +92,9 @@ class StudyManager(models.Manager):
             return obj, True
 
 
+class NotSuppressedStudyManager(SuppressionFilterManagerMixin, StudyManager): ...
+
+
 class Study(ENAModel):
     title = models.TextField()
 
@@ -106,6 +110,7 @@ class Study(ENAModel):
         verbose_name_plural = "studies"
 
     objects: StudyManager = StudyManager()
+    objects_not_suppressed: NotSuppressedStudyManager = NotSuppressedStudyManager()
 
     def __str__(self):
         return self.accession
@@ -148,35 +153,24 @@ def on_ena_study_saved_update_derived_suppression_and_privacy_states(
                         #  we want to avoid circular imports, and because Analysis works slightly differently
                         #  but is caught by this.
 
-                        related_qs: QuerySet = related_model.objects.get_queryset()
-
-                        related_objects_to_update_status_of = related_qs.filter(
-                            ena_study=instance
-                        ).exclude(
-                            **{
-                                field_to_propagate: getattr(
-                                    instance, field_to_propagate
-                                )
-                            }  # optimisation so only select derived objects that are not already up to date
+                        # `objects` is intentionally unfiltered. Visibility-aware
+                        # reads use `objects_not_suppressed` or `public_objects`.
+                        value_to_propagate = getattr(instance, field_to_propagate)
+                        related_objects_to_update_status_of = (
+                            related_model.objects.filter(ena_study=instance).exclude(
+                                **{field_to_propagate: value_to_propagate}
+                            )
                         )
-                        if related_objects_to_update_status_of.exists():
+                        updated_count = related_objects_to_update_status_of.update(
+                            **{field_to_propagate: value_to_propagate}
+                        )
+                        if updated_count:
                             logger.info(
                                 f"Will update {field_to_propagate} state of "
-                                f"{related_objects_to_update_status_of.count()} "
+                                f"{updated_count} "
                                 f"{related_model._meta.app_label}.{related_model._meta.verbose_name_plural} "
-                                f"to {field_to_propagate}={getattr(instance, field_to_propagate)} "
+                                f"to {field_to_propagate}={value_to_propagate} "
                                 f"via {instance.accession}."
-                            )
-                            for related_object in related_objects_to_update_status_of:
-                                setattr(
-                                    related_object,
-                                    field_to_propagate,
-                                    getattr(instance, field_to_propagate),
-                                )
-
-                            related_qs.bulk_update(
-                                related_objects_to_update_status_of,
-                                [field_to_propagate],
                             )
 
 
