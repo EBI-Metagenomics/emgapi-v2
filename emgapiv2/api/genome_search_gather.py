@@ -8,7 +8,6 @@ from typing import Any, Dict, List, Optional
 
 from django.conf import settings
 from django.core.cache import cache
-from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db.models import Case, IntegerField, When
 from django.http import FileResponse, Http404
 from ninja import Schema
@@ -73,64 +72,8 @@ class SourmashGatherStatusOut(Schema):
     data: SourmashGatherStatusData
 
 
-def _api_path(path_suffix: str) -> str:
-    return f"/{settings.BASE_URL}{path_suffix.lstrip('/')}"
-
-
-def _absolute_api_url(request, path_suffix: str) -> str:
-    return request.build_absolute_uri(_api_path(path_suffix))
-
-
 def _is_signature_valid(signature: Dict[str, Any]) -> bool:
     return signature.get("molecule", "").lower() == "dna"
-
-
-def _normalize_form_list(values: List[Any]) -> List[str]:
-    normalized: List[str] = []
-    for value in values:
-        if isinstance(value, (list, tuple, set)):
-            normalized.extend(str(item) for item in value if item not in (None, ""))
-            continue
-        if value not in (None, ""):
-            normalized.append(str(value))
-    return normalized
-
-
-def _coerce_uploaded_file(uploaded_file: Any):
-    if hasattr(uploaded_file, "chunks") and hasattr(uploaded_file, "name"):
-        return uploaded_file
-
-    if isinstance(uploaded_file, tuple) and len(uploaded_file) >= 2:
-        filename = str(uploaded_file[0])
-        payload = uploaded_file[1]
-        content_type = (
-            str(uploaded_file[2])
-            if len(uploaded_file) >= 3
-            else "application/octet-stream"
-        )
-        if hasattr(payload, "seek"):
-            payload.seek(0)
-        content = payload.read() if hasattr(payload, "read") else payload
-        if isinstance(content, str):
-            content = content.encode("utf-8")
-        return SimpleUploadedFile(filename, content, content_type=content_type)
-
-    raise TypeError("Unsupported uploaded file payload")
-
-
-def _get_uploaded_files(request) -> List[Any]:
-    files = getattr(request, "FILES", None)
-    if not files:
-        return []
-    if hasattr(files, "getlist"):
-        return [_coerce_uploaded_file(f) for f in files.getlist("file_uploaded")]
-
-    uploaded = files.get("file_uploaded")
-    if uploaded is None:
-        return []
-    if isinstance(uploaded, list):
-        return [_coerce_uploaded_file(f) for f in uploaded]
-    return [_coerce_uploaded_file(uploaded)]
 
 
 def _validate_sourmash_signature(json_str: str) -> None:
@@ -292,8 +235,9 @@ def _get_sourmash_job_status(
             if item.get("reason"):
                 signature["reason"] = item["reason"]
             if item.get("raw_csv_path") and Path(item["raw_csv_path"]).exists():
-                signature["results_url"] = _absolute_api_url(
-                    request, f"genomes-search/results/{job_id}/"
+                signature["results_url"] = (
+                    f"{EMG_CONFIG.service_urls.app_root.rstrip('/')}/"
+                    f"{settings.BASE_URL}genomes-search/results/{job_id}/"
                 )
                 has_results = True
             signatures.append(SourmashGatherSignatureStatus(**signature))
@@ -315,7 +259,8 @@ def _get_sourmash_job_status(
         status=status,
         signatures=signatures,
         results_url=(
-            _absolute_api_url(request, f"genomes-search/results/{job_id}/")
+            f"{EMG_CONFIG.service_urls.app_root.rstrip('/')}/"
+            f"{settings.BASE_URL}genomes-search/results/{job_id}/"
             if has_results
             else None
         ),
@@ -388,9 +333,6 @@ class GenomeSearchGatherController:
         operation_id="genome_search_gather_submit",
     )
     def submit_gather(self, request):
-        # mag_catalogues = set(
-        #     _normalize_form_list(request.POST.getlist("mag_catalogues"))
-        # )
         mag_catalogues = set(request.POST.getlist("mag_catalogues"))
         if not mag_catalogues:
             raise HttpError(
@@ -415,7 +357,7 @@ class GenomeSearchGatherController:
             )
 
         search_indexes = _get_active_sourmash_indexes(mag_catalogues)
-        uploaded_files = _get_uploaded_files(request)
+        uploaded_files = request.FILES.getlist("file_uploaded")
         if not uploaded_files:
             raise HttpError(400, "At least one file_uploaded entry must be provided.")
 
@@ -479,8 +421,9 @@ class GenomeSearchGatherController:
                 children_ids={},
                 signatures_received=signature_names,
                 requested_catalogues=requested_catalogues,
-                status_url=_absolute_api_url(
-                    request, f"genomes-search/status/{task_result.id}/"
+                status_url=(
+                    f"{EMG_CONFIG.service_urls.app_root.rstrip('/')}/"
+                    f"{settings.BASE_URL}genomes-search/status/{task_result.id}/"
                 ),
             )
         )

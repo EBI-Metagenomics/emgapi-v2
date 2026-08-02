@@ -294,6 +294,7 @@ class SourmashConfig(BaseModel):
     results_path: str = "/tmp/sourmash/results"
     index_root: str = "/app/data/sourmash/indexes"
     default_ksize: int = 31
+    default_scaled: int = 1000
     result_retention_days: int = 30
     name_map_path: str = ""
 

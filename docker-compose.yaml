@@ -136,6 +136,8 @@ services:
     depends_on:
       httpbin:
         condition: service_started
+      app-database:
+        condition: service_healthy
     ports:
       - "8000:8000"
     networks: [emg]
@@ -165,7 +167,7 @@ services:
       - "./slurm-dev-environment/fs/nfs/public:/app/data"
     depends_on:
       app-database:
-        condition: service_started
+        condition: service_healthy
     networks: [emg]
 
   transfer-services:

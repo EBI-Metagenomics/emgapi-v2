@@ -2,6 +2,7 @@ from pathlib import Path
 from unittest.mock import Mock, patch
 
 import pytest
+from django.conf import settings
 from django.core.management import call_command
 from django.utils import timezone
 
@@ -40,7 +41,7 @@ def seed_dev_searchable_sourmash_catalogue(top_level_biomes):
             "status": GenomeSearchIndex.Status.ACTIVE,
             "is_active": True,
             "artifact_path": DEV_SOURMASH_ARTIFACT_PATH,
-            "scaled": 1000,
+            "scaled": settings.EMG_CONFIG.sourmash.default_scaled,
             "genome_count": 1,
             "built_at": timezone.now(),
             "activated_at": timezone.now(),

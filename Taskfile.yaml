@@ -166,6 +166,11 @@ tasks:
       "reconnected" to by the restarted flow.
       This is desired behaviour.
 
+  debug_sourmash_smoke_test:
+    desc: "Run a fast smoke test of the local Django Tasks sourmash gather stack (assumes the app stack is already built and dev data exists)"
+    cmds:
+      - bash ./sourmash-local/smoke_test.sh
+
   generate-ena-util-stub:
     desc: "(Re)Generate an ena utils request stub file for a given result type of the ENA Portal API. Usage: task generate-ena-util-study -- study"
     cmds:
