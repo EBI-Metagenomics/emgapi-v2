@@ -121,9 +121,9 @@ services:
       - DATABASE_URL=postgres://postgres:postgres@app-database:5432/emg
       - PREFECT_API_URL=http://prefect-server:4200/api
       - PREFECT_UI_URL=http://localhost:4200
-      - EMG_SOURMASH__QUERIES_PATH=/app/tools/sourmash-local/data/queries
-      - EMG_SOURMASH__RESULTS_PATH=/app/tools/sourmash-local/data/results
-      - EMG_SOURMASH__INDEX_ROOT=/app/tools/sourmash-local/data/signatures
+      - EMG_SOURMASH__QUERIES_PATH=/app/sourmash-local/data/queries
+      - EMG_SOURMASH__RESULTS_PATH=/app/sourmash-local/data/results
+      - EMG_SOURMASH__INDEX_ROOT=/app/sourmash-local/data/signatures
       - EMG_WEBIN__JWT_SECRET_KEY=dummy-key
       - EMG_WEBIN__AUTH_ENDPOINT=http://httpbin/status/200
       - EMG_WEBIN__TOKEN_ENDPOINT=http://httpbin/status/200
@@ -157,9 +157,9 @@ services:
       - DATABASE_URL=postgres://postgres:postgres@app-database:5432/emg
       - PREFECT_API_URL=http://prefect-server:4200/api
       - PREFECT_UI_URL=http://localhost:4200
-      - EMG_SOURMASH__QUERIES_PATH=/app/tools/sourmash-local/data/queries
-      - EMG_SOURMASH__RESULTS_PATH=/app/tools/sourmash-local/data/results
-      - EMG_SOURMASH__INDEX_ROOT=/app/tools/sourmash-local/data/signatures
+      - EMG_SOURMASH__QUERIES_PATH=/app/sourmash-local/data/queries
+      - EMG_SOURMASH__RESULTS_PATH=/app/sourmash-local/data/results
+      - EMG_SOURMASH__INDEX_ROOT=/app/sourmash-local/data/signatures
       - PRIVATE_DATA_SECURE_LINK_SECRET_KEY=dummy-key
       - DJANGO_DEBUG=1
     volumes:

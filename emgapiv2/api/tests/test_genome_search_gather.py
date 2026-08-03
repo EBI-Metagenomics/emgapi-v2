@@ -87,6 +87,12 @@ class _FakeTaskResult:
         return None
 
 
+class _ValueErrorTaskResult(_FakeTaskResult):
+    @property
+    def return_value(self):
+        raise ValueError("result not ready yet")
+
+
 def _make_request_payload(*catalogues: str):
     qd = QueryDict(mutable=True)
     qd.setlist("mag_catalogues", list(catalogues or ["human-gut-v2-0"]))
@@ -132,6 +138,14 @@ def _make_signature_payload(
         },
         "raw_csv_path": raw_csv_path,
     }
+
+
+def _make_uploaded_text_file(filename: str, content: bytes = b"hello world"):
+    return SimpleUploadedFile(
+        filename,
+        content,
+        content_type="application/octet-stream",
+    )
 
 
 @pytest.mark.django_db
@@ -325,3 +339,80 @@ def test_genome_search_gather_results_archive(
 
     assert response.status_code == 200, response.text
     assert response.headers["Content-Type"].startswith("application/gzip")
+
+
+def test_validate_sourmash_signature_accepts_nested_signature_list():
+    from emgapiv2.api import genome_search_gather as gather_api
+
+    gather_api._validate_sourmash_signature(
+        '[{"signatures": [{"molecule": "dna"}]}, {"molecule": "dna"}]'
+    )
+
+
+def test_validate_sourmash_signature_rejects_invalid_nested_signature():
+    from emgapiv2.api import genome_search_gather as gather_api
+
+    with pytest.raises(
+        ValueError, match="One of the signatures in the uploaded file is not valid"
+    ):
+        gather_api._validate_sourmash_signature(
+            '[{"signatures": [{"molecule": "protein"}]}]'
+        )
+
+
+def test_save_signature_reuses_existing_staged_file(settings, tmp_path):
+    from emgapiv2.api import genome_search_gather as gather_api
+
+    settings.EMG_CONFIG.sourmash.queries_path = str(tmp_path / "queries")
+    uploaded_file = _make_uploaded_text_file("query.sig", b'{"molecule":"dna"}')
+
+    first_path = gather_api._save_signature(uploaded_file, "job-1")
+    second_path = gather_api._save_signature(uploaded_file, "job-1")
+
+    assert first_path == second_path
+    assert Path(first_path).read_text(encoding="utf-8") == '{"molecule":"dna"}'
+
+
+def test_parse_uuid_returns_none_for_invalid_value():
+    from emgapiv2.api import genome_search_gather as gather_api
+
+    assert gather_api._parse_uuid("not-a-uuid") is None
+
+
+@pytest.mark.parametrize(
+    ("task_result", "expected"),
+    [
+        (_FakeTaskResult({}, status="RUNNING"), "RUNNING"),
+        (_FakeTaskResult({}, status="PENDING"), "QUEUED"),
+        (_FakeTaskResult({"status": "SUCCESS"}, status="SUCCESSFUL"), "SUCCESS"),
+        (_ValueErrorTaskResult({}, status="SUCCESSFUL"), "RUNNING"),
+        (_FakeTaskResult({}, status="FAILED"), "FAILED"),
+    ],
+)
+def test_task_result_status_maps_backend_states(task_result, expected):
+    from emgapiv2.api import genome_search_gather as gather_api
+
+    assert gather_api._task_result_status(task_result) == expected
+
+
+def test_get_result_file_prefers_prebuilt_archive(settings, patcher, tmp_path):
+    from emgapiv2.api import genome_search_gather as gather_api
+
+    settings.EMG_CONFIG.sourmash.results_path = str(tmp_path / "results")
+    archive_path = tmp_path / "results" / "job-1" / "job-1.tgz"
+    archive_path.parent.mkdir(parents=True, exist_ok=True)
+    archive_path.write_bytes(b"gzip-data")
+    patcher.setattr(
+        "emgapiv2.api.genome_search_gather._get_task_result",
+        lambda _job_id: _FakeTaskResult(
+            {
+                "signatures": [],
+                "archive_path": str(archive_path),
+            }
+        ),
+    )
+
+    file_path, content_type = gather_api._get_result_file("job-1")
+
+    assert file_path == archive_path
+    assert content_type == "application/gzip"

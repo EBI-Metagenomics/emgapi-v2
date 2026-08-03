@@ -41,6 +41,9 @@ fileignoreconfig:
 - filename: analyses/tests/test_models.py
   allowed_patterns: [key]
 
+- filename: genomes/tests/test_sourmash.py
+  allowed_patterns: [monkeypatch]
+
 - filename: conftest.py
   allowed_patterns: [password="password123"]
 

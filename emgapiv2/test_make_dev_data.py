@@ -16,7 +16,7 @@ from workflows.flows.analyse_study_tasks.amplicon.import_completed_amplicon_anal
 
 DEV_SOURMASH_CATALOGUE_ID = "human-gut-prokaryotes"
 DEV_SOURMASH_ARTIFACT_PATH = (
-    "/app/tools/sourmash-local/data/signatures/human-gut-v2-0/genomes_index.sbt.json"
+    "/app/sourmash-local/data/signatures/human-gut-v2-0/genomes_index.sbt.zip"
 )
 
 

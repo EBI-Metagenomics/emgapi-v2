@@ -79,7 +79,7 @@ def run_sourmash_gather(
     name_map_path: str = "",
 ) -> dict[str, Any]:
     from sourmash.commands import SaveSignaturesToLocation
-    from sourmash.search import format_bp, gather_databases
+    from sourmash.search import GatherDatabases, format_bp
     from sourmash.sourmash_args import (
         FileOutputCSV,
         get_moltype,
@@ -134,14 +134,12 @@ def run_sourmash_gather(
     if not databases:
         raise ValueError("No sourmash databases were available to search")
 
-    prefetch_query = query.copy()
-    prefetch_query.minhash = prefetch_query.minhash.flatten()
     save_prefetch = SaveSignaturesToLocation(None)
     save_prefetch.open()
 
     counters = []
     for database in databases:
-        counter = database.counter_gather(prefetch_query, threshold_bp)
+        counter = database.counter_gather(query, threshold_bp)
         save_prefetch.add_many(counter.siglist)
         counters.append(counter)
 
@@ -150,9 +148,14 @@ def run_sourmash_gather(
 
     found = []
     first_match = None
-    gather_iter = gather_databases(query, counters, threshold_bp, ignore_abundance)
+    gather_iter = GatherDatabases(
+        query,
+        counters,
+        threshold_bp=threshold_bp,
+        ignore_abundance=ignore_abundance,
+    )
 
-    for result, _weighted_missed, _next_query in gather_iter:
+    for result in gather_iter:
         pct_query = "{:.1f}%".format(result.f_unique_weighted * 100)
         pct_genome = "{:.1f}%".format(result.f_match * 100)
         match_name = result.match.filename
@@ -181,8 +184,7 @@ def run_sourmash_gather(
             )
             writer.writeheader()
             for result in found:
-                row = dict(result._asdict())
-                row.pop("match", None)
+                row = result.gatherresultdict
                 writer.writerow(row)
 
         first_match["matches"] = len(found)
