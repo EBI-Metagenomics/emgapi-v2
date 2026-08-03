@@ -434,6 +434,35 @@ def test_status_filtering(
         == 1
     )
 
+    # The suppression-aware managers compose with status filtering while the
+    # default manager remains unfiltered for internal and admin use.
+    analysis.status[analysis.AnalysisStates.ANALYSIS_COMPLETED] = True
+    analysis.is_suppressed = True
+    analysis.save()
+    assert (
+        Analysis.objects.filter_by_statuses(
+            [analysis.AnalysisStates.ANALYSIS_COMPLETED]
+        ).count()
+        == 1
+    )
+    assert (
+        Analysis.objects_not_suppressed.filter_by_statuses(
+            [analysis.AnalysisStates.ANALYSIS_COMPLETED]
+        ).count()
+        == 0
+    )
+    assert (
+        Analysis.objects_and_annotations.filter_by_statuses(
+            [analysis.AnalysisStates.ANALYSIS_COMPLETED]
+        ).count()
+        == 0
+    )
+    deferred_fields, is_deferred = (
+        Analysis.objects_not_suppressed.get_queryset().query.deferred_loading
+    )
+    assert is_deferred
+    assert "annotations" in deferred_fields
+
 
 @pytest.mark.django_db(transaction=True)
 def test_update_or_create_by_accession(raw_reads_mgnify_study):

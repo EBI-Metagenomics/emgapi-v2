@@ -11,6 +11,7 @@ from django.core.exceptions import MultipleObjectsReturned, ObjectDoesNotExist
 from django.db import models
 
 import ena.models
+from emgapiv2.model_manager_mixins import SuppressionFilterManagerMixin
 
 
 class SelectRelatedEnaStudyManagerMixin:
@@ -235,12 +236,6 @@ class TimeStampedModel(models.Model):
 
     class Meta:
         abstract = True
-
-
-class SuppressionFilterManagerMixin:
-    def get_queryset(self):
-        qs = super().get_queryset()
-        return qs.filter(is_suppressed=False)
 
 
 class PrivacyFilterManagerMixin(SuppressionFilterManagerMixin):
