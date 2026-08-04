@@ -745,46 +745,39 @@ def get_study_accession_for_assembly(
         f"Querying ENA API for study accession of assembly {assembly_accession}"
     )
 
-    try:
-        _ = ENAAnalysisFields
-        portal_analyses = ENAAPIRequest(
-            result=ENAPortalResultType.ANALYSIS,
-            fields=[
-                _.ANALYSIS_ACCESSION,
-                _.STUDY_ACCESSION,
-                _.SECONDARY_STUDY_ACCESSION,
-            ],
-            limit=1,
-            query=ENAAnalysisQuery(analysis_accession=assembly_accession),
-            data_portals=[ENAPortalDataPortal.METAGENOME, ENAPortalDataPortal.ENA],
-        ).get()
+    _ = ENAAnalysisFields
+    portal_analyses = ENAAPIRequest(
+        result=ENAPortalResultType.ANALYSIS,
+        fields=[
+            _.ANALYSIS_ACCESSION,
+            _.STUDY_ACCESSION,
+            _.SECONDARY_STUDY_ACCESSION,
+        ],
+        limit=1,
+        query=ENAAnalysisQuery(analysis_accession=assembly_accession),
+        data_portals=[ENAPortalDataPortal.METAGENOME, ENAPortalDataPortal.ENA],
+    ).get()
 
-        if not portal_analyses:
-            raise ValueError(
-                f"Assembly accession {assembly_accession} not found in ENA Portal API"
-            )
-
-        analysis_record = portal_analyses[0]
-        study_accession = analysis_record.get(_.STUDY_ACCESSION)
-
-        if not study_accession:
-            # Try secondary study accession if primary is missing
-            study_accession = analysis_record.get(_.SECONDARY_STUDY_ACCESSION)
-            if study_accession:
-                logger.warning(
-                    f"Assembly {assembly_accession}: Using secondary study accession {study_accession}"
-                )
-
-        if not study_accession:
-            raise ValueError(
-                f"No study accession found for assembly {assembly_accession} in ENA"
-            )
-
-        logger.info(f"Assembly {assembly_accession} belongs to study {study_accession}")
-        return study_accession
-
-    except Exception as e:
-        logger.exception(f"Error querying ENA API for assembly {assembly_accession}")
+    if not portal_analyses:
         raise ValueError(
-            f"Failed to derive study accession for assembly {assembly_accession}: {e}"
+            f"Assembly accession {assembly_accession} not found in ENA Portal API"
         )
+
+    analysis_record = portal_analyses[0]
+    study_accession = analysis_record.get(_.STUDY_ACCESSION)
+
+    if not study_accession:
+        # Try secondary study accession if primary is missing
+        study_accession = analysis_record.get(_.SECONDARY_STUDY_ACCESSION)
+        if study_accession:
+            logger.warning(
+                f"Assembly {assembly_accession}: Using secondary study accession {study_accession}"
+            )
+
+    if not study_accession:
+        raise ValueError(
+            f"No study accession found for assembly {assembly_accession} in ENA"
+        )
+
+    logger.info(f"Assembly {assembly_accession} belongs to study {study_accession}")
+    return study_accession
