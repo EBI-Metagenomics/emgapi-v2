@@ -456,14 +456,16 @@ def import_out_of_production_analysis_results(
         validation_only=True,
     )
 
-    # Only import if validation passed for at least one analysis
+    # Only import analyses that passed validation
     successful_validations = [r for r in validation_results if r.success]
     if successful_validations:
+        validated_analysis_ids = {r.analysis_id for r in successful_validations}
+        validated_analyses = [a for a in analyses if a.id in validated_analysis_ids]
         logger.info(
-            f"Importing {len(successful_validations)} validated {pipeline_type} analyses..."
+            f"Importing {len(validated_analyses)} validated {pipeline_type} analyses..."
         )
         import_results = assembly_analysis_results_importer(
-            analyses, schema, base_path, pipeline_type, validation_only=False
+            validated_analyses, schema, base_path, pipeline_type, validation_only=False
         )
         # Process import results (should all succeed since validation passed)
         mark_analyses_with_failed_status(
