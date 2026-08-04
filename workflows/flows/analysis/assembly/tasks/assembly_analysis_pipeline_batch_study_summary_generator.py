@@ -83,26 +83,10 @@ def generate_assembly_analysis_pipeline_batch_summary(
 
     # ASA workspace contains the analysis results
     asa_workspace = assembly_batch.get_pipeline_workspace(AssemblyAnalysisPipeline.ASA)
-    assemblies_csv = asa_workspace / "analysed_assemblies.csv"
-    logger.info(f"Expecting to find analysis results in {asa_workspace}")
 
-    # Ensure the study has a canonical results_dir to write summaries to.
-    study.set_results_dir_default()
-
-    pipeline_config = EMG_CONFIG.assembly_analysis_pipeline
-    summary_dir = Directory(
-        path=(
-            study.results_dir_path
-            / f"{pipeline_config.pipeline_name}_{pipeline_config.pipeline_version}"
-            / "summaries"
-        ),
-    )
-    summary_dir.path.mkdir(parents=True, exist_ok=True)
-
-    return _run_assembly_summary_generator(
-        output_dir=summary_dir.path,
+    return generate_assembly_analysis_pipeline_summary(
+        study=study,
         asa_workspace=asa_workspace,
-        assemblies_csv=assemblies_csv,
         output_prefix=str(assembly_batch.id),
     )
 
@@ -111,28 +95,32 @@ def generate_assembly_analysis_pipeline_batch_summary(
 def generate_assembly_analysis_pipeline_summary(
     study: Study,
     asa_workspace: Path,
+    output_prefix: Union[str, None] = None,
 ) -> Union[List[Path], None]:
     """
-    Generate a study summary file for assembly analysis results (no batch context).
+    Generate a study summary file for assembly analysis results.
 
     The study summaries are written to the study.results_dir.
 
     :param study: The Study object to summarize annotation results for.
     :param asa_workspace: Directory containing the ASA end-of-run reports
         (``analysed_assemblies.csv``) to summarise.
+    :param output_prefix: Prefix for the generated summary file names.
+        Defaults to the study's first accession. Batch summary runs
+        override this with their own identifier, because each batch
+        only produces a partial summary that is merged with others later.
     :return: List of paths to the study summary files generated
     """
 
     logger = get_run_logger()
 
     logger.info(f"Generating assembly summary for {study.id}")
+    logger.info(f"Expecting to find analysis results in {asa_workspace}")
 
     # Ensure the study has a canonical results_dir to write summaries to.
     study.set_results_dir_default()
 
     assemblies_csv = asa_workspace / "analysed_assemblies.csv"
-
-    logger.info(f"Expecting to find analysis results in {asa_workspace}")
 
     pipeline_config = EMG_CONFIG.assembly_analysis_pipeline
     summary_dir = Directory(
@@ -148,5 +136,5 @@ def generate_assembly_analysis_pipeline_summary(
         output_dir=summary_dir.path,
         asa_workspace=asa_workspace,
         assemblies_csv=assemblies_csv,
-        output_prefix=study.first_accession,
+        output_prefix=output_prefix or study.first_accession,
     )
