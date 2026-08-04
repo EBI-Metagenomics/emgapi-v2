@@ -169,7 +169,7 @@ def assembly_analysis_results_importer(
             else:
                 # Validate and import
                 logger.info(
-                    f"Validating and importing results into the DB the downloads for {analysis} using schema {schema}"
+                    f"Validating and importing downloads into the DB for {analysis} using schema {schema}"
                 )
                 importer = AssemblyResultImporter(analysis)
 
