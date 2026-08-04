@@ -5,6 +5,7 @@ from functools import reduce
 from typing import List, Literal, Optional, Type, Union
 
 from django.conf import settings
+from django.db import transaction
 from httpx import Auth
 from prefect import flow, get_run_logger, task
 from prefect.tasks import task_input_hash
@@ -477,9 +478,115 @@ def is_ena_study_available_privately(accession: str):
 # TODO: is_ena_study_available_to_webin_account()
 
 
+@task(
+    task_run_name="Get ENA sample accessions for {study_accessions}",
+    retries=RETRIES,
+    retry_delay_seconds=RETRY_DELAY,
+)
+def get_available_study_sample_accessions(study_accessions: list[str]) -> set[str]:
+    sample_fields = [
+        ENASampleFields.SAMPLE_ACCESSION,
+        ENASampleFields.SECONDARY_SAMPLE_ACCESSION,
+    ]
+    samples = ENAAPIRequest(
+        result=ENAPortalResultType.SAMPLE,
+        query=reduce(
+            operator.or_,
+            [
+                ENASampleQuery(study_accession=accession)
+                for accession in study_accessions
+            ],
+        ),
+        fields=sample_fields,
+    ).get(auth=dcc_auth, raise_on_empty=False)
+    return {
+        accession
+        for sample in samples
+        for accession in (
+            sample[ENASampleFields.SAMPLE_ACCESSION],
+            sample.get(ENASampleFields.SECONDARY_SAMPLE_ACCESSION),
+        )
+        if accession
+    }
+
+
+@task(
+    task_run_name="Get ENA run accessions for {study_accessions}",
+    retries=RETRIES,
+    retry_delay_seconds=RETRY_DELAY,
+)
+def get_available_study_run_accessions(study_accessions: list[str]) -> set[str]:
+    runs = ENAAPIRequest(
+        result=ENAPortalResultType.READ_RUN,
+        query=reduce(
+            operator.or_,
+            [
+                ENAReadRunQuery(study_accession=accession)
+                | ENAReadRunQuery(secondary_study_accession=accession)
+                for accession in study_accessions
+            ],
+        ),
+        fields=[ENAReadRunFields.RUN_ACCESSION],
+    ).get(auth=dcc_auth, raise_on_empty=False)
+    return {run[ENAReadRunFields.RUN_ACCESSION] for run in runs}
+
+
+@task(
+    task_run_name="Get ENA assembly accessions for {study_accessions}",
+    retries=RETRIES,
+    retry_delay_seconds=RETRY_DELAY,
+)
+def get_available_study_assembly_accessions(study_accessions: list[str]) -> set[str]:
+    assemblies = ENAAPIRequest(
+        result=ENAPortalResultType.ANALYSIS,
+        query=reduce(
+            operator.or_,
+            [
+                ENAAnalysisQuery(study_accession=accession)
+                | ENAAnalysisQuery(secondary_study_accession=accession)
+                for accession in study_accessions
+            ],
+        ),
+        fields=[ENAAnalysisFields.ANALYSIS_ACCESSION],
+    ).get(auth=dcc_auth, raise_on_empty=False)
+    return {assembly[ENAAnalysisFields.ANALYSIS_ACCESSION] for assembly in assemblies}
+
+
+def sync_study_child_suppression_from_ena(
+    ena_study: ena.models.Study, available: dict[str, set[str]]
+) -> None:
+    """Reconcile direct ENA suppression before applying inherited suppression."""
+    # Reconcile leaves first so later parent updates can re-suppress descendants.
+    for model, name in (
+        (analyses.models.Assembly, "assemblies"),
+        (analyses.models.Run, "runs"),
+        (analyses.models.Sample, "samples"),
+    ):
+        children = (
+            model.objects.filter(ena_study=ena_study)
+            .select_related(None)
+            .prefetch_related(None)
+            .only("pk", "ena_accessions", "is_suppressed")
+        )
+        for child in children:
+            known_accessions = {
+                accession
+                for accession in child.ena_accessions
+                if accession
+                and child.PREFERRED_ENA_ACCESSION_REGEX.fullmatch(accession)
+            }
+            if not known_accessions:
+                continue
+            is_suppressed = known_accessions.isdisjoint(available[name])
+            if child.is_suppressed != is_suppressed:
+                child.is_suppressed = is_suppressed
+                child.save(update_fields=["is_suppressed"])
+
+
 @flow
 def sync_privacy_state_of_ena_study_and_derived_objects(
     ena_study: Union[ena.models.Study, str],
+    also_check_suppressed_children: bool = False,
 ):
     logger = get_run_logger()
 
@@ -504,10 +611,25 @@ def sync_privacy_state_of_ena_study_and_derived_objects(
         logger.warning(
             f"ENA Study {ena_study} is not available via portal API, either publicly or privately. Assuming it has been suppressed."
         )
-        ena_study.is_suppressed = True
-    else:
-        ena_study.is_private = private or False  # null private -> false
-    ena_study.save()
+
+    available = {}
+    if also_check_suppressed_children and not suppressed:
+        study_accessions = [ena_study.accession] + (
+            ena_study.additional_accessions or []
+        )
+        available = {
+            "samples": get_available_study_sample_accessions(study_accessions),
+            "runs": get_available_study_run_accessions(study_accessions),
+            "assemblies": get_available_study_assembly_accessions(study_accessions),
+        }
+
+    ena_study.is_suppressed = suppressed
+    ena_study.is_private = private or False  # null private -> false
+    with transaction.atomic():
+        # Reset derived objects to the study state before reapplying child suppression.
+        ena_study.save()
+        if available:
+            sync_study_child_suppression_from_ena(ena_study, available)
 
 
 @task(
