@@ -110,13 +110,16 @@ def generate_assembly_analysis_pipeline_batch_summary(
 @task
 def generate_assembly_analysis_pipeline_summary(
     study: Study,
+    asa_workspace: Path,
 ) -> Union[List[Path], None]:
     """
     Generate a study summary file for assembly analysis results (no batch context).
 
     The study summaries are written to the study.results_dir.
 
-    :param study: The Study object to summarize annotation results for. Must have results_dir attribute set.
+    :param study: The Study object to summarize annotation results for.
+    :param asa_workspace: Directory containing the ASA end-of-run reports
+        (``analysed_assemblies.csv``) to summarise.
     :return: List of paths to the study summary files generated
     """
 
@@ -124,13 +127,9 @@ def generate_assembly_analysis_pipeline_summary(
 
     logger.info(f"Generating assembly summary for {study.id}")
 
-    if not study.results_dir_path:
-        raise ValueError(
-            f"Study {study.accession} does not have results_dir set, "
-            "cannot generate assembly analysis summary."
-        )
+    # Ensure the study has a canonical results_dir to write summaries to.
+    study.set_results_dir_default()
 
-    asa_workspace = study.results_dir_path / "asa"
     assemblies_csv = asa_workspace / "analysed_assemblies.csv"
 
     logger.info(f"Expecting to find analysis results in {asa_workspace}")

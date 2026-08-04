@@ -147,11 +147,6 @@ def import_out_of_production_assembly_analysis_results(
     # Run this function to fetch related runs/samples for this study and save them in the DB
     get_study_assemblies_from_ena(study_accession, limit=10000)
 
-    # Set results_dir to the provided external path
-    logger.info(f"Set results_dir to {results_path}")
-    mgnify_study.results_dir = str(results_path)
-    mgnify_study.save()
-
     # Suspend if biome is needed, or if the study is private and has no webin submitter set yet
     needs_biome = not mgnify_study.biome
     needs_webin = mgnify_study.is_private and not ena_study.webin_submitter
@@ -231,7 +226,7 @@ def import_out_of_production_assembly_analysis_results(
 
     logger.info("Setting ASA analysis states based on the end-of-execution reports...")
     set_asa_analysis_states(
-        results_path / "asa",  # may as well be mgnify_study.results_dir / "asa"
+        results_path / "asa",
         exported_analyses,
     )
 
@@ -263,6 +258,7 @@ def import_out_of_production_assembly_analysis_results(
 
     generate_assembly_analysis_pipeline_summary(
         study=mgnify_study,
+        asa_workspace=results_path / "asa",
     )
 
     add_assembly_study_summaries_to_downloads(mgnify_study.accession)
