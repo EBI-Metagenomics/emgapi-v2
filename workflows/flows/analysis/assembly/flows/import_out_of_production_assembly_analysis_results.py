@@ -5,6 +5,7 @@ from typing import List, Optional
 
 from django.conf import settings
 from prefect import flow, get_run_logger, suspend_flow_run, task
+from prefect.artifacts import create_table_artifact
 from prefect.input import RunInput
 from pydantic import Field
 
@@ -107,8 +108,15 @@ def import_out_of_production_assembly_analysis_results(
     logger.info(
         f"Extracted {len(assembly_accessions)} assembly accessions from samplesheet"
     )
-    for acc in assembly_accessions:
-        logger.info(f"  - {acc}")
+
+    create_table_artifact(
+        key="out-of-production-assembly-accessions",
+        table=[{"assembly_accession": acc} for acc in assembly_accessions],
+        description=_(f"""\
+            Assembly accessions extracted from the samplesheet at `{samplesheet_path}`,
+            for the out-of-production import from `{results_dir}`.
+            """),
+    )
 
     # =========================================================================
     # STEP 2: Validate filesystem and results structure
