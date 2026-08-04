@@ -510,7 +510,10 @@ class TestImportOutOfProductionAssemblyAnalysisResultsRealData:
             ena_study__accession__in=[assembly_test_scenario.study_accession]
         ).first()
         assert study is not None, "Study was not created in the database"
-        assert study.results_dir == str(mocked_results_dir)
+        assert study.results_dir == str(
+            Path(EMG_CONFIG.slurm.default_workdir)
+            / assembly_test_scenario.study_accession
+        )
         assert study.biome is not None, "Study biome was not set"
 
         analysis = study.analyses.filter(
