@@ -485,19 +485,11 @@ class TestImportOutOfProductionAssemblyAnalysisResultsRealData:
             "workflows.flows.analysis.assembly.flows.import_out_of_production_assembly_analysis_results.copy_v6_study_summaries"
         )
 
-        # Wish me luck...
-        try:
-            result = run_flow_and_capture_logs(
-                import_out_of_production_assembly_analysis_results,
-                results_dir=str(mocked_results_dir),
-                samplesheet_path=str(samplesheet_path),
-            )
-            print(
-                "✓ import_out_of_production_assembly_analysis_results flow completed successfully"
-            )
-        except Exception as e:
-            print(f"✗ Flow failed with error: {e}")
-            raise
+        result = run_flow_and_capture_logs(
+            import_out_of_production_assembly_analysis_results,
+            results_dir=str(mocked_results_dir),
+            samplesheet_path=str(samplesheet_path),
+        )
 
         # only to make linter happy
         mock_copy_external.assert_called_once()
