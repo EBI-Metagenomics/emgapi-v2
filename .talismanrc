@@ -146,7 +146,7 @@ fileignoreconfig:
 - filename: slurm-dev-environment/fs/nfs/public/tests/amplicon_v6_output/PRJNA398089_DADA2_SILVA_16S-V3-V4_dwcready.csv
   checksum: 64dc192bb898582c90eb5ff990f6df05ebb56f29d58d8483a10b6f49a6ca96f9
 
-- filename: slurm-dev-environment/fs/nfs/production/catalogs/ocean-prokaryotes/*/website/*/genome/*.tsv
+- filename: slurm-dev-environment/fs/nfs/production/catalogs/ocean-*/*/website/*/genome/*.tsv
   ignore_detectors: [filecontent]
 
 - filename: Taskfile.yaml

@@ -23,6 +23,9 @@ from genomes.models.genome import COG_CATEGORIES, KEGG_CLASSES
 OCEAN_CATALOGUE_FIXTURE_ROOT = (
     Path(settings.EMG_CONFIG.genomes.results_directory_root) / "ocean-prokaryotes"
 )
+OCEAN_EUK_CATALOGUE_FIXTURE_ROOT = (
+    Path(settings.EMG_CONFIG.genomes.results_directory_root) / "ocean-eukaryotes"
+)
 
 
 @pytest.fixture
@@ -48,6 +51,16 @@ def genome_catalogues(top_level_biomes):
             "catalogue_type": GenomeCatalogue.PROK,
             "biome": root_biome,
             "result_directory": "/mgnify_genomes/ocean-prokaryotes/1.0",
+        },
+        {
+            "catalogue_id": "ocean-eukaryotes",
+            "version": "1.0",
+            "name": "Ocean Eukaryotes",
+            "description": "Eukaryotic genomes from marine environments",
+            "catalogue_biome_label": "Ocean",
+            "catalogue_type": GenomeCatalogue.EUKS,
+            "biome": root_biome,
+            "result_directory": "/mgnify_genomes/ocean-eukaryotes/1.0",
         },
     ]
 
@@ -195,6 +208,29 @@ def genomes(top_level_biomes, genome_catalogues, geographic_locations):
             "catalogue": genome_catalogues[1],  # Ocean Prokaryotes
             "geographic_origin": "South Pacific Ocean",
         },
+        {
+            "accession": "MGYG000000010",
+            "ena_sample_accession": "SAMEA000000010",
+            "ena_genome_accession": "GCA_000000010.1",
+            "ena_study_accession": "ERP000010",
+            "biome": top_level_biomes[0],  # Root biome
+            "length": 84771,
+            "num_contigs": 10,
+            "num_genomes_total": 1,
+            "n_50": 10066,
+            "gc_content": 65.41,
+            "type": Genome.GenomeType.MAG,
+            "completeness": 92.4,
+            "contamination": 1.3,
+            "trnas": 18.0,
+            "nc_rnas": 4,
+            "num_proteins": 43,
+            "eggnog_coverage": 78.12,
+            "ipr_coverage": 74.33,
+            "taxon_lineage": "d__Eukaryota;p__Chlorophyta;c__Mamiellophyceae;o__Mamiellales;f__Mamiellaceae;g__Micromonas;s__Micromonas commoda",
+            "catalogue": genome_catalogues[2],  # Ocean Eukaryotes
+            "geographic_origin": "North Atlantic Ocean",
+        },
     ]
 
     genomes_objects = []
@@ -239,6 +275,9 @@ def genomes(top_level_biomes, genome_catalogues, geographic_locations):
         elif accession == "MGYG000000004":
             catalogue_genome.geographic_range = ["Oceania"]
             catalogue_genome.save()
+        elif accession == "MGYG000000010":
+            catalogue_genome.geographic_range = ["Europe", "North America"]
+            catalogue_genome.save()
 
         genomes_objects.append(genome)
 
@@ -247,32 +286,38 @@ def genomes(top_level_biomes, genome_catalogues, geographic_locations):
 
 @pytest.fixture
 def real_genome_catalogue_files(genomes, genome_catalogues):
-    """Attach downloads backed by the compact on-disk v1.0 fixture."""
-    catalogue = next(
-        catalogue
-        for catalogue in genome_catalogues
-        if catalogue.catalogue_id == "ocean-prokaryotes"
-    )
-    website = OCEAN_CATALOGUE_FIXTURE_ROOT / "v1.0/website"
-    catalogue.other_stats = read_json(website / "catalogue_summary.json")
-    catalogue.save(update_fields=["other_stats"])
-    upload_file(
-        catalogue,
-        "Phylogenetic tree of catalogue genomes",
-        "json",
-        "phylo_tree.json",
-        directory=website,
-        require_existent_and_non_empty=True,
-    )
-
+    """Attach downloads backed by the compact on-disk v1.0 fixtures."""
     entries = []
-    for accession in ("MGYG000000003", "MGYG000000004"):
-        entry = CatalogueGenome.objects.get(
-            catalogue=catalogue,
-            genome__accession=accession,
+    fixtures = (
+        (
+            "ocean-prokaryotes",
+            OCEAN_CATALOGUE_FIXTURE_ROOT,
+            ("MGYG000000003", "MGYG000000004"),
+        ),
+        ("ocean-eukaryotes", OCEAN_EUK_CATALOGUE_FIXTURE_ROOT, ("MGYG000000010",)),
+    )
+    for catalogue_id, fixture_root, accessions in fixtures:
+        catalogue = next(
+            item for item in genome_catalogues if item.catalogue_id == catalogue_id
         )
-        entry.result_directory = f"{catalogue.result_directory}/{accession}"
-        entry.save(update_fields=["result_directory"])
-        upload_genome_files(entry, website / accession, has_pangenome=False)
-        entries.append(entry)
+        website = fixture_root / "v1.0/website"
+        catalogue.other_stats = read_json(website / "catalogue_summary.json")
+        catalogue.save(update_fields=["other_stats"])
+        upload_file(
+            catalogue,
+            "Phylogenetic tree of catalogue genomes",
+            "json",
+            "phylo_tree.json",
+            directory=website,
+            require_existent_and_non_empty=True,
+        )
+        for accession in accessions:
+            entry = CatalogueGenome.objects.get(
+                catalogue=catalogue,
+                genome__accession=accession,
+            )
+            entry.result_directory = f"{catalogue.result_directory}/{accession}"
+            entry.save(update_fields=["result_directory"])
+            upload_genome_files(entry, website / accession, has_pangenome=False)
+            entries.append(entry)
     return entries

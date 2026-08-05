@@ -122,7 +122,6 @@ def test_api_study_filtering(
 
 @pytest.mark.django_db
 def test_api_analyses_list(raw_read_analyses, ninja_api_client):
-
     raw_read_analyses[1].status[
         Analysis.AnalysisStates.ANALYSIS_ANNOTATIONS_IMPORTED
     ] = True
@@ -298,7 +297,7 @@ def test_api_super_study_detail(
 @pytest.mark.django_db
 def test_api_genome_list(ninja_api_client, genomes):
     first_of_all_genomes = call_endpoint_and_get_data(
-        ninja_api_client, "/genomes/", count=4, getter=_first_item
+        ninja_api_client, "/genomes/", count=5, getter=_first_item
     )
     assert first_of_all_genomes["accession"].startswith("MGYG")
 
@@ -321,7 +320,7 @@ def test_api_genome_list(ninja_api_client, genomes):
     first_by_descending_accession = call_endpoint_and_get_data(
         ninja_api_client,
         "/genomes/?order=-accession",
-        count=4,
+        count=5,
         getter=_first_item,
     )
     assert first_by_descending_accession["accession"] == max(
@@ -351,11 +350,18 @@ def test_api_genome_real_download(ninja_api_client, real_genome_catalogue_files)
 @pytest.mark.django_db
 def test_api_genome_catalogues(ninja_api_client, genomes, genome_catalogues):
     catalogues = call_endpoint_and_get_data(
-        ninja_api_client, "/genomes/catalogues/", count=2
+        ninja_api_client, "/genomes/catalogues/", count=3
     )
-    assert catalogues[0]["catalogue_id"] in [
-        cat.catalogue_id for cat in genome_catalogues
-    ]
+    assert {catalogue["catalogue_id"] for catalogue in catalogues} == {
+        catalogue.catalogue_id for catalogue in genome_catalogues
+    }
+
+    ocean_eukaryotes = next(
+        catalogue
+        for catalogue in catalogues
+        if catalogue["catalogue_id"] == "ocean-eukaryotes"
+    )
+    assert ocean_eukaryotes["catalogue_type"] == GenomeCatalogue.EUKS
 
     cat_id = "human-gut-prokaryotes"
     catalogue = call_endpoint_and_get_data(
@@ -440,7 +446,7 @@ def test_webin_admin_can_preview_an_unpublished_catalogue(
             ninja_api_client,
             "/genomes/catalogues/",
             headers=headers,
-            count=2,
+            count=3,
         )
         assert draft_catalogue.pk not in {
             catalogue["catalogue_id"] for catalogue in public_catalogues
@@ -471,7 +477,7 @@ def test_webin_admin_can_preview_an_unpublished_catalogue(
         ninja_api_client,
         "/genomes/catalogues/",
         headers=admin_headers,
-        count=3,
+        count=4,
     )
     assert draft_catalogue.pk in {
         catalogue["catalogue_id"] for catalogue in catalogue_list
@@ -851,7 +857,6 @@ def test_runs_detail_nonexistent(ninja_api_client):
 
 @pytest.mark.django_db
 def test_runs_analyses_list(ninja_api_client, raw_read_run, raw_read_analyses):
-
     finished_analyses = list(filter(lambda a: a.is_ready, raw_read_analyses))
 
     run = raw_read_run[0]
@@ -882,7 +887,6 @@ def test_runs_analyses_private(ninja_api_client, private_run):
 
 @pytest.mark.django_db
 def test_list_sample_runs(ninja_api_client, raw_reads_mgnify_sample, raw_read_run):
-
     sample: Sample = raw_reads_mgnify_sample[0]
 
     items: list = call_endpoint_and_get_data(

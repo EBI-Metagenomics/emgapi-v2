@@ -118,11 +118,17 @@ tasks:
       - mkdir -p slurm-dev-environment/fs/nfs/ftp/public/databases/metagenomics/mgnify_results/mgnify_genomes/ocean-prokaryotes
       - cp -r slurm-dev-environment/fs/nfs/production/catalogs/ocean-prokaryotes/v1.0/website slurm-dev-environment/fs/nfs/ftp/public/databases/metagenomics/mgnify_results/mgnify_genomes/ocean-prokaryotes/1.0
       - cp -r slurm-dev-environment/fs/nfs/production/catalogs/ocean-prokaryotes/v2.0/website slurm-dev-environment/fs/nfs/ftp/public/databases/metagenomics/mgnify_results/mgnify_genomes/ocean-prokaryotes/2.0
+      - rm -fr slurm-dev-environment/fs/nfs/ftp/public/databases/metagenomics/mgnify_results/mgnify_genomes/ocean-eukaryotes
+      - mkdir -p slurm-dev-environment/fs/nfs/ftp/public/databases/metagenomics/mgnify_results/mgnify_genomes/ocean-eukaryotes
+      - cp -r slurm-dev-environment/fs/nfs/production/catalogs/ocean-eukaryotes/v1.0/website slurm-dev-environment/fs/nfs/ftp/public/databases/metagenomics/mgnify_results/mgnify_genomes/ocean-eukaryotes/1.0
       # mirror the traditional aggregate catalogue release area too
       - rm -fr slurm-dev-environment/fs/nfs/ftp/public/databases/metagenomics/mgnify_genomes/ocean-prokaryotes
       - mkdir -p slurm-dev-environment/fs/nfs/ftp/public/databases/metagenomics/mgnify_genomes/ocean-prokaryotes
       - cp -r slurm-dev-environment/fs/nfs/production/catalogs/ocean-prokaryotes/v1.0/ftp slurm-dev-environment/fs/nfs/ftp/public/databases/metagenomics/mgnify_genomes/ocean-prokaryotes/v1.0
       - cp -r slurm-dev-environment/fs/nfs/production/catalogs/ocean-prokaryotes/v2.0/ftp slurm-dev-environment/fs/nfs/ftp/public/databases/metagenomics/mgnify_genomes/ocean-prokaryotes/v2.0
+      - rm -fr slurm-dev-environment/fs/nfs/ftp/public/databases/metagenomics/mgnify_genomes/ocean-eukaryotes
+      - mkdir -p slurm-dev-environment/fs/nfs/ftp/public/databases/metagenomics/mgnify_genomes/ocean-eukaryotes
+      - cp -r slurm-dev-environment/fs/nfs/production/catalogs/ocean-eukaryotes/v1.0/ftp slurm-dev-environment/fs/nfs/ftp/public/databases/metagenomics/mgnify_genomes/ocean-eukaryotes/v1.0
       # make workdir
       - mkdir -p slurm-dev-environment/fs/nfs/production/dev-slurm-work-dir
       - chmod -R o+w slurm-dev-environment/fs

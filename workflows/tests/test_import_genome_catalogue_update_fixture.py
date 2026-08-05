@@ -11,6 +11,9 @@ from workflows.prefect_utils.testing_utils import run_flow_and_capture_logs
 CATALOGUE_FIXTURE_ROOT = (
     Path(settings.EMG_CONFIG.genomes.results_directory_root) / "ocean-prokaryotes"
 )
+OCEAN_EUK_CATALOGUE_FIXTURE_ROOT = (
+    Path(settings.EMG_CONFIG.genomes.results_directory_root) / "ocean-eukaryotes"
+)
 
 
 def import_fixture_release(version, catalogue_slug):
@@ -75,3 +78,35 @@ def test_realistic_catalogue_update_fixture(prefect_harness):
     assert set(
         CatalogueGenome.public_objects.values_list("genome__accession", flat=True)
     ) == {"MGYG000000003", "MGYG000000005"}
+
+
+@pytest.mark.django_db(transaction=True)
+def test_ocean_eukaryotes_fixture(prefect_harness):
+    Biome.objects.create(biome_name="root", path="root")
+
+    run_flow_and_capture_logs(
+        import_genomes_flow,
+        results_directory=str(OCEAN_EUK_CATALOGUE_FIXTURE_ROOT / "v1.0"),
+        catalogue_name="Ocean Eukaryotes",
+        catalogue_version="1.0",
+        gold_biome="root",
+        pipeline_version="v3.0.0",
+        catalogue_type="eukaryotes",
+        catalogue_biome_label="Ocean",
+        destination_dir_name="ocean-eukaryotes",
+        catalogue_slug="ocean-eukaryotes",
+        run_release_tasks=False,
+        release_third_party_data=False,
+    )
+
+    catalogue = GenomeCatalogue.objects.get(pk="ocean-eukaryotes")
+    assert catalogue.status == GenomeCatalogue.Status.READY
+    assert catalogue.catalogue_type == GenomeCatalogue.EUKS
+    assert catalogue.other_stats["Total proteins"] == 43
+
+    entry = catalogue.genomes.get(genome__accession="MGYG000000010")
+    assert entry.num_contigs == 10
+    assert entry.taxon_lineage.endswith("s__Micromonas commoda")
+    assert "genome/MGYG000000010.fna" in {
+        download["path"] for download in entry.downloads
+    }

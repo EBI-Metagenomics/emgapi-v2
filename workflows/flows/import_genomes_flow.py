@@ -485,12 +485,6 @@ def import_genomes_flow(
     catalogue.status = GenomeCatalogue.Status.DRAFT
     catalogue.save(update_fields=["downloads", "other_stats", "status"])
 
-    if run_release_tasks:
-        run_genome_release_tasks(
-            options,
-            run_genome_search_tasks=run_genome_search_tasks,
-        )
-
     upload_catalogue_summary(catalogue, options["catalogue_dir"])
     upload_catalogue_files(catalogue, options["catalogue_dir"])
     genome_dirs = gather_genome_dirs(
@@ -502,6 +496,12 @@ def import_genomes_flow(
         f"Processed {len(genome_dirs)} genomes in catalogue {catalogue.name}"
     )
     validate_import_summary(catalogue, expected_count=len(genome_dirs))
+
+    if run_release_tasks:
+        run_genome_release_tasks(
+            options,
+            run_genome_search_tasks=run_genome_search_tasks,
+        )
 
     if run_release_tasks and release_third_party_data:
         release_rnacentral_json(options)

@@ -60,7 +60,7 @@ def order_catalogue_genomes(qs, order):
     return order.order_by(qs)
 
 
-def catalogue_releases_visible_to(request):
+def get_catalogue_releases_visible_to(request):
     manager = (
         GenomeCatalogue.objects
         if IsWebinAdmin().has_permission(request, None)
@@ -69,7 +69,7 @@ def catalogue_releases_visible_to(request):
     return manager.select_related("series__biome")
 
 
-def catalogue_genomes_visible_to(request):
+def get_catalogue_genomes_visible_to(request):
     return (
         CatalogueGenome.objects
         if IsWebinAdmin().has_permission(request, None)
@@ -99,7 +99,7 @@ class GenomeController(UnauthorisedIsUnfoundController):
         self, request, accession: str, catalogue_id: str | None = None
     ):
         genomes = (
-            catalogue_genomes_visible_to(request)
+            get_catalogue_genomes_visible_to(request)
             if catalogue_id
             else CatalogueGenome.public_objects
         )
@@ -189,7 +189,7 @@ class GenomeController(UnauthorisedIsUnfoundController):
         self,
         request,
     ):
-        return catalogue_releases_visible_to(request)
+        return get_catalogue_releases_visible_to(request)
 
     @http_get(
         "/catalogues/{catalogue_id}",
@@ -200,7 +200,7 @@ class GenomeController(UnauthorisedIsUnfoundController):
     )
     def get_catalogue(self, request, catalogue_id: str):
         catalogue = get_object_or_404(
-            catalogue_releases_visible_to(request),
+            get_catalogue_releases_visible_to(request),
             catalogue_id=catalogue_id,
         )
         return catalogue
@@ -221,7 +221,7 @@ class GenomeController(UnauthorisedIsUnfoundController):
         filters: GenomeFilters = Query(...),
     ):
         catalogue = get_object_or_404(
-            catalogue_releases_visible_to(request),
+            get_catalogue_releases_visible_to(request),
             catalogue_id=catalogue_id,
         )
         qs = catalogue.genomes.select_related("genome", "biome", "catalogue__series")

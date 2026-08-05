@@ -115,15 +115,17 @@ class GenomeCatalogue(WithDownloadsModel, TimeStampedModel):
         return self.series.biome
 
     @classmethod
-    def publish_ready(cls, catalogue_ids):
+    def publish_ready(cls, selected_catalogue_ids):
         """Atomically publish ready releases and retire their current versions.
 
         All series rows are locked because the public uniqueness rule spans catalogue
         series. Catalogue publication is rare, and serialising it avoids two admin
         actions racing with one another.
         """
-        catalogue_ids = list(dict.fromkeys(str(pk) for pk in catalogue_ids))
-        if not catalogue_ids:
+        selected_catalogue_ids = list(
+            dict.fromkeys(str(pk) for pk in selected_catalogue_ids)
+        )
+        if not selected_catalogue_ids:
             raise ValidationError("Select at least one catalogue release to publish.")
 
         from genomes.models.catalogue_genome import CatalogueGenome
@@ -137,11 +139,11 @@ class GenomeCatalogue(WithDownloadsModel, TimeStampedModel):
             )
             releases = list(
                 cls.objects.select_for_update().filter(
-                    pk__in=catalogue_ids,
+                    pk__in=selected_catalogue_ids,
                     status=cls.Status.READY,
                 )
             )
-            if len(releases) != len(catalogue_ids):
+            if len(releases) != len(selected_catalogue_ids):
                 raise ValidationError(
                     "Every selected catalogue release must exist and be ready."
                 )
@@ -157,7 +159,7 @@ class GenomeCatalogue(WithDownloadsModel, TimeStampedModel):
                 .exclude(series_id__in=series_ids)
                 .values_list("pk", flat=True)
             )
-            proposed_public_ids = unchanged_public_ids + catalogue_ids
+            proposed_public_ids = unchanged_public_ids + selected_catalogue_ids
             conflicts = list(
                 CatalogueGenome.objects.filter(catalogue_id__in=proposed_public_ids)
                 .values("genome_id", "genome__accession")
@@ -214,14 +216,14 @@ class GenomeCatalogue(WithDownloadsModel, TimeStampedModel):
                     status=cls.Status.RETIRED,
                     retired_at=now,
                 )
-            cls.objects.filter(pk__in=catalogue_ids).update(
+            cls.objects.filter(pk__in=selected_catalogue_ids).update(
                 status=cls.Status.PUBLISHED,
                 published_at=now,
                 retired_at=None,
             )
 
         return {
-            "published": catalogue_ids,
+            "published": selected_catalogue_ids,
             "retired": retired_ids,
         }
 
