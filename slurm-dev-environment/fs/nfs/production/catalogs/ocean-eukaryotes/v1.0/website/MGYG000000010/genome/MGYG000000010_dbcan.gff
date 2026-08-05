@@ -1,0 +1,4 @@
+##gff-version 3
+MGYG000000010_2	dbCAN:4.1.4	CAZyme	2971	4958	.	-	2	ID=MGYG000000010_00006.t1.CDS1;protein_family=GT5;substrate_dbcan-sub=N/A;eC_number=2.4.1.21;num_tools=3;
+MGYG000000010_2	dbCAN:4.1.4	CAZyme	5251	5281	.	-	0	ID=MGYG000000010_00006.t1.CDS2;protein_family=GT5;substrate_dbcan-sub=N/A;eC_number=2.4.1.21;num_tools=3;
+MGYG000000010_5	dbCAN:4.1.4	CAZyme	3482	4204	.	-	0	ID=MGYG000000010_00018.t1.CDS1;protein_family=GT2;substrate_dbcan-sub=N/A;eC_number=2.4.1.83;num_tools=3;

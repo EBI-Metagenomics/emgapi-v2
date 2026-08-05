@@ -2,15 +2,51 @@ from django.contrib import admin
 from unfold.admin import ModelAdmin
 
 from analyses.admin.base import JSONFieldWidgetOverridesMixin
-from genomes.models import Genome
+from genomes.models import CatalogueGenome, Genome
 
 
 @admin.register(Genome)
-class GenomeCatalogueAdmin(JSONFieldWidgetOverridesMixin, ModelAdmin):
-    search_fields = ["accession", "catalogue_id", "taxon_lineage"]
+class GenomeAdmin(ModelAdmin):
+    search_fields = [
+        "accession",
+        "ena_genome_accession",
+        "ncbi_genome_accession",
+        "catalogue_entries__catalogue__catalogue_id",
+    ]
+    fieldsets = (
+        (None, {"fields": ["accession"]}),
+        (
+            "Accessions",
+            {
+                "fields": [
+                    "ena_genome_accession",
+                    "ena_sample_accession",
+                    "ena_study_accession",
+                    "ncbi_genome_accession",
+                    "ncbi_study_accession",
+                    "ncbi_sample_accession",
+                    "img_genome_accession",
+                    "patric_genome_accession",
+                ]
+            },
+        ),
+    )
+
+
+@admin.register(CatalogueGenome)
+class CatalogueGenomeAdmin(JSONFieldWidgetOverridesMixin, ModelAdmin):
+    search_fields = [
+        "genome__accession",
+        "catalogue__catalogue_id",
+        "taxon_lineage",
+    ]
+    list_display = ["accession", "catalogue", "catalogue_status", "type", "biome"]
+    list_filter = ["catalogue__status", "catalogue", "type"]
+    autocomplete_fields = ["genome", "catalogue", "biome"]
+    readonly_fields = ["accession"]
 
     fieldsets = (
-        (None, {"fields": ["accession", "taxon_lineage", "catalogue"]}),
+        (None, {"fields": ["accession", "genome", "catalogue", "taxon_lineage"]}),
         (
             "Metadata",
             {
@@ -25,24 +61,9 @@ class GenomeCatalogueAdmin(JSONFieldWidgetOverridesMixin, ModelAdmin):
                     "length",
                     "num_contigs",
                     "biome",
+                    "annotations",
                 ],
                 "classes": ["tab"],
-            },
-        ),
-        (
-            "Accessions",
-            {
-                "classes": ["tab"],
-                "fields": [
-                    "ena_genome_accession",
-                    "ena_sample_accession",
-                    "ena_study_accession",
-                    "ncbi_genome_accession",
-                    "ncbi_study_accession",
-                    "ncbi_sample_accession",
-                    "img_genome_accession",
-                    "patric_genome_accession",
-                ],
             },
         ),
         (
@@ -66,6 +87,8 @@ class GenomeCatalogueAdmin(JSONFieldWidgetOverridesMixin, ModelAdmin):
                     "trnas",
                     "nc_rnas",
                     "num_proteins",
+                    "eggnog_coverage",
+                    "ipr_coverage",
                 ],
             },
         ),
@@ -83,3 +106,14 @@ class GenomeCatalogueAdmin(JSONFieldWidgetOverridesMixin, ModelAdmin):
             },
         ),
     )
+
+    def get_queryset(self, request):
+        return (
+            super()
+            .get_queryset(request)
+            .select_related("genome", "catalogue", "catalogue__series", "biome")
+        )
+
+    @admin.display(description="Status", ordering="catalogue__status")
+    def catalogue_status(self, obj):
+        return obj.catalogue.get_status_display()

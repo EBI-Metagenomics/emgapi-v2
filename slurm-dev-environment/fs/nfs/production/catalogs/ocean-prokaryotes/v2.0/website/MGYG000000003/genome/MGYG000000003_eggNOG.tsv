@@ -1,0 +1,3 @@
+#query	seed_ortholog	evalue	score	eggNOG_OGs	max_annot_lvl	COG_category	Description	Preferred_name	GOs	EC	KEGG_ko	KEGG_Pathway	KEGG_Module
+MGYG000000003_00001	762903.Pedsa_0853	2.11e-55	174.0	COG2975@2|Bacteria	2|Bacteria	S	FeS assembly protein IscX	iscX	GO:0005506	-	-	-	-
+MGYG000000003_00002	1454007.JAUG01000024_gene828	0.0	912.0	COG1249@2|Bacteria	2|Bacteria	C	Dihydrolipoamide dehydrogenase	lpdA	GO:0005737	1.8.1.4	ko:K00382	ko00010	M00009

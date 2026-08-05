@@ -18,7 +18,7 @@ router = RouterPaginated(tags=[ApiSections.GENOMES])
     operation_id="list_genome_catalogues",
 )
 def list_catalogues(request):
-    return GenomeCatalogue.objects.select_related("biome")
+    return GenomeCatalogue.public_objects.select_related("series__biome")
 
 
 @router.get(
@@ -29,6 +29,7 @@ def list_catalogues(request):
 )
 def get_catalogue(request, catalogue_id: str):
     catalogue = get_object_or_404(
-        GenomeCatalogue.objects.select_related("biome"), catalogue_id=catalogue_id
+        GenomeCatalogue.public_objects.select_related("series__biome"),
+        catalogue_id=catalogue_id,
     )
     return catalogue

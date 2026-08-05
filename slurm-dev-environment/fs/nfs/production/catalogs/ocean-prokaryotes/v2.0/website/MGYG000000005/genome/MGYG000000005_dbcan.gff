@@ -1,0 +1,2 @@
+##gff-version 3
+MGYG000000005_1	dbCAN:4.1.4	gene	1	120	.	+	.	ID=MGYG000000005_00001;substrate=starch;dbcan_prot_type=CAZyme

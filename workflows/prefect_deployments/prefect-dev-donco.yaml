@@ -193,6 +193,37 @@ deployments:
       working_dir: /nfs/production/dev-slurm-work-dir
       memory: 1
 
+- name: move_data_deployment
+  description: |-
+    Move files between cluster filesystems using a job on the datamover partition.
+
+    This deployment is called by other flows, including the genome catalogue
+    release tasks, so it must be registered in the local Prefect server.
+  entrypoint: workflows.prefect_utils.datamovers:move_data
+  work_pool:
+    name: slurm
+
+- name: import_genomes_flow_deployment
+  description: |-
+    Import the compact Ocean Prokaryotes v2.0 update fixture. The flow leaves the
+    release ready but unpublished so it can be inspected and published in admin.
+  entrypoint: workflows/flows/import_genomes_flow.py:import_genomes_flow
+  parameters:
+    results_directory: /nfs/production/catalogs/ocean-prokaryotes/v2.0
+    catalogue_name: Ocean Prokaryotes
+    catalogue_version: "2.0"
+    gold_biome: root
+    pipeline_version: v3.0.0
+    catalogue_type: prokaryotes
+    catalogue_biome_label: Ocean
+    destination_dir_name: ocean-prokaryotes
+    catalogue_slug: ocean-prokaryotes-v2-0
+    run_release_tasks: true
+    run_genome_search_tasks: false
+    release_third_party_data: false
+  work_pool:
+    name: slurm
+
 - name: clean_old_nextflow_workdirs_deployment
   description: |-
     Scan a directory for old Nextflow work directories and delete them after human confirmation.

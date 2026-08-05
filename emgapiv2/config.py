@@ -322,6 +322,22 @@ class GenomeConfig(BaseModel):
     results_directory_root: str = "/nfs/donco/results"
     genomes_ftp_results_subpath: str = "mgnify_genomes"
 
+    ftp_genomes_root: str = "/path/to/ftp-genomes"
+
+    genome_search_project_dir: str = "/path/to/genome-search-project"
+    genome_search_singularity_image: str = "/path/to/genome-search.sif"
+    cobs_search_host: str = "user@cobs-genome-search.example.org"
+    cobs_search_ssh_key: str = "cobs-genome-search-ssh.pem"
+    cobs_remote_index_dir: str = "/mnt/data/cobs"
+    cobs_remote_config_path: str = "cobs/cobs.yaml"
+    cobs_remote_service: str = "cobs"
+
+    sourmash_conda_environment: str = "sourmash"
+    sourmash_public_signatures_dir: str = "/path/to/sourmash-signatures"
+
+    rnacentral_ftp_dir: str = "/path/to/rnacentral-ftp"
+    uniprot_ftp_dir: str = "/path/to/uniprot-ftp"
+
 
 class EuropePMCConfig(BaseModel):
     annotations_endpoint: str = Field(
