@@ -299,6 +299,14 @@ class SourmashConfig(BaseModel):
     name_map_path: str = ""
 
 
+class BranchwaterConfig(BaseModel):
+    index_server: str = "http://index-service"
+    metadata_duckdb: str = "/data/metadata.duckdb"
+    signatures_root: str = "/signatures"
+    threshold: float = 0.1
+    ksize: int = 21
+
+
 class DataDistributionConfig(BaseModel):
     studies_url_root_for_permalinks: str = Field(
         "https://www.ebi.ac.uk/metagenomics/studies/"
@@ -391,6 +399,7 @@ class EMGConfig(BaseSettings):
     legacy_service: LegacyServiceConfig = LegacyServiceConfig()
     service_urls: ServiceURLsConfig = ServiceURLsConfig()
     sourmash: SourmashConfig = SourmashConfig()
+    branchwater: BranchwaterConfig = BranchwaterConfig()
     slurm: SlurmConfig = SlurmConfig()
     webin: WebinConfig = WebinConfig()
     log_masking: LogMaskingConfig = LogMaskingConfig()
