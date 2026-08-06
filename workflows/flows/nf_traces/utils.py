@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Any
+from typing import Any, Optional
 
 import numpy as np
 import pandas as pd
@@ -67,10 +67,10 @@ class NextflowTraceSchema(pa.DataFrameModel):
         ).astype(float)
 
     # Resource metrics - strings in raw data, converted to floats/MB
-    cpu_percent: Series[float] = pa.Field(nullable=True)
-    mem_percent: Series[float] = pa.Field(nullable=True)
-    peak_rss: Series[Any] = pa.Field(nullable=True)
-    peak_vmem: Series[Any] = pa.Field(nullable=True)
+    cpu_percent: Optional[Series[float]] = pa.Field(nullable=True)
+    mem_percent: Optional[Series[float]] = pa.Field(nullable=True)
+    peak_rss: Optional[Series[Any]] = pa.Field(nullable=True)
+    peak_vmem: Optional[Series[Any]] = pa.Field(nullable=True)
 
     rchar: Series[float] = pa.Field(nullable=True)
     wchar: Series[float] = pa.Field(nullable=True)
@@ -90,6 +90,8 @@ class NextflowTraceSchema(pa.DataFrameModel):
 
     class Config:
         strict = False
+        add_missing_columns = True
+        drop_invalid_rows = True
 
 
 def parse_time_to_seconds(time_str: str) -> float:
