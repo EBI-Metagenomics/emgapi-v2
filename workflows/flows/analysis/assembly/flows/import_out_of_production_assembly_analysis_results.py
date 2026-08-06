@@ -522,6 +522,17 @@ def copy_out_of_production_assembly_analysis_results(
     :param analyses: The list of analyses objects to copy results for
     :param timeout: Timeout in seconds for each move operation (default: 4 hours)
     """
+    # Analyses that failed validation/import earlier in the flow are marked
+    # ANALYSIS_QC_FAILED in the DB. Re-query rather than trust the in-memory
+    # objects, since they may have been fetched before that status was set.
+    # These must not be copied to production: copying would let
+    # update_analysis_statuses_from_copy_results incorrectly clear
+    # ANALYSIS_QC_FAILED and mark them as imported.
+    analyses_ready_for_copy = list(
+        Analysis.objects.filter(
+            id__in=[analysis.id for analysis in analyses]
+        ).exclude_by_statuses([Analysis.AnalysisStates.ANALYSIS_QC_FAILED])
+    )
 
     study_prefix = accession_prefix_separated_dir_path(study.first_accession, -3)
     nfs_results_root = Path(results_dir) / "results"
@@ -534,7 +545,7 @@ def copy_out_of_production_assembly_analysis_results(
 
     external_copy_results = list(
         copy_out_of_production_analysis_results_to_destination_folder(
-            analyses=analyses,
+            analyses=analyses_ready_for_copy,
             results_workspace=Path(results_dir),
             destination_root=external_results_root,
             timeout=timeout,
@@ -549,7 +560,7 @@ def copy_out_of_production_assembly_analysis_results(
     # Copy the files to the NFS production
     nfs_copy_results = list(
         copy_out_of_production_analysis_results_to_destination_folder(
-            analyses=analyses,
+            analyses=analyses_ready_for_copy,
             results_workspace=Path(results_dir),
             destination_root=nfs_results_root,
             timeout=timeout,
