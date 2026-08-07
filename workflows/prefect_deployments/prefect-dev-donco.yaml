@@ -316,3 +316,20 @@ deployments:
   parameters: {}
   work_pool:
     name: slurm
+
+- name: ebi_search_dump_deployment
+  description: |-
+    Build the projects and analyses XML dumps consumed by EBI Search. This local
+    deployment uses the donco transfer-service fixture and publishes under /hps.
+  entrypoint: workflows/flows/data_dumps/ebi_search/flows/ebi_search_dump.py:ebi_search_dump_flow
+  parameters:
+    initial: true
+  work_pool:
+    name: slurm
+    job_variables:
+      env:
+        EMG_EBI_SEARCH__ANALYSIS_CHUNK_SIZE: "2"
+        EMG_EBI_SEARCH__OUTPUT_DIR: /hps/ebi-search-e2e/live
+        EMG_SERVICE_URLS__TRANSFER_SERVICES_URL_ROOT: http://transfer-services/pub/databases/metagenomics/mgnify_results/
+      memory: 1
+      time_limit: 168

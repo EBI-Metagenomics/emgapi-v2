@@ -153,7 +153,7 @@ fileignoreconfig:
   ignore_detectors: [filecontent]
 
 - filename: Taskfile.yaml
-  allowed_patterns: [a password in, slurm-dev-environment/fs/nfs/public/tests/assembly_v6_output/ERZ857107/ERZ857107, slurm-dev-environment/fs/nfs/ftp/public/databases/metagenomics/mgnify_results/PRJNA398/PRJNA398089/ERZ857/ERZ857107/V6/assembly]
+  checksum: 86a0322edf3c4ac8bcdc04a307dc349173463c076820dacd896e83baca8a21b6
 
 - filename: workflows/data_io_utils/csv/csv_comment_handler.py
   allowed_patterns: [keys()]
@@ -202,6 +202,12 @@ fileignoreconfig:
 
 - filename: workflows/flows/assemble_study_tasks/make_samplesheets.py
   allowed_patterns: [key, InstrumentPlatformKeys]
+
+- filename: workflows/flows/data_dumps/ebi_search/**/*.py
+  ignore_detectors: [filename]
+
+- filename: workflows/flows/data_dumps/ebi_search/utils/*.py
+  allowed_patterns: [dbkey, key='ebi_search__state', "keys: tuple"]
 
 - filename: workflows/flows/import_genomes_flow.py
   checksum: 26802040107ed033a32ae3209bb856a6f52e5d1ffe112d7fed11f177f094a651
@@ -288,6 +294,9 @@ fileignoreconfig:
 - filename: workflows/tests/test_backfill_assembly_analysis_results_dirs_flow.py
   allowed_patterns: [key]
 
+- filename: workflows/tests/test_ebi_search_dump.py
+  ignore_detectors: [filename]
+
 - filename: workflows/tests/test_flows_utils.py
   checksum: 7044790c62db033597a0c9391751a32f2db1f88d5ba5a953b6c607d97ff7ed6d
 
@@ -312,3 +321,7 @@ allowed_patterns:
 - OpenApiKeywords
 - KeyValueStore
 - key=ask_every_time_suspend_for_input_key()
+- dump
+- EBI_SEARCH_DUMP_STATE_KEY
+- monkeypatch
+- lineage_key
