@@ -125,6 +125,7 @@ services:
       - EMG_SOURMASH__RESULTS_PATH=/app/sourmash-local/data/results
       - EMG_SOURMASH__INDEX_ROOT=/app/sourmash-local/data/signatures
       - EMG_WEBIN__JWT_SECRET_KEY=dummy-key
+      - EMG_WEBIN__EMG_WEBIN_ACCOUNT="Webin-999999"
       - EMG_WEBIN__AUTH_ENDPOINT=http://httpbin/status/200
       - EMG_WEBIN__TOKEN_ENDPOINT=http://httpbin/status/200
       - EMG_WEBIN__ACCOUNT_DETAILS_ENDPOINT=http://httpbin/status/200
@@ -133,6 +134,7 @@ services:
     volumes:
       - ".:/app"
       - "./slurm-dev-environment/fs/nfs/public:/app/data"  # similar to the k8s volume mount in production
+      - "./slurm-dev-environment/fs/nfs/production/catalogs:/nfs/donco/results:ro"  # dissimilar to production - just used for some tests/local dev data
     depends_on:
       httpbin:
         condition: service_started
@@ -260,6 +262,38 @@ services:
       - "6820:6820"
     profiles: ["slurm", "all"]
     networks: [slurm, "emg"]
+
+  slurm-web-agent:
+    image: ghcr.io/rackslab/slurm-web-agent:v7.0.0
+    platform: linux/amd64  # Slurm-web does not currently publish an arm64 image
+    container_name: slurm-web-agent
+    restart: unless-stopped
+    depends_on:
+      slurm_node:
+        condition: service_started
+    volumes:
+      - "./slurm-dev-environment/configs/slurm-web-agent.ini:/etc/slurm-web/agent.ini:ro"
+      - "./slurm-dev-environment/configs/slurm-web.key:/var/lib/slurm-web/jwt.key:ro"
+      - "./slurm-dev-environment/configs/jwt_hs256.key:/var/lib/slurm-web/slurmrestd.key:ro"
+    profiles: ["slurm", "all"]
+    networks: [slurm]
+
+  slurm-web-gateway:
+    image: ghcr.io/rackslab/slurm-web-gateway:v7.0.0
+    platform: linux/amd64  # Slurm-web does not currently publish an arm64 image
+    container_name: slurm-web-gateway
+    restart: unless-stopped
+    depends_on:
+      slurm-web-agent:
+        condition: service_started
+    volumes:
+      - "./slurm-dev-environment/configs/slurm-web-gateway.ini:/etc/slurm-web/gateway.ini:ro"
+      - "./slurm-dev-environment/configs/slurm-web.key:/var/lib/slurm-web/jwt.key:ro"
+      - "./slurm-dev-environment/configs/slurm-web.key:/var/lib/slurm-web/session.key:ro"
+    ports:
+      - "5011:5011"
+    profiles: ["slurm", "all"]
+    networks: [slurm]
 
 volumes:
   prefectdb:

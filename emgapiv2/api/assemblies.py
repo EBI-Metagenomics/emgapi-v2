@@ -1,3 +1,4 @@
+from django.db.models import Prefetch
 from django.shortcuts import get_object_or_404
 from ninja_extra import api_controller, http_get, paginate
 from ninja_extra.schemas import NinjaPaginationResponseSchema
@@ -17,7 +18,11 @@ from emgapiv2.api.schema_utils import (
     make_links_section,
     make_related_detail_link,
 )
-from genomes.models import AdditionalContainedGenomes, GenomeAssemblyLink
+from genomes.models import (
+    AdditionalContainedGenomes,
+    CatalogueGenome,
+    GenomeAssemblyLink,
+)
 
 
 @api_controller("assemblies", tags=[ApiSections.ASSEMBLIES])
@@ -98,9 +103,17 @@ class AssemblyController(UnauthorisedIsUnfoundController):
             ena_accessions__contains=[accession],
         )
 
-        genome_links_query_set = GenomeAssemblyLink.objects.select_related(
-            "genome", "genome__catalogue"
-        ).filter(assembly=assembly)
+        genome_links_query_set = (
+            GenomeAssemblyLink.objects.select_related("genome")
+            .prefetch_related(
+                Prefetch(
+                    "genome__catalogue_entries",
+                    queryset=CatalogueGenome.public_objects.select_related("catalogue"),
+                    to_attr="_published_catalogue_entries",
+                )
+            )
+            .filter(assembly=assembly)
+        )
 
         return genome_links_query_set
 
@@ -122,9 +135,15 @@ class AssemblyController(UnauthorisedIsUnfoundController):
             ena_accessions__contains=[accession],
         )
         additional_contained_genomes_query_set = (
-            AdditionalContainedGenomes.objects.select_related(
-                "genome", "genome__catalogue", "run"
-            ).filter(assembly=assembly)
+            AdditionalContainedGenomes.objects.select_related("genome", "run")
+            .prefetch_related(
+                Prefetch(
+                    "genome__catalogue_entries",
+                    queryset=CatalogueGenome.public_objects.select_related("catalogue"),
+                    to_attr="_published_catalogue_entries",
+                )
+            )
+            .filter(assembly=assembly)
         )
         return additional_contained_genomes_query_set
 

@@ -2,7 +2,7 @@ import pytest
 from django.urls import reverse
 from ninja_jwt.tokens import SlidingToken
 
-from analyses.models import Analysis, Run, Study
+from analyses.models import Analysis, Assembly, Run, Study
 from emgapiv2.api.auth import WebinJWTAuth
 from ena.models import Study as ENAStudy
 
@@ -55,6 +55,8 @@ def test_admin_view_studies(admin_client):
     """Test that admin interface shows all studies"""
     public_study = Study.objects.create(title="Public Study", is_private=False)
     private_study = Study.objects.create(title="Private Study", is_private=True)
+    public_study.is_suppressed = True
+    public_study.save()
 
     url = reverse("admin:analyses_study_changelist")
     response = admin_client.get(url)
@@ -70,6 +72,8 @@ def test_admin_view_analyses(raw_read_run, admin_client):
     """Test that admin interface shows all analyses"""
     public_analysis = create_analysis(is_private=False)
     private_analysis = create_analysis(is_private=True)
+    public_analysis.is_suppressed = True
+    public_analysis.save()
 
     url = reverse("admin:analyses_analysis_changelist")
     response = admin_client.get(url)
@@ -91,6 +95,7 @@ def test_study_manager_methods():
 
     assert Study.public_objects.count() == 1
     assert Study.public_objects.first() == public_study
+    assert Study.objects_not_suppressed.count() == 2
     assert Study.objects.count() == 2
     private_studies = Study.public_objects.private_only()
     # a bit odd naming, public_objects is really "privacy controlled objects but by default public"
@@ -107,6 +112,7 @@ def test_suppressed_study_manager_methods():
     private_study = Study.objects.create(title="Private Study", is_private=True)
 
     assert Study.public_objects.count() == 1
+    assert Study.objects_not_suppressed.count() == 2
     assert Study.objects.count() == 2
 
     public_study.is_suppressed = True
@@ -114,6 +120,7 @@ def test_suppressed_study_manager_methods():
     public_study.save()
     private_study.save()
     assert Study.public_objects.count() == 0
+    assert Study.objects_not_suppressed.count() == 0
     assert Study.objects.count() == 2
 
 
@@ -129,7 +136,39 @@ def test_suppressed_study_propagates_to_analyses(raw_read_run):
     assert public_analysis.study.is_suppressed
 
     assert Analysis.public_objects.count() == 0
+    assert Analysis.objects_not_suppressed.count() == 0
     assert Analysis.objects.count() == 1
+
+
+@pytest.mark.django_db(transaction=True)
+def test_suppressed_objects_are_hidden_from_detail_apis(raw_read_run, ninja_api_client):
+    analysis = create_analysis(is_private=False)
+    run = analysis.run
+    sample = analysis.sample
+    study = analysis.study
+    assembly_accession = "ERZ00000001"
+    Assembly.objects.create(
+        ena_study=analysis.ena_study,
+        sample=sample,
+        reads_study=study,
+        ena_accessions=[assembly_accession],
+    )
+
+    analysis.ena_study.is_suppressed = True
+    analysis.ena_study.save()
+
+    endpoints = [
+        f"/studies/{study.accession}",
+        f"/samples/{sample.first_accession}",
+        f"/runs/{run.first_accession}",
+        f"/assemblies/{assembly_accession}",
+        f"/analyses/{analysis.accession}",
+        f"/analyses/{analysis.accession}/annotations",
+        f"/analyses/{analysis.accession}/annotations/pfams",
+    ]
+
+    for endpoint in endpoints:
+        assert ninja_api_client.get(endpoint).status_code == 404
 
 
 @pytest.mark.django_db(transaction=True)
@@ -182,6 +221,12 @@ def test_superuser_can_list_private_studies(
     data = response.json()
     assert data["count"] == 1
     assert data["items"][0]["accession"] == webin_private_study.accession
+
+    webin_private_study.is_suppressed = True
+    webin_private_study.save()
+    response = ninja_api_client.get("/my-data/studies/", user=admin_user)
+    assert response.status_code == 200
+    assert response.json()["count"] == 0
 
 
 @pytest.mark.django_db

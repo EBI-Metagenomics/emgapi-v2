@@ -1,0 +1,3 @@
+##gff-version 3
+##sequence-region MGYG000000003_1 1 120
+MGYG000000003_1	Prodigal:2.6.3	CDS	1	120	.	+	0	ID=MGYG000000003_00001;product=FeS assembly protein IscX

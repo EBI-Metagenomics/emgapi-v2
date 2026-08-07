@@ -13,6 +13,13 @@ from workflows.data_io_utils.schemas import AssemblyResultSchema, MapResultSchem
 from workflows.flows.analyse_study_tasks.amplicon.import_completed_amplicon_analyses import (
     import_completed_analysis as import_completed_amplicon_analysis,
 )
+from workflows.flows.import_genomes_flow import import_genomes_flow
+from workflows.prefect_utils.testing_utils import run_flow_and_capture_logs
+
+OCEAN_CATALOGUE_ROOT = (
+    Path(settings.EMG_CONFIG.genomes.results_directory_root) / "ocean-prokaryotes"
+)
+OCEAN_CATALOGUE_WEBSITE = OCEAN_CATALOGUE_ROOT / "v1.0/website"
 
 DEV_SOURMASH_CATALOGUE_ID = "human-gut-prokaryotes"
 DEV_SOURMASH_ARTIFACT_PATH = (
@@ -158,6 +165,25 @@ def assembly_analysis_with_downloads(mock_run_deployment, mgnify_assemblies_comp
     analysis.mark_status(analysis.AnalysisStates.ANALYSIS_ANNOTATIONS_IMPORTED)
 
 
+@pytest.fixture
+def unpublished_genome_catalogue(prefect_harness, real_genome_catalogue_files):
+    run_flow_and_capture_logs(
+        import_genomes_flow,
+        results_directory=str(OCEAN_CATALOGUE_ROOT / "v2.0"),
+        catalogue_name="Ocean Prokaryotes",
+        catalogue_version="2.0",
+        gold_biome="root",
+        pipeline_version="v3.0.0",
+        catalogue_type="prokaryotes",
+        catalogue_biome_label="Ocean",
+        destination_dir_name="ocean-prokaryotes",
+        catalogue_slug="ocean-prokaryotes-v2-0",
+        run_release_tasks=False,
+        release_third_party_data=False,
+    )
+    return GenomeCatalogue.objects.get(pk="ocean-prokaryotes-v2-0")
+
+
 # TODO: currently unused as download data fixtures are missing
 # @pytest.fixture
 # @patch("workflows.flows.analyse_study_tasks.copy_v6_pipeline_results.move_data")
@@ -233,6 +259,8 @@ def test_make_dev_data(
     geographic_locations,
     genome_catalogues,
     genomes,
+    real_genome_catalogue_files,
+    unpublished_genome_catalogue,
     private_analysis_with_download,
     private_study_with_download,
     super_study,

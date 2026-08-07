@@ -72,7 +72,9 @@ class SampleController(UnauthorisedIsUnfoundController):
     )
     def get_mgnify_sample(self, accession: str):
         try:
-            sample = analyses.models.Sample.objects.get_by_accession(accession)
+            sample = analyses.models.Sample.objects_not_suppressed.get_by_accession(
+                accession
+            )
         except (
             analyses.models.Sample.DoesNotExist,
             analyses.models.Sample.MultipleObjectsReturned,
@@ -127,9 +129,11 @@ class SampleController(UnauthorisedIsUnfoundController):
     )
     @paginate()
     def list_sample_runs(self, accession: str):
-        sample = analyses.models.Sample.objects.get_by_accession(accession)
+        sample = analyses.models.Sample.objects_not_suppressed.get_by_accession(
+            accession
+        )
         self.check_object_permissions(sample)
-        return sample.runs.all()
+        return analyses.models.Run.objects_not_suppressed.filter(sample=sample)
 
     @http_get(
         "/{accession}/assemblies/",
@@ -157,6 +161,8 @@ class SampleController(UnauthorisedIsUnfoundController):
     )
     @paginate()
     def list_sample_assemblies(self, accession: str):
-        sample = analyses.models.Sample.objects.get_by_accession(accession)
+        sample = analyses.models.Sample.objects_not_suppressed.get_by_accession(
+            accession
+        )
         self.check_object_permissions(sample)
-        return sample.assemblies.all()
+        return analyses.models.Assembly.objects_not_suppressed.filter(sample=sample)

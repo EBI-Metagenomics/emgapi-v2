@@ -45,7 +45,7 @@ class AnalysisController(UnauthorisedIsUnfoundController):
     )
     def get_mgnify_analysis(self, accession: str):
         return self.get_object_or_exception(
-            analyses.models.Analysis.objects.select_related(
+            analyses.models.Analysis.objects_not_suppressed.select_related(
                 "run", "assembly", "study", "sample"
             ),
             accession=accession,
@@ -103,10 +103,10 @@ class AnalysisController(UnauthorisedIsUnfoundController):
     ):
         # TODO: this involves a duplicate DB query, can probably be a single query that is then perm checked
         self.get_object_or_exception(
-            analyses.models.Analysis.objects, accession=accession
+            analyses.models.Analysis.objects_not_suppressed, accession=accession
         )
         annotations = (
-            analyses.models.Analysis.objects.filter(accession=accession)
+            analyses.models.Analysis.objects_not_suppressed.filter(accession=accession)
             .values_list(f"annotations__{annotation_type.value}", flat=True)
             .first()
         )

@@ -1,0 +1,12 @@
+{
+  "children": [
+    {
+      "countgen": 1,
+      "name": "d__Eukaryota",
+      "type": "d",
+      "children": [
+        {"countgen": 1, "name": "MGYG000000010", "type": "genome"}
+      ]
+    }
+  ]
+}
