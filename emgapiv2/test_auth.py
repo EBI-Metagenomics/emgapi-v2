@@ -1,11 +1,11 @@
 import pytest
+from django.conf import settings
 from ninja_jwt.tokens import SlidingToken
 
 from emgapiv2.api.auth import (
     authenticate_webin_user,
     validate_webin_username,
 )
-from emgapiv2.config import EMGConfig
 
 
 @pytest.mark.django_db
@@ -14,7 +14,7 @@ def test_validate_webin_username():
     assert validate_webin_username("Webin-12345") is True
 
     # Test with broker prefix
-    config = EMGConfig().webin
+    config = settings.EMG_CONFIG.webin
     assert validate_webin_username(f"{config.broker_prefix}Webin-12345") is True
 
     # Test invalid usernames
@@ -41,7 +41,7 @@ def test_broker_user_can_authenticate_as_webin(httpx_mock):
         status_code=200,
     )
     # Test with broker prefix
-    config = EMGConfig().webin
+    config = settings.EMG_CONFIG.webin
     webin_id = authenticate_webin_user(f"{config.broker_prefix}Webin-12345", "password")
     assert webin_id == "Webin-12345"
 
@@ -79,6 +79,7 @@ def test_token_endpoint(ninja_api_client, webin_private_study, httpx_mock):
     token = data["token"]
     validated_token = SlidingToken(token)
     assert validated_token.get("username") == webin_private_study.webin_submitter
+    assert validated_token.get("is_admin") is None
 
     # Test refresh
     response = ninja_api_client.post(
@@ -107,6 +108,33 @@ def test_token_endpoint(ninja_api_client, webin_private_study, httpx_mock):
 
 
 @pytest.mark.django_db
+def test_emg_webin_account_gets_admin_claim(ninja_api_client, httpx_mock, monkeypatch):
+    admin_account = "Webin-12345"
+    monkeypatch.setattr(settings.EMG_CONFIG.webin, "emg_webin_account", admin_account)
+    httpx_mock.add_response(
+        url="http://fake-auth.example.com/auth",
+        status_code=200,
+    )
+
+    response = ninja_api_client.post(
+        "/auth/sliding",
+        json={"username": admin_account, "password": "password"},
+    )
+
+    assert response.status_code == 200
+    token = SlidingToken(response.json()["token"])
+    assert token["username"] == admin_account
+    assert token["is_admin"] is True
+
+    refreshed = ninja_api_client.post(
+        "/auth/sliding/refresh",
+        json={"token": str(token)},
+    )
+    assert refreshed.status_code == 200
+    assert SlidingToken(refreshed.json()["token"])["is_admin"] is True
+
+
+@pytest.mark.django_db
 def test_token_endpoint_as_broker(ninja_api_client, webin_private_study, httpx_mock):
     httpx_mock.add_response(
         url="http://fake-auth.example.com/auth",
@@ -114,7 +142,7 @@ def test_token_endpoint_as_broker(ninja_api_client, webin_private_study, httpx_m
     )
 
     # Test successful token generation as broker
-    config = EMGConfig().webin
+    config = settings.EMG_CONFIG.webin
     webin_broker = f"{config.broker_prefix}{webin_private_study.webin_submitter}"
 
     response = ninja_api_client.post(

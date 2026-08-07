@@ -1,14 +1,9 @@
-from typing import Any
-
-from django.contrib.postgres.fields import ArrayField
 from django.db import models
 
 from analyses.base_models.base_models import TimeStampedModel
-from analyses.base_models.with_downloads_models import WithDownloadsModel
-from analyses.models import Biome
 from emgapiv2.enum_utils import DjangoChoicesCompatibleStrEnum
 
-# Annotation field constants
+# Annotation field constants are kept in this module for backwards-compatible imports.
 COG_CATEGORIES = "cog_categories"
 KEGG_CLASSES = "kegg_classes"
 KEGG_MODULES = "kegg_modules"
@@ -24,30 +19,17 @@ def default_annotations():
     }
 
 
-class GenomeManagerDeferringAnnotations(models.Manager):
+class Genome(TimeStampedModel):
+    """Stable identity for an MGnify genome.
+
+    Catalogue- and pipeline-release-specific data lives on ``CatalogueGenome``.
+    This allows one MGYG accession to be staged in a new catalogue release without
+    changing the version that is currently public.
     """
-    The annotations field is a potentially large JSONB field.
-    Defer it by default, since most queries don't need to transfer this large dataset.
-    """
-
-    def get_queryset(self):
-        return super().get_queryset().defer("annotations")
-
-
-class GenomeManagerIncludingAnnotations(models.Manager):
-    def get_queryset(self):
-        return super().get_queryset()
-
-
-class Genome(WithDownloadsModel, TimeStampedModel):
-    DOWNLOAD_PARENT_IDENTIFIER_ATTR = "accession"
 
     class GenomeType(DjangoChoicesCompatibleStrEnum):
         MAG = "MAG"
         ISOLATE = "Isolate"
-
-    objects = GenomeManagerDeferringAnnotations()
-    objects_and_annotations = GenomeManagerIncludingAnnotations()
 
     genome_id = models.AutoField(primary_key=True)
     accession = models.CharField(max_length=40, unique=True)
@@ -83,109 +65,31 @@ class Genome(WithDownloadsModel, TimeStampedModel):
         null=True,
     )
 
-    biome = models.ForeignKey(Biome, on_delete=models.PROTECT)
+    @property
+    def published_catalogue_entry(self):
+        """Return the published snapshot prefetched by assembly API queries."""
+        return (
+            self._published_catalogue_entries[0]
+            if self._published_catalogue_entries
+            else None
+        )
 
-    length = models.IntegerField()
-    num_contigs = models.IntegerField()
-    n_50 = models.IntegerField()
-    gc_content = models.FloatField()
-    type = models.CharField(choices=GenomeType.as_choices(), max_length=80)
-    completeness = models.FloatField()
-    contamination = models.FloatField()
+    # Compatibility properties for schemas that expose a genome nested inside an
+    # assembly link. Catalogue-specific API endpoints use CatalogueGenome directly.
+    @property
+    def catalogue(self):
+        entry = self.published_catalogue_entry
+        return entry.catalogue if entry else None
 
-    # EUKS:
-    busco_completeness = models.FloatField(null=True, blank=True)
+    @property
+    def catalogue_id(self):
+        catalogue = self.catalogue
+        return catalogue.catalogue_id if catalogue else None
 
-    # EUKS + PROKS:
-    rna_5s = models.FloatField(null=True, blank=True)
-    # PROKS:
-    rna_16s = models.FloatField(null=True, blank=True)
-    rna_23s = models.FloatField(null=True, blank=True)
-    # EUKS:
-    rna_5_8s = models.FloatField(null=True, blank=True)
-    rna_18s = models.FloatField(null=True, blank=True)
-    rna_28s = models.FloatField(null=True, blank=True)
-
-    trnas = models.FloatField()
-    nc_rnas = models.IntegerField()
-    num_proteins = models.IntegerField()
-    eggnog_coverage = models.FloatField()
-    ipr_coverage = models.FloatField()
-    taxon_lineage = models.CharField(max_length=400)
-
-    geographic_origin = models.CharField(
-        max_length=80,
-        blank=True,
-        null=True,
-        help_text="Geographic origin of this genome",
-    )
-
-    annotations = models.JSONField(default=default_annotations)
-    default_annotations = staticmethod(default_annotations)
-
-    result_directory = models.CharField(max_length=100, blank=True, null=True)
-
-    catalogue = models.ForeignKey(
-        "GenomeCatalogue",
-        db_column="genome_catalogue",
-        on_delete=models.CASCADE,
-        related_name="genomes",
-    )
-
-    # pangenome
-    num_genomes_total = models.IntegerField(null=True, blank=True)
-    pangenome_size = models.IntegerField(null=True, blank=True)
-    pangenome_core_size = models.IntegerField(null=True, blank=True)
-    pangenome_accessory_size = models.IntegerField(null=True, blank=True)
-    geographic_range = ArrayField(
-        models.CharField(max_length=80),
-        blank=True,
-        null=True,
-        help_text="Array of geographic locations where this genome is found",
-    )
-
-    @classmethod
-    def clean_data(cls, genome_data: dict[str, Any]):
-        """
-        Clean genome data by removing unnecessary fields and ensuring required fields are present.
-        - Extract selected nested fields from exporter structures (e.g. pangenome) into model fields.
-        - Drop keys that do not belong to the model (basic known drops retained for safety).
-        """
-        # Remove fields that are not stored as-is
-        genome_data.pop("gold_biome", None)
-        genome_data.pop("genome_accession", None)
-        genome_data.pop("study_accession", None)
-
-        # Map nested pangenome fields if present
-        pangenome = genome_data.get("pangenome")
-        if isinstance(pangenome, dict):
-            # Store total number of genomes in the pangenome, if provided
-            if (
-                "num_genomes_total" in pangenome
-                and "num_genomes_total" not in genome_data
-            ):
-                genome_data["num_genomes_total"] = pangenome.get("num_genomes_total")
-
-            genome_data["geographic_range"] = pangenome.get("geographic_range")
-            genome_data["pangenome_size"] = pangenome.get("pangenome_size")
-            genome_data["pangenome_core_size"] = pangenome.get("pangenome_core_size")
-            genome_data["pangenome_accessory_size"] = pangenome.get(
-                "pangenome_accessory_size"
-            )
-        genome_data.setdefault("num_genomes_total", 1)
-        # Remove the nested pangenome blob from defaults passed to ORM
-        genome_data.pop("pangenome", None)
-
-        # Normalise annotations container
-        if "annotations" not in genome_data:
-            genome_data["annotations"] = cls.default_annotations()
-
-        # Normalise rRNA key variation that sometimes appears in exporter JSON
-        if "rna_5.8s" in genome_data:
-            genome_data["rna_5_8s"] = genome_data["rna_5.8s"]
-            genome_data.pop("rna_5.8s", None)
-
-        return genome_data
+    @property
+    def taxon_lineage(self):
+        entry = self.published_catalogue_entry
+        return entry.taxon_lineage if entry else None
 
     def __str__(self):
         return self.accession

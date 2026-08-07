@@ -21,7 +21,7 @@ class GenomeBase(Schema):
     patric_genome_accession: Optional[str]
     length: int
     num_contigs: int
-    num_genomes_total: int = None
+    num_genomes_total: Optional[int] = None
     n_50: int
     gc_content: float
     type: Genome.GenomeType

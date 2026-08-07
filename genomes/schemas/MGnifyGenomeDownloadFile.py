@@ -22,10 +22,11 @@ class MGnifyGenomeDownloadFile(Schema, DownloadFile):
     @staticmethod
     def resolve_url(obj: "MGnifyGenomeDownloadFile"):
         try:
-            genome = genome_models.Genome.objects.get(accession=obj.parent_identifier)
-        except genome_models.Genome.DoesNotExist:
+            genome = genome_models.CatalogueGenome.objects.get(pk=obj.parent_identifier)
+        except genome_models.CatalogueGenome.DoesNotExist:
             logger.warning(
-                f"No Genome found with accession {obj.parent_identifier} for download URL resolution"
+                "No catalogue genome found with id %s for download URL resolution",
+                obj.parent_identifier,
             )
             return None
 

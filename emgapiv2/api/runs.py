@@ -130,7 +130,7 @@ class AnalysedRunController(UnauthorisedIsUnfoundController):
     )
     def get_analysed_run(self, accession: str):
         try:
-            run = analyses.models.Run.objects.get_by_accession(accession)
+            run = analyses.models.Run.objects_not_suppressed.get_by_accession(accession)
         except (
             analyses.models.Run.DoesNotExist,
             analyses.models.Run.MultipleObjectsReturned,
@@ -164,7 +164,7 @@ class AnalysedRunController(UnauthorisedIsUnfoundController):
     @paginate()
     def list_runs_analyses(self, accession: str):
         try:
-            run = analyses.models.Run.objects.get_by_accession(accession)
+            run = analyses.models.Run.objects_not_suppressed.get_by_accession(accession)
         except (
             analyses.models.Run.DoesNotExist,
             analyses.models.Run.MultipleObjectsReturned,
@@ -172,7 +172,9 @@ class AnalysedRunController(UnauthorisedIsUnfoundController):
             raise NotFound(detail=f"Analysed run with accession {accession} not found.")
         # raise not found if user doesn't have permission to see
         self.check_object_permissions(run)
-        return run.analyses.filter(is_ready=True)
+        return analyses.models.Analysis.objects_not_suppressed.filter(
+            run=run, is_ready=True
+        )
 
     @http_get(
         "/{accession}/assemblies/",
@@ -198,7 +200,7 @@ class AnalysedRunController(UnauthorisedIsUnfoundController):
     @paginate()
     def list_runs_assemblies(self, accession: str):
         try:
-            run = analyses.models.Run.objects.get_by_accession(accession)
+            run = analyses.models.Run.objects_not_suppressed.get_by_accession(accession)
         except (
             analyses.models.Run.DoesNotExist,
             analyses.models.Run.MultipleObjectsReturned,

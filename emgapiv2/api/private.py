@@ -51,7 +51,7 @@ class MyDataController(ControllerBase):
     @paginate()
     def list_private_mgnify_studies(self):
         auth = self.context.request.auth
-        qs = analyses.models.Study.objects
+        qs = analyses.models.Study.objects_not_suppressed
 
         if auth and auth.is_superuser:
             qs = qs.all()

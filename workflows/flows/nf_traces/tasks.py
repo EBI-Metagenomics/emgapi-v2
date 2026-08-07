@@ -137,7 +137,21 @@ def transform_trace_records(df: pd.DataFrame) -> pd.DataFrame:
         return pd.DataFrame()
 
     df = preprocess_trace_dataframe(df)
-    df = NextflowTraceSchema.validate(df)
+    before_df = df.copy()
+
+    df = NextflowTraceSchema.validate(df, lazy=True)
+
+    if len(df) < len(before_df):
+        dropped_rows = before_df[~before_df.index.isin(df.index)]
+        dropped_ids = dropped_rows["native_id"].tolist()
+        logger.error(
+            f"Nextflow trace validation failed. Dropping {len(dropped_rows)} rows. "
+            f"Dropped native_ids: {dropped_ids}"
+        )
+        create_markdown_artifact(
+            f"Dropped {len(dropped_rows)} rows: {dropped_ids}",
+            key="invalid-traces",
+        )
 
     # Rename to more descriptive columns
     df = df.rename(

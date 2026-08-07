@@ -17,6 +17,7 @@ from workflows.flows.nf_traces.utils import (
     NextflowTraceSchema,
     parse_memory_to_mb,
     parse_time_to_seconds,
+    preprocess_trace_dataframe,
 )
 from workflows.models import OrchestratedClusterJob
 
@@ -422,7 +423,8 @@ def test_schema_validation(sample_nextflow_trace_data):
     df["job_last_known_state"] = "COMPLETED"
 
     # Validate using the schema
-    validated_df = NextflowTraceSchema.validate(df)
+    df = preprocess_trace_dataframe(df)
+    validated_df = NextflowTraceSchema.validate(df, lazy=True)
 
     # Verify the result
     assert isinstance(validated_df, pd.DataFrame)
@@ -643,3 +645,58 @@ def test_transform_traces_with_missing_fields(prefect_harness):
     # Summary stats should also work
     stats = summary_stats(result_df)
     assert stats["total_records"] == 1
+
+
+def test_transform_trace_records_add_the_missing_cols_if_optional_are_missing(
+    prefect_harness,
+):
+    """Test that transform_trace_records drops rows that fail validation."""
+    df = pd.DataFrame(
+        [
+            {
+                "native_id": 101,
+                "task_id": 1,
+                "name": "valid_task (ACC1)",
+                "status": "COMPLETED",
+                "exit": 0,
+                "duration": "10s",
+                "realtime": "10s",
+                "%cpu": "10%",
+                "%mem": "10%",
+                "peak_rss": "100MB",
+                "peak_vmem": "200MB",
+                "rchar": 0,
+                "wchar": 0,
+            },
+            {
+                "native_id": 102,
+                "task_id": 2,
+                "name": "invalid_task (ACC2)",
+                "status": "COMPLETED",
+                "exit": 0,
+                "duration": "10s",
+                "realtime": "10s",
+                "%cpu": "10%",
+                "peak_rss": "100MB",
+                "peak_vmem": "200MB",
+                "rchar": 0,
+                "wchar": 0,
+            },
+        ]
+    )
+
+    # Add required metadata columns
+    df["job_id"] = "test-job-id"
+    df["cluster_job_id"] = 12345
+    df["flow_run_id"] = "test-flow-run-id"
+    df["job_created_at"] = datetime(2023, 1, 1, 10, 0, 0)
+    df["job_updated_at"] = datetime(2023, 1, 1, 12, 0, 0)
+    df["job_last_known_state"] = "COMPLETED"
+
+    # Transform the data
+    result_df = transform_trace_records(df.rename(columns=NEXTFLOW_FIELD_MAP))
+
+    # Verify that one row was dropped
+    assert len(result_df) == 2
+    assert result_df.iloc[0]["native_id"] == 101
+    assert result_df.iloc[1]["mem_percent"] == 0.0

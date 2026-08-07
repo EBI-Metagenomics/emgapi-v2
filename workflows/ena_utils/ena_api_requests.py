@@ -650,8 +650,9 @@ def get_study_assemblies_from_ena(
         else:
             run = mgnify_sample.runs.first()  # TODO: coassemblies? replicates?
 
+        assembly_accession = assembly_data[_.ANALYSIS_ACCESSION]
         assembly, __ = analyses.models.Assembly.objects.update_or_create_by_accession(
-            known_accessions=[assembly_data[_.ANALYSIS_ACCESSION]],
+            known_accessions=[assembly_accession],
             defaults={
                 "sample": mgnify_sample,
                 "is_private": study.is_private,
@@ -665,14 +666,11 @@ def get_study_assemblies_from_ena(
         )
         assembly.metadata[_.GENERATED_FTP] = assembly_data[_.GENERATED_FTP]
 
-        # FIXME: Error - DETAIL:  Failing row contains (113467, 60323, null) for some studies such as PRJEB88595!
-        # I imagine some public assemblies are not linked to any runs
+        # It is possible that some assemblies are not linked to any runs, the ENA data model allows for this.
         if run:
             assembly.runs.add(run)
         else:
-            logger.error(
-                f"Could not find run for assembly {assembly_data[_.ANALYSIS_ACCESSION]}!"
-            )
+            logger.warning(f"Could not find run for assembly {assembly_accession}!")
         assembly.save()
         assemblies.append(assembly.first_accession)
     return assemblies
