@@ -123,4 +123,35 @@ def test_samplesheet_fetch(mock_move_samplesheet, client, admin_client, settings
     )
 
 
+@pytest.mark.django_db
+@patch("workflows.views.move_samplesheet_to_editable_location")
+def test_samplesheet_fetch_rejects_parent_dir_escape(
+    mock_move_samplesheet, admin_client, settings
+):
+    settings.EMG_CONFIG.slurm.shared_filesystem_root_on_slurm = (
+        "/nfs/production/edit/here"
+    )
+    settings.EMG_CONFIG.slurm.shared_filesystem_root_on_server = "/app/data/edit/here"
+    settings.EMG_CONFIG.slurm.samplesheet_editing_allowed_inside = (
+        "/nfs/production/edit/here"
+    )
+    settings.EMG_CONFIG.slurm.samplesheet_editing_path_from_shared_filesystem = (
+        "samplesheet_edits_here"
+    )
+
+    # This is the explicit path-traversal PoC shape: it starts inside the allowed
+    # directory but resolves outside it once ".." is applied.
+    traversal_samplesheet = "/nfs/production/edit/here/../outside/secret.csv"
+    traversal_encoded = encode_samplesheet_path(traversal_samplesheet)
+
+    fetch_view_url = reverse(
+        "workflows:edit_samplesheet_fetch",
+        kwargs={"filepath_encoded": traversal_encoded},
+    )
+    response = admin_client.get(fetch_view_url)
+
+    assert response.status_code == 404
+    assert mock_move_samplesheet.call_count == 0
+
+
 # TODO: test of edit view/post
