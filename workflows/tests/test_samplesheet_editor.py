@@ -31,6 +31,11 @@ def test_samplesheet_editor_paths_validation(settings):
     samplesheet_encoded = encode_samplesheet_path(samplesheet)
     assert validate_samplesheet_path(samplesheet_encoded) == Path(samplesheet)
 
+    samplesheet = "/nfs/production/edit/here/../outside/secret.csv"
+    samplesheet_encoded = encode_samplesheet_path(samplesheet)
+    with pytest.raises(Http404):
+        validate_samplesheet_path(samplesheet_encoded)
+
     samplesheet = "/nfs/production/cannot/edit/here/no.csv"
     samplesheet_encoded = encode_samplesheet_path(samplesheet)
     with pytest.raises(Http404):

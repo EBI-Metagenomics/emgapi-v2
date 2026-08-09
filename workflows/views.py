@@ -46,12 +46,13 @@ def validate_samplesheet_path(filepath_encoded: str) -> Path:
     if filepath.suffix.lower() not in [".csv", ".tsv"]:
         raise Http404(f"Invalid file type: {filepath.suffix.lower()}")
 
-    if not filepath.is_relative_to(
-        Path(EMG_CONFIG.slurm.samplesheet_editing_allowed_inside).resolve()
-    ):
+    resolved_filepath = filepath.resolve(strict=False)
+    allowed_root = Path(EMG_CONFIG.slurm.samplesheet_editing_allowed_inside).resolve()
+
+    if not resolved_filepath.is_relative_to(allowed_root):
         raise Http404("Invalid directory")
 
-    return filepath
+    return resolved_filepath
 
 
 @staff_member_required
