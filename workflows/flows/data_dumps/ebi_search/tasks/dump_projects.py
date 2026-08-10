@@ -1,6 +1,8 @@
 from datetime import datetime
 from pathlib import Path
 
+from prefect import get_run_logger
+
 from workflows.flows.data_dumps.ebi_search.utils.documents import (
     biome_lineages,
     project_entry,
@@ -24,10 +26,9 @@ def dump_projects(
     output_dir: Path,
     since: datetime | None,
     until: datetime,
-) -> dict[str, int]:
+) -> dict:
     output_dir.mkdir(parents=True, exist_ok=True)
     additions = study_additions(initial, since, until)
-    addition_count = additions.count()
     lineages = biome_lineages()
     deletion_ids: list[str] = []
     if not initial:
@@ -45,9 +46,25 @@ def dump_projects(
         PROJECT_DATABASE_NAME,
         "EMG Projects – studies analysed by MGnify",
         until.date().isoformat(),
-        addition_count,
     )
+    run_logger = get_run_logger()
+    failures = []
     for study in additions.iterator(chunk_size=500):
-        database_.entries.append(project_entry(study, lineages))
+        try:
+            database_.entries.append(project_entry(study, lineages))
+        except Exception as error:
+            reason = " ".join(str(error).split())[:300] or type(error).__name__
+            run_logger.warning(
+                "Skipping EBI Search study %s: %s",
+                study.accession,
+                reason,
+            )
+            failures.append((study.accession, study.accession, reason))
+
+    database_.entry_count = len(database_.entries)
     write_xml(output_dir / "projects.xml", database_)
-    return {"additions": addition_count, "deletions": len(deletion_ids)}
+    return {
+        "additions": len(database_.entries),
+        "deletions": len(deletion_ids),
+        "failures": failures,
+    }

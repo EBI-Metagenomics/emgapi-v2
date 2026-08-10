@@ -5,6 +5,7 @@ from pathlib import Path
 
 from django.utils import timezone
 from prefect import get_run_logger
+from prefect.artifacts import create_table_artifact
 
 from activate_django_first import EMG_CONFIG
 
@@ -16,13 +17,17 @@ from workflows.flows.data_dumps.ebi_search.utils.checkpoints import (
 )
 from workflows.prefect_utils.flows_utils import django_db_flow
 
+MAX_FAILURES_PER_ARTIFACT = 50
+# Truncate very long artifacts, as they may bump into max http payload limits
+
 
 @django_db_flow(name="EBI Search dump", log_prints=True)
 def ebi_search_dump_flow(initial: bool = False) -> dict:
     """Build and publish the MGnify projects and analyses EBI Search XML dumps.
 
     Incremental runs resume from the last successfully published dump date stored in
-    the database. An initial dump creates that state.
+    the database. An initial dump creates that state. Individual records that cannot
+    be rendered are skipped and reported in small per-study Prefect artifacts.
     """
     until = timezone.now()
     output_root = Path(EMG_CONFIG.ebi_search.output_dir)
@@ -68,6 +73,27 @@ def ebi_search_dump_flow(initial: bool = False) -> dict:
             EMG_CONFIG.ebi_search.analysis_chunk_size,
             EMG_CONFIG.service_urls.transfer_services_url_root,
         )
+        failures = project_counts.pop("failures") + analysis_counts.pop("failures")
+        for study in sorted({failure[0] for failure in failures}):
+            study_failures = [failure for failure in failures if failure[0] == study]
+            artifact_key = f"ebi-search-dump-failures-{study.lower()}"
+            run_logger.warning(
+                "%s EBI Search records failed for study %s; see artifact '%s'",
+                len(study_failures),
+                study,
+                artifact_key,
+            )
+            create_table_artifact(
+                key=artifact_key,
+                table=[
+                    {"record": record, "reason": reason}
+                    for _, record, reason in study_failures[:MAX_FAILURES_PER_ARTIFACT]
+                ],
+                description=(
+                    f"Showing at most {MAX_FAILURES_PER_ARTIFACT} of "
+                    f"{len(study_failures)} EBI Search dump failures for {study}"
+                ),
+            )
         published_to = publish_dump(source, destination, until)
 
     return {

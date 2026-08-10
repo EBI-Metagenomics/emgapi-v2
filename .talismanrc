@@ -325,3 +325,4 @@ allowed_patterns:
 - EBI_SEARCH_DUMP_STATE_KEY
 - monkeypatch
 - lineage_key
+- artifact_key

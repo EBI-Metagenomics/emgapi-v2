@@ -1,4 +1,5 @@
 import gzip
+import json
 import logging
 from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
@@ -7,6 +8,7 @@ from types import SimpleNamespace
 import httpx
 import pytest
 from lxml import etree
+from prefect.artifacts import Artifact
 
 from activate_django_first import EMG_CONFIG
 
@@ -226,6 +228,85 @@ def test_ebi_search_dump_flow_initial_and_private_incremental(
     assert _parse(incremental / "runs/analyses_0001.xml").findtext("entry_count") == "0"
     state = KeyValueStore.get_model(EBI_SEARCH_DUMP_STATE_KEY, EBISearchDumpState)
     assert state.last_dump_date == incremental_until
+
+
+@pytest.mark.django_db(transaction=True)
+def test_ebi_search_dump_reports_and_skips_record_failures(
+    monkeypatch,
+    prefect_harness,
+    caplog,
+    tmp_path,
+    assembly_with_analyses,
+):
+    failed_analysis, successful_analysis = assembly_with_analyses[:2]
+    for analysis in (failed_analysis, successful_analysis):
+        analysis.status[Analysis.AnalysisStates.ANALYSIS_ANNOTATIONS_IMPORTED] = True
+        analysis.downloads = []
+        analysis.save()
+        analysis.refresh_from_db()
+        assert analysis.is_ready
+
+    failed_analysis.external_results_dir = "results/MGYA00000001"
+    failed_analysis.downloads = [
+        _download("functional-annotation/go.tsv.gz", "GO Term counts").model_dump(
+            exclude={"parent_identifier"}
+        )
+    ]
+    failed_analysis.save()
+    failed_analysis.refresh_from_db()
+    failed_study = failed_analysis.study
+    requested_urls = []
+
+    def failing_project_entry(study, lineages):
+        raise ValueError("invalid project metadata")
+
+    def unavailable(request):
+        requested_urls.append(str(request.url))
+        return _response(str(request.url), status_code=503)
+
+    def failing_http_client():
+        return httpx.Client(
+            transport=httpx.MockTransport(unavailable), follow_redirects=True
+        )
+
+    monkeypatch.setattr(
+        "workflows.flows.data_dumps.ebi_search.tasks.dump_projects.project_entry",
+        failing_project_entry,
+    )
+    monkeypatch.setattr(
+        "workflows.flows.data_dumps.ebi_search.tasks.dump_analyses._http_client",
+        failing_http_client,
+    )
+    monkeypatch.setattr(
+        "workflows.flows.data_dumps.ebi_search.flows.ebi_search_dump.MAX_FAILURES_PER_ARTIFACT",
+        1,
+    )
+    monkeypatch.setattr(type(DOWNLOAD_RETRY), "sleep", lambda *_: None)
+    output_dir = tmp_path / "live"
+    monkeypatch.setattr(EMG_CONFIG.ebi_search, "output_dir", str(output_dir))
+    monkeypatch.setattr(EMG_CONFIG.ebi_search, "analysis_chunk_size", 10)
+
+    with caplog.at_level(logging.WARNING):
+        result = ebi_search_dump_flow(initial=True)
+
+    assert result["projects"] == {"additions": 0, "deletions": 0}
+    assert result["analyses"] == {"additions": 1, "deletions": 0}
+
+    artifact_key = f"ebi-search-dump-failures-{failed_study.accession.lower()}"
+    artifact = Artifact.get(artifact_key)
+    assert artifact.type == "table"
+    failures = json.loads(artifact.data)
+    assert failures[0] == {
+        "record": failed_study.accession,
+        "reason": "invalid project metadata",
+    }
+    assert len(failures) == 1
+    assert len(requested_urls) == DOWNLOAD_RETRY.total + 1
+    assert f"Skipping EBI Search study {failed_study.accession}" in caplog.text
+    assert (
+        f"Skipping EBI Search analysis {failed_analysis.accession}_6.0" in caplog.text
+    )
+    assert artifact_key in caplog.text
 
 
 def test_project_entry_has_distinct_analysis_types_and_pipeline_versions():

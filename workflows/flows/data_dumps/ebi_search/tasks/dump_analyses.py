@@ -33,7 +33,7 @@ def dump_analyses(
     until: datetime,
     chunk_size: int,
     transfer_services_url_root: str,
-) -> dict[str, int]:
+) -> dict:
     output_dir.mkdir(parents=True, exist_ok=True)
     additions = analysis_additions(initial, since, until)
     deletion_ids: list[str] = []
@@ -54,10 +54,10 @@ def dump_analyses(
     lineages = biome_lineages()
     paginator = Paginator(additions, chunk_size)
     addition_count = 0
+    failures = []
     try:
         for page in paginator:
             page_analyses = list(page.object_list)
-            addition_count += len(page_analyses)
             output_file = output_dir / f"analyses_{page.number:04d}.xml"
             run_logger.info(
                 "Writing analysis page %s/%s to %s",
@@ -69,19 +69,33 @@ def dump_analyses(
                 RUN_DATABASE_NAME,
                 "EMG Analysis runs – samples analysed by MGnify pipelines",
                 until.date().isoformat(),
-                len(page_analyses),
             )
             for analysis in page_analyses:
-                database_.entries.append(
-                    analysis_entry(
-                        analysis,
-                        transfer_services_url_root,
-                        client,
-                        run_logger,
-                        lineages,
+                document_id = analysis_document_id(analysis)
+                try:
+                    database_.entries.append(
+                        analysis_entry(
+                            analysis,
+                            transfer_services_url_root,
+                            client,
+                            run_logger,
+                            lineages,
+                        )
                     )
-                )
+                except Exception as error:
+                    reason = " ".join(str(error).split())[:300] or type(error).__name__
+                    run_logger.warning(
+                        "Skipping EBI Search analysis %s: %s", document_id, reason
+                    )
+                    failures.append((analysis.study.accession, document_id, reason))
+            database_.entry_count = len(database_.entries)
+            addition_count += len(database_.entries)
             write_xml(output_file, database_)
     finally:
         client.close()
-    return {"additions": addition_count, "deletions": len(deletion_ids)}
+
+    return {
+        "additions": addition_count,
+        "deletions": len(deletion_ids),
+        "failures": failures,
+    }

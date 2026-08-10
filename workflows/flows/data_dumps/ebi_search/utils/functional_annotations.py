@@ -82,18 +82,7 @@ def _identifiers_from_url(
                 url,
             )
             return set()
-        error = exc
-    except (httpx.RequestError, OSError, EOFError, UnicodeDecodeError) as exc:
-        error = exc
-
-    run_logger.warning(
-        "Skipping unreadable %s file for %s at %s: %s",
-        kind,
-        analysis_accession,
-        url,
-        error,
-    )
-    return set()
+        raise
 
 
 def functional_cross_references(
