@@ -123,7 +123,7 @@ def test_sample_suppression_propagates_to_children(
     sample.is_suppressed = True
     sample.save(update_fields=["is_suppressed"])
 
-    assert sample.runs.filter(is_suppressed=True).exists()
+    assert not sample.runs.filter(is_suppressed=False).exists()
     assert sample.assemblies.filter(is_suppressed=True).exists()
     assert sample.analyses.filter(is_suppressed=True).exists()
 
