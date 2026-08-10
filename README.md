@@ -259,19 +259,3 @@ See [the slurm-dev-environment/README.md](slurm-dev-environment/README.md) for d
 of the containerised slurm "cluster".
 
 ---
-
-## Deployment
-Production and shared-environment deployment configuration is kept outside this
-application repository in a private infrastructure repository.
-This repository owns the application code, local development setup, tests, and
-container build context. Local Prefect development config remains in
-`workflows/prefect_deployments/prefect-dev-donco.yaml`.
-
-For production releases, build and publish an immutable application image from
-this repo, then deploy that image from the private infrastructure repo.
-
-
-## TODO
-* DB Schema parity with EMG DB (v1) and EMG Backlog
-* Job cleanup flows
-* Legacy data importers
