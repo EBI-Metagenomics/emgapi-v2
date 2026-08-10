@@ -262,12 +262,7 @@ of the containerised slurm "cluster".
 
 ## Deployment
 Production and shared-environment deployment configuration is kept outside this
-application repository in a private infrastructure repository. That private repo
-owns Kubernetes manifests, migration jobs, cluster-specific Taskfiles, production
-Prefect deployment declarations, worker supervisor scripts, kubeconfig paths,
-namespaces, ingress rules, NFS paths, image pull credentials, and operational
-runbooks for sensitive configuration.
-
+application repository in a private infrastructure repository.
 This repository owns the application code, local development setup, tests, and
 container build context. Local Prefect development config remains in
 `workflows/prefect_deployments/prefect-dev-donco.yaml`.
