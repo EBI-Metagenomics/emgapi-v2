@@ -628,7 +628,7 @@ def sync_privacy_state_of_ena_study_and_derived_objects(
     with transaction.atomic():
         # Reset derived objects to the study state before reapplying child suppression.
         ena_study.save()
-        if available:
+        if any(available.values()):
             sync_study_child_suppression_from_ena(ena_study, available)
 
 
