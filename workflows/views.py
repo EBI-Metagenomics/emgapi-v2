@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import csv
 import logging
+import os
 from pathlib import Path
 from urllib.parse import quote, unquote
 
@@ -49,7 +50,10 @@ def validate_samplesheet_path(filepath_encoded: str) -> Path:
     resolved_filepath = filepath.resolve(strict=False)
     allowed_root = Path(EMG_CONFIG.slurm.samplesheet_editing_allowed_inside).resolve()
 
-    if not resolved_filepath.is_relative_to(allowed_root):
+    if (
+        os.path.commonpath([str(allowed_root), str(resolved_filepath)])
+        != str(allowed_root)
+    ):
         raise Http404("Invalid directory")
 
     return resolved_filepath
