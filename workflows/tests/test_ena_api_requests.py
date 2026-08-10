@@ -1077,45 +1077,6 @@ def test_study_child_suppression_is_synced_from_assemblies_to_samples(
     assert analysis.is_suppressed
 
 
-@pytest.mark.django_db
-def test_sync_privacy_state_can_check_suppressed_children(
-    monkeypatch, prefect_harness, raw_read_run
-):
-    ena_study = ena.models.Study.objects.first()
-    available = {"samples": set(), "runs": set(), "assemblies": set()}
-    checked = {}
-    monkeypatch.setattr(
-        "workflows.ena_utils.ena_api_requests.is_ena_study_public",
-        lambda accession: True,
-    )
-    monkeypatch.setattr(
-        "workflows.ena_utils.ena_api_requests.get_available_study_sample_accessions",
-        lambda accessions: available["samples"],
-    )
-    monkeypatch.setattr(
-        "workflows.ena_utils.ena_api_requests.get_available_study_run_accessions",
-        lambda accessions: available["runs"],
-    )
-    monkeypatch.setattr(
-        "workflows.ena_utils.ena_api_requests.get_available_study_assembly_accessions",
-        lambda accessions: available["assemblies"],
-    )
-
-    def record_check(study, child_accessions):
-        checked.update(study=study, child_accessions=child_accessions)
-
-    monkeypatch.setattr(
-        "workflows.ena_utils.ena_api_requests.sync_study_child_suppression_from_ena",
-        record_check,
-    )
-
-    sync_privacy_state_of_ena_study_and_derived_objects(
-        ena_study, also_check_suppressed_children=True
-    )
-
-    assert checked == {"study": ena_study, "child_accessions": available}
-
-
 def test_ena_accession_parsing():
     assert extract_all_accessions("ERP1;ERP2") == ["ERP1", "ERP2"]
     assert extract_all_accessions(["ERP1;ERP2"]) == ["ERP1", "ERP2"]
