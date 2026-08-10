@@ -1,5 +1,4 @@
 import json
-import os
 
 from django.contrib import admin, messages
 from django.contrib.admin.views.decorators import staff_member_required
@@ -9,6 +8,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse_lazy
 from django.utils.html import format_html
 from prefect.deployments import run_deployment
+from prefect.utilities.urls import url_for
 from unfold.admin import ModelAdmin
 from unfold.decorators import action, display
 
@@ -207,14 +207,11 @@ class StudyAdmin(
             parameters={"accessions": accessions},
             timeout=0,
         )
-        flow_run_url = (
-            f"{os.getenv('PREFECT_UI_URL', '').rstrip('/')}/runs/flow-run/{flow_run.id}"
-        )
         self.message_user(
             request,
             format_html(
                 'ENA resync started: <a href="{url}">flow run {flow_run_id}</a>.',
-                url=flow_run_url,
+                url=url_for(flow_run),
                 flow_run_id=flow_run.id,
             ),
             messages.SUCCESS,
