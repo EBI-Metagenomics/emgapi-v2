@@ -83,7 +83,7 @@ def _identifiers_from_url(
             )
             return set()
         error = exc
-    except (httpx.RequestError, OSError, EOFError) as exc:
+    except (httpx.RequestError, OSError, EOFError, UnicodeDecodeError) as exc:
         error = exc
 
     run_logger.warning(
