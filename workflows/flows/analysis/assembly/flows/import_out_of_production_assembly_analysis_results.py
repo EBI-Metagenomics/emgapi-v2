@@ -4,7 +4,7 @@ from textwrap import dedent as _
 from typing import List, Optional
 
 from django.conf import settings
-from prefect import flow, get_run_logger, suspend_flow_run, task
+from prefect import get_run_logger, suspend_flow_run
 from prefect.artifacts import create_table_artifact
 from prefect.input import RunInput
 from pydantic import Field
@@ -59,6 +59,12 @@ from workflows.models import Analysis, AssemblyAnalysisPipeline, Study
 from workflows.prefect_utils.analyses_models_helpers import (
     add_study_watchers,
     get_users_as_choices,
+)
+from workflows.prefect_utils.flows_utils import (
+    django_db_flow as flow,
+)
+from workflows.prefect_utils.flows_utils import (
+    django_db_task as task,
 )
 
 
