@@ -8,7 +8,7 @@ from prefect import get_run_logger
 
 from activate_django_first import EMG_CONFIG
 
-from ena.models import Study
+from analyses.models import Study
 from workflows.data_io_utils.file_rules.nodes import Directory
 from workflows.flows.analyse_study_tasks.shared.study_summary import STUDY_SUMMARY_TSV
 from workflows.models import AssemblyAnalysisBatch, AssemblyAnalysisPipeline
@@ -85,7 +85,7 @@ def generate_assembly_analysis_pipeline_batch_summary(
     asa_workspace = assembly_batch.get_pipeline_workspace(AssemblyAnalysisPipeline.ASA)
 
     return generate_assembly_analysis_pipeline_summary(
-        study=study,
+        study_accession=study.accession,
         asa_workspace=asa_workspace,
         output_prefix=str(assembly_batch.id),
     )
@@ -93,7 +93,7 @@ def generate_assembly_analysis_pipeline_batch_summary(
 
 @task
 def generate_assembly_analysis_pipeline_summary(
-    study: Study,
+    study_accession: str,
     asa_workspace: Path,
     output_prefix: Union[str, None] = None,
 ) -> Union[List[Path], None]:
@@ -102,7 +102,7 @@ def generate_assembly_analysis_pipeline_summary(
 
     The study summaries are written to the study.results_dir.
 
-    :param study: The Study object to summarize annotation results for.
+    :param study_accession: Accession of the Study to summarize annotation results for.
     :param asa_workspace: Directory containing the ASA end-of-run reports
         (``analysed_assemblies.csv``) to summarise.
     :param output_prefix: Prefix for the generated summary file names.
@@ -113,6 +113,8 @@ def generate_assembly_analysis_pipeline_summary(
     """
 
     logger = get_run_logger()
+
+    study = Study.objects.get(accession=study_accession)
 
     logger.info(f"Generating assembly summary for {study.id}")
     logger.info(f"Expecting to find analysis results in {asa_workspace}")
