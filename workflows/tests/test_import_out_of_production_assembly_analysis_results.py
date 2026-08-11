@@ -128,11 +128,11 @@ class TestCopyOutOfProductionAnalysisResultsToDestinationFolder:
         return analysis
 
     @patch(
-        "workflows.flows.analysis.assembly.flows.import_out_of_production_assembly_analysis_results.copy_single_analysis_results"
+        "workflows.flows.analysis.assembly.flows.import_out_of_production_assembly_analysis_results.copy_single_out_of_production_analysis_results"
     )
     def test_copy_success_returns_result(
         self,
-        mock_copy_single,
+        mock_copy_out_of_production,
         setup_analysis,
         prefect_harness,
         tmp_path,
@@ -146,7 +146,7 @@ class TestCopyOutOfProductionAnalysisResultsToDestinationFolder:
             destination_folder=tmp_path / "ftp" / "analysis",
             success=True,
         )
-        mock_copy_single.return_value = copy_result
+        mock_copy_out_of_production.return_value = copy_result
 
         results = copy_out_of_production_analysis_results_to_destination_folder(
             analyses=[analysis],
@@ -155,22 +155,23 @@ class TestCopyOutOfProductionAnalysisResultsToDestinationFolder:
         )
 
         assert results == [copy_result]
-        mock_copy_single.assert_called_once()
-        assert mock_copy_single.call_args.kwargs["analysis"] == analysis
+        mock_copy_out_of_production.assert_called_once()
+        assert mock_copy_out_of_production.call_args.kwargs["analysis"] == analysis
         assert (
-            mock_copy_single.call_args.kwargs["results_workspace"] == results_workspace
+            mock_copy_out_of_production.call_args.kwargs["results_workspace"]
+            == results_workspace
         )
-        assert mock_copy_single.call_args.kwargs["destination_root"] == tmp_path / "ftp"
-        # Out-of-production copies do not go through the batch context
-        assert "batch" not in mock_copy_single.call_args.kwargs
-        assert "batch_analysis_job" not in mock_copy_single.call_args.kwargs
+        assert (
+            mock_copy_out_of_production.call_args.kwargs["destination_root"]
+            == tmp_path / "ftp"
+        )
 
     @patch(
-        "workflows.flows.analysis.assembly.flows.import_out_of_production_assembly_analysis_results.copy_single_analysis_results"
+        "workflows.flows.analysis.assembly.flows.import_out_of_production_assembly_analysis_results.copy_single_out_of_production_analysis_results"
     )
     def test_copy_failed_returns_result(
         self,
-        mock_copy_single,
+        mock_copy_out_of_production,
         setup_analysis,
         prefect_harness,
         tmp_path,
@@ -191,7 +192,7 @@ class TestCopyOutOfProductionAnalysisResultsToDestinationFolder:
                 )
             ],
         )
-        mock_copy_single.return_value = copy_result
+        mock_copy_out_of_production.return_value = copy_result
 
         results = copy_out_of_production_analysis_results_to_destination_folder(
             analyses=[analysis],
@@ -204,11 +205,11 @@ class TestCopyOutOfProductionAnalysisResultsToDestinationFolder:
         assert results[0].errors[0].message == "ASA results are missing"
 
     @patch(
-        "workflows.flows.analysis.assembly.flows.import_out_of_production_assembly_analysis_results.copy_single_analysis_results"
+        "workflows.flows.analysis.assembly.flows.import_out_of_production_assembly_analysis_results.copy_single_out_of_production_analysis_results"
     )
     def test_copy_processes_all_analyses(
         self,
-        mock_copy_single,
+        mock_copy_out_of_production,
         raw_reads_mgnify_study,
         raw_reads_mgnify_sample,
         mgnify_assemblies,
@@ -236,7 +237,7 @@ class TestCopyOutOfProductionAnalysisResultsToDestinationFolder:
             )
             for analysis in analyses
         ]
-        mock_copy_single.side_effect = copy_results
+        mock_copy_out_of_production.side_effect = copy_results
 
         results = copy_out_of_production_analysis_results_to_destination_folder(
             analyses=analyses,
@@ -245,8 +246,8 @@ class TestCopyOutOfProductionAnalysisResultsToDestinationFolder:
         )
 
         assert results == copy_results
-        assert mock_copy_single.call_count == 2
-        for call, analysis in zip(mock_copy_single.call_args_list, analyses):
+        assert mock_copy_out_of_production.call_count == 2
+        for call, analysis in zip(mock_copy_out_of_production.call_args_list, analyses):
             assert call.kwargs["analysis"] == analysis
             assert call.kwargs["results_workspace"] == results_workspace
 

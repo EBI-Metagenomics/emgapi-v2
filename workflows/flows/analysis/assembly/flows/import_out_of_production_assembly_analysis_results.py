@@ -26,7 +26,7 @@ from workflows.ena_utils.ena_api_requests import (
 from workflows.ena_utils.webin_owner_utils import validate_and_set_webin_owner
 from workflows.flows.analyse_study_tasks.shared.copy_v6_pipeline_results import (
     BatchCopyResult,
-    copy_single_analysis_results,
+    copy_single_out_of_production_analysis_results,
     copy_v6_study_summaries,
 )
 from workflows.flows.analysis.assembly.flows.sync_assembly_batch_results import (
@@ -612,7 +612,7 @@ def copy_out_of_production_analysis_results_to_destination_folder(
     copy_results: list[BatchCopyResult] = []
     for analysis in analyses:
         copy_results.append(
-            copy_single_analysis_results(
+            copy_single_out_of_production_analysis_results(
                 analysis=analysis,
                 results_workspace=results_workspace,
                 destination_root=destination_root,
