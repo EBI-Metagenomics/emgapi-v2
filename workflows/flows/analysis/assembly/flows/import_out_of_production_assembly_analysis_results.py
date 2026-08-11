@@ -159,6 +159,8 @@ def import_out_of_production_assembly_analysis_results(
         logger.info(f"{mgnify_study} is a private study.")
 
     # Run this function to fetch related runs/samples for this study and save them in the DB
+    # TODO: this hardcoded limit is duplicated in other places in the codebase. We should
+    #  either adjust it or refactor these limits to use a shared, better structure.
     get_study_assemblies_from_ena(study_accession, limit=10000)
 
     # Suspend if biome is needed, or if the study is private and has no webin submitter set yet
