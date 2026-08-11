@@ -1029,3 +1029,45 @@ def test_get_study_accession_for_assembly_secondary(httpx_mock, prefect_harness)
 
     study_accession = get_study_accession_for_assembly(assembly_accession)
     assert study_accession == secondary_study_accession
+
+
+@pytest.mark.httpx_mock(should_mock=should_not_mock_httpx_requests_to_prefect_server)
+@pytest.mark.django_db(transaction=True)
+def test_get_study_accession_for_assembly_private(httpx_mock, prefect_harness):
+    """If the assembly isn't found publicly, retry with DCC auth before giving up."""
+    assembly_accession = "ERZ25038795"
+    study_accession = "PRJEB85401"
+
+    base_url = (
+        f"{EMG_CONFIG.ena.portal_search_api}?result=analysis"
+        f"&query=%22analysis_accession={assembly_accession}%22"
+        "&fields=analysis_accession%2Cstudy_accession%2Csecondary_study_accession"
+        "&limit=1&format=json"
+    )
+    dcc_auth_header = {
+        "Authorization": "Basic ZGNjX2Zha2U6bm90LWEtZGNjLXB3"
+    }  # dcc_fake:not-a-dcc-pw
+
+    # Unauthenticated lookups, on both data portals, find nothing publicly.
+    httpx_mock.add_response(
+        url=f"{base_url}&dataPortal=metagenome",
+        json=[],
+        match_headers={},
+        is_reusable=True,
+    )
+    httpx_mock.add_response(
+        url=f"{base_url}&dataPortal=ena",
+        json=[],
+        match_headers={},
+        is_reusable=True,
+    )
+    # Authenticated lookup on the metagenome portal finds the private assembly.
+    httpx_mock.add_response(
+        url=f"{base_url}&dataPortal=metagenome",
+        json=[{"study_accession": study_accession}],
+        match_headers=dcc_auth_header,
+        is_reusable=True,
+    )
+
+    result = get_study_accession_for_assembly(assembly_accession)
+    assert result == study_accession

@@ -744,7 +744,7 @@ def get_study_accession_for_assembly(
     )
 
     _ = ENAAnalysisFields
-    portal_analyses = ENAAPIRequest(
+    analysis_request = ENAAPIRequest(
         result=ENAPortalResultType.ANALYSIS,
         fields=[
             _.ANALYSIS_ACCESSION,
@@ -754,7 +754,19 @@ def get_study_accession_for_assembly(
         limit=1,
         query=ENAAnalysisQuery(analysis_accession=assembly_accession),
         data_portals=[ENAPortalDataPortal.METAGENOME, ENAPortalDataPortal.ENA],
-    ).get()
+    )
+
+    # We don't yet know which study this assembly belongs to, so we can't look up
+    # is_private from our own DB.
+    # Try publicly first, and only fall back to authenticated access if that finds
+    # nothing - the assembly may belong to a private study.
+    portal_analyses = analysis_request.get(raise_on_empty=False)
+    if not portal_analyses:
+        logger.info(
+            f"Assembly {assembly_accession} not found publicly; "
+            "retrying with authentication in case its study is private"
+        )
+        portal_analyses = analysis_request.get(auth=dcc_auth, raise_on_empty=False)
 
     if not portal_analyses:
         raise ValueError(
