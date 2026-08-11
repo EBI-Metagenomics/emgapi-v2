@@ -188,8 +188,8 @@ def import_out_of_production_assembly_analysis_results(
             wait_for_input=ImportAssemblyAnalysisInput.with_initial_data(
                 **initial_data,
                 description=_(f"""\
-                        **External Assembly Analysis Ingestion**
-                        Ingesting out-of-production generated Assembly Analysis results for study {study_accession} \
+                        **Import Out-of-Production Assembly Analysis Results**
+                        Importing Assembly Analysis results for study {study_accession} generated outside of MGnify automation v6\
                         produced by [Assembly Analysis Pipeline V6](https://github.com/EBI-Metagenomics/assembly-analysis-pipeline).
 
                         {"**Biome tagger** Please select a Biome for the entire study " + f"[{ena_study.accession}: {ena_study.title}](https://www.ebi.ac.uk/ena/browser/view/{ena_study.accession})." if needs_biome else f"Biome is already set to {mgnify_study.biome} — change here if needed."}
