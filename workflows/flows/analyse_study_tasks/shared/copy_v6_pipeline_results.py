@@ -452,7 +452,9 @@ def copy_single_out_of_production_analysis_results(
 
     copy_errors: list[CopyError] = []
 
-    asa_source_base = results_workspace / "asa" / assembly_accession
+    asa_source_base = (
+        results_workspace / AssemblyAnalysisPipeline.ASA.value / assembly_accession
+    )
     asa_copy_success, asa_copy_errors = copy_schema_directories(
         schema=AssemblyResultSchema(),
         source_base=asa_source_base,
@@ -464,14 +466,14 @@ def copy_single_out_of_production_analysis_results(
     copy_errors.extend(asa_copy_errors)
 
     optional_pipelines = (
-        ("virify", "VIRify", VirifyResultSchema),
-        ("map", "MAP", MapResultSchema),
+        (AssemblyAnalysisPipeline.VIRIFY, VirifyResultSchema),
+        (AssemblyAnalysisPipeline.MAP, MapResultSchema),
     )
-    for directory_name, pipeline_name, schema_class in optional_pipelines:
-        source_base = results_workspace / directory_name / assembly_accession
+    for pipeline, schema_class in optional_pipelines:
+        source_base = results_workspace / pipeline.value / assembly_accession
         if not source_base.exists():
             logger.info(
-                f"No {pipeline_name} output found for {analysis.accession} "
+                f"No {pipeline.label} output found for {analysis.accession} "
                 f"at {source_base}; skipping optional copy"
             )
             continue
@@ -483,7 +485,7 @@ def copy_single_out_of_production_analysis_results(
             timeout=timeout,
         )
         if not success:
-            logger.error(f"{pipeline_name} copy for {analysis.accession} failed")
+            logger.error(f"{pipeline.label} copy for {analysis.accession} failed")
         copy_errors.extend(errors)
 
     if copy_errors:

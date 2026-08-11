@@ -18,6 +18,7 @@ from workflows.flows.analysis.assembly.flows.import_out_of_production_assembly_a
     copy_out_of_production_analysis_results_to_destination_folder,
     import_out_of_production_assembly_analysis_results,
 )
+from workflows.models import AssemblyAnalysisPipeline
 from workflows.prefect_utils.testing_utils import (
     generate_assembly_v6_pipeline_results,
     run_flow_and_capture_logs,
@@ -46,12 +47,16 @@ class TestImportOutOfProductionAssemblyAnalysisResults:
         accession = "ERZ18440741"
         results_path = tmp_path / "results"
         results_path.mkdir()
-        for pipeline in ["asa", "virify"]:  # MAP directory is missing
-            pipeline_path = results_path / pipeline / accession
+        for pipeline in (
+            AssemblyAnalysisPipeline.ASA,
+            AssemblyAnalysisPipeline.VIRIFY,
+        ):  # MAP directory is missing
+            pipeline_path = results_path / pipeline.value / accession
             pipeline_path.mkdir(parents=True, exist_ok=True)
 
         with pytest.raises(
-            FileNotFoundError, match="Pipeline directory map not found "
+            FileNotFoundError,
+            match=f"Pipeline directory {AssemblyAnalysisPipeline.MAP.value} not found ",
         ):
             _validate_results_structure(results_path, [accession])
 
@@ -186,8 +191,10 @@ class TestCopyOutOfProductionAnalysisResultsToDestinationFolder:
             success=False,
             errors=[
                 CopyError(
-                    pipeline_name="asa",
-                    source=results_workspace / "asa" / "ERZ000000",
+                    pipeline_name=AssemblyAnalysisPipeline.ASA.value,
+                    source=results_workspace
+                    / AssemblyAnalysisPipeline.ASA.value
+                    / "ERZ000000",
                     message="ASA results are missing",
                 )
             ],
@@ -283,13 +290,17 @@ def setup_fixtures_of_completed_assembly_analysis(assembly_test_scenario):
     )
     # Generate ASA pipeline results
     generate_assembly_v6_pipeline_results(
-        asa_workspace=workspace / "asa",
+        asa_workspace=workspace / AssemblyAnalysisPipeline.ASA.value,
         assemblies=[(assembly_test_scenario.assembly_accession_success, "success")],
         copy_from_fixtures=assembly_test_scenario.fixture_source_dir,
     )
     # Generate MAP and Virify pipeline results
-    setup_virify_batch_fixtures(workspace / "virify", assembly_test_scenario)
-    setup_map_batch_fixtures(workspace / "map", assembly_test_scenario)
+    setup_virify_batch_fixtures(
+        workspace / AssemblyAnalysisPipeline.VIRIFY.value, assembly_test_scenario
+    )
+    setup_map_batch_fixtures(
+        workspace / AssemblyAnalysisPipeline.MAP.value, assembly_test_scenario
+    )
 
     return workspace, samplesheet_path
 
@@ -531,9 +542,11 @@ class TestImportOutOfProductionAssemblyAnalysisResultsRealData:
         study_accession_2 = "PRJEB00002"
 
         results_dir = tmp_path / "results"
-        for pipeline in ["asa", "virify", "map"]:
+        for pipeline in AssemblyAnalysisPipeline:
             for accession in [assembly_accession_1, assembly_accession_2]:
-                (results_dir / pipeline / accession).mkdir(parents=True, exist_ok=True)
+                (results_dir / pipeline.value / accession).mkdir(
+                    parents=True, exist_ok=True
+                )
 
         samplesheet_path = tmp_path / "samplesheet.csv"
         samplesheet_path.write_text(

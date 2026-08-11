@@ -243,7 +243,7 @@ def import_out_of_production_assembly_analysis_results(
 
     logger.info("Setting ASA analysis states based on the end-of-execution reports...")
     set_asa_analysis_states(
-        results_path / "asa",
+        results_path / AssemblyAnalysisPipeline.ASA.value,
         [analysis.id for analysis in exported_analyses],
     )
 
@@ -275,7 +275,7 @@ def import_out_of_production_assembly_analysis_results(
 
     generate_assembly_analysis_pipeline_summary(
         study_accession=mgnify_study.accession,
-        asa_workspace=results_path / "asa",
+        asa_workspace=results_path / AssemblyAnalysisPipeline.ASA.value,
     )
 
     add_assembly_study_summaries_to_downloads(mgnify_study.accession)
@@ -388,18 +388,16 @@ def _validate_results_structure(
 
     # Check for expected subdirectories
     expected_dirs = {
-        "asa": results_path / "asa",
-        "virify": results_path / "virify",
-        "map": results_path / "map",
+        pipeline: results_path / pipeline.value for pipeline in AssemblyAnalysisPipeline
     }
 
     for pipeline, pipeline_path in expected_dirs.items():
         if not pipeline_path.exists():
             raise FileNotFoundError(
-                f"Pipeline directory {pipeline} not found at {pipeline_path}."
+                f"Pipeline directory {pipeline.value} not found at {pipeline_path}."
             )
         else:
-            logger.info(f"Found {pipeline} results directory: {pipeline_path}")
+            logger.info(f"Found {pipeline.value} results directory: {pipeline_path}")
         for assembly_acc in assemblies_accessions:
             assembly_results_folder = pipeline_path / assembly_acc
             if not assembly_results_folder.exists():
@@ -437,13 +435,13 @@ def import_out_of_production_analysis_results(
     # This is a bit ugly, but it is done like this to avoid having Prefect to serialize a complex schema as input
     if pipeline_type == AssemblyAnalysisPipeline.ASA:
         schema = AssemblyResultSchema()
-        base_path = results_path / "asa"
+        base_path = results_path / AssemblyAnalysisPipeline.ASA.value
     elif pipeline_type == AssemblyAnalysisPipeline.VIRIFY:
         schema = VirifyResultSchema()
-        base_path = results_path / "virify"
+        base_path = results_path / AssemblyAnalysisPipeline.VIRIFY.value
     elif pipeline_type == AssemblyAnalysisPipeline.MAP:
         schema = MapResultSchema()
-        base_path = results_path / "map"
+        base_path = results_path / AssemblyAnalysisPipeline.MAP.value
 
     if schema is None or base_path is None:
         raise ValueError(f"Unsupported pipeline type: {pipeline_type}")
