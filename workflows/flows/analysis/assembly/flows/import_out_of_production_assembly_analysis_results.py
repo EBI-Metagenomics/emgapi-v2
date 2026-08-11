@@ -29,6 +29,7 @@ from workflows.flows.analyse_study_tasks.shared.copy_v6_pipeline_results import 
     copy_single_out_of_production_analysis_results,
     copy_v6_study_summaries,
 )
+from workflows.flows.analysis import AnalysisType
 from workflows.flows.analysis.assembly.flows.sync_assembly_batch_results import (
     update_analysis_statuses_from_copy_results,
     update_external_results_dirs_from_copy_results,
