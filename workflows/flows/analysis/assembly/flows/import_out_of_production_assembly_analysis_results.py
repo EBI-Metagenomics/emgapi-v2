@@ -126,15 +126,9 @@ def import_out_of_production_assembly_analysis_results(
     )
 
     # =========================================================================
-    # STEP 2: Validate filesystem and results structure
+    # STEP 2: Determine study accession and validate samplesheet is single-study
     # =========================================================================
-    logger.info("Step 2: Validating results structure and consistency...")
-    _validate_results_structure(results_path, assembly_accessions)
-
-    # =========================================================================
-    # STEP 3: Create/fetch Study, Assemblies and related objects, set Biome
-    # =========================================================================
-    logger.info("Step 3: Creating/fetching study and related models...")
+    logger.info("Step 2: Determining study accession for samplesheet assemblies...")
 
     # Find study accession for each assembly accession in the samplesheet
     study_accessions = set()
@@ -149,6 +143,17 @@ def import_out_of_production_assembly_analysis_results(
         )
 
     study_accession = study_accessions.pop()
+
+    # =========================================================================
+    # STEP 3: Validate filesystem and results structure
+    # =========================================================================
+    logger.info("Step 3: Validating results structure and consistency...")
+    _validate_results_structure(results_path, assembly_accessions)
+
+    # =========================================================================
+    # STEP 4: Create/fetch Study, Assemblies and related objects, set Biome
+    # =========================================================================
+    logger.info("Step 4: Creating/fetching study and related models...")
 
     # Process the study and its assemblies
     logger.info(f"Processing study accession: {study_accession}")
@@ -227,9 +232,9 @@ def import_out_of_production_assembly_analysis_results(
         )
 
     # =========================================================================
-    # STEP 4: Create Analysis objects
+    # STEP 5: Create Analysis objects
     # =========================================================================
-    logger.info("Step 4: Creating Analysis objects for all assemblies...")
+    logger.info("Step 5: Creating Analysis objects for all assemblies...")
     exported_analyses = create_analyses_for_assemblies(
         mgnify_study.id,
         assembly_accessions,
@@ -237,9 +242,9 @@ def import_out_of_production_assembly_analysis_results(
     )
 
     # =========================================================================
-    # STEP 5: Validate and Import Pipeline Results
+    # STEP 6: Validate and Import Pipeline Results
     # =========================================================================
-    logger.info("Step 5: Validating and importing pipeline results...")
+    logger.info("Step 6: Validating and importing pipeline results...")
 
     logger.info("Setting ASA analysis states based on the end-of-execution reports...")
     set_asa_analysis_states(
@@ -269,9 +274,9 @@ def import_out_of_production_assembly_analysis_results(
     )
 
     # =========================================================================
-    # STEP 6: Finalize study and create summaries
+    # STEP 7: Finalize study and create summaries
     # =========================================================================
-    logger.info("Step 6: Finalizing study and creating summaries...")
+    logger.info("Step 7: Finalizing study and creating summaries...")
 
     generate_assembly_analysis_pipeline_summary(
         study_accession=mgnify_study.accession,
@@ -292,9 +297,9 @@ def import_out_of_production_assembly_analysis_results(
     mgnify_study.save()
 
     # =========================================================================
-    # STEP 7: Copy results files to production locations
+    # STEP 8: Copy results files to production locations
     # =========================================================================
-    logger.info("Step 7: Copying results to production locations...")
+    logger.info("Step 8: Copying results to production locations...")
     copy_out_of_production_assembly_analysis_results(
         study_id=mgnify_study.id,
         results_dir=results_path,
