@@ -280,7 +280,7 @@ def import_out_of_production_assembly_analysis_results(
     add_assembly_study_summaries_to_downloads(mgnify_study.accession)
     logger.info("Added study summaries to downloads")
 
-    copy_v6_study_summaries(mgnify_study.accession)
+    copy_v6_study_summaries(mgnify_study.accession, analysis_type=AnalysisType.ASSEMBLY)
     logger.info("Copied v6 study summaries")
 
     # Update study features
