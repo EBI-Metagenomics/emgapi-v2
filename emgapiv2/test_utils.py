@@ -1,9 +1,12 @@
+from datetime import UTC, datetime
+
 import pytest
 from django.core.exceptions import ValidationError
 from django.db import connection, models
 from django.test.utils import isolate_apps
 from pydantic import BaseModel
 
+from analyses.models import Publication
 from emgapiv2.async_utils import anysync_property
 from emgapiv2.dict_utils import add, some
 from emgapiv2.enum_utils import FutureStrEnum
@@ -12,6 +15,7 @@ from emgapiv2.model_utils import (
     JSONFieldWithSchema,
     SuppressionFollowingForeignKey,
     SuppressionFollowingRelation,
+    during,
 )
 
 
@@ -135,6 +139,22 @@ def test_json_field_with_schema():
 
     instance = TestModel2(my_data=[single_datum])
     assert TestSchema.model_validate(instance.my_data[0]).name == "X-wing"
+
+
+@pytest.mark.django_db
+def test_model_utils_during():
+    jul_start = datetime(2026, 7, 1, tzinfo=UTC)
+    aug_start = datetime(2026, 8, 1, tzinfo=UTC)
+    jul_pub = Publication.objects.create(
+        pubmed_id=1, title="Published in July", metadata={}
+    )
+    aug_pub = Publication.objects.create(
+        pubmed_id=2, title="Published in August", metadata={}
+    )
+    Publication.objects.filter(pk=jul_pub.pk).update(updated_at=jul_start)
+    Publication.objects.filter(pk=aug_pub.pk).update(updated_at=aug_start)
+
+    assert list(Publication.objects.filter(during(jul_start, aug_start))) == [jul_pub]
 
 
 @pytest.mark.django_db(transaction=True)

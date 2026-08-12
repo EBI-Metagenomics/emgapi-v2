@@ -1,8 +1,10 @@
 import json
+from datetime import datetime
 from typing import Type
 
 from django.core.exceptions import ValidationError as DjValidationError
 from django.db import models
+from django.db.models import Q
 from pydantic import BaseModel
 from pydantic import ValidationError as PydValidationError
 
@@ -291,3 +293,30 @@ class JSONFieldWithSchema(models.JSONField):
         if isinstance(value, _PydanticValidatingList):
             return list(value)
         return super().get_prep_value(value)
+
+
+def during(
+    since: datetime,
+    until: datetime,
+    relationship_path: str | None = None,
+    field: str = "updated_at",
+) -> Q:
+    """
+    Return a django queryset Q object to filter a queryset by a datetime field being within a window.
+
+    Example:
+    july_01 = datetime.fromisoformat("2026-07-01")
+    august_01 = datetime.fromisoformat("2026-08-01")
+
+    july_updates = models.Study.filter(during(july_01, august_01, field="updated_at"))
+    july_sample_related_superstudy_updates = models.Sample.filter(during(july_01, august_01, field="updated_at", relationship_path="study__superstudy"))
+
+
+    :param since:
+    :param until:
+    :param relationship_path:
+    :param field:
+    :return:
+    """
+    field_path = "__".join(filter(None, [relationship_path, field]))
+    return Q(**{f"{field_path}__gte": since, f"{field_path}__lt": until})

@@ -144,6 +144,59 @@ tasks:
       The deployment imports v2.0 but does not publish it. Inspect the ready release in
       Django admin, then use the catalogue publication action to replace v1.0.
 
+  test-ebi-search-dump-donco:
+    desc: "Run the EBI Search dump end to end on the local donco Slurm worker"
+    preconditions:
+      - sh: command -v xmllint
+        msg: "xmllint is required on the host"
+      - sh: test -s dev-db.json
+        msg: "Development database fixture not found; run `task make-dev-data`"
+      - sh: >-
+          test -s
+          slurm-dev-environment/fs/nfs/ftp/public/databases/metagenomics/mgnify_results/PRJNA398/PRJNA398089/ERZ857/ERZ857107/V6/assembly/functional-annotation/rhea-reactions/ERZ857107_proteins2rhea.tsv.gz
+        msg: "Development analysis results not found; run `task make-dev-data`"
+    cmds:
+      - docker compose up -d app transfer-services prefect-server prefect-slurm-worker slurm_node
+      - task: create-pool
+      - >-
+        docker compose run -e PREFECT_CLIENT_RETRY_EXTRA_CODES=0 app
+        python manage.py prefectcli --no-prompt deploy
+        --name ebi_search_dump_deployment
+        --prefect-file workflows/prefect_deployments/prefect-dev-donco.yaml
+      - docker compose exec slurm_node mkdir -p /hps/ebi-search-e2e
+      - docker compose exec slurm_node chmod a+rwx /hps/ebi-search-e2e
+      - task: prefect
+        vars:
+          CLI_ARGS: >-
+            deployment run 'EBI Search dump/ebi_search_dump_deployment' --watch
+      - >-
+        docker compose exec slurm_node python -c
+        "from pathlib import Path; from lxml import etree;
+        root=Path('/hps/ebi-search-e2e/live/initial');
+        projects=root/'projects/latest/projects.xml';
+        analyses=sorted((root/'runs/latest').glob('analyses_*.xml'));
+        assert projects.is_file() and analyses;
+        project_xml=etree.parse(projects);
+        assert project_xml.findtext('name') == 'EMG_Project';
+        assert project_xml.xpath(\"entries/entry/additional_fields/field[@name='experiment_type']\");
+        assert project_xml.xpath(\"entries/entry/additional_fields/field[@name='pipeline_version']\");
+        assert all(etree.parse(path).findtext('name') == 'EMG_run' for path in analyses);
+        assert any(b'dbname=\"rhea\"' in path.read_bytes() for path in analyses)"
+      - >-
+        xmllint --noout --schema
+        http://www.ebi.ac.uk/ebisearch/XML4dbDumps.xsd
+        slurm-dev-environment/fs/hps/ebi-search-e2e/live/initial/projects/latest/projects.xml
+        slurm-dev-environment/fs/hps/ebi-search-e2e/live/initial/runs/latest/analyses_*.xml
+      - >-
+        docker compose exec app python manage.py shell -c
+        "from kvstore.models import KeyValueStore;
+        assert KeyValueStore.objects.filter(key='ebi_search_dump_state').exists()"
+    summary: |
+      Requires development data from `task make-dev-data` and xmllint on the host. The
+      task starts the local donco stack, deploys the flow to the real Slurm work pool,
+      waits for it to finish, validates every XML file against the EBI Search schema,
+      and confirms the Rhea and KV-store state outputs.
+
   debug-break-prefect-connection:
     desc: "Temporarily return 404s from the prefect server, when prefect worker tries to access it"
     vars:
