@@ -115,6 +115,43 @@ def test_ena_suppression_and_privacy_propagation(mgnify_assemblies, raw_read_ana
 
 
 @pytest.mark.django_db(transaction=True)
+def test_sample_suppression_propagates_to_children(
+    mgnify_assemblies, raw_read_analyses
+):
+    sample = analyses.models.Sample.objects.filter(runs__analyses__isnull=False).first()
+
+    sample.is_suppressed = True
+    sample.save(update_fields=["is_suppressed"])
+
+    assert not sample.runs.filter(is_suppressed=False).exists()
+    assert sample.assemblies.filter(is_suppressed=True).exists()
+    assert sample.analyses.filter(is_suppressed=True).exists()
+
+
+@pytest.mark.django_db(transaction=True)
+def test_run_suppression_propagates_to_children(assembly_with_analyses):
+    run = assembly_with_analyses[0].assembly.runs.first()
+
+    run.is_suppressed = True
+    run.save(update_fields=["is_suppressed"])
+
+    assert run.assemblies.filter(is_suppressed=True).exists()
+    assert analyses.models.Analysis.objects.filter(
+        assembly__runs=run, is_suppressed=True
+    ).exists()
+
+
+@pytest.mark.django_db(transaction=True)
+def test_assembly_suppression_propagates_to_analyses(assembly_with_analyses):
+    assembly = assembly_with_analyses[0].assembly
+
+    assembly.is_suppressed = True
+    assembly.save(update_fields=["is_suppressed"])
+
+    assert assembly.analyses.filter(is_suppressed=True).exists()
+
+
+@pytest.mark.django_db(transaction=True)
 def test_sync_samples_with_ena(raw_read_analyses, httpx_mock):
     httpx_mock.add_response(
         url=re.compile(r".*result=sample.*"),

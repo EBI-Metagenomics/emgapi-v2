@@ -9,6 +9,87 @@ from pydantic import BaseModel
 from pydantic import ValidationError as PydValidationError
 
 
+class SuppressionFollowingRelation:
+    """Marker for relations whose target inherits the source suppression state."""
+
+    migration_field_path: str
+
+    def deconstruct(self):
+        name, _, args, kwargs = super().deconstruct()
+        # These marker fields have the same database representation as their
+        # Django base fields, so changing to them requires no migration.
+        return name, self.migration_field_path, args, kwargs
+
+    @classmethod
+    def propagate_from(cls, instance: models.Model):
+        seen = {instance.__class__: {instance.pk}}
+        cls._propagate_from(
+            instance.__class__, {instance.pk}, instance.is_suppressed, seen
+        )
+
+    @classmethod
+    def _propagate_from(
+        cls, source_model, source_pks: set, is_suppressed: bool, seen: dict
+    ):
+        """Recursively propagate suppression state without visiting the same object twice.
+
+        The current relations contain diamonds: an Analysis may be reached from a
+        Sample directly, through its Run, through its Assembly, or through both.
+        ``seen`` avoids repeating queries down each of those paths and also prevents
+        infinite recursion if a cycle is introduced in the future.
+        """
+        for relation in source_model._meta.related_objects:
+            if not isinstance(relation.field, cls):
+                continue
+            related_model = relation.related_model
+            already_seen = seen.setdefault(related_model, set())
+            related_pks = (
+                set(
+                    related_model._base_manager.filter(
+                        **{f"{relation.field.name}__pk__in": source_pks}
+                    )
+                    .values_list("pk", flat=True)
+                    .distinct()
+                )
+                - already_seen
+            )
+            if not related_pks:
+                continue
+            related_model._base_manager.filter(pk__in=related_pks).exclude(
+                is_suppressed=is_suppressed
+            ).update(is_suppressed=is_suppressed)
+            already_seen.update(related_pks)
+            cls._propagate_from(related_model, related_pks, is_suppressed, seen)
+
+
+class SuppressionFollowingForeignKey(SuppressionFollowingRelation, models.ForeignKey):
+    """
+    Like Django's normal ForeignKey, but the defining model innstance should "follow" the suppression status
+    of the other side, i.e.
+
+    class MyDerivedModel:
+        parent = SuppressionFollowingForeignKey(MyParentModel)
+        is_suppressed = BooleanField <-- this will be updated by MyParentModel.is_suppressed
+    """
+
+    migration_field_path = "django.db.models.ForeignKey"
+
+
+class SuppressionFollowingManyToManyField(
+    SuppressionFollowingRelation, models.ManyToManyField
+):
+    """
+    Like Django's normal ManyToManyField, but the defining model instances should "follow" the suppression status
+    of the instances on the other side, i.e.
+
+    class MyDerivedModel:
+        parents = SuppressionFollowingManyToManyField(MyParentsModel)
+        is_suppressed = BooleanField <-- this will be updated by [MyParentsModel.is_suppressed]
+    """
+
+    migration_field_path = "django.db.models.ManyToManyField"
+
+
 class _PydanticValidatingDict(dict):
     """
     If django field is returning a dict, override item setter so that a field within the dict

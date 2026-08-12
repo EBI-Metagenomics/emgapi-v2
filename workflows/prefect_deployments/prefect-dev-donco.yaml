@@ -239,7 +239,7 @@ deployments:
 
 - name: sync_studies_with_ena
   description: |-
-    This flow will sync studies metadata with ENA.
+    This flow will sync study metadata and visibility with ENA.
     :param accessions: List of study accessions to sync
   entrypoint: workflows/flows/housekeeping/sync_studies_with_ena.py:sync_studies_with_ena
   parameters: {}

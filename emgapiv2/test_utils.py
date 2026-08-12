@@ -2,7 +2,8 @@ from datetime import UTC, datetime
 
 import pytest
 from django.core.exceptions import ValidationError
-from django.db import models
+from django.db import connection, models
+from django.test.utils import isolate_apps
 from pydantic import BaseModel
 
 from analyses.models import Publication
@@ -10,7 +11,12 @@ from emgapiv2.async_utils import anysync_property
 from emgapiv2.dict_utils import add, some
 from emgapiv2.enum_utils import FutureStrEnum
 from emgapiv2.log_utils import mask_sensitive_data
-from emgapiv2.model_utils import JSONFieldWithSchema, during
+from emgapiv2.model_utils import (
+    during,
+    JSONFieldWithSchema,
+    SuppressionFollowingForeignKey,
+    SuppressionFollowingRelation,
+)
 
 
 # Tests for async utils
@@ -149,6 +155,70 @@ def test_model_utils_during():
     Publication.objects.filter(pk=aug_pub.pk).update(updated_at=aug_start)
 
     assert list(Publication.objects.filter(during(jul_start, aug_start))) == [jul_pub]
+@pytest.mark.django_db(transaction=True)
+@isolate_apps("emgapiv2")
+def test_suppression_following_foreign_key_propagates_through_suppressed_models():
+    class SuppressionSource(models.Model):
+        is_suppressed = models.BooleanField(default=False)
+
+        class Meta:
+            app_label = "emgapiv2"
+
+    class SuppressionIntermediate(models.Model):
+        source = SuppressionFollowingForeignKey(
+            SuppressionSource, on_delete=models.CASCADE
+        )
+        is_suppressed = models.BooleanField(default=False)
+
+        class Meta:
+            app_label = "emgapiv2"
+
+    class SuppressionLeaf(models.Model):
+        intermediate = SuppressionFollowingForeignKey(
+            SuppressionIntermediate, on_delete=models.CASCADE
+        )
+        is_suppressed = models.BooleanField(default=False)
+
+        class Meta:
+            app_label = "emgapiv2"
+
+    test_models = (SuppressionSource, SuppressionIntermediate, SuppressionLeaf)
+    with connection.schema_editor() as schema_editor:
+        for model in test_models:
+            schema_editor.create_model(model)
+
+    try:
+        source = SuppressionSource.objects.create(is_suppressed=True)
+        unsuppressed_intermediate = SuppressionIntermediate.objects.create(
+            source=source
+        )
+        suppressed_intermediate = SuppressionIntermediate.objects.create(source=source)
+        leaves = [
+            SuppressionLeaf.objects.create(intermediate=unsuppressed_intermediate),
+            SuppressionLeaf.objects.create(intermediate=suppressed_intermediate),
+        ]
+        SuppressionIntermediate.objects.filter(pk=suppressed_intermediate.pk).update(
+            is_suppressed=True
+        )
+
+        SuppressionFollowingRelation.propagate_from(source)
+
+        assert not SuppressionIntermediate.objects.filter(is_suppressed=False).exists()
+        assert not SuppressionLeaf.objects.filter(
+            pk__in=[leaf.pk for leaf in leaves], is_suppressed=False
+        ).exists()
+
+        source.is_suppressed = False
+        source.save(update_fields=["is_suppressed"])
+
+        assert not SuppressionIntermediate.objects.filter(is_suppressed=True).exists()
+        assert not SuppressionLeaf.objects.filter(
+            pk__in=[leaf.pk for leaf in leaves], is_suppressed=True
+        ).exists()
+    finally:
+        with connection.schema_editor() as schema_editor:
+            for model in reversed(test_models):
+                schema_editor.delete_model(model)
 
 
 def test_enum_stringification():
