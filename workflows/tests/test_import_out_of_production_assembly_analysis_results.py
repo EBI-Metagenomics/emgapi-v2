@@ -519,7 +519,6 @@ class TestImportOutOfProductionAssemblyAnalysisResultsRealData:
         mock_copy_summaries.assert_called_once()
         assert result is not None
 
-        # TODO: add more assertions on flow logs and database state
         # Verify study was created/updated
         study = AnalysisStudy.objects.filter(
             ena_study__accession__in=[assembly_test_scenario.study_accession]
@@ -530,6 +529,7 @@ class TestImportOutOfProductionAssemblyAnalysisResultsRealData:
             / assembly_test_scenario.study_accession
         )
         assert study.biome is not None, "Study biome was not set"
+        assert study.features.has_v6_analyses is True
 
         analysis = study.analyses.filter(
             assembly__ena_accessions__contains=[
@@ -537,6 +537,10 @@ class TestImportOutOfProductionAssemblyAnalysisResultsRealData:
             ]
         ).first()
         assert analysis is not None, "Analysis for assembly was not created"
+
+        assert analysis.status[Analysis.AnalysisStates.ANALYSIS_QC_FAILED] is False
+        assert analysis.downloads, "Expected downloads to have been imported"
+        assert analysis.is_ready is True
 
     @pytest.mark.django_db(transaction=True)
     @pytest.mark.httpx_mock(
