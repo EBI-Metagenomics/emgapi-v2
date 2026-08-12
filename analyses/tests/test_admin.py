@@ -35,7 +35,7 @@ def test_resync_study_with_ena_admin_action(
         timeout=0,
     )
     assert (
-        "https://prefect.example.com/runs/flow-run/flow-run-id"
+        "flow run flow-run-id"  # text of the prefect UI link
         in response.content.decode()
     )
 
