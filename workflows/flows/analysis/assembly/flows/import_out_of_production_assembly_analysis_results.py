@@ -289,13 +289,6 @@ def import_out_of_production_assembly_analysis_results(
     copy_v6_study_summaries(mgnify_study.accession, analysis_type=AnalysisType.ASSEMBLY)
     logger.info("Copied v6 study summaries")
 
-    # Update study features
-    mgnify_study.refresh_from_db()
-    mgnify_study.features.has_v6_analyses = mgnify_study.analyses.filter(
-        pipeline_version=analyses.models.Analysis.PipelineVersions.v6, is_ready=True
-    ).exists()
-    mgnify_study.save()
-
     # =========================================================================
     # STEP 8: Copy results files to production locations
     # =========================================================================
@@ -306,6 +299,19 @@ def import_out_of_production_assembly_analysis_results(
         analysis_ids=[analysis.id for analysis in exported_analyses],
         timeout=14400,
     )
+
+    mgnify_study.refresh_from_db()
+    mgnify_study.features.has_v6_analyses = mgnify_study.analyses.filter(
+        pipeline_version=analyses.models.Analysis.PipelineVersions.v6, is_ready=True
+    ).exists()
+    mgnify_study.save()
+
+    if not mgnify_study.features.has_v6_analyses:
+        # This flow exists specifically to import out-of-production v6 assembly
+        # analyses, so ending up with none ready means something went very wrong
+        raise RuntimeError(
+            f"Study {mgnify_study.accession} has no ready v6 analyses after import."
+        )
 
     logger.info(f"Ingestion complete for study {mgnify_study.accession}")
 

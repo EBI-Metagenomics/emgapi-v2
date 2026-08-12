@@ -490,8 +490,17 @@ class TestImportOutOfProductionAssemblyAnalysisResultsRealData:
 
         mock_suspend_flow_run.side_effect = suspend_side_effect
 
+        def mark_copied_analyses_ready(*, analysis_ids, **kwargs):
+            # Mirrors what the real copy task does via
+            # update_analysis_statuses_from_copy_results on a successful copy.
+            for analysis in Analysis.objects.filter(id__in=analysis_ids):
+                analysis.mark_status(
+                    Analysis.AnalysisStates.ANALYSIS_ANNOTATIONS_IMPORTED
+                )
+
         mock_copy_external = mocker.patch(
-            "workflows.flows.analysis.assembly.flows.import_out_of_production_assembly_analysis_results.copy_out_of_production_assembly_analysis_results"
+            "workflows.flows.analysis.assembly.flows.import_out_of_production_assembly_analysis_results.copy_out_of_production_assembly_analysis_results",
+            side_effect=mark_copied_analyses_ready,
         )
         mock_copy_summaries = mocker.patch(
             "workflows.flows.analysis.assembly.flows.import_out_of_production_assembly_analysis_results.copy_v6_study_summaries"
