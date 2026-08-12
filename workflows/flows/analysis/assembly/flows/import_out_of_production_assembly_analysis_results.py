@@ -246,29 +246,31 @@ def import_out_of_production_assembly_analysis_results(
     # =========================================================================
     logger.info("Step 6: Validating and importing pipeline results...")
 
+    exported_analysis_ids = [analysis.id for analysis in exported_analyses]
+
     logger.info("Setting ASA analysis states based on the end-of-execution reports...")
     set_asa_analysis_states(
         results_path / AssemblyAnalysisPipeline.ASA.value,
-        [analysis.id for analysis in exported_analyses],
+        exported_analysis_ids,
     )
 
     logger.info("Processing ASA results...")
     import_out_of_production_analysis_results(
-        exported_analyses,
+        exported_analysis_ids,
         results_path,
         AssemblyAnalysisPipeline.ASA,
     )
 
     logger.info("Processing VIRify results...")
     import_out_of_production_analysis_results(
-        exported_analyses,
+        exported_analysis_ids,
         results_path,
         AssemblyAnalysisPipeline.VIRIFY,
     )
 
     logger.info("Processing MAP results...")
     import_out_of_production_analysis_results(
-        exported_analyses,
+        exported_analysis_ids,
         results_path,
         AssemblyAnalysisPipeline.MAP,
     )
@@ -296,7 +298,7 @@ def import_out_of_production_assembly_analysis_results(
     copy_out_of_production_assembly_analysis_results(
         study_id=mgnify_study.id,
         results_dir=results_path,
-        analysis_ids=[analysis.id for analysis in exported_analyses],
+        analysis_ids=exported_analysis_ids,
         timeout=14400,
     )
 
@@ -423,7 +425,7 @@ def _validate_results_structure(
     retry_delay_seconds=60,
 )
 def import_out_of_production_analysis_results(
-    analyses: list[Analysis],
+    analysis_ids: list[int],
     results_path: Path,
     pipeline_type: AssemblyAnalysisPipeline,
 ) -> None:
@@ -433,12 +435,17 @@ def import_out_of_production_analysis_results(
     marks analysis that failed validation as FAILED, and imports the results of analyses that
     passed validation into the database.
 
-    :param analyses: List of Analysis objects to process
+    :param analysis_ids: IDs of the Analysis objects to process
     :param results_path: Path to the directory containing out-of-production results
                         (should contain folders: asa/, virify/, map/)
     :param pipeline_type: The pipeline type (ASA, VIRify, or MAP)
     """
     logger = get_run_logger()
+
+    # Re-fetch fresh from the DB rather than trusting objects handed across the flow boundary
+    analyses = list(
+        Analysis.objects.filter(id__in=analysis_ids).select_related("assembly")
+    )
 
     schema = None
     base_path = None
@@ -547,13 +554,10 @@ def copy_out_of_production_assembly_analysis_results(
     # Analyses that failed validation/import earlier in the flow are marked
     # ANALYSIS_QC_FAILED in the DB. Re-query rather than trust the in-memory
     # objects, since they may have been fetched before that status was set.
-    # These must not be copied to production: copying would let
-    # update_analysis_statuses_from_copy_results incorrectly clear
-    # ANALYSIS_QC_FAILED and mark them as imported.
-    analyses_ready_for_copy = list(
-        Analysis.objects.filter(id__in=analysis_ids).exclude_by_statuses(
-            [Analysis.AnalysisStates.ANALYSIS_QC_FAILED]
-        )
+    analysis_ids_ready_for_copy = list(
+        Analysis.objects.filter(id__in=analysis_ids)
+        .exclude_by_statuses([Analysis.AnalysisStates.ANALYSIS_QC_FAILED])
+        .values_list("id", flat=True)
     )
 
     study_prefix = accession_prefix_separated_dir_path(study.first_accession, -3)
@@ -567,7 +571,7 @@ def copy_out_of_production_assembly_analysis_results(
 
     external_copy_results = list(
         copy_out_of_production_analysis_results_to_destination_folder(
-            analyses=analyses_ready_for_copy,
+            analysis_ids=analysis_ids_ready_for_copy,
             results_workspace=Path(results_dir),
             destination_root=external_results_root,
             timeout=timeout,
@@ -582,7 +586,7 @@ def copy_out_of_production_assembly_analysis_results(
     # Copy the files to the NFS production
     nfs_copy_results = list(
         copy_out_of_production_analysis_results_to_destination_folder(
-            analyses=analyses_ready_for_copy,
+            analysis_ids=analysis_ids_ready_for_copy,
             results_workspace=Path(results_dir),
             destination_root=nfs_results_root,
             timeout=timeout,
@@ -602,7 +606,7 @@ def copy_out_of_production_assembly_analysis_results(
     task_run_name="Copy out-of-production assembly results to {destination_root}",
 )
 def copy_out_of_production_analysis_results_to_destination_folder(
-    analyses: list[Analysis],
+    analysis_ids: list[int],
     results_workspace: Path,
     destination_root: str | Path,
     timeout: int = 14400,
@@ -611,7 +615,7 @@ def copy_out_of_production_analysis_results_to_destination_folder(
     The source workspace is expected to have three pipeline subdirectories:
     ``asa/``, ``virify/``, and ``map/``, each with per-assembly result folders.
 
-    :param analyses: List of analyses to copy results for
+    :param analysis_ids: IDs of the analyses to copy results for
     :param results_workspace: Source workspace with ``asa/``, ``virify/`, and ``map/`` subdirectories
     :param destination_root: The root directory to copy results into
     :param timeout: Timeout in seconds for each move operation (default: 4 hours)
@@ -622,10 +626,10 @@ def copy_out_of_production_analysis_results_to_destination_folder(
     destination_root = Path(destination_root)
 
     copy_results: list[BatchCopyResult] = []
-    for analysis in analyses:
+    for analysis_id in analysis_ids:
         copy_results.append(
             copy_single_out_of_production_analysis_results(
-                analysis=analysis,
+                analysis_id=analysis_id,
                 results_workspace=results_workspace,
                 destination_root=destination_root,
                 timeout=timeout,

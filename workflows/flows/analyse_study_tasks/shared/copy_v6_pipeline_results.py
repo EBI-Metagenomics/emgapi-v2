@@ -413,7 +413,7 @@ def copy_single_analysis_results(
 
 @task
 def copy_single_out_of_production_analysis_results(
-    analysis: Analysis,
+    analysis_id: int,
     destination_root: Path,
     results_workspace: Path,
     timeout: int = 14400,
@@ -425,13 +425,18 @@ def copy_single_out_of_production_analysis_results(
     per-pipeline completion status against: ASA is always required, and VIRify/MAP
     are copied only if their result directories are present under ``results_workspace``.
 
-    :param analysis: The analysis to copy results for
+    :param analysis_id: ID of the analysis to copy results for
     :param results_workspace: Source workspace with ``asa/``, ``virify/``, ``map/`` subdirectories
     :param destination_root: The root directory for copied results
     :param timeout: Timeout in seconds for each move operation (default: 4 hours)
     :return: Copy result for this analysis
     """
     logger = get_run_logger()
+
+    # Re-fetch fresh from the DB rather than trusting objects handed across the flow boundary
+    analysis = Analysis.objects.select_related("study", "assembly", "run").get(
+        id=analysis_id
+    )
 
     # The results folder looks like ERPxxxx/ERZyyy/ERZyyyyy
 

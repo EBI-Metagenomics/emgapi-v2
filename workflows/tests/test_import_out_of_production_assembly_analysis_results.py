@@ -154,14 +154,16 @@ class TestCopyOutOfProductionAnalysisResultsToDestinationFolder:
         mock_copy_out_of_production.return_value = copy_result
 
         results = copy_out_of_production_analysis_results_to_destination_folder(
-            analyses=[analysis],
+            analysis_ids=[analysis.id],
             results_workspace=results_workspace,
             destination_root=tmp_path / "ftp",
         )
 
         assert results == [copy_result]
         mock_copy_out_of_production.assert_called_once()
-        assert mock_copy_out_of_production.call_args.kwargs["analysis"] == analysis
+        assert (
+            mock_copy_out_of_production.call_args.kwargs["analysis_id"] == analysis.id
+        )
         assert (
             mock_copy_out_of_production.call_args.kwargs["results_workspace"]
             == results_workspace
@@ -202,7 +204,7 @@ class TestCopyOutOfProductionAnalysisResultsToDestinationFolder:
         mock_copy_out_of_production.return_value = copy_result
 
         results = copy_out_of_production_analysis_results_to_destination_folder(
-            analyses=[analysis],
+            analysis_ids=[analysis.id],
             results_workspace=results_workspace,
             destination_root=tmp_path / "ftp",
         )
@@ -247,7 +249,7 @@ class TestCopyOutOfProductionAnalysisResultsToDestinationFolder:
         mock_copy_out_of_production.side_effect = copy_results
 
         results = copy_out_of_production_analysis_results_to_destination_folder(
-            analyses=analyses,
+            analysis_ids=[analysis.id for analysis in analyses],
             results_workspace=results_workspace,
             destination_root=tmp_path / "ftp",
         )
@@ -255,7 +257,7 @@ class TestCopyOutOfProductionAnalysisResultsToDestinationFolder:
         assert results == copy_results
         assert mock_copy_out_of_production.call_count == 2
         for call, analysis in zip(mock_copy_out_of_production.call_args_list, analyses):
-            assert call.kwargs["analysis"] == analysis
+            assert call.kwargs["analysis_id"] == analysis.id
             assert call.kwargs["results_workspace"] == results_workspace
 
 
