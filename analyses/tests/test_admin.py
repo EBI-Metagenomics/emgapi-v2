@@ -1,3 +1,5 @@
+from unittest.mock import Mock, patch
+
 import pytest
 from django.urls import reverse
 
@@ -6,6 +8,36 @@ from workflows.models import (
     AssemblyAnalysisBatchAnalysis,
     AssemblyAnalysisPipelineStatus,
 )
+
+
+@patch("analyses.admin.study.run_deployment")
+@pytest.mark.django_db
+def test_resync_study_with_ena_admin_action(
+    mock_run_deployment, monkeypatch, admin_client, raw_reads_mgnify_study
+):
+    mock_run_deployment.return_value = Mock(id="flow-run-id")
+    monkeypatch.setenv("PREFECT_UI_URL", "https://prefect.example.com")
+
+    response = admin_client.post(
+        reverse("admin:analyses_study_changelist"),
+        {
+            "action": "resync_with_ena",
+            "_selected_action": [raw_reads_mgnify_study.pk],
+            "select_across": "0",
+        },
+        follow=True,
+    )
+
+    assert response.status_code == 200
+    mock_run_deployment.assert_called_once_with(
+        name="sync-studies-with-ena/sync_studies_with_ena",
+        parameters={"accessions": [raw_reads_mgnify_study.ena_study.accession]},
+        timeout=0,
+    )
+    assert (
+        "flow run flow-run-id"  # text of the prefect UI link
+        in response.content.decode()
+    )
 
 
 @pytest.mark.django_db

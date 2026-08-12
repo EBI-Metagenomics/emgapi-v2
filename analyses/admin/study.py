@@ -7,6 +7,8 @@ from django.db.models import Count
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse_lazy
 from django.utils.html import format_html
+from prefect.deployments import run_deployment
+from prefect.utilities.urls import url_for
 from unfold.admin import ModelAdmin
 from unfold.decorators import action, display
 
@@ -127,6 +129,7 @@ class StudyAdmin(
     ]
     list_display = ["accession", "updated_at", "title", "display_accessions"]
     list_filter = ["updated_at", "created_at", "is_private", "watchers"]
+    actions = ["resync_with_ena"]
     filter_horizontal = ("watchers",)
     search_fields = [
         "accession",
@@ -185,6 +188,34 @@ class StudyAdmin(
     @display(description="ENA Accessions", label=True)
     def display_accessions(self, instance: Study):
         return instance.ena_accessions
+
+    @admin.action(description="Resync selected studies and contents with ENA")
+    def resync_with_ena(self, request, queryset):
+        accessions = list(
+            queryset.filter(ena_study__isnull=False).values_list(
+                "ena_study__accession", flat=True
+            )
+        )
+        if not accessions:
+            self.message_user(
+                request, "No selected studies have an ENA study.", messages.WARNING
+            )
+            return
+
+        flow_run = run_deployment(
+            name="sync-studies-with-ena/sync_studies_with_ena",
+            parameters={"accessions": accessions},
+            timeout=0,
+        )
+        self.message_user(
+            request,
+            format_html(
+                'ENA resync started: <a href="{url}">flow run {flow_run_id}</a>.',
+                url=url_for(flow_run),
+                flow_run_id=flow_run.id,
+            ),
+            messages.SUCCESS,
+        )
 
     @action(
         description="Assembly statuses",
