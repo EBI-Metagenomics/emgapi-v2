@@ -12,10 +12,10 @@ from emgapiv2.dict_utils import add, some
 from emgapiv2.enum_utils import FutureStrEnum
 from emgapiv2.log_utils import mask_sensitive_data
 from emgapiv2.model_utils import (
-    during,
     JSONFieldWithSchema,
     SuppressionFollowingForeignKey,
     SuppressionFollowingRelation,
+    during,
 )
 
 
@@ -155,6 +155,8 @@ def test_model_utils_during():
     Publication.objects.filter(pk=aug_pub.pk).update(updated_at=aug_start)
 
     assert list(Publication.objects.filter(during(jul_start, aug_start))) == [jul_pub]
+
+
 @pytest.mark.django_db(transaction=True)
 @isolate_apps("emgapiv2")
 def test_suppression_following_foreign_key_propagates_through_suppressed_models():
