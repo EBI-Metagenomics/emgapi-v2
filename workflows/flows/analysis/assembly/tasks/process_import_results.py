@@ -76,6 +76,7 @@ def process_import_results(
     batch.save()
 
 
+@task
 def mark_analyses_with_failed_status(
     import_results: List[ImportResult],
     pipeline_type: AssemblyAnalysisPipeline,

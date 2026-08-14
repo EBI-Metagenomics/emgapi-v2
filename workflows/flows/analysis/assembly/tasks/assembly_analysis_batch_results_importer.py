@@ -132,6 +132,7 @@ def assembly_analysis_batch_results_importer(
     return results
 
 
+@task()
 def assembly_analysis_results_importer(
     analyses: List[Analysis],
     schema,
