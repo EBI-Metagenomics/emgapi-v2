@@ -730,6 +730,9 @@ def get_study_accession_for_assembly(
         Input: "ERZ18440741" (assembly accession)
         Output: "ERP123456" (study accession)
 
+    Looks up the assembly publicly first, and if that finds nothing - falls back
+    to authenticated access, since the assembly's study may be private.
+
     :param assembly_accession: Assembly accession
     :return: Study accession (e.g., ERP/SRP/DRP/PRJ format)
     :raises: ValueError if accession cannot be determined or not found in ENA

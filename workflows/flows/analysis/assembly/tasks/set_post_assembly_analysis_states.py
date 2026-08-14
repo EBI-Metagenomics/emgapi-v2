@@ -14,6 +14,10 @@ from workflows.prefect_utils.flows_utils import django_db_task as task
 
 
 def _read_report_csv(report_csv_path: Path) -> dict[str, str]:
+    """
+    Reads a two-column, headerless CSV (assembly_accession, info) produced by the
+    assembly analysis pipeline into a dict keyed by assembly accession.
+    """
     report_entries = {}
     with report_csv_path.open(mode="r") as file_handle:
         for row in csv.reader(file_handle, delimiter=","):
@@ -27,6 +31,15 @@ def parse_asa_end_of_run_reports(
     analysed_assemblies_csv: Path,
     logger,
 ) -> tuple[dict[str, str], dict[str, str]]:
+    """
+    Parses the pipeline's end-of-execution reports into (qc_failed_assemblies,
+    analysed_assemblies) dicts keyed by assembly accession.
+
+    qc_failed_csv is optional (an empty dict is returned if it doesn't exist), but
+    analysed_assemblies_csv is required.
+
+    :raises ValueError: If analysed_assemblies_csv is missing.
+    """
     qc_failed_assemblies = {}
     if qc_failed_csv.is_file():
         logger.info("Reading qc failed assemblies...")
@@ -48,6 +61,13 @@ def update_asa_batch_relations_from_reports(
     analysed_assemblies: dict[str, str],
     logger,
 ) -> list[AssemblyAnalysisBatchAnalysis]:
+    """
+    Sets asa_status on each batch_relation based on whether its assembly appears in
+    analysed_assemblies (COMPLETED) or not (FAILED, whether QC-failed or missing
+    from the reports entirely).
+
+    :return: The batch_relations, with asa_status set, ready for a bulk_update.
+    """
     relations_to_update = []
 
     for batch_relation in batch_relations:
@@ -76,6 +96,13 @@ def update_analyses_from_asa_reports(
     analysed_assemblies_csv: Path,
     logger,
 ) -> list[Analysis]:
+    """
+    Marks ANALYSIS_QC_FAILED (with a reason) on each analysis whose assembly is not
+    in analysed_assemblies. Analyses that did complete are left untouched and not
+    included in the returned list.
+
+    :return: The analyses that need their QC-failed status persisted via bulk_update.
+    """
     analyses_to_update = []
 
     for analysis in analyses:
