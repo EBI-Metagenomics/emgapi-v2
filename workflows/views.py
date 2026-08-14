@@ -50,9 +50,8 @@ def validate_samplesheet_path(filepath_encoded: str) -> Path:
     resolved_filepath = filepath.resolve(strict=False)
     allowed_root = Path(EMG_CONFIG.slurm.samplesheet_editing_allowed_inside).resolve()
 
-    if (
-        os.path.commonpath([str(allowed_root), str(resolved_filepath)])
-        != str(allowed_root)
+    if os.path.commonpath([str(allowed_root), str(resolved_filepath)]) != str(
+        allowed_root
     ):
         raise Http404("Invalid directory")
 
