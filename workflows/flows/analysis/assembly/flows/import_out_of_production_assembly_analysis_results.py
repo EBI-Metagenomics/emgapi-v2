@@ -3,7 +3,6 @@ from pathlib import Path
 from textwrap import dedent as _
 from typing import List, Optional
 
-from django.conf import settings
 from prefect import get_run_logger, suspend_flow_run
 from prefect.artifacts import create_table_artifact
 from prefect.input import RunInput
