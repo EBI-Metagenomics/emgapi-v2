@@ -294,6 +294,9 @@ fileignoreconfig:
 - filename: .git-blame-ignore-revs
   ignore_detectors: [filecontent]
 
+- filename: data_stewardship/workflows/predict_biomes.py
+  allowed_patterns: [key]
+
 allowed_patterns:
 - cache_key_fn
 - CommonMetadataKeys
