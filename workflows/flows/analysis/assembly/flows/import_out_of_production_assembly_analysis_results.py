@@ -57,9 +57,6 @@ from workflows.prefect_utils.analyses_models_helpers import (
 from workflows.prefect_utils.flows_utils import (
     django_db_flow as flow,
 )
-from workflows.prefect_utils.flows_utils import (
-    django_db_task as task,
-)
 
 
 @flow(
@@ -316,7 +313,6 @@ def import_out_of_production_assembly_analysis_results(
 # ============================================================================
 
 
-@task
 def _parse_and_validate_samplesheet(samplesheet_path: Path) -> list[str]:
     """
     Parse the samplesheet CSV to extract assembly accessions and validate required columns.
@@ -369,7 +365,6 @@ def _parse_and_validate_samplesheet(samplesheet_path: Path) -> list[str]:
     return assembly_accessions
 
 
-@task
 def _validate_results_structure(
     results_path: Path,
     assemblies_accessions: list[str],

@@ -42,8 +42,11 @@ EMG_CONFIG = settings.EMG_CONFIG
 @pytest.mark.django_db
 class TestImportOutOfProductionAssemblyAnalysisResults:
 
+    @patch(
+        "workflows.flows.analysis.assembly.flows.import_out_of_production_assembly_analysis_results.get_run_logger"
+    )
     def test_validate_results_structure_missing_pipeline_dir_error(
-        self, tmp_path, prefect_harness
+        self, mock_get_run_logger, tmp_path, prefect_harness
     ):
         """Test warning when pipeline directories are missing."""
         accession = "ERZ18440741"
@@ -88,8 +91,11 @@ class TestImportOutOfProductionAssemblyAnalysisResults:
                 samplesheet_path=str(missing_samplesheet_path),
             )
 
+    @patch(
+        "workflows.flows.analysis.assembly.flows.import_out_of_production_assembly_analysis_results.get_run_logger"
+    )
     def test_parse_and_validate_samplesheet_missing_required_columns_error(
-        self, tmp_path, prefect_harness
+        self, mock_get_run_logger, tmp_path, prefect_harness
     ):
         """Test error when the samplesheet is missing a required column."""
         samplesheet_path = tmp_path / "samplesheet.csv"
@@ -101,8 +107,11 @@ class TestImportOutOfProductionAssemblyAnalysisResults:
         with pytest.raises(ValueError, match="missing required columns"):
             _parse_and_validate_samplesheet(samplesheet_path)
 
+    @patch(
+        "workflows.flows.analysis.assembly.flows.import_out_of_production_assembly_analysis_results.get_run_logger"
+    )
     def test_parse_and_validate_samplesheet_no_assembly_accessions_error(
-        self, tmp_path, prefect_harness
+        self, mock_get_run_logger, tmp_path, prefect_harness
     ):
         """Test error when the samplesheet has no rows with a sample accession."""
         samplesheet_path = tmp_path / "samplesheet.csv"
