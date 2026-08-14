@@ -133,6 +133,7 @@ CORS_ALLOW_HEADERS = [
     "authorization",
     "x-csrftoken",
     "sentry-trace",
+    "baggage",
 ]
 
 CSRF_TRUSTED_ORIGINS = ["https://*.ebi.ac.uk", "http://localhost:9000"]
