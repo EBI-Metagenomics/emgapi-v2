@@ -15,8 +15,10 @@ from workflows.flows.analyse_study_tasks.shared.copy_v6_pipeline_results import 
 from workflows.flows.analysis.assembly.flows.import_out_of_production_assembly_analysis_results import (
     _parse_and_validate_samplesheet,
     _validate_results_structure,
-    copy_out_of_production_analysis_results_to_destination_folder,
     import_out_of_production_assembly_analysis_results,
+)
+from workflows.flows.analysis.assembly.tasks.copy_out_of_production_assembly_analysis_results import (
+    copy_out_of_production_analysis_results_to_destination_folder,
 )
 from workflows.models import AssemblyAnalysisPipeline
 from workflows.prefect_utils.testing_utils import (
@@ -133,7 +135,7 @@ class TestCopyOutOfProductionAnalysisResultsToDestinationFolder:
         return analysis
 
     @patch(
-        "workflows.flows.analysis.assembly.flows.import_out_of_production_assembly_analysis_results.copy_single_out_of_production_analysis_results"
+        "workflows.flows.analysis.assembly.tasks.copy_out_of_production_assembly_analysis_results.copy_single_out_of_production_analysis_results"
     )
     def test_copy_success_returns_result(
         self,
@@ -174,7 +176,7 @@ class TestCopyOutOfProductionAnalysisResultsToDestinationFolder:
         )
 
     @patch(
-        "workflows.flows.analysis.assembly.flows.import_out_of_production_assembly_analysis_results.copy_single_out_of_production_analysis_results"
+        "workflows.flows.analysis.assembly.tasks.copy_out_of_production_assembly_analysis_results.copy_single_out_of_production_analysis_results"
     )
     def test_copy_failed_returns_result(
         self,
@@ -214,7 +216,7 @@ class TestCopyOutOfProductionAnalysisResultsToDestinationFolder:
         assert results[0].errors[0].message == "ASA results are missing"
 
     @patch(
-        "workflows.flows.analysis.assembly.flows.import_out_of_production_assembly_analysis_results.copy_single_out_of_production_analysis_results"
+        "workflows.flows.analysis.assembly.tasks.copy_out_of_production_assembly_analysis_results.copy_single_out_of_production_analysis_results"
     )
     def test_copy_processes_all_analyses(
         self,
