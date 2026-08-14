@@ -563,9 +563,9 @@ def copy_out_of_production_assembly_analysis_results(
     nfs_results_root = Path(results_dir) / "results"
 
     external_results_root = (
-        settings.EMG_CONFIG.slurm.private_results_dir
+       EMG_CONFIG.slurm.private_results_dir
         if study.is_private
-        else settings.EMG_CONFIG.slurm.ftp_results_dir
+        else EMG_CONFIG.slurm.ftp_results_dir
     )
 
     external_copy_results = list(
