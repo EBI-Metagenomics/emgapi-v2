@@ -13,7 +13,7 @@ It is:
 * [Developing data models](#django)
 * Developing workflows: [basic](#writing-flows) and [detailed](workflows/README.md)
 * Developing the slurm integration: [basic](#interacting-with-the-slurm-development-environment) and [detailed](slurm-dev-environment/README.md)
-* Deploying to production environment: [summary](#deployment) and [detailed](deployment/ebi-wp-k8s-hl/README.md)
+* [Deployment boundary](#deployment)
 
 ---
 
@@ -259,20 +259,3 @@ See [the slurm-dev-environment/README.md](slurm-dev-environment/README.md) for d
 of the containerised slurm "cluster".
 
 ---
-
-## Deployment
-The `deployment/` folder has deployment configs for different environments.
-Each should have its own `Taskfile`, included in the main `Taskfile`.
-E.g. see [the EBI WP K8s HL deployment README](deployment/ebi-wp-k8s-hl/README.md).
-Run e.g. `task ebi-wp-k8s-hl:update-api` to build/push/restart the EMG API service in that deployment (**requires some secrets setup**).
-
-Run e.g. `FLOW=assembly_study task ebi-wp-k8s-hl:deploy-flow` to deploy a new flow to this production environment.
-
-You can also use the declarative approach in production:
-```shell
-task ebi-wp-k8s-hl:deploy-all
-```
-(This uses `workflows/prefect_deployments/prefect-ebi-codon.yaml` by default.)
-
-Note that the prefect workers *ALSO* need to have your new flow code, which is currently deployed separately.
-For EBI-WP-K8s-HL, there is a Jenkins job to deploy those workers to Codon.
