@@ -539,6 +539,9 @@ def test_update_or_create_by_accession(raw_reads_mgnify_study):
     assert study.title == "Set at create"
     assert study.results_dir == "/has/been/set"
 
+    with pytest.raises(ValueError, match="separate list items"):
+        Study.objects.update_or_create_by_accession(known_accessions=["ERP5;PRJ5"])
+
 
 @pytest.mark.django_db
 def test_get_or_create_should_not_create_duplicate_run_with_conflicting_kwargs(

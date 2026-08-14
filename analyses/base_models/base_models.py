@@ -120,6 +120,9 @@ class UpdateOrCreateByAccessionManagerMixin(Generic[T_ENADerivedModel]):
         :param kwargs: Extra fields to apply only when creating a new object.
         :return: Tuple of object, created.
         """
+        if any(accession and ";" in accession for accession in known_accessions):
+            raise ValueError("ENA accessions must be passed as separate list items")
+
         defaults = defaults or {}
         if not create_defaults:
             create_defaults = defaults.copy()

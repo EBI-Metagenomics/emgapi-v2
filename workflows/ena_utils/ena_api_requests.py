@@ -189,57 +189,34 @@ def check_reads_fastq(
     return None, None
 
 
-def _make_samples_and_run(
-    run_or_assembly_response: dict,
-    study: analyses.models.Study,
-    library_strategy_policy: ENALibraryStrategyPolicy = ENALibraryStrategyPolicy.ONLY_IF_CORRECT_IN_ENA,
-    library_source_policy: ENALibrarySourcePolicy = ENALibrarySourcePolicy.OVERRIDE_GENOMIC_IF_METAGENOMIC_SCIENTIFIC_NAME,
-    expected_experiment_type: analyses.models.Run.ExperimentTypes | None = None,
-) -> tuple[ena.models.Sample, analyses.models.Sample, analyses.models.Run]:
-    """
-    Generate and update samples and runs for given study and ENA data.
-
-    This function updates or creates ENA and MGnify sample records as well as
-    run records using the provided ENA data and study information. Metadata
-    for samples and runs is extracted and synchronized accordingly. It also
-    handles library strategy and source policies to determine experiment
-    types. If an ENA sample is newly created, it fetches complete metadata
-    for the sample from the ENA API.
-
-    :param run_or_assembly_response: A dictionary containing metadata from ENA about a run or assembly.
-    :param study: A Study object representing the context in which the samples and runs are created or updated.
-    :param library_strategy_policy: Policy dictating how to handle library strategies that may be incorrect in ENA
-    :param library_source_policy: Policy determining how library source from ENA is interpreted or overridden
-    :param expected_experiment_type: Optional predefined expected experiment type, used if the policies dictate it should be overridden
-    :return: A tuple with three components - (ENA sample, MGnify sample, Run).
-    """
+def _make_samples(
+    ena_response: dict, study: analyses.models.Study
+) -> tuple[ena.models.Sample, analyses.models.Sample]:
     _ = ENAReadRunFields  # fields used here are also present on ENAAnalysisFields
 
     ena_sample, ena_sample_was_created = ena.models.Sample.objects.update_or_create(
         accession__in=[
-            run_or_assembly_response[_.SAMPLE_ACCESSION],
-            run_or_assembly_response[_.SECONDARY_SAMPLE_ACCESSION],
+            ena_response[_.SAMPLE_ACCESSION],
+            ena_response[_.SECONDARY_SAMPLE_ACCESSION],
         ],
         defaults={
-            "metadata": some(run_or_assembly_response, {_.SAMPLE_TITLE, _.LAT, _.LON}),
+            "metadata": some(ena_response, {_.SAMPLE_TITLE, _.LAT, _.LON}),
         },
         create_defaults={
-            "accession": run_or_assembly_response[_.SAMPLE_ACCESSION],
-            "additional_accessions": [
-                run_or_assembly_response[_.SECONDARY_SAMPLE_ACCESSION]
-            ],
+            "accession": ena_response[_.SAMPLE_ACCESSION],
+            "additional_accessions": [ena_response[_.SECONDARY_SAMPLE_ACCESSION]],
             "study": study.ena_study,  # TODO could be more than one...
         },
     )
 
     mgnify_sample, __ = analyses.models.Sample.objects.update_or_create_by_accession(
         known_accessions=[
-            run_or_assembly_response[_.SAMPLE_ACCESSION],
-            run_or_assembly_response[_.SECONDARY_SAMPLE_ACCESSION],
+            ena_response[_.SAMPLE_ACCESSION],
+            ena_response[_.SECONDARY_SAMPLE_ACCESSION],
         ],
         defaults={
             "is_private": study.is_private,
-            "metadata": some(run_or_assembly_response, {_.LAT, _.LON}),
+            "metadata": some(ena_response, {_.LAT, _.LON}),
         },
         create_defaults={
             "ena_sample": ena_sample,
@@ -248,11 +225,27 @@ def _make_samples_and_run(
     )
     mgnify_sample.studies.add(study)
 
+    if ena_sample_was_created:
+        # This propagates all available ENA sample metadata to the MGnify sample.
+        sync_sample_metadata_from_ena(ena_sample)
+
+    return ena_sample, mgnify_sample
+
+
+def _make_run(
+    run_response: dict,
+    study: analyses.models.Study,
+    mgnify_sample: analyses.models.Sample,
+    library_strategy_policy: ENALibraryStrategyPolicy = ENALibraryStrategyPolicy.ONLY_IF_CORRECT_IN_ENA,
+    library_source_policy: ENALibrarySourcePolicy = ENALibrarySourcePolicy.OVERRIDE_GENOMIC_IF_METAGENOMIC_SCIENTIFIC_NAME,
+    expected_experiment_type: analyses.models.Run.ExperimentTypes | None = None,
+) -> analyses.models.Run:
+    _ = ENAReadRunFields
     run, __ = analyses.models.Run.objects.update_or_create_by_accession(
-        known_accessions=[run_or_assembly_response[_.RUN_ACCESSION]],
+        known_accessions=[run_response[_.RUN_ACCESSION]],
         defaults={
             "metadata": some(
-                run_or_assembly_response,
+                run_response,
                 {
                     _.LIBRARY_STRATEGY,
                     _.LIBRARY_LAYOUT,
@@ -275,20 +268,32 @@ def _make_samples_and_run(
     # TODO: Review if this is the best way to handle this, but I've been loads of studies which
     #       have missing metadata, for example when trying to run the assembly analysis of ERP117856
     run.set_experiment_type_by_metadata(
-        run_or_assembly_response.get(_.LIBRARY_STRATEGY, ""),
-        run_or_assembly_response.get(_.LIBRARY_SOURCE, ""),
-        run_or_assembly_response.get(_.SCIENTIFIC_NAME, ""),
+        run_response.get(_.LIBRARY_STRATEGY, ""),
+        run_response.get(_.LIBRARY_SOURCE, ""),
+        run_response.get(_.SCIENTIFIC_NAME, ""),
         library_strategy_policy=library_strategy_policy,
         library_source_policy=library_source_policy,
         expected_experiment_type=expected_experiment_type,
     )
+    return run
 
-    if ena_sample_was_created:
-        # Also fetch ALL sample metadata from ENA.
-        # Don't re-fetch unless this is first creation, as this triggers another API call per sample.
-        # This propagates to mgnify_sample by hooks.
-        sync_sample_metadata_from_ena(ena_sample)
 
+def _make_samples_and_run(
+    run_response: dict,
+    study: analyses.models.Study,
+    library_strategy_policy: ENALibraryStrategyPolicy = ENALibraryStrategyPolicy.ONLY_IF_CORRECT_IN_ENA,
+    library_source_policy: ENALibrarySourcePolicy = ENALibrarySourcePolicy.OVERRIDE_GENOMIC_IF_METAGENOMIC_SCIENTIFIC_NAME,
+    expected_experiment_type: analyses.models.Run.ExperimentTypes | None = None,
+) -> tuple[ena.models.Sample, analyses.models.Sample, analyses.models.Run]:
+    ena_sample, mgnify_sample = _make_samples(run_response, study)
+    run = _make_run(
+        run_response,
+        study,
+        mgnify_sample,
+        library_strategy_policy,
+        library_source_policy,
+        expected_experiment_type,
+    )
     return ena_sample, mgnify_sample, run
 
 
@@ -762,15 +767,27 @@ def get_study_assemblies_from_ena(
         except analyses.models.Sample.DoesNotExist:
             # make sample based on metadata available from ENA assembly
             logger.info(f"Creating sample for {assembly_data[_.SAMPLE_ACCESSION]}")
-            __, mgnify_sample, run = _make_samples_and_run(
-                assembly_data,
-                study,
-                library_strategy_policy=library_strategy_policy,
-                library_source_policy=library_source_policy,
-                expected_experiment_type=expected_experiment_type,
+            __, mgnify_sample = _make_samples(assembly_data, study)
+
+        run_accessions = extract_all_accessions(assembly_data.get(_.RUN_ACCESSION, ""))
+        runs = list(
+            analyses.models.Run.objects.filter(ena_accessions__overlap=run_accessions)
+        )
+        found_accessions = {
+            run_accession for run in runs for run_accession in run.ena_accessions
+        }
+        for run_accession in set(run_accessions) - found_accessions:
+            run_data = {**assembly_data, _.RUN_ACCESSION: run_accession}
+            runs.append(
+                _make_run(
+                    run_data,
+                    study,
+                    mgnify_sample,
+                    library_strategy_policy,
+                    library_source_policy,
+                    expected_experiment_type,
+                )
             )
-        else:
-            run = mgnify_sample.runs.first()  # TODO: coassemblies? replicates?
 
         assembly_accession = assembly_data[_.ANALYSIS_ACCESSION]
         assembly, __ = analyses.models.Assembly.objects.update_or_create_by_accession(
@@ -789,9 +806,8 @@ def get_study_assemblies_from_ena(
         assembly.metadata[_.GENERATED_FTP] = assembly_data[_.GENERATED_FTP]
 
         # It is possible that some assemblies are not linked to any runs, the ENA data model allows for this.
-        if run:
-            assembly.runs.add(run)
-        else:
+        assembly.runs.set(runs)
+        if not runs:
             logger.warning(f"Could not find run for assembly {assembly_accession}!")
         assembly.save()
         assemblies.append(assembly.first_accession)

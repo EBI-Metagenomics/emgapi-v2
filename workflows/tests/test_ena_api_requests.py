@@ -1,3 +1,5 @@
+import logging
+
 import pytest
 from django.conf import settings
 from django.db.models.signals import post_save
@@ -22,6 +24,7 @@ from workflows.ena_utils.ena_api_requests import (
     get_available_study_assembly_accessions,
     get_available_study_run_accessions,
     get_available_study_sample_accessions,
+    get_study_assemblies_from_ena,
     get_study_from_ena,
     get_study_readruns_from_ena,
     is_ena_study_available_privately,
@@ -1090,6 +1093,45 @@ def test_ena_accession_parsing():
         "ERP3",
     ]
     assert extract_all_accessions("") == []
+
+
+@pytest.mark.httpx_mock(should_mock=should_not_mock_httpx_requests_to_prefect_server)
+@pytest.mark.django_db
+def test_get_study_assemblies_from_ena_links_coassembly_runs(
+    monkeypatch, raw_reads_mgnify_study, httpx_mock
+):
+    run_accessions = ["ERR12945506", "ERR12954000"]
+    assembly_data = {
+        "sample_accession": "SAMEA999999",
+        "sample_title": "Co-assembly sample",
+        "secondary_sample_accession": "ERS999999",
+        "run_accession": ";".join(run_accessions),
+        "analysis_accession": "ERZ999999",
+        "scientific_name": "metagenome",
+        "generated_ftp": "ftp.example.org/ERZ999999.fa.gz",
+    }
+
+    httpx_mock.add_response(json=[assembly_data])
+    monkeypatch.setattr(
+        "workflows.ena_utils.ena_api_requests.get_study_readruns_from_ena",
+        lambda **kwargs: [],
+    )
+    monkeypatch.setattr(
+        "workflows.ena_utils.ena_api_requests.sync_sample_metadata_from_ena",
+        lambda sample: None,
+    )
+    monkeypatch.setattr(
+        "workflows.ena_utils.ena_api_requests.get_run_logger",
+        lambda: logging.getLogger(__name__),
+    )
+
+    get_study_assemblies_from_ena.fn(raw_reads_mgnify_study.ena_study.accession)
+
+    assembly = analyses.models.Assembly.objects.get_by_accession("ERZ999999")
+    assert {run.first_accession for run in assembly.runs.all()} == set(run_accessions)
+    assert not analyses.models.Run.objects.filter(
+        ena_accessions__icontains=";"
+    ).exists()
 
 
 def test_ena_accession_parsing_from_study_title():
