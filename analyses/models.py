@@ -38,7 +38,12 @@ from analyses.base_models.with_status_models import SelectByStatusManagerMixin
 from analyses.base_models.with_watchers_models import WithWatchersModel
 from emgapiv2.enum_utils import DjangoChoicesCompatibleStrEnum, FutureStrEnum
 from emgapiv2.model_manager_mixins import SuppressionFilterManagerMixin
-from emgapiv2.model_utils import JSONFieldWithSchema
+from emgapiv2.model_utils import (
+    JSONFieldWithSchema,
+    SuppressionFollowingForeignKey,
+    SuppressionFollowingManyToManyField,
+    SuppressionFollowingRelation,
+)
 from workflows.ena_utils.ena_accession_matching import (
     ENA_ASSEMBLY_ACCESSION_REGEX,
     INSDC_BIOSAMPLE_ACCESSION_REGEX,
@@ -382,7 +387,9 @@ class Run(
 
     metadata = models.JSONField(default=dict, blank=True)
     study = models.ForeignKey(Study, on_delete=models.CASCADE, related_name="runs")
-    sample = models.ForeignKey(Sample, on_delete=models.CASCADE, related_name="runs")
+    sample = SuppressionFollowingForeignKey(
+        Sample, on_delete=models.CASCADE, related_name="runs"
+    )
 
     @property
     def latest_analysis(self) -> "Analysis":
@@ -560,8 +567,10 @@ class Assembly(InferredMetadataMixin, TimeStampedModel, ENADerivedModel):
     PREFERRED_ENA_ACCESSION_REGEX = ENA_ASSEMBLY_ACCESSION_REGEX
 
     dir = models.CharField(max_length=200, null=True, blank=True)
-    runs = models.ManyToManyField(Run, related_name="assemblies", blank=True)
-    sample = models.ForeignKey(
+    runs = SuppressionFollowingManyToManyField(
+        Run, related_name="assemblies", blank=True
+    )
+    sample = SuppressionFollowingForeignKey(
         Sample,
         on_delete=models.CASCADE,
         related_name="assemblies",
@@ -907,19 +916,18 @@ class Analysis(
 
     accession = MGnifyAccessionField(accession_prefix="MGYA", accession_length=8)
 
-    suppression_following_fields = ["sample"]
-    study = models.ForeignKey(
+    study = SuppressionFollowingForeignKey(
         Study, on_delete=models.CASCADE, to_field="accession", related_name="analyses"
     )
     results_dir = models.CharField(max_length=256, null=True, blank=True)
     external_results_dir = models.CharField(max_length=256, null=True, blank=True)
-    sample = models.ForeignKey(
+    sample = SuppressionFollowingForeignKey(
         Sample, on_delete=models.CASCADE, related_name="analyses"
     )
-    run = models.ForeignKey(
+    run = SuppressionFollowingForeignKey(
         Run, on_delete=models.CASCADE, null=True, blank=True, related_name="analyses"
     )
-    assembly = models.ForeignKey(
+    assembly = SuppressionFollowingForeignKey(
         Assembly,
         on_delete=models.CASCADE,
         null=True,
@@ -1134,28 +1142,10 @@ def on_analysis_saved(sender, instance: Analysis, created, **kwargs):
         instance.inherit_experiment_type()
 
 
-@receiver(post_save, sender=Study)
-def on_study_saved_update_analyses_suppression_states(
-    sender, instance: Study, created, **kwargs
-):
-    """
-    (Un)suppress the analyses associated with a Study whenever the Study is updated.
-    All other models are directly related to ENA objects, so their suppression is handled directly.
-    Analyses are different (no ENA accession/equivalent object) hence they follow this study-down propagation.
-    This means there is no current way to suppress one analysis of a study, only entire studies.
-    This is how ENA's documentation suggests suppression should work.
-    """
-    analyses_to_update_suppression_of = (
-        Analysis.objects.filter(study=instance)
-        .exclude(is_suppressed=instance.is_suppressed)
-        .only("pk", "accession", "is_suppressed")
-    )
-    for analysis in analyses_to_update_suppression_of:
-        logger.info(
-            f"Setting is_suppressed to {instance.is_suppressed} on {analysis.accession} via {instance.accession}"
-        )
-        analysis.is_suppressed = instance.is_suppressed
-    Analysis.objects.bulk_update(analyses_to_update_suppression_of, ["is_suppressed"])
+@receiver(post_save)
+def on_suppression_source_saved(sender, instance, **kwargs):
+    if hasattr(instance, "is_suppressed"):
+        SuppressionFollowingRelation.propagate_from(instance)
 
 
 class AnalysedContig(TimeStampedModel):
