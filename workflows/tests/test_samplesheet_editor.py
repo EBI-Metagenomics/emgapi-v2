@@ -70,6 +70,26 @@ def test_samplesheet_editor_paths_validation(settings):
     ) == Path("/nfs/production/edit/here/samplesheet_edits_here/from_editing/yes.csv")
 
 
+def test_samplesheet_editor_paths_validation_rejects_symlink_escape(settings, tmp_path):
+    allowed_root = tmp_path / "allowed"
+    allowed_root.mkdir()
+    outside_root = tmp_path / "outside"
+    outside_root.mkdir()
+
+    outside_target = outside_root / "secret.csv"
+    outside_target.write_text("not a samplesheet")
+
+    linked_samplesheet = allowed_root / "linked.csv"
+    linked_samplesheet.symlink_to(outside_target)
+
+    settings.EMG_CONFIG.slurm.samplesheet_editing_allowed_inside = str(allowed_root)
+
+    samplesheet_path = linked_samplesheet.parent.resolve() / linked_samplesheet.name
+    samplesheet_encoded = encode_samplesheet_path(str(samplesheet_path))
+    with pytest.raises(Http404):
+        validate_samplesheet_path(samplesheet_encoded)
+
+
 @pytest.mark.django_db
 @patch("workflows.views.move_samplesheet_to_editable_location")
 def test_samplesheet_fetch(mock_move_samplesheet, client, admin_client, settings):
