@@ -306,6 +306,11 @@ class DataDistributionConfig(BaseModel):
     latest_studies_feed_count: int = 20
 
 
+class EBISearchConfig(BaseModel):
+    output_dir: str = "/path/to/ebi-search-output-dir"
+    analysis_chunk_size: int = Field(default=500, ge=1)
+
+
 class MaskReplacement(BaseModel):
     match: Pattern = Field(
         ..., description="A compiled regex pattern which, when matched, will be masked"
@@ -395,6 +400,7 @@ class EMGConfig(BaseSettings):
     rt: RequestTrackerConfig = RequestTrackerConfig()
     sentry_dsn: str = ""
     distribution: DataDistributionConfig = DataDistributionConfig()
+    ebi_search: EBISearchConfig = EBISearchConfig()
 
     model_config = SettingsConfigDict(
         env_prefix="emg_",

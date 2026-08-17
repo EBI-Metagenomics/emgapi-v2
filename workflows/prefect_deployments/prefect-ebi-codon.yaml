@@ -399,7 +399,7 @@ deployments:
 
 - name: sync_studies_with_ena
   description: |-
-    This flow will sync studies metadata with ENA.
+    This flow will sync study metadata and visibility with ENA.
     :param accessions: List of study accessions to sync
   entrypoint: workflows/flows/housekeeping/sync_studies_with_ena.py:sync_studies_with_ena
   parameters: {}
@@ -425,3 +425,14 @@ deployments:
   parameters: {}
   work_pool:
     name: slurm
+
+- name: ebi_search_dump_deployment
+  description: |-
+    Build and publish the projects and analyses XML dumps consumed by EBI Search.
+    Run once with initial=true before running incremental dumps.
+  entrypoint: workflows/flows/data_dumps/ebi_search/flows/ebi_search_dump.py:ebi_search_dump_flow
+  parameters: {}
+  work_pool:
+    name: slurm
+    job_variables:
+      memory: 4
