@@ -26,7 +26,7 @@ gunicorn==25.3.0
 whitenoise==6.11.0
 
 # DB
-psycopg-pool==3.3.0
+psycopg-pool==3.3.1
 
 # Prefect workflows
 prefect==3.4.19
