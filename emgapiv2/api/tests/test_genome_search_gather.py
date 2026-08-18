@@ -6,7 +6,7 @@ from django.http import QueryDict
 from django.utils import timezone
 from django.utils.datastructures import MultiValueDict
 
-from genomes.models import GenomeCatalogue, GenomeSearchIndex
+from genomes.models import GenomeCatalogue, GenomeCatalogueSeries, GenomeSearchIndex
 
 
 @pytest.fixture
@@ -24,14 +24,20 @@ def make_catalogue(top_level_biomes):
     human_biome = top_level_biomes[3]
 
     def _make_catalogue(catalogue_id: str = "human-gut-v2-0") -> GenomeCatalogue:
+        series, _ = GenomeCatalogueSeries.objects.get_or_create(
+            catalogue_biome_label=catalogue_id,
+            catalogue_type=GenomeCatalogue.PROK,
+            defaults={
+                "name": catalogue_id,
+                "biome": human_biome,
+            },
+        )
         catalogue, _ = GenomeCatalogue.objects.get_or_create(
             catalogue_id=catalogue_id,
             defaults={
+                "series": series,
                 "version": "2.0",
                 "name": catalogue_id,
-                "catalogue_biome_label": catalogue_id,
-                "catalogue_type": GenomeCatalogue.PROK,
-                "biome": human_biome,
             },
         )
         return catalogue
