@@ -47,8 +47,14 @@ However, most common tasks are covered by the Taskfile, see below.)
 That file is used in development (docker-compose.yml) to export variables into environment.
 Currently, that file has mandatory variables: username and password for assembly uploader using [webin-cli](https://ena-docs.readthedocs.io/en/latest/submit/general-guide/webin-cli.html)
 ```shell
+export DATABASE_URL="postgres://<user>:<password>@<host>:5432/<database>"
 export EMG_WEBIN__EMG_WEBIN_ACCOUNT="Webin-XXX"
 export EMG_WEBIN__EMG_WEBIN_PASSWORD="password"
+```
+
+If you want to use the docker-compose Postgres service instead of a remote database, set:
+```shell
+export DATABASE_URL="postgres://postgres:postgres@app-database:5432/emg"
 ```
 
 #### The Taskfile

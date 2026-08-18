@@ -1,16 +1,30 @@
 import gzip
 import logging
 import re
+import time
+from dataclasses import dataclass
 from pathlib import PurePosixPath
 from urllib.parse import quote
 
 import httpx
-from httpx_retries import Retry, retry_request
 
 from analyses.base_models.with_downloads_models import DownloadFile, DownloadType
 from analyses.models import Analysis
 
-DOWNLOAD_RETRY = Retry(
+
+@dataclass(frozen=True)
+class RetryPolicy:
+    total: int
+    backoff_factor: float
+    status_forcelist: set[int]
+
+    def sleep(self, attempt_number: int) -> None:
+        if attempt_number <= 0 or self.backoff_factor <= 0:
+            return
+        time.sleep(self.backoff_factor * attempt_number)
+
+
+DOWNLOAD_RETRY = RetryPolicy(
     total=4,
     backoff_factor=1,
     status_forcelist={429, 500, 502, 503, 504},
@@ -58,6 +72,21 @@ def _http_client() -> httpx.Client:
     )
 
 
+def _retry_request(
+    client: httpx.Client, url: str, retry: RetryPolicy
+) -> httpx.Response:
+    last_response = None
+    for attempt_number in range(retry.total + 1):
+        response = client.get(url)
+        if response.status_code not in retry.status_forcelist:
+            return response
+        last_response = response
+        if attempt_number == retry.total:
+            return response
+        retry.sleep(attempt_number + 1)
+    return last_response
+
+
 def _identifiers_from_url(
     client: httpx.Client,
     url: str,
@@ -67,7 +96,7 @@ def _identifiers_from_url(
     run_logger: logging.Logger,
 ) -> set[str]:
     try:
-        response = retry_request(client, "GET", url, retry=DOWNLOAD_RETRY)
+        response = _retry_request(client, url, DOWNLOAD_RETRY)
         response.raise_for_status()
         contents = response.content
         if path.endswith(".gz"):
