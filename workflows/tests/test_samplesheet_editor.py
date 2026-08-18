@@ -31,6 +31,11 @@ def test_samplesheet_editor_paths_validation(settings):
     samplesheet_encoded = encode_samplesheet_path(samplesheet)
     assert validate_samplesheet_path(samplesheet_encoded) == Path(samplesheet)
 
+    samplesheet = "/nfs/production/edit/here/../outside/secret.csv"
+    samplesheet_encoded = encode_samplesheet_path(samplesheet)
+    with pytest.raises(Http404):
+        validate_samplesheet_path(samplesheet_encoded)
+
     samplesheet = "/nfs/production/cannot/edit/here/no.csv"
     samplesheet_encoded = encode_samplesheet_path(samplesheet)
     with pytest.raises(Http404):
@@ -63,6 +68,26 @@ def test_samplesheet_editor_paths_validation(settings):
     assert location_where_samplesheet_was_edited(
         Path(samplesheet), EMG_CONFIG.slurm.shared_filesystem_root_on_slurm
     ) == Path("/nfs/production/edit/here/samplesheet_edits_here/from_editing/yes.csv")
+
+
+def test_samplesheet_editor_paths_validation_rejects_symlink_escape(settings, tmp_path):
+    allowed_root = tmp_path / "allowed"
+    allowed_root.mkdir()
+    outside_root = tmp_path / "outside"
+    outside_root.mkdir()
+
+    outside_target = outside_root / "secret.csv"
+    outside_target.write_text("not a samplesheet")
+
+    linked_samplesheet = allowed_root / "linked.csv"
+    linked_samplesheet.symlink_to(outside_target)
+
+    settings.EMG_CONFIG.slurm.samplesheet_editing_allowed_inside = str(allowed_root)
+
+    samplesheet_path = linked_samplesheet.parent.resolve() / linked_samplesheet.name
+    samplesheet_encoded = encode_samplesheet_path(str(samplesheet_path))
+    with pytest.raises(Http404):
+        validate_samplesheet_path(samplesheet_encoded)
 
 
 @pytest.mark.django_db
@@ -116,6 +141,37 @@ def test_samplesheet_fetch(mock_move_samplesheet, client, admin_client, settings
             "next_url": quote(edit_url, safe=""),
         },
     )
+
+
+@pytest.mark.django_db
+@patch("workflows.views.move_samplesheet_to_editable_location")
+def test_samplesheet_fetch_rejects_parent_dir_escape(
+    mock_move_samplesheet, admin_client, settings
+):
+    settings.EMG_CONFIG.slurm.shared_filesystem_root_on_slurm = (
+        "/nfs/production/edit/here"
+    )
+    settings.EMG_CONFIG.slurm.shared_filesystem_root_on_server = "/app/data/edit/here"
+    settings.EMG_CONFIG.slurm.samplesheet_editing_allowed_inside = (
+        "/nfs/production/edit/here"
+    )
+    settings.EMG_CONFIG.slurm.samplesheet_editing_path_from_shared_filesystem = (
+        "samplesheet_edits_here"
+    )
+
+    # This is the explicit path-traversal PoC shape: it starts inside the allowed
+    # directory but resolves outside it once ".." is applied.
+    traversal_samplesheet = "/nfs/production/edit/here/../outside/secret.csv"
+    traversal_encoded = encode_samplesheet_path(traversal_samplesheet)
+
+    fetch_view_url = reverse(
+        "workflows:edit_samplesheet_fetch",
+        kwargs={"filepath_encoded": traversal_encoded},
+    )
+    response = admin_client.get(fetch_view_url)
+
+    assert response.status_code == 404
+    assert mock_move_samplesheet.call_count == 0
 
 
 # TODO: test of edit view/post
