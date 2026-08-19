@@ -24,6 +24,8 @@ workflows/prefect_deployments/prefect-*-prod*.yaml
 deployment/**
 !deployment/
 !deployment/README.md
+!deployment/ebi-wp-k8s-hl/
+!deployment/ebi-wp-k8s-hl/Dockerfile
 .coverage
 /.nextflow/
 /work/
