@@ -2,6 +2,7 @@ import csv
 from pathlib import Path
 from typing import Iterable, List
 
+from django.utils import timezone
 from prefect import get_run_logger
 
 from analyses.models import Analysis
@@ -192,10 +193,16 @@ def set_post_assembly_analysis_states(
     )
 
     # Bulk update - slightly gentler on the DB
+    now = timezone.now()
+    for relation in relations_to_update:
+        relation.updated_at = now
     AssemblyAnalysisBatchAnalysis.objects.bulk_update(
-        relations_to_update, ["asa_status"]
+        relations_to_update, ["asa_status", "updated_at"]
     )
-    Analysis.objects.bulk_update(analyses_to_update, ["status"])
+
+    for analysis in analyses_to_update:
+        analysis.updated_at = now
+    Analysis.objects.bulk_update(analyses_to_update, ["status", "updated_at"])
 
 
 @task
@@ -230,4 +237,7 @@ def set_asa_analysis_states(study_results_dir: Path, analysis_ids: List[int]):
     )
 
     # Bulk update - slightly gentler on the DB
-    Analysis.objects.bulk_update(analyses_to_update, ["status"])
+    now = timezone.now()
+    for analysis in analyses_to_update:
+        analysis.updated_at = now
+    Analysis.objects.bulk_update(analyses_to_update, ["status", "updated_at"])
