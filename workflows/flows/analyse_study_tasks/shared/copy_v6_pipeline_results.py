@@ -468,7 +468,12 @@ def copy_single_out_of_production_analysis_results(
     )
     if not asa_copy_success:
         logger.error(f"ASA {analysis.accession} copy for {assembly_accession} failed")
-    copy_errors.extend(asa_copy_errors)
+        return BatchCopyResult(
+            analysis_id=analysis.id,
+            destination_folder=destination_base,
+            success=False,
+            errors=asa_copy_errors,
+        )
 
     optional_pipelines = (
         (AssemblyAnalysisPipeline.VIRIFY, VirifyResultSchema),
