@@ -13,7 +13,7 @@ from prefect.tasks import task_input_hash
 import analyses.models
 import ena.models
 from emgapiv2.dict_utils import some
-from workflows.ena_utils.abstract import ENAPortalResultType
+from workflows.ena_utils.abstract import ENAPortalDataPortal, ENAPortalResultType
 from workflows.ena_utils.analysis import ENAAnalysisFields, ENAAnalysisQuery
 from workflows.ena_utils.ena_accession_matching import (
     extract_all_accessions,
@@ -848,3 +848,87 @@ def sync_study_metadata_from_ena(study: ena.models.Study):
     if portal_study := portal_study_response[0]:
         study.metadata = portal_study
         study.save()
+
+
+@task(
+    retries=RETRIES,
+    retry_delay_seconds=RETRY_DELAY,
+    cache_key_fn=task_input_hash,
+    task_run_name="Get study for assembly {assembly_accession} from ENA",
+)
+def get_study_accession_for_assembly(
+    assembly_accession: str,
+) -> str:
+    """
+    Queries the ENA Portal API with the assembly accession (ERZ format) to fetch
+    the associated study accession. An assembly in ENA is represented as an "analysis"
+    record, which contains the study_accession field.
+
+    Example:
+        Input: "ERZ18440741" (assembly accession)
+        Output: "ERP123456" (study accession)
+
+    Looks up the assembly publicly first, and if that finds nothing - falls back
+    to authenticated access, since the assembly's study may be private.
+
+    :param assembly_accession: Assembly accession
+    :return: Study accession (e.g., ERP/SRP/DRP/PRJ format)
+    :raises: ValueError if accession cannot be determined or not found in ENA
+    """
+    logger = get_run_logger()
+
+    if not assembly_accession:
+        raise ValueError("No assembly accession provided to derive study accession.")
+
+    logger.info(
+        f"Querying ENA API for study accession of assembly {assembly_accession}"
+    )
+
+    _ = ENAAnalysisFields
+    analysis_request = ENAAPIRequest(
+        result=ENAPortalResultType.ANALYSIS,
+        fields=[
+            _.ANALYSIS_ACCESSION,
+            _.STUDY_ACCESSION,
+            _.SECONDARY_STUDY_ACCESSION,
+        ],
+        limit=1,
+        query=ENAAnalysisQuery(analysis_accession=assembly_accession),
+        data_portals=[ENAPortalDataPortal.METAGENOME, ENAPortalDataPortal.ENA],
+    )
+
+    # We don't yet know which study this assembly belongs to, so we can't look up
+    # is_private from our own DB.
+    # Try publicly first, and only fall back to authenticated access if that finds
+    # nothing - the assembly may belong to a private study.
+    portal_analyses = analysis_request.get(raise_on_empty=False)
+    if not portal_analyses:
+        logger.info(
+            f"Assembly {assembly_accession} not found publicly; "
+            "retrying with authentication in case its study is private"
+        )
+        portal_analyses = analysis_request.get(auth=dcc_auth, raise_on_empty=False)
+
+    if not portal_analyses:
+        raise ValueError(
+            f"Assembly accession {assembly_accession} not found in ENA Portal API"
+        )
+
+    analysis_record = portal_analyses[0]
+    study_accession = analysis_record.get(_.STUDY_ACCESSION)
+
+    if not study_accession:
+        # Try secondary study accession if primary is missing
+        study_accession = analysis_record.get(_.SECONDARY_STUDY_ACCESSION)
+        if study_accession:
+            logger.warning(
+                f"Assembly {assembly_accession}: Using secondary study accession {study_accession}"
+            )
+
+    if not study_accession:
+        raise ValueError(
+            f"No study accession found for assembly {assembly_accession} in ENA"
+        )
+
+    logger.info(f"Assembly {assembly_accession} belongs to study {study_accession}")
+    return study_accession
