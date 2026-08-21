@@ -1,6 +1,7 @@
 import uuid
 from typing import List
 
+from django.utils import timezone
 from prefect import get_run_logger
 
 from activate_django_first import EMG_CONFIG  # noqa
@@ -132,5 +133,8 @@ def mark_analyses_with_failed_status(
 
     # Bulk update all analyses at once
     if analyses_to_update:
-        Analysis.objects.bulk_update(analyses_to_update, ["status"])
+        now = timezone.now()
+        for analysis in analyses_to_update:
+            analysis.updated_at = now
+        Analysis.objects.bulk_update(analyses_to_update, ["status", "updated_at"])
         logger.info(f"Marked {len(analyses_to_update)} analyses as ANALYSIS_QC_FAILED")
