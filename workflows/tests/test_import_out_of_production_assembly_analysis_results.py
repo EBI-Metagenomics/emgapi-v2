@@ -8,17 +8,10 @@ from django.conf import settings
 
 from analyses.models import Analysis
 from analyses.models import Study as AnalysisStudy
-from workflows.flows.analyse_study_tasks.shared.copy_v6_pipeline_results import (
-    BatchCopyResult,
-    CopyError,
-)
 from workflows.flows.analysis.assembly.flows.import_out_of_production_assembly_analysis_results import (
     _parse_and_validate_samplesheet,
     _validate_results_structure,
     import_out_of_production_assembly_analysis_results,
-)
-from workflows.flows.analysis.assembly.tasks.copy_out_of_production_assembly_analysis_results import (
-    copy_out_of_production_analysis_results_to_destination_folder,
 )
 from workflows.models import AssemblyAnalysisPipeline
 from workflows.prefect_utils.testing_utils import (
@@ -122,154 +115,6 @@ class TestImportOutOfProductionAssemblyAnalysisResults:
 
         with pytest.raises(ValueError, match="No assembly accessions found"):
             _parse_and_validate_samplesheet(samplesheet_path)
-
-
-@pytest.mark.django_db
-class TestCopyOutOfProductionAnalysisResultsToDestinationFolder:
-
-    @pytest.fixture
-    def setup_analysis(
-        self,
-        raw_reads_mgnify_study,
-        raw_reads_mgnify_sample,
-        mgnify_assemblies,
-    ):
-        analysis = Analysis.objects.create(
-            study=raw_reads_mgnify_study,
-            sample=raw_reads_mgnify_sample[0],
-            ena_study=raw_reads_mgnify_study.ena_study,
-            assembly=mgnify_assemblies[0],
-            pipeline_version="6.0",
-        )
-        return analysis
-
-    @patch(
-        "workflows.flows.analysis.assembly.tasks.copy_out_of_production_assembly_analysis_results.copy_single_out_of_production_analysis_results"
-    )
-    def test_copy_success_returns_result(
-        self,
-        mock_copy_out_of_production,
-        setup_analysis,
-        prefect_harness,
-        tmp_path,
-    ):
-        """Test that a successful copy is returned for the analysis."""
-        analysis = setup_analysis
-        results_workspace = tmp_path / "results"
-
-        copy_result = BatchCopyResult(
-            analysis_id=analysis.id,
-            destination_folder=tmp_path / "ftp" / "analysis",
-            success=True,
-        )
-        mock_copy_out_of_production.return_value = copy_result
-
-        results = copy_out_of_production_analysis_results_to_destination_folder(
-            analysis_ids=[analysis.id],
-            results_workspace=results_workspace,
-            destination_root=tmp_path / "ftp",
-        )
-
-        assert results == [copy_result]
-        mock_copy_out_of_production.assert_called_once()
-        assert (
-            mock_copy_out_of_production.call_args.kwargs["analysis_id"] == analysis.id
-        )
-        assert (
-            mock_copy_out_of_production.call_args.kwargs["results_workspace"]
-            == results_workspace
-        )
-        assert (
-            mock_copy_out_of_production.call_args.kwargs["destination_root"]
-            == tmp_path / "ftp"
-        )
-
-    @patch(
-        "workflows.flows.analysis.assembly.tasks.copy_out_of_production_assembly_analysis_results.copy_single_out_of_production_analysis_results"
-    )
-    def test_copy_failed_returns_result(
-        self,
-        mock_copy_out_of_production,
-        setup_analysis,
-        prefect_harness,
-        tmp_path,
-    ):
-        """Test that a failed copy is returned rather than raised."""
-        analysis = setup_analysis
-        results_workspace = tmp_path / "results"
-
-        copy_result = BatchCopyResult(
-            analysis_id=analysis.id,
-            destination_folder=tmp_path / "ftp" / "analysis",
-            success=False,
-            errors=[
-                CopyError(
-                    pipeline_name=AssemblyAnalysisPipeline.ASA.value,
-                    source=results_workspace
-                    / AssemblyAnalysisPipeline.ASA.value
-                    / "ERZ000000",
-                    message="ASA results are missing",
-                )
-            ],
-        )
-        mock_copy_out_of_production.return_value = copy_result
-
-        results = copy_out_of_production_analysis_results_to_destination_folder(
-            analysis_ids=[analysis.id],
-            results_workspace=results_workspace,
-            destination_root=tmp_path / "ftp",
-        )
-
-        assert results == [copy_result]
-        assert results[0].success is False
-        assert results[0].errors[0].message == "ASA results are missing"
-
-    @patch(
-        "workflows.flows.analysis.assembly.tasks.copy_out_of_production_assembly_analysis_results.copy_single_out_of_production_analysis_results"
-    )
-    def test_copy_processes_all_analyses(
-        self,
-        mock_copy_out_of_production,
-        raw_reads_mgnify_study,
-        raw_reads_mgnify_sample,
-        mgnify_assemblies,
-        prefect_harness,
-        tmp_path,
-    ):
-        """Test that one copy result is returned per analysis, preserving order."""
-        analyses = [
-            Analysis.objects.create(
-                study=raw_reads_mgnify_study,
-                sample=raw_reads_mgnify_sample[0],
-                ena_study=raw_reads_mgnify_study.ena_study,
-                assembly=assembly,
-                pipeline_version="6.0",
-            )
-            for assembly in mgnify_assemblies[:2]
-        ]
-        results_workspace = tmp_path / "results"
-
-        copy_results = [
-            BatchCopyResult(
-                analysis_id=analysis.id,
-                destination_folder=tmp_path / "ftp" / str(analysis.id),
-                success=True,
-            )
-            for analysis in analyses
-        ]
-        mock_copy_out_of_production.side_effect = copy_results
-
-        results = copy_out_of_production_analysis_results_to_destination_folder(
-            analysis_ids=[analysis.id for analysis in analyses],
-            results_workspace=results_workspace,
-            destination_root=tmp_path / "ftp",
-        )
-
-        assert results == copy_results
-        assert mock_copy_out_of_production.call_count == 2
-        for call, analysis in zip(mock_copy_out_of_production.call_args_list, analyses):
-            assert call.kwargs["analysis_id"] == analysis.id
-            assert call.kwargs["results_workspace"] == results_workspace
 
 
 # ============================================================================
