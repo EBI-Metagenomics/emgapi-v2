@@ -5,6 +5,7 @@ from functools import reduce
 from typing import List, Literal, Optional, Type, Union
 
 from django.conf import settings
+from django.db import transaction
 from httpx import Auth
 from prefect import flow, get_run_logger, task
 from prefect.tasks import task_input_hash
@@ -188,57 +189,34 @@ def check_reads_fastq(
     return None, None
 
 
-def _make_samples_and_run(
-    run_or_assembly_response: dict,
-    study: analyses.models.Study,
-    library_strategy_policy: ENALibraryStrategyPolicy = ENALibraryStrategyPolicy.ONLY_IF_CORRECT_IN_ENA,
-    library_source_policy: ENALibrarySourcePolicy = ENALibrarySourcePolicy.OVERRIDE_GENOMIC_IF_METAGENOMIC_SCIENTIFIC_NAME,
-    expected_experiment_type: analyses.models.Run.ExperimentTypes | None = None,
-) -> tuple[ena.models.Sample, analyses.models.Sample, analyses.models.Run]:
-    """
-    Generate and update samples and runs for given study and ENA data.
-
-    This function updates or creates ENA and MGnify sample records as well as
-    run records using the provided ENA data and study information. Metadata
-    for samples and runs is extracted and synchronized accordingly. It also
-    handles library strategy and source policies to determine experiment
-    types. If an ENA sample is newly created, it fetches complete metadata
-    for the sample from the ENA API.
-
-    :param run_or_assembly_response: A dictionary containing metadata from ENA about a run or assembly.
-    :param study: A Study object representing the context in which the samples and runs are created or updated.
-    :param library_strategy_policy: Policy dictating how to handle library strategies that may be incorrect in ENA
-    :param library_source_policy: Policy determining how library source from ENA is interpreted or overridden
-    :param expected_experiment_type: Optional predefined expected experiment type, used if the policies dictate it should be overridden
-    :return: A tuple with three components - (ENA sample, MGnify sample, Run).
-    """
+def _make_samples(
+    ena_response: dict, study: analyses.models.Study
+) -> tuple[ena.models.Sample, analyses.models.Sample]:
     _ = ENAReadRunFields  # fields used here are also present on ENAAnalysisFields
 
     ena_sample, ena_sample_was_created = ena.models.Sample.objects.update_or_create(
         accession__in=[
-            run_or_assembly_response[_.SAMPLE_ACCESSION],
-            run_or_assembly_response[_.SECONDARY_SAMPLE_ACCESSION],
+            ena_response[_.SAMPLE_ACCESSION],
+            ena_response[_.SECONDARY_SAMPLE_ACCESSION],
         ],
         defaults={
-            "metadata": some(run_or_assembly_response, {_.SAMPLE_TITLE, _.LAT, _.LON}),
+            "metadata": some(ena_response, {_.SAMPLE_TITLE, _.LAT, _.LON}),
         },
         create_defaults={
-            "accession": run_or_assembly_response[_.SAMPLE_ACCESSION],
-            "additional_accessions": [
-                run_or_assembly_response[_.SECONDARY_SAMPLE_ACCESSION]
-            ],
+            "accession": ena_response[_.SAMPLE_ACCESSION],
+            "additional_accessions": [ena_response[_.SECONDARY_SAMPLE_ACCESSION]],
             "study": study.ena_study,  # TODO could be more than one...
         },
     )
 
     mgnify_sample, __ = analyses.models.Sample.objects.update_or_create_by_accession(
         known_accessions=[
-            run_or_assembly_response[_.SAMPLE_ACCESSION],
-            run_or_assembly_response[_.SECONDARY_SAMPLE_ACCESSION],
+            ena_response[_.SAMPLE_ACCESSION],
+            ena_response[_.SECONDARY_SAMPLE_ACCESSION],
         ],
         defaults={
             "is_private": study.is_private,
-            "metadata": some(run_or_assembly_response, {_.LAT, _.LON}),
+            "metadata": some(ena_response, {_.LAT, _.LON}),
         },
         create_defaults={
             "ena_sample": ena_sample,
@@ -247,11 +225,27 @@ def _make_samples_and_run(
     )
     mgnify_sample.studies.add(study)
 
+    if ena_sample_was_created:
+        # This propagates all available ENA sample metadata to the MGnify sample.
+        sync_sample_metadata_from_ena(ena_sample)
+
+    return ena_sample, mgnify_sample
+
+
+def _make_run(
+    run_response: dict,
+    study: analyses.models.Study,
+    mgnify_sample: analyses.models.Sample,
+    library_strategy_policy: ENALibraryStrategyPolicy = ENALibraryStrategyPolicy.ONLY_IF_CORRECT_IN_ENA,
+    library_source_policy: ENALibrarySourcePolicy = ENALibrarySourcePolicy.OVERRIDE_GENOMIC_IF_METAGENOMIC_SCIENTIFIC_NAME,
+    expected_experiment_type: analyses.models.Run.ExperimentTypes | None = None,
+) -> analyses.models.Run:
+    _ = ENAReadRunFields
     run, __ = analyses.models.Run.objects.update_or_create_by_accession(
-        known_accessions=[run_or_assembly_response[_.RUN_ACCESSION]],
+        known_accessions=[run_response[_.RUN_ACCESSION]],
         defaults={
             "metadata": some(
-                run_or_assembly_response,
+                run_response,
                 {
                     _.LIBRARY_STRATEGY,
                     _.LIBRARY_LAYOUT,
@@ -274,20 +268,32 @@ def _make_samples_and_run(
     # TODO: Review if this is the best way to handle this, but I've been loads of studies which
     #       have missing metadata, for example when trying to run the assembly analysis of ERP117856
     run.set_experiment_type_by_metadata(
-        run_or_assembly_response.get(_.LIBRARY_STRATEGY, ""),
-        run_or_assembly_response.get(_.LIBRARY_SOURCE, ""),
-        run_or_assembly_response.get(_.SCIENTIFIC_NAME, ""),
+        run_response.get(_.LIBRARY_STRATEGY, ""),
+        run_response.get(_.LIBRARY_SOURCE, ""),
+        run_response.get(_.SCIENTIFIC_NAME, ""),
         library_strategy_policy=library_strategy_policy,
         library_source_policy=library_source_policy,
         expected_experiment_type=expected_experiment_type,
     )
+    return run
 
-    if ena_sample_was_created:
-        # Also fetch ALL sample metadata from ENA.
-        # Don't re-fetch unless this is first creation, as this triggers another API call per sample.
-        # This propagates to mgnify_sample by hooks.
-        sync_sample_metadata_from_ena(ena_sample)
 
+def _make_samples_and_run(
+    run_response: dict,
+    study: analyses.models.Study,
+    library_strategy_policy: ENALibraryStrategyPolicy = ENALibraryStrategyPolicy.ONLY_IF_CORRECT_IN_ENA,
+    library_source_policy: ENALibrarySourcePolicy = ENALibrarySourcePolicy.OVERRIDE_GENOMIC_IF_METAGENOMIC_SCIENTIFIC_NAME,
+    expected_experiment_type: analyses.models.Run.ExperimentTypes | None = None,
+) -> tuple[ena.models.Sample, analyses.models.Sample, analyses.models.Run]:
+    ena_sample, mgnify_sample = _make_samples(run_response, study)
+    run = _make_run(
+        run_response,
+        study,
+        mgnify_sample,
+        library_strategy_policy,
+        library_source_policy,
+        expected_experiment_type,
+    )
     return ena_sample, mgnify_sample, run
 
 
@@ -477,9 +483,115 @@ def is_ena_study_available_privately(accession: str):
 # TODO: is_ena_study_available_to_webin_account()
 
 
+@task(
+    task_run_name="Get ENA sample accessions for {study_accessions}",
+    retries=RETRIES,
+    retry_delay_seconds=RETRY_DELAY,
+)
+def get_available_study_sample_accessions(study_accessions: list[str]) -> set[str]:
+    sample_fields = [
+        ENASampleFields.SAMPLE_ACCESSION,
+        ENASampleFields.SECONDARY_SAMPLE_ACCESSION,
+    ]
+    samples = ENAAPIRequest(
+        result=ENAPortalResultType.SAMPLE,
+        query=reduce(
+            operator.or_,
+            [
+                ENASampleQuery(study_accession=accession)
+                for accession in study_accessions
+            ],
+        ),
+        fields=sample_fields,
+    ).get(auth=dcc_auth, raise_on_empty=False)
+    return {
+        accession
+        for sample in samples
+        for accession in (
+            sample[ENASampleFields.SAMPLE_ACCESSION],
+            sample.get(ENASampleFields.SECONDARY_SAMPLE_ACCESSION),
+        )
+        if accession
+    }
+
+
+@task(
+    task_run_name="Get ENA run accessions for {study_accessions}",
+    retries=RETRIES,
+    retry_delay_seconds=RETRY_DELAY,
+)
+def get_available_study_run_accessions(study_accessions: list[str]) -> set[str]:
+    runs = ENAAPIRequest(
+        result=ENAPortalResultType.READ_RUN,
+        query=reduce(
+            operator.or_,
+            [
+                ENAReadRunQuery(study_accession=accession)
+                | ENAReadRunQuery(secondary_study_accession=accession)
+                for accession in study_accessions
+            ],
+        ),
+        fields=[ENAReadRunFields.RUN_ACCESSION],
+    ).get(auth=dcc_auth, raise_on_empty=False)
+    return {run[ENAReadRunFields.RUN_ACCESSION] for run in runs}
+
+
+@task(
+    task_run_name="Get ENA assembly accessions for {study_accessions}",
+    retries=RETRIES,
+    retry_delay_seconds=RETRY_DELAY,
+)
+def get_available_study_assembly_accessions(study_accessions: list[str]) -> set[str]:
+    assemblies = ENAAPIRequest(
+        result=ENAPortalResultType.ANALYSIS,
+        query=reduce(
+            operator.or_,
+            [
+                ENAAnalysisQuery(study_accession=accession)
+                | ENAAnalysisQuery(secondary_study_accession=accession)
+                for accession in study_accessions
+            ],
+        ),
+        fields=[ENAAnalysisFields.ANALYSIS_ACCESSION],
+    ).get(auth=dcc_auth, raise_on_empty=False)
+    return {assembly[ENAAnalysisFields.ANALYSIS_ACCESSION] for assembly in assemblies}
+
+
+def sync_study_child_suppression_from_ena(
+    ena_study: ena.models.Study, available: dict[str, set[str]]
+) -> None:
+    """Reconcile direct ENA suppression before applying inherited suppression."""
+    # Reconcile leaves first so later parent updates can re-suppress descendants.
+    for model, name in (
+        (analyses.models.Assembly, "assemblies"),
+        (analyses.models.Run, "runs"),
+        (analyses.models.Sample, "samples"),
+    ):
+        children = (
+            model.objects.filter(ena_study=ena_study)
+            .select_related(None)
+            .prefetch_related(None)
+            .only("pk", "ena_accessions", "is_suppressed")
+        )
+        for child in children:
+            known_accessions = {
+                accession
+                for accession in child.ena_accessions
+                if accession
+                and child.PREFERRED_ENA_ACCESSION_REGEX.fullmatch(accession)
+            }
+            if not known_accessions:
+                continue
+            is_suppressed = known_accessions.isdisjoint(available[name])
+            if child.is_suppressed != is_suppressed:
+                child.is_suppressed = is_suppressed
+                child.save(update_fields=["is_suppressed"])
+
+
 @flow
 def sync_privacy_state_of_ena_study_and_derived_objects(
     ena_study: Union[ena.models.Study, str],
+    also_check_suppressed_children: bool = False,
 ):
     logger = get_run_logger()
 
@@ -504,10 +616,25 @@ def sync_privacy_state_of_ena_study_and_derived_objects(
         logger.warning(
             f"ENA Study {ena_study} is not available via portal API, either publicly or privately. Assuming it has been suppressed."
         )
-        ena_study.is_suppressed = True
-    else:
-        ena_study.is_private = private or False  # null private -> false
-    ena_study.save()
+
+    available = {}
+    if also_check_suppressed_children and not suppressed:
+        study_accessions = [ena_study.accession] + (
+            ena_study.additional_accessions or []
+        )
+        available = {
+            "samples": get_available_study_sample_accessions(study_accessions),
+            "runs": get_available_study_run_accessions(study_accessions),
+            "assemblies": get_available_study_assembly_accessions(study_accessions),
+        }
+
+    ena_study.is_suppressed = suppressed
+    ena_study.is_private = private or False  # null private -> false
+    with transaction.atomic():
+        # Reset derived objects to the study state before reapplying child suppression.
+        ena_study.save()
+        if any(available.values()):
+            sync_study_child_suppression_from_ena(ena_study, available)
 
 
 @task(
@@ -640,15 +767,27 @@ def get_study_assemblies_from_ena(
         except analyses.models.Sample.DoesNotExist:
             # make sample based on metadata available from ENA assembly
             logger.info(f"Creating sample for {assembly_data[_.SAMPLE_ACCESSION]}")
-            __, mgnify_sample, run = _make_samples_and_run(
-                assembly_data,
-                study,
-                library_strategy_policy=library_strategy_policy,
-                library_source_policy=library_source_policy,
-                expected_experiment_type=expected_experiment_type,
+            __, mgnify_sample = _make_samples(assembly_data, study)
+
+        run_accessions = extract_all_accessions(assembly_data.get(_.RUN_ACCESSION, ""))
+        runs = list(
+            analyses.models.Run.objects.filter(ena_accessions__overlap=run_accessions)
+        )
+        found_accessions = {
+            run_accession for run in runs for run_accession in run.ena_accessions
+        }
+        for run_accession in set(run_accessions) - found_accessions:
+            run_data = {**assembly_data, _.RUN_ACCESSION: run_accession}
+            runs.append(
+                _make_run(
+                    run_data,
+                    study,
+                    mgnify_sample,
+                    library_strategy_policy,
+                    library_source_policy,
+                    expected_experiment_type,
+                )
             )
-        else:
-            run = mgnify_sample.runs.first()  # TODO: coassemblies? replicates?
 
         assembly_accession = assembly_data[_.ANALYSIS_ACCESSION]
         assembly, __ = analyses.models.Assembly.objects.update_or_create_by_accession(
@@ -667,9 +806,8 @@ def get_study_assemblies_from_ena(
         assembly.metadata[_.GENERATED_FTP] = assembly_data[_.GENERATED_FTP]
 
         # It is possible that some assemblies are not linked to any runs, the ENA data model allows for this.
-        if run:
-            assembly.runs.add(run)
-        else:
+        assembly.runs.set(runs)
+        if not runs:
             logger.warning(f"Could not find run for assembly {assembly_accession}!")
         assembly.save()
         assemblies.append(assembly.first_accession)
