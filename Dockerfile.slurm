@@ -67,7 +67,7 @@ RUN mv nextflow /usr/bin/
 COPY slurm-dev-environment/configs/slurm_prolog.sh /usr/local/bin/slurm_prolog.sh
 COPY slurm-dev-environment/configs/slurm_epilog.sh /usr/local/bin/slurm_epilog.sh
 
-COPY requirements.txt .
+COPY requirements*.txt .
 RUN python -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 RUN pip install --use-pep517 --upgrade -r requirements.txt
