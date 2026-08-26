@@ -297,6 +297,16 @@ deployments:
     name: slurm
   schedules: []
 
+- name: sync_runs_with_ena
+  description: |-
+    This flow will sync run metadata with ENA.
+    :param accessions: List of run accessions to sync
+  entrypoint: workflows/flows/housekeeping/sync_runs_with_ena.py:sync_runs_with_ena
+  parameters: {}
+  work_pool:
+    name: slurm
+  schedules: []
+
 - name: repair_eggnog_tsv_headers_deployment
   description: |-
     Scan assembly analyses for EggNOG annotation TSV files with duplicated headers.
