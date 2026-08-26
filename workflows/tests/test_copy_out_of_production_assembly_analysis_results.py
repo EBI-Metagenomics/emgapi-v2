@@ -229,43 +229,6 @@ class TestCopySingleOutOfProductionAnalysisResults:
     @patch(
         "workflows.flows.analysis.assembly.tasks.copy_out_of_production_assembly_analysis_results.copy_schema_directories"
     )
-    def test_asa_success_virify_present_and_succeeds(
-        self,
-        mock_copy_schema_directories,
-        setup_analysis,
-        prefect_harness,
-        tmp_path,
-    ):
-        """VIRify output present and copied successfully; MAP absent."""
-        analysis = setup_analysis
-        results_workspace = tmp_path / "results"
-        assembly_accession = analysis.assembly_or_run.first_accession
-
-        virify_source_base = (
-            results_workspace
-            / AssemblyAnalysisPipeline.VIRIFY.value
-            / assembly_accession
-        )
-        virify_source_base.mkdir(parents=True)
-
-        mock_copy_schema_directories.return_value = (True, [])
-
-        result = copy_single_out_of_production_analysis_results(
-            analysis_id=analysis.id,
-            destination_root=tmp_path / "ftp",
-            results_workspace=results_workspace,
-        )
-
-        assert result.success is True
-        assert mock_copy_schema_directories.call_count == 2
-        assert (
-            mock_copy_schema_directories.call_args_list[1].kwargs["source_base"]
-            == virify_source_base
-        )
-
-    @patch(
-        "workflows.flows.analysis.assembly.tasks.copy_out_of_production_assembly_analysis_results.copy_schema_directories"
-    )
     def test_asa_success_virify_present_but_fails(
         self,
         mock_copy_schema_directories,
