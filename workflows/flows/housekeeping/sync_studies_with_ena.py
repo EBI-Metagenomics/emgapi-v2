@@ -4,7 +4,11 @@ from prefect.artifacts import create_table_artifact
 from activate_django_first import EMG_CONFIG  # noqa: F401
 
 import ena.models
-from workflows.ena_utils.ena_api_requests import sync_study_metadata_from_ena
+from workflows.ena_utils.ena_api_requests import (
+    sync_privacy_state_of_ena_study_and_derived_objects,
+    sync_study_metadata_from_ena,
+)
+from workflows.ena_utils.requestors import ENAAvailabilityException
 from workflows.prefect_utils.flows_utils import (
     django_db_flow as flow,
 )
@@ -13,9 +17,9 @@ from workflows.prefect_utils.flows_utils import (
 )
 
 
-@task(name="Sync batch of studies metadata from ENA")
+@task(name="Sync batch of studies with ENA")
 def sync_studies(study_accessions: list[str]) -> list[str]:
-    """Sync metadata for a batch of studies from ENA.
+    """Sync metadata and visibility for a batch of studies from ENA.
 
     Each study is synced individually with try/except so that a failure
     for one study does not block the rest of the batch.
@@ -28,9 +32,25 @@ def sync_studies(study_accessions: list[str]) -> list[str]:
     for study_accession in study_accessions:
         try:
             study = ena.models.Study.objects.get_ena_study(study_accession)
-            logger.info(f"Syncing metadata for study {study.accession}")
-            sync_study_metadata_from_ena(study)
-            logger.info(f"Successfully synced metadata for study {study.accession}")
+            logger.info(f"Syncing study {study.accession} with ENA")
+            metadata_error = None
+            try:
+                sync_study_metadata_from_ena(study)
+            except Exception as error:
+                metadata_error = error
+            # A suppressed study has no metadata response, but the visibility
+            # sync must run before we can distinguish that from a real failure.
+            sync_privacy_state_of_ena_study_and_derived_objects(
+                study, also_check_suppressed_children=True
+            )
+            if metadata_error is not None:
+                study.refresh_from_db(fields=["is_suppressed"])
+                if not (
+                    study.is_suppressed
+                    and isinstance(metadata_error, ENAAvailabilityException)
+                ):
+                    raise metadata_error
+            logger.info(f"Successfully synced ENA state for study {study.accession}")
         except Exception as e:
             logger.error(f"Failed to sync study {study_accession}: {e}")
             failed.append(study_accession)
@@ -43,7 +63,7 @@ def sync_studies_with_ena(
     all_studies: bool = False,
     batch_size: int = 50,
 ) -> list[str]:
-    """Sync study metadata from ENA for a list of accessions or all studies.
+    """Sync study metadata and visibility for a list of accessions or all studies.
 
     Studies are processed in batches to avoid long-running DB connections.
 
@@ -68,7 +88,7 @@ def sync_studies_with_ena(
         )
 
     total = len(study_accessions)
-    logger.info(f"Syncing metadata for {total} studies in batches of {batch_size}")
+    logger.info(f"Syncing {total} studies with ENA in batches of {batch_size}")
 
     all_failed = []
     for i in range(0, total, batch_size):

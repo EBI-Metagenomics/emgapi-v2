@@ -16,7 +16,7 @@ RUN addgroup --gid "$GID" "$USER" \
 
 WORKDIR /app
 
-ADD requirements.txt ./requirements.txt
+ADD requirements.txt requirements-common.txt ./
 RUN pip install --upgrade pip
 RUN pip install -r requirements.txt
 

@@ -289,11 +289,26 @@ class ServiceURLsConfig(BaseModel):
     genome_search_proxy: str = "https://cobs-genome-search-01.mgnify.org/search"
 
 
+class SourmashConfig(BaseModel):
+    queries_path: str = "/tmp/sourmash/queries"
+    results_path: str = "/tmp/sourmash/results"
+    index_root: str = "/app/data/sourmash/indexes"
+    default_ksize: int = 31
+    default_scaled: int = 1000
+    result_retention_days: int = 30
+    name_map_path: str = ""
+
+
 class DataDistributionConfig(BaseModel):
     studies_url_root_for_permalinks: str = Field(
         "https://www.ebi.ac.uk/metagenomics/studies/"
     )
     latest_studies_feed_count: int = 20
+
+
+class EBISearchConfig(BaseModel):
+    output_dir: str = "/path/to/ebi-search-output-dir"
+    analysis_chunk_size: int = Field(default=500, ge=1)
 
 
 class MaskReplacement(BaseModel):
@@ -375,6 +390,7 @@ class EMGConfig(BaseSettings):
     environment: str = "development"
     legacy_service: LegacyServiceConfig = LegacyServiceConfig()
     service_urls: ServiceURLsConfig = ServiceURLsConfig()
+    sourmash: SourmashConfig = SourmashConfig()
     slurm: SlurmConfig = SlurmConfig()
     webin: WebinConfig = WebinConfig()
     log_masking: LogMaskingConfig = LogMaskingConfig()
@@ -384,6 +400,7 @@ class EMGConfig(BaseSettings):
     rt: RequestTrackerConfig = RequestTrackerConfig()
     sentry_dsn: str = ""
     distribution: DataDistributionConfig = DataDistributionConfig()
+    ebi_search: EBISearchConfig = EBISearchConfig()
 
     model_config = SettingsConfigDict(
         env_prefix="emg_",

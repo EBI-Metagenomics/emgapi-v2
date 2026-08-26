@@ -124,12 +124,12 @@ def on_ena_study_saved_update_derived_suppression_and_privacy_states(
     (Un)suppress the MGnify ("Analyses" app) objects associated with an ENA Study whenever the ENA Study is updated,
     and update their private/public state.
     Typically, an ENA study might be suppressed if it was submitted with erroneous data.
-    At present, suppression is handled study-wide. I.e. data are suppressed if and only if an ENA study is suppressed.
-    Likewise, data can be private if an entire ENA study is private.
+    Study suppression here applies to all derived data.
+    More specific suppression (sample/run/assembly) is propagated between models in the analyses app.
+    After a study is unsuppressed, an ENA resync can reapply suppression from its individual child records.
+    Likewise, data can be private if an entire ENA study is private (there is no more specific privacy below study).
     After embargo date expires, the study and all associated data become public.
     """
-    # TODO: suppression can also take place at non-study level...
-
     for field in instance._meta.get_fields():
         if field.is_relation and field.auto_created and not field.concrete:
             related_model: Model = field.related_model

@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import csv
 import logging
+import os
 from pathlib import Path
 from urllib.parse import quote, unquote
 
@@ -38,7 +39,7 @@ def validate_samplesheet_path(filepath_encoded: str) -> Path:
     except (TypeError, ValueError):
         raise Http404("Invalid file path: couldn't decode")
     else:
-        filepath = Path(_filepath)
+        filepath = Path(os.path.normpath(_filepath))
 
     if not filepath.is_absolute():
         raise Http404("Invalid file path: not absolute")
@@ -46,12 +47,19 @@ def validate_samplesheet_path(filepath_encoded: str) -> Path:
     if filepath.suffix.lower() not in [".csv", ".tsv"]:
         raise Http404(f"Invalid file type: {filepath.suffix.lower()}")
 
-    if not filepath.is_relative_to(
-        Path(EMG_CONFIG.slurm.samplesheet_editing_allowed_inside).resolve()
-    ):
+    allowed_root = Path(EMG_CONFIG.slurm.samplesheet_editing_allowed_inside).resolve()
+
+    if os.path.commonpath([str(allowed_root), str(filepath)]) != str(allowed_root):
         raise Http404("Invalid directory")
 
-    return filepath
+    relative_filepath = filepath.relative_to(allowed_root)
+    validated_filepath = allowed_root
+    for part in relative_filepath.parts:
+        validated_filepath = validated_filepath / part
+        if validated_filepath.is_symlink():
+            raise Http404("Invalid directory")
+
+    return validated_filepath
 
 
 @staff_member_required

@@ -1,6 +1,18 @@
 fileignoreconfig:
+- filename: .talismanrc
+  allowed_patterns: [dbkey, key='ebi_search__state', "keys: tuple"]
+
 - filename: .github/workflows/release_k8s.yml
   checksum: 0e93196d244417801fd40ad6bfa01f53a6bf04257371378a1dc3e14cbc7a04d8
+
+- filename: README.md
+  checksum: d8137e9ccf9810642995fd8874cda51b33a1bd41c90f968919e91b6483014d3c
+
+- filename: sourmash_django_tasks_detailed_design.md
+  checksum: d8abca58f2c51a145cf99b3fcc88b717d057c58ef0cb1c9a1a3588997cdac55b
+
+- filename: sourmash_search_architecture_plan.md
+  checksum: ce5701f35acc8cc05b00cb3d75d9d528ecb8a6d3dccb0c273274f07bc5cda7bc
 
 - filename: ena/models.py
   allowed_patterns: [accession key]
@@ -32,6 +44,9 @@ fileignoreconfig:
 - filename: analyses/tests/test_models.py
   allowed_patterns: [key]
 
+- filename: genomes/tests/test_sourmash.py
+  allowed_patterns: [monkeypatch]
+
 - filename: conftest.py
   allowed_patterns: [password="password123"]
 
@@ -42,7 +57,7 @@ fileignoreconfig:
   allowed_patterns: [kubectl create secret generic nginx-private-data-config-secret --from-file=private-data-nginx.conf -n emgapiv2-hl-exp, google-maps-key-secret, create secret generic, google-maps-key]
 
 - filename: docker-compose.yaml
-  checksum: a2a08ad2c13767992ee803ce4af5492907c1343b007c4a4ef3e22af052a751d4
+  allowed_patterns: [EMG_WEBIN__JWT_SECRET_KEY=dummy-key, SECURE_LINK_SECRET=dummy-key, PRIVATE_DATA_SECURE_LINK_SECRET_KEY=dummy-key]
 
 - filename: emgapiv2/api/__init__.py
   allowed_patterns: [OpenApiKeywords]
@@ -69,7 +84,7 @@ fileignoreconfig:
   checksum: 08e2680598ee0719f717dc73019948001ebfcbaf700a3ee2dfb0e442acaebd26
 
 - filename: emgapiv2/settings.py
-  checksum: c6b5a727cf8a2638879787d5670b7f198574be0c31878a6bc92e652ce298af70
+  checksum: 830b351ce75e66d6e35a3c7d270ab8f78bd0a9a82b28f8c2e53adc02b8cb32b3
 
 - filename: emgapiv2/settings_test.py
   checksum: ded898400b4eda7e3cf75694af1b66235975a85eb5b8f49f3a2c708163a7aad4
@@ -153,7 +168,7 @@ fileignoreconfig:
   ignore_detectors: [filecontent]
 
 - filename: Taskfile.yaml
-  allowed_patterns: [a password in, slurm-dev-environment/fs/nfs/public/tests/assembly_v6_output/ERZ857107/ERZ857107, slurm-dev-environment/fs/nfs/ftp/public/databases/metagenomics/mgnify_results/PRJNA398/PRJNA398089/ERZ857/ERZ857107/V6/assembly]
+  checksum: 148f6190a7b807f283bb96be5ac2ec39f5cb0b3474daa83beaae748712230838
 
 - filename: workflows/data_io_utils/csv/csv_comment_handler.py
   allowed_patterns: [keys()]
@@ -202,6 +217,12 @@ fileignoreconfig:
 
 - filename: workflows/flows/assemble_study_tasks/make_samplesheets.py
   allowed_patterns: [key, InstrumentPlatformKeys]
+
+- filename: workflows/flows/data_dumps/ebi_search/**/*.py
+  ignore_detectors: [filename]
+
+- filename: workflows/flows/data_dumps/ebi_search/utils/*.py
+  allowed_patterns: [dbkey, key='ebi_search__state', "keys: tuple"]
 
 - filename: workflows/flows/import_genomes_flow.py
   checksum: 26802040107ed033a32ae3209bb856a6f52e5d1ffe112d7fed11f177f094a651
@@ -291,6 +312,9 @@ fileignoreconfig:
 - filename: workflows/tests/test_backfill_assembly_analysis_results_dirs_flow.py
   allowed_patterns: [key]
 
+- filename: workflows/tests/test_ebi_search_dump.py
+  ignore_detectors: [filename]
+
 - filename: workflows/tests/test_flows_utils.py
   checksum: 7044790c62db033597a0c9391751a32f2db1f88d5ba5a953b6c607d97ff7ed6d
 
@@ -315,3 +339,8 @@ allowed_patterns:
 - OpenApiKeywords
 - KeyValueStore
 - key=ask_every_time_suspend_for_input_key()
+- dump
+- EBI_SEARCH_DUMP_STATE_KEY
+- monkeypatch
+- lineage_key
+- artifact_key

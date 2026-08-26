@@ -1,5 +1,8 @@
+import logging
+
 import pytest
 from django.conf import settings
+from django.db.models.signals import post_save
 from prefect import State
 
 import analyses.models
@@ -18,13 +21,18 @@ from workflows.ena_utils.ena_accession_matching import (
 )
 from workflows.ena_utils.ena_api_requests import (
     ENALibraryStrategyPolicy,
+    get_available_study_assembly_accessions,
+    get_available_study_run_accessions,
+    get_available_study_sample_accessions,
     get_study_accession_for_assembly,
+    get_study_assemblies_from_ena,
     get_study_from_ena,
     get_study_readruns_from_ena,
     is_ena_study_available_privately,
     is_ena_study_public,
     library_strategy_policy_to_filter,
     sync_privacy_state_of_ena_study_and_derived_objects,
+    sync_study_child_suppression_from_ena,
 )
 from workflows.ena_utils.ena_policies import PRIMARY_METAGENOME_ASSEMBLY_TYPE
 from workflows.ena_utils.requestors import (
@@ -910,7 +918,6 @@ def test_is_study_private(httpx_mock, prefect_harness):
 def test_sync_privacy_state_of_ena_study_and_derived_objects(
     httpx_mock, prefect_harness, raw_read_run
 ):
-
     ena_study: ena.models.Study = ena.models.Study.objects.first()
 
     httpx_mock.add_response(
@@ -931,6 +938,149 @@ def test_sync_privacy_state_of_ena_study_and_derived_objects(
     assert not ena_study.is_suppressed
 
 
+def test_get_available_study_child_accession_tasks(httpx_mock):
+    httpx_mock.add_response(
+        json=[
+            {
+                "sample_accession": "ERS000001",
+                "secondary_sample_accession": "SAMN00000001",
+            }
+        ]
+    )
+    httpx_mock.add_response(json=[{"run_accession": "ERR000001"}])
+    httpx_mock.add_response(json=[{"analysis_accession": "ERZ000001"}])
+
+    study_accessions = ["PRJEB000001"]
+    assert get_available_study_sample_accessions.fn(study_accessions) == {
+        "ERS000001",
+        "SAMN00000001",
+    }
+    assert get_available_study_run_accessions.fn(study_accessions) == {"ERR000001"}
+    assert get_available_study_assembly_accessions.fn(study_accessions) == {"ERZ000001"}
+
+    requests = httpx_mock.get_requests()
+    assert [request.url.params["result"] for request in requests] == [
+        "sample",
+        "read_run",
+        "analysis",
+    ]
+    assert [request.url.params["fields"] for request in requests] == [
+        "sample_accession,secondary_sample_accession",
+        "run_accession",
+        "analysis_accession",
+    ]
+    assert "secondary_study_accession" not in requests[0].url.params["query"]
+    assert all(
+        "secondary_study_accession" in request.url.params["query"]
+        for request in requests[1:]
+    )
+
+
+@pytest.mark.django_db(transaction=True)
+def test_sync_study_child_suppression_from_ena(mgnify_assemblies, raw_read_analyses):
+    runs = list(analyses.models.Run.objects.order_by("pk"))
+    samples = list(analyses.models.Sample.objects.order_by("pk"))
+    directly_suppressed_assembly = analyses.models.Assembly.objects.create(
+        ena_study=runs[2].ena_study,
+        reads_study=runs[2].study,
+        sample=samples[2],
+        ena_accessions=["ERZ999999"],
+    )
+    directly_suppressed_assembly.runs.add(runs[2])
+    assembly_analysis = analyses.models.Analysis.objects.create(
+        ena_study=runs[2].ena_study,
+        study=runs[2].study,
+        sample=samples[2],
+        assembly=directly_suppressed_assembly,
+    )
+    available = {
+        "samples": {
+            accession for sample in samples[1:] for accession in sample.ena_accessions
+        },
+        "runs": {
+            accession for run in (runs[0], runs[2]) for accession in run.ena_accessions
+        },
+        "assemblies": set(),
+    }
+
+    sync_study_child_suppression_from_ena(runs[0].ena_study, available)
+
+    for obj in (samples[0], runs[0], runs[1], directly_suppressed_assembly):
+        obj.refresh_from_db()
+        assert obj.is_suppressed
+    samples[1].refresh_from_db()
+    runs[2].refresh_from_db()
+    assembly_analysis.refresh_from_db()
+    assert not samples[1].is_suppressed
+    assert not runs[2].is_suppressed
+    assert assembly_analysis.is_suppressed
+
+
+@pytest.mark.django_db(transaction=True)
+def test_study_child_suppression_is_synced_from_assemblies_to_samples(
+    mgnify_assemblies, raw_read_analyses
+):
+    run = analyses.models.Run.objects.order_by("pk").first()
+    assembly = analyses.models.Assembly.objects.create(
+        ena_study=run.ena_study,
+        reads_study=run.study,
+        sample=run.sample,
+        ena_accessions=["ERZ999998"],
+    )
+    assembly.runs.add(run)
+    analysis = analyses.models.Analysis.objects.create(
+        ena_study=run.ena_study,
+        study=run.study,
+        sample=run.sample,
+        assembly=assembly,
+    )
+    analyses.models.Assembly.objects.filter(pk=assembly.pk).update(is_suppressed=True)
+    analyses.models.Analysis.objects.filter(pk=analysis.pk).update(is_suppressed=True)
+
+    directly_updated = []
+
+    def record_direct_update(sender, instance, **kwargs):
+        if (sender, instance.pk) in {
+            (analyses.models.Assembly, assembly.pk),
+            (analyses.models.Run, run.pk),
+            (analyses.models.Sample, run.sample_id),
+        }:
+            directly_updated.append((sender, instance.is_suppressed))
+
+    post_save.connect(record_direct_update, weak=False)
+    try:
+        sync_study_child_suppression_from_ena(
+            run.ena_study,
+            {
+                "assemblies": {"ERZ999998"},
+                "runs": {
+                    accession
+                    for other_run in analyses.models.Run.objects.exclude(pk=run.pk)
+                    for accession in other_run.ena_accessions
+                },
+                "samples": {
+                    accession
+                    for sample in analyses.models.Sample.objects.exclude(
+                        pk=run.sample_id
+                    )
+                    for accession in sample.ena_accessions
+                },
+            },
+        )
+    finally:
+        post_save.disconnect(record_direct_update)
+
+    assembly.refresh_from_db()
+    analysis.refresh_from_db()
+    assert directly_updated == [
+        (analyses.models.Assembly, False),
+        (analyses.models.Run, True),
+        (analyses.models.Sample, True),
+    ]
+    assert assembly.is_suppressed
+    assert analysis.is_suppressed
+
+
 def test_ena_accession_parsing():
     assert extract_all_accessions("ERP1;ERP2") == ["ERP1", "ERP2"]
     assert extract_all_accessions(["ERP1;ERP2"]) == ["ERP1", "ERP2"]
@@ -944,6 +1094,45 @@ def test_ena_accession_parsing():
         "ERP3",
     ]
     assert extract_all_accessions("") == []
+
+
+@pytest.mark.httpx_mock(should_mock=should_not_mock_httpx_requests_to_prefect_server)
+@pytest.mark.django_db
+def test_get_study_assemblies_from_ena_links_coassembly_runs(
+    monkeypatch, raw_reads_mgnify_study, httpx_mock
+):
+    run_accessions = ["ERR12945506", "ERR12954000"]
+    assembly_data = {
+        "sample_accession": "SAMEA999999",
+        "sample_title": "Co-assembly sample",
+        "secondary_sample_accession": "ERS999999",
+        "run_accession": ";".join(run_accessions),
+        "analysis_accession": "ERZ999999",
+        "scientific_name": "metagenome",
+        "generated_ftp": "ftp.example.org/ERZ999999.fa.gz",
+    }
+
+    httpx_mock.add_response(json=[assembly_data])
+    monkeypatch.setattr(
+        "workflows.ena_utils.ena_api_requests.get_study_readruns_from_ena",
+        lambda **kwargs: [],
+    )
+    monkeypatch.setattr(
+        "workflows.ena_utils.ena_api_requests.sync_sample_metadata_from_ena",
+        lambda sample: None,
+    )
+    monkeypatch.setattr(
+        "workflows.ena_utils.ena_api_requests.get_run_logger",
+        lambda: logging.getLogger(__name__),
+    )
+
+    get_study_assemblies_from_ena.fn(raw_reads_mgnify_study.ena_study.accession)
+
+    assembly = analyses.models.Assembly.objects.get_by_accession("ERZ999999")
+    assert {run.first_accession for run in assembly.runs.all()} == set(run_accessions)
+    assert not analyses.models.Run.objects.filter(
+        ena_accessions__icontains=";"
+    ).exists()
 
 
 def test_ena_accession_parsing_from_study_title():

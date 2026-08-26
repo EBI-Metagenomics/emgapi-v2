@@ -1,10 +1,93 @@
 import json
+from datetime import datetime
 from typing import Type
 
 from django.core.exceptions import ValidationError as DjValidationError
 from django.db import models
+from django.db.models import Q
 from pydantic import BaseModel
 from pydantic import ValidationError as PydValidationError
+
+
+class SuppressionFollowingRelation:
+    """Marker for relations whose target inherits the source suppression state."""
+
+    migration_field_path: str
+
+    def deconstruct(self):
+        name, _, args, kwargs = super().deconstruct()
+        # These marker fields have the same database representation as their
+        # Django base fields, so changing to them requires no migration.
+        return name, self.migration_field_path, args, kwargs
+
+    @classmethod
+    def propagate_from(cls, instance: models.Model):
+        seen = {instance.__class__: {instance.pk}}
+        cls._propagate_from(
+            instance.__class__, {instance.pk}, instance.is_suppressed, seen
+        )
+
+    @classmethod
+    def _propagate_from(
+        cls, source_model, source_pks: set, is_suppressed: bool, seen: dict
+    ):
+        """Recursively propagate suppression state without visiting the same object twice.
+
+        The current relations contain diamonds: an Analysis may be reached from a
+        Sample directly, through its Run, through its Assembly, or through both.
+        ``seen`` avoids repeating queries down each of those paths and also prevents
+        infinite recursion if a cycle is introduced in the future.
+        """
+        for relation in source_model._meta.related_objects:
+            if not isinstance(relation.field, cls):
+                continue
+            related_model = relation.related_model
+            already_seen = seen.setdefault(related_model, set())
+            related_pks = (
+                set(
+                    related_model._base_manager.filter(
+                        **{f"{relation.field.name}__pk__in": source_pks}
+                    )
+                    .values_list("pk", flat=True)
+                    .distinct()
+                )
+                - already_seen
+            )
+            if not related_pks:
+                continue
+            related_model._base_manager.filter(pk__in=related_pks).exclude(
+                is_suppressed=is_suppressed
+            ).update(is_suppressed=is_suppressed)
+            already_seen.update(related_pks)
+            cls._propagate_from(related_model, related_pks, is_suppressed, seen)
+
+
+class SuppressionFollowingForeignKey(SuppressionFollowingRelation, models.ForeignKey):
+    """
+    Like Django's normal ForeignKey, but the defining model innstance should "follow" the suppression status
+    of the other side, i.e.
+
+    class MyDerivedModel:
+        parent = SuppressionFollowingForeignKey(MyParentModel)
+        is_suppressed = BooleanField <-- this will be updated by MyParentModel.is_suppressed
+    """
+
+    migration_field_path = "django.db.models.ForeignKey"
+
+
+class SuppressionFollowingManyToManyField(
+    SuppressionFollowingRelation, models.ManyToManyField
+):
+    """
+    Like Django's normal ManyToManyField, but the defining model instances should "follow" the suppression status
+    of the instances on the other side, i.e.
+
+    class MyDerivedModel:
+        parents = SuppressionFollowingManyToManyField(MyParentsModel)
+        is_suppressed = BooleanField <-- this will be updated by [MyParentsModel.is_suppressed]
+    """
+
+    migration_field_path = "django.db.models.ManyToManyField"
 
 
 class _PydanticValidatingDict(dict):
@@ -210,3 +293,30 @@ class JSONFieldWithSchema(models.JSONField):
         if isinstance(value, _PydanticValidatingList):
             return list(value)
         return super().get_prep_value(value)
+
+
+def during(
+    since: datetime,
+    until: datetime,
+    relationship_path: str | None = None,
+    field: str = "updated_at",
+) -> Q:
+    """
+    Return a django queryset Q object to filter a queryset by a datetime field being within a window.
+
+    Example:
+    july_01 = datetime.fromisoformat("2026-07-01")
+    august_01 = datetime.fromisoformat("2026-08-01")
+
+    july_updates = models.Study.filter(during(july_01, august_01, field="updated_at"))
+    july_sample_related_superstudy_updates = models.Sample.filter(during(july_01, august_01, field="updated_at", relationship_path="study__superstudy"))
+
+
+    :param since:
+    :param until:
+    :param relationship_path:
+    :param field:
+    :return:
+    """
+    field_path = "__".join(filter(None, [relationship_path, field]))
+    return Q(**{f"{field_path}__gte": since, f"{field_path}__lt": until})
