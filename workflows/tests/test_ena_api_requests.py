@@ -1,3 +1,5 @@
+import logging
+
 import pytest
 from django.conf import settings
 from django.db.models.signals import post_save
@@ -22,6 +24,8 @@ from workflows.ena_utils.ena_api_requests import (
     get_available_study_assembly_accessions,
     get_available_study_run_accessions,
     get_available_study_sample_accessions,
+    get_study_accession_for_assembly,
+    get_study_assemblies_from_ena,
     get_study_from_ena,
     get_study_readruns_from_ena,
     is_ena_study_available_privately,
@@ -1092,6 +1096,45 @@ def test_ena_accession_parsing():
     assert extract_all_accessions("") == []
 
 
+@pytest.mark.httpx_mock(should_mock=should_not_mock_httpx_requests_to_prefect_server)
+@pytest.mark.django_db
+def test_get_study_assemblies_from_ena_links_coassembly_runs(
+    monkeypatch, raw_reads_mgnify_study, httpx_mock
+):
+    run_accessions = ["ERR12945506", "ERR12954000"]
+    assembly_data = {
+        "sample_accession": "SAMEA999999",
+        "sample_title": "Co-assembly sample",
+        "secondary_sample_accession": "ERS999999",
+        "run_accession": ";".join(run_accessions),
+        "analysis_accession": "ERZ999999",
+        "scientific_name": "metagenome",
+        "generated_ftp": "ftp.example.org/ERZ999999.fa.gz",
+    }
+
+    httpx_mock.add_response(json=[assembly_data])
+    monkeypatch.setattr(
+        "workflows.ena_utils.ena_api_requests.get_study_readruns_from_ena",
+        lambda **kwargs: [],
+    )
+    monkeypatch.setattr(
+        "workflows.ena_utils.ena_api_requests.sync_sample_metadata_from_ena",
+        lambda sample: None,
+    )
+    monkeypatch.setattr(
+        "workflows.ena_utils.ena_api_requests.get_run_logger",
+        lambda: logging.getLogger(__name__),
+    )
+
+    get_study_assemblies_from_ena.fn(raw_reads_mgnify_study.ena_study.accession)
+
+    assembly = analyses.models.Assembly.objects.get_by_accession("ERZ999999")
+    assert {run.first_accession for run in assembly.runs.all()} == set(run_accessions)
+    assert not analyses.models.Run.objects.filter(
+        ena_accessions__icontains=";"
+    ).exists()
+
+
 def test_ena_accession_parsing_from_study_title():
     assert (
         extract_study_accession_from_study_title(
@@ -1141,3 +1184,79 @@ def test_library_strategy_policy_to_filter():
         )
         == []
     )
+
+
+@pytest.mark.httpx_mock(should_mock=should_not_mock_httpx_requests_to_prefect_server)
+@pytest.mark.django_db(transaction=True)
+def test_get_study_accession_for_assembly_primary(httpx_mock, prefect_harness):
+    assembly_accession = "ERZ25038795"
+    primary_study_accession = "PRJEB85401"
+
+    httpx_mock.add_response(
+        url=f"{EMG_CONFIG.ena.portal_search_api}?result=analysis&query=%22analysis_accession={assembly_accession}%22&fields=analysis_accession%2Cstudy_accession%2Csecondary_study_accession&limit=1&format=json&dataPortal=metagenome",
+        json=[{"study_accession": primary_study_accession}],
+    )
+
+    study_accession = get_study_accession_for_assembly(assembly_accession)
+    assert study_accession == primary_study_accession
+
+
+@pytest.mark.httpx_mock(should_mock=should_not_mock_httpx_requests_to_prefect_server)
+@pytest.mark.django_db(transaction=True)
+def test_get_study_accession_for_assembly_secondary(httpx_mock, prefect_harness):
+    assembly_accession = "ERZ25038795"
+    secondary_study_accession = "ERP168778"
+    httpx_mock.add_response(
+        url=f"{EMG_CONFIG.ena.portal_search_api}?result=analysis&query=%22analysis_accession={assembly_accession}%22&fields=analysis_accession%2Cstudy_accession%2Csecondary_study_accession&limit=1&format=json&dataPortal=metagenome",
+        json=[
+            {
+                "secondary_study_accession": secondary_study_accession,
+                "study_accession": "",  # primary study accession missing
+            }
+        ],
+    )
+
+    study_accession = get_study_accession_for_assembly(assembly_accession)
+    assert study_accession == secondary_study_accession
+
+
+@pytest.mark.httpx_mock(should_mock=should_not_mock_httpx_requests_to_prefect_server)
+@pytest.mark.django_db(transaction=True)
+def test_get_study_accession_for_assembly_private(httpx_mock, prefect_harness):
+    """If the assembly isn't found publicly, retry with DCC auth before giving up."""
+    assembly_accession = "ERZ25038795"
+    study_accession = "PRJEB85401"
+
+    base_url = (
+        f"{EMG_CONFIG.ena.portal_search_api}?result=analysis"
+        f"&query=%22analysis_accession={assembly_accession}%22"
+        "&fields=analysis_accession%2Cstudy_accession%2Csecondary_study_accession"
+        "&limit=1&format=json"
+    )
+    dcc_auth_header = {
+        "Authorization": "Basic ZGNjX2Zha2U6bm90LWEtZGNjLXB3"
+    }  # dcc_fake:not-a-dcc-pw
+
+    # Unauthenticated lookups, on both data portals, find nothing publicly.
+    httpx_mock.add_response(
+        url=f"{base_url}&dataPortal=metagenome",
+        json=[],
+        match_headers={},
+        is_reusable=True,
+    )
+    httpx_mock.add_response(
+        url=f"{base_url}&dataPortal=ena",
+        json=[],
+        match_headers={},
+        is_reusable=True,
+    )
+    # Authenticated lookup on the metagenome portal finds the private assembly.
+    httpx_mock.add_response(
+        url=f"{base_url}&dataPortal=metagenome",
+        json=[{"study_accession": study_accession}],
+        match_headers=dcc_auth_header,
+        is_reusable=True,
+    )
+
+    result = get_study_accession_for_assembly(assembly_accession)
+    assert result == study_accession

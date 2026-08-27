@@ -42,8 +42,8 @@ def _ensure_flow_like_amplicon_objects_for_dwcr(study: Study):
     sample.metadata.update(sample_metadata)
     sample.save()
 
-    run.instrument_platform = run.instrument_platform or "ILLUMINA"
-    run.instrument_model = run.instrument_model or "Illumina MiSeq"
+    run.metadata.setdefault(Run.CommonMetadataKeys.INSTRUMENT_PLATFORM, "ILLUMINA")
+    run.metadata.setdefault(Run.CommonMetadataKeys.INSTRUMENT_MODEL, "Illumina MiSeq")
     run.experiment_type = Run.ExperimentTypes.AMPLICON
     run.save()
 

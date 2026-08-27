@@ -13,7 +13,7 @@ from prefect.tasks import task_input_hash
 import analyses.models
 import ena.models
 from emgapiv2.dict_utils import some
-from workflows.ena_utils.abstract import ENAPortalResultType
+from workflows.ena_utils.abstract import ENAPortalDataPortal, ENAPortalResultType
 from workflows.ena_utils.analysis import ENAAnalysisFields, ENAAnalysisQuery
 from workflows.ena_utils.ena_accession_matching import (
     extract_all_accessions,
@@ -41,6 +41,18 @@ RETRY_DELAY = EMG_CONFIG.ena.portal_search_api_retry_delay_seconds
 
 
 base_logger = logging.getLogger(__name__)
+
+
+RUN_METADATA_FIELDS = [
+    ENAReadRunFields.LIBRARY_STRATEGY,
+    ENAReadRunFields.LIBRARY_LAYOUT,
+    ENAReadRunFields.LIBRARY_SOURCE,
+    ENAReadRunFields.SCIENTIFIC_NAME,
+    ENAReadRunFields.HOST_TAX_ID,
+    ENAReadRunFields.HOST_SCIENTIFIC_NAME,
+    ENAReadRunFields.INSTRUMENT_PLATFORM,
+    ENAReadRunFields.INSTRUMENT_MODEL,
+]
 
 
 def library_strategy_policy_to_filter(
@@ -189,57 +201,34 @@ def check_reads_fastq(
     return None, None
 
 
-def _make_samples_and_run(
-    run_or_assembly_response: dict,
-    study: analyses.models.Study,
-    library_strategy_policy: ENALibraryStrategyPolicy = ENALibraryStrategyPolicy.ONLY_IF_CORRECT_IN_ENA,
-    library_source_policy: ENALibrarySourcePolicy = ENALibrarySourcePolicy.OVERRIDE_GENOMIC_IF_METAGENOMIC_SCIENTIFIC_NAME,
-    expected_experiment_type: analyses.models.Run.ExperimentTypes | None = None,
-) -> tuple[ena.models.Sample, analyses.models.Sample, analyses.models.Run]:
-    """
-    Generate and update samples and runs for given study and ENA data.
-
-    This function updates or creates ENA and MGnify sample records as well as
-    run records using the provided ENA data and study information. Metadata
-    for samples and runs is extracted and synchronized accordingly. It also
-    handles library strategy and source policies to determine experiment
-    types. If an ENA sample is newly created, it fetches complete metadata
-    for the sample from the ENA API.
-
-    :param run_or_assembly_response: A dictionary containing metadata from ENA about a run or assembly.
-    :param study: A Study object representing the context in which the samples and runs are created or updated.
-    :param library_strategy_policy: Policy dictating how to handle library strategies that may be incorrect in ENA
-    :param library_source_policy: Policy determining how library source from ENA is interpreted or overridden
-    :param expected_experiment_type: Optional predefined expected experiment type, used if the policies dictate it should be overridden
-    :return: A tuple with three components - (ENA sample, MGnify sample, Run).
-    """
+def _make_samples(
+    ena_response: dict, study: analyses.models.Study
+) -> tuple[ena.models.Sample, analyses.models.Sample]:
     _ = ENAReadRunFields  # fields used here are also present on ENAAnalysisFields
 
     ena_sample, ena_sample_was_created = ena.models.Sample.objects.update_or_create(
         accession__in=[
-            run_or_assembly_response[_.SAMPLE_ACCESSION],
-            run_or_assembly_response[_.SECONDARY_SAMPLE_ACCESSION],
+            ena_response[_.SAMPLE_ACCESSION],
+            ena_response[_.SECONDARY_SAMPLE_ACCESSION],
         ],
         defaults={
-            "metadata": some(run_or_assembly_response, {_.SAMPLE_TITLE, _.LAT, _.LON}),
+            "metadata": some(ena_response, {_.SAMPLE_TITLE, _.LAT, _.LON}),
         },
         create_defaults={
-            "accession": run_or_assembly_response[_.SAMPLE_ACCESSION],
-            "additional_accessions": [
-                run_or_assembly_response[_.SECONDARY_SAMPLE_ACCESSION]
-            ],
+            "accession": ena_response[_.SAMPLE_ACCESSION],
+            "additional_accessions": [ena_response[_.SECONDARY_SAMPLE_ACCESSION]],
             "study": study.ena_study,  # TODO could be more than one...
         },
     )
 
     mgnify_sample, __ = analyses.models.Sample.objects.update_or_create_by_accession(
         known_accessions=[
-            run_or_assembly_response[_.SAMPLE_ACCESSION],
-            run_or_assembly_response[_.SECONDARY_SAMPLE_ACCESSION],
+            ena_response[_.SAMPLE_ACCESSION],
+            ena_response[_.SECONDARY_SAMPLE_ACCESSION],
         ],
         defaults={
             "is_private": study.is_private,
-            "metadata": some(run_or_assembly_response, {_.LAT, _.LON}),
+            "metadata": some(ena_response, {_.LAT, _.LON}),
         },
         create_defaults={
             "ena_sample": ena_sample,
@@ -248,22 +237,26 @@ def _make_samples_and_run(
     )
     mgnify_sample.studies.add(study)
 
+    if ena_sample_was_created:
+        # This propagates all available ENA sample metadata to the MGnify sample.
+        sync_sample_metadata_from_ena(ena_sample)
+
+    return ena_sample, mgnify_sample
+
+
+def _make_run(
+    run_response: dict,
+    study: analyses.models.Study,
+    mgnify_sample: analyses.models.Sample,
+    library_strategy_policy: ENALibraryStrategyPolicy = ENALibraryStrategyPolicy.ONLY_IF_CORRECT_IN_ENA,
+    library_source_policy: ENALibrarySourcePolicy = ENALibrarySourcePolicy.OVERRIDE_GENOMIC_IF_METAGENOMIC_SCIENTIFIC_NAME,
+    expected_experiment_type: analyses.models.Run.ExperimentTypes | None = None,
+) -> analyses.models.Run:
+    _ = ENAReadRunFields
     run, __ = analyses.models.Run.objects.update_or_create_by_accession(
-        known_accessions=[run_or_assembly_response[_.RUN_ACCESSION]],
+        known_accessions=[run_response[_.RUN_ACCESSION]],
         defaults={
-            "metadata": some(
-                run_or_assembly_response,
-                {
-                    _.LIBRARY_STRATEGY,
-                    _.LIBRARY_LAYOUT,
-                    _.LIBRARY_SOURCE,
-                    _.SCIENTIFIC_NAME,
-                    _.HOST_TAX_ID,
-                    _.HOST_SCIENTIFIC_NAME,
-                    _.INSTRUMENT_PLATFORM,
-                    _.INSTRUMENT_MODEL,
-                },
-            ),
+            "metadata": some(run_response, set(RUN_METADATA_FIELDS)),
             "is_private": study.is_private,
         },
         create_defaults={
@@ -275,20 +268,32 @@ def _make_samples_and_run(
     # TODO: Review if this is the best way to handle this, but I've been loads of studies which
     #       have missing metadata, for example when trying to run the assembly analysis of ERP117856
     run.set_experiment_type_by_metadata(
-        run_or_assembly_response.get(_.LIBRARY_STRATEGY, ""),
-        run_or_assembly_response.get(_.LIBRARY_SOURCE, ""),
-        run_or_assembly_response.get(_.SCIENTIFIC_NAME, ""),
+        run_response.get(_.LIBRARY_STRATEGY, ""),
+        run_response.get(_.LIBRARY_SOURCE, ""),
+        run_response.get(_.SCIENTIFIC_NAME, ""),
         library_strategy_policy=library_strategy_policy,
         library_source_policy=library_source_policy,
         expected_experiment_type=expected_experiment_type,
     )
+    return run
 
-    if ena_sample_was_created:
-        # Also fetch ALL sample metadata from ENA.
-        # Don't re-fetch unless this is first creation, as this triggers another API call per sample.
-        # This propagates to mgnify_sample by hooks.
-        sync_sample_metadata_from_ena(ena_sample)
 
+def _make_samples_and_run(
+    run_response: dict,
+    study: analyses.models.Study,
+    library_strategy_policy: ENALibraryStrategyPolicy = ENALibraryStrategyPolicy.ONLY_IF_CORRECT_IN_ENA,
+    library_source_policy: ENALibrarySourcePolicy = ENALibrarySourcePolicy.OVERRIDE_GENOMIC_IF_METAGENOMIC_SCIENTIFIC_NAME,
+    expected_experiment_type: analyses.models.Run.ExperimentTypes | None = None,
+) -> tuple[ena.models.Sample, analyses.models.Sample, analyses.models.Run]:
+    ena_sample, mgnify_sample = _make_samples(run_response, study)
+    run = _make_run(
+        run_response,
+        study,
+        mgnify_sample,
+        library_strategy_policy,
+        library_source_policy,
+        expected_experiment_type,
+    )
     return ena_sample, mgnify_sample, run
 
 
@@ -762,15 +767,27 @@ def get_study_assemblies_from_ena(
         except analyses.models.Sample.DoesNotExist:
             # make sample based on metadata available from ENA assembly
             logger.info(f"Creating sample for {assembly_data[_.SAMPLE_ACCESSION]}")
-            __, mgnify_sample, run = _make_samples_and_run(
-                assembly_data,
-                study,
-                library_strategy_policy=library_strategy_policy,
-                library_source_policy=library_source_policy,
-                expected_experiment_type=expected_experiment_type,
+            __, mgnify_sample = _make_samples(assembly_data, study)
+
+        run_accessions = extract_all_accessions(assembly_data.get(_.RUN_ACCESSION, ""))
+        runs = list(
+            analyses.models.Run.objects.filter(ena_accessions__overlap=run_accessions)
+        )
+        found_accessions = {
+            run_accession for run in runs for run_accession in run.ena_accessions
+        }
+        for run_accession in set(run_accessions) - found_accessions:
+            run_data = {**assembly_data, _.RUN_ACCESSION: run_accession}
+            runs.append(
+                _make_run(
+                    run_data,
+                    study,
+                    mgnify_sample,
+                    library_strategy_policy,
+                    library_source_policy,
+                    expected_experiment_type,
+                )
             )
-        else:
-            run = mgnify_sample.runs.first()  # TODO: coassemblies? replicates?
 
         assembly_accession = assembly_data[_.ANALYSIS_ACCESSION]
         assembly, __ = analyses.models.Assembly.objects.update_or_create_by_accession(
@@ -789,13 +806,30 @@ def get_study_assemblies_from_ena(
         assembly.metadata[_.GENERATED_FTP] = assembly_data[_.GENERATED_FTP]
 
         # It is possible that some assemblies are not linked to any runs, the ENA data model allows for this.
-        if run:
-            assembly.runs.add(run)
-        else:
+        assembly.runs.set(runs)
+        if not runs:
             logger.warning(f"Could not find run for assembly {assembly_accession}!")
         assembly.save()
         assemblies.append(assembly.first_accession)
     return assemblies
+
+
+def sync_run_metadata_from_ena(run: analyses.models.Run) -> None:
+    base_logger.info(f"Syncing run metadata from ENA for {run}")
+    run_accession = run.first_accession
+    if not run_accession:
+        raise ValueError(f"Run {run.pk} has no ENA accession")
+
+    portal_run_response = ENAAPIRequest(
+        result=ENAPortalResultType.READ_RUN,
+        fields=RUN_METADATA_FIELDS,
+        limit=1,
+        query=ENAReadRunQuery(run_accession=run_accession),
+    ).get(auth=dcc_auth, raise_on_empty=True)
+    base_logger.debug(f"Got run metadata from ENA: {len(portal_run_response)}")
+    if portal_run := portal_run_response[0]:
+        run.metadata.update(portal_run)
+        run.save(update_fields=["metadata"])
 
 
 def sync_sample_metadata_from_ena(sample: ena.models.Sample):
@@ -832,3 +866,87 @@ def sync_study_metadata_from_ena(study: ena.models.Study):
     if portal_study := portal_study_response[0]:
         study.metadata = portal_study
         study.save()
+
+
+@task(
+    retries=RETRIES,
+    retry_delay_seconds=RETRY_DELAY,
+    cache_key_fn=task_input_hash,
+    task_run_name="Get study for assembly {assembly_accession} from ENA",
+)
+def get_study_accession_for_assembly(
+    assembly_accession: str,
+) -> str:
+    """
+    Queries the ENA Portal API with the assembly accession (ERZ format) to fetch
+    the associated study accession. An assembly in ENA is represented as an "analysis"
+    record, which contains the study_accession field.
+
+    Example:
+        Input: "ERZ18440741" (assembly accession)
+        Output: "ERP123456" (study accession)
+
+    Looks up the assembly publicly first, and if that finds nothing - falls back
+    to authenticated access, since the assembly's study may be private.
+
+    :param assembly_accession: Assembly accession
+    :return: Study accession (e.g., ERP/SRP/DRP/PRJ format)
+    :raises: ValueError if accession cannot be determined or not found in ENA
+    """
+    logger = get_run_logger()
+
+    if not assembly_accession:
+        raise ValueError("No assembly accession provided to derive study accession.")
+
+    logger.info(
+        f"Querying ENA API for study accession of assembly {assembly_accession}"
+    )
+
+    _ = ENAAnalysisFields
+    analysis_request = ENAAPIRequest(
+        result=ENAPortalResultType.ANALYSIS,
+        fields=[
+            _.ANALYSIS_ACCESSION,
+            _.STUDY_ACCESSION,
+            _.SECONDARY_STUDY_ACCESSION,
+        ],
+        limit=1,
+        query=ENAAnalysisQuery(analysis_accession=assembly_accession),
+        data_portals=[ENAPortalDataPortal.METAGENOME, ENAPortalDataPortal.ENA],
+    )
+
+    # We don't yet know which study this assembly belongs to, so we can't look up
+    # is_private from our own DB.
+    # Try publicly first, and only fall back to authenticated access if that finds
+    # nothing - the assembly may belong to a private study.
+    portal_analyses = analysis_request.get(raise_on_empty=False)
+    if not portal_analyses:
+        logger.info(
+            f"Assembly {assembly_accession} not found publicly; "
+            "retrying with authentication in case its study is private"
+        )
+        portal_analyses = analysis_request.get(auth=dcc_auth, raise_on_empty=False)
+
+    if not portal_analyses:
+        raise ValueError(
+            f"Assembly accession {assembly_accession} not found in ENA Portal API"
+        )
+
+    analysis_record = portal_analyses[0]
+    study_accession = analysis_record.get(_.STUDY_ACCESSION)
+
+    if not study_accession:
+        # Try secondary study accession if primary is missing
+        study_accession = analysis_record.get(_.SECONDARY_STUDY_ACCESSION)
+        if study_accession:
+            logger.warning(
+                f"Assembly {assembly_accession}: Using secondary study accession {study_accession}"
+            )
+
+    if not study_accession:
+        raise ValueError(
+            f"No study accession found for assembly {assembly_accession} in ENA"
+        )
+
+    logger.info(f"Assembly {assembly_accession} belongs to study {study_accession}")
+    return study_accession
