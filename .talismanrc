@@ -69,7 +69,13 @@ fileignoreconfig:
   checksum: 08e2680598ee0719f717dc73019948001ebfcbaf700a3ee2dfb0e442acaebd26
 
 - filename: emgapiv2/settings.py
-  checksum: c6b5a727cf8a2638879787d5670b7f198574be0c31878a6bc92e652ce298af70
+  checksum: 6989ec117401ce299a88370a61e976e442f0f1f410aa064e4238e3aaf492205c
+
+- filename: curations/api.py
+  allowed_patterns: [key]
+
+- filename: curations/europe_pmc.py
+  allowed_patterns: [key]
 
 - filename: emgapiv2/settings_test.py
   checksum: ded898400b4eda7e3cf75694af1b66235975a85eb5b8f49f3a2c708163a7aad4

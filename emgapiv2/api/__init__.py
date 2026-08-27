@@ -4,6 +4,7 @@ from ninja_extra import NinjaExtraAPI
 
 # Avoid circular imports between analyses and genomes apps' schemas by resolving forward references here
 from analyses.schemas import Biome, MGnifyAnalysisDownloadFile  # noqa
+from curations.api import CurationController
 from emgapiv2.api.schema_utils import ApiSections, OpenApiKeywords
 from genomes.schemas import (
     GenomeCatalogueDetail,
@@ -157,6 +158,7 @@ api.register_controllers(BiomeController)
 api.register_controllers(MyDataController)
 api.register_controllers(AnalysedRunController)
 api.register_controllers(GenomeSearchController)
+api.register_controllers(CurationController)
 
 # Private data auth token provider (Webin JWTs)
 api.register_controllers(WebinJwtController)

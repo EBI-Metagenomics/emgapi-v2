@@ -2,6 +2,7 @@ from typing import Literal, Optional
 
 from ninja import Field, FilterSchema, Query
 from ninja_extra import api_controller, http_get, paginate
+from ninja_extra.exceptions import NotFound
 from ninja_extra.schemas import NinjaPaginationResponseSchema
 
 import analyses.models
@@ -9,13 +10,16 @@ from analyses.schemas import (
     MGnifyPublication,
     MGnifyPublicationDetail,
     OrderByFilter,
-    PublicationAnnotations,
 )
+from curations.europe_pmc import (
+    get_effective_publication_annotations,
+    publication_annotations_response,
+)
+from curations.schemas import PublicationAnnotations
 from emgapiv2.api.perms import UnauthorisedIsUnfoundController
 from emgapiv2.api.schema_utils import (
     ApiSections,
 )
-from emgapiv2.api.third_party_metadata import get_epmc_publication_annotations
 
 
 class PublicationListFilters(FilterSchema):
@@ -52,10 +56,15 @@ class PublicationController(UnauthorisedIsUnfoundController):
         operation_id="get_mgnify_publication_annotations",
     )
     def get_mgnify_publication_annotations(self, pubmed_id: int):
-        self.get_object_or_exception(
+        publication = self.get_object_or_exception(
             analyses.models.Publication.objects.get_queryset(), pubmed_id=pubmed_id
         )
-        return get_epmc_publication_annotations(pubmed_id)
+        curation = get_effective_publication_annotations(publication)
+        if curation is None:
+            raise NotFound(
+                f"No synchronized Europe PMC annotations for publication {pubmed_id}"
+            )
+        return publication_annotations_response(curation)
 
     @http_get(
         "/",

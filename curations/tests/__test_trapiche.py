@@ -3,7 +3,7 @@ from unittest.mock import patch
 
 from analyses.base_models.with_downloads_models import DownloadType
 from analyses.schemas import MGnifyAnalysisDownloadFile
-from data_stewardship.workflows.predict_biomes import convert_taxonomy_download
+from workflows.curations.predict_biomes import convert_taxonomy_download
 
 
 def taxonomy_download(path, group):

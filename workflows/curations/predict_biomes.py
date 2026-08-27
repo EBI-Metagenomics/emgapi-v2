@@ -1,19 +1,13 @@
 from typing import Any
 
-from django.db.models import QuerySet
 from pydantic import BaseModel
 from trapiche.api import TrapicheWorkflowFromSequence
 from trapiche.config import TrapicheWorkflowParams
 
-from activate_django_first import EMG_CONFIG  # noqa: F401
-
 from analyses.base_models.with_downloads_models import DownloadType
-from analyses.models import Analysis, Biome, Sample, Study
+from analyses.models import Analysis, Sample, Study
 from analyses.schemas import MGnifyAnalysisDownloadFile
-from data_stewardship.models import (
-    BiomeSampleBiomePrediction,
-    BiomeStudyBiomePrediction,
-)
+from curations.models import TrapicheBiomeCuration, normalize_lineage
 from workflows.prefect_utils.flows_utils import django_db_flow as flow
 from workflows.prefect_utils.flows_utils import django_db_task as task
 
@@ -29,20 +23,7 @@ class PredictionResult(BaseModel):
     configuration: dict[str, Any] | None = (
         None  # TODO: to capture how was ran, text-only, tax....
     )
-
-
-def normalize_lineage(lineage: str | None) -> str:
-    """Remove empty lineage components and surrounding whitespace."""
-    return ":".join(part.strip() for part in (lineage or "").split(":") if part.strip())
-
-
-def map_lineage(lineage: str | None, biomes: QuerySet | None = None) -> Biome | None:
-    """Map a classifier lineage to the corresponding stored biome."""
-    normalized = normalize_lineage(lineage)
-    if not normalized:
-        return None
-    queryset = biomes if biomes is not None else Biome.objects.all()
-    return queryset.filter(path=Biome.lineage_to_path(normalized)).first()
+    raw_result: dict[str, Any] | None = None
 
 
 def latest_taxonomy_analysis(sample: Sample) -> Analysis | None:
@@ -54,18 +35,19 @@ def latest_taxonomy_analysis(sample: Sample) -> Analysis | None:
     return None
 
 
-def _description(study: Study, sample: Sample) -> tuple[str, str]:
-    """Build the study and sample text fields sent to Trapiche."""
+def get_study_sample_description(study: Study, sample: Sample) -> tuple[str, str]:
+    """Get the study and sample title and description (if available) for Trapiche."""
+    study_description = study.metadata.get("description") or study.metadata.get(
+        "study_description", ""
+    )
     study_text = " ".join(
-        str(value)
-        for value in (study.title, (study.metadata or {}).get("description", ""))
-        if value
+        str(value) for value in (study.title, study_description) if value
     )
     sample_text = " ".join(
         str(value)
         for value in (
             sample.sample_title,
-            (sample.metadata or {}).get("description", ""),
+            sample.metadata.get("description", ""),
         )
         if value
     )
@@ -76,7 +58,7 @@ def trapiche_input(
     study: Study, sample: Sample, analysis: Analysis | None
 ) -> dict[str, Any]:
     """Build one Trapiche input row from a study, sample, and optional analysis."""
-    study_text, sample_text = _description(study, sample)
+    study_text, sample_text = get_study_sample_description(study, sample)
     row = {
         "project_id": study.first_accession,
         "sample_id": sample.first_accession,
@@ -89,6 +71,7 @@ def trapiche_input(
         row["ext_text_pred_project"] = [study.biome.pretty_lineage]
     else:
         row["project_description_text"] = study_text
+
     if sample.biome_id:
         row["ext_text_pred_sample"] = [sample.biome.pretty_lineage]
     elif sample_text:
@@ -106,28 +89,31 @@ def trapiche_input(
     return row
 
 
-def _taxonomy_path(download: MGnifyAnalysisDownloadFile) -> str | None:
-    """Resolve a download using MGnify's canonical file URL builder."""
-    if download.parent_results_dir is None:
+def convert_taxonomy_download(download: MGnifyAnalysisDownloadFile) -> str | None:
+    """Convert a MAPseq download into a Trapiche input URL."""
+
+    # TODO: this is generating an URL (for the FTP path of the file).
+    #       we should probably be generating the _path_ as this is meant to run internally.
+
+    if (
+        download.parent_results_dir is None
+        or download.download_type != DownloadType.TAXONOMIC_ANALYSIS
+    ):
         return None
-    return MGnifyAnalysisDownloadFile._build_file_url(
+
+    file_url = MGnifyAnalysisDownloadFile._build_file_url(
         download.path,
         download.parent_results_dir,
         download.parent_is_private,
     )
 
+    if file_url and ".mseq" in str(download.path).lower():
+        return file_url
 
-def convert_taxonomy_download(download: MGnifyAnalysisDownloadFile) -> str | None:
-    """Convert a MAPseq download into a Trapiche input URL."""
-    if download.download_type != DownloadType.TAXONOMIC_ANALYSIS:
-        return None
-    path = _taxonomy_path(download)
-    if path and ".mseq" in str(download.path).lower():
-        return path
     return None
 
 
-def _result(raw: Any) -> PredictionResult:
+def convert_trapiche_response(raw: Any) -> PredictionResult:
     """Convert a Trapiche response item into a normalized prediction result."""
     if isinstance(raw, PredictionResult):
         return raw
@@ -158,7 +144,8 @@ def _result(raw: Any) -> PredictionResult:
         raw.get("method", "trapiche"),
         raw.get("source", "trapiche"),
         "v1",  # TODO: fill this with the trapiche version
-        "TODO",  # TODO: to capture how was ran, text-only, tax....
+        {},  # TODO: capture how the workflow was run, text-only, tax....
+        raw,
     )
 
 
@@ -172,19 +159,22 @@ def classify_study(
     selected = {sample: latest_taxonomy_analysis(sample) for sample in samples}
     rows = [trapiche_input(study, sample, selected[sample]) for sample in samples]
 
-    # Defaults
-    # TrapicheWorkflowParams(
-    #     run_text=True, run_vectorise=True, run_taxonomy=True,
-    #     keep_text_results=True, keep_vectorise_results=False, keep_taxonomy_results=True, output_keys=None
-    #     When output_k is None, the keep_* flags decide what to include.
-    # )
-
-    runner = TrapicheWorkflowFromSequence(workflow_params=TrapicheWorkflowParams())
+    # Trapiche's taxonomy step is configured for the whole batch and requires
+    # taxonomy paths for every row. Fall back to text-only classification when
+    # any selected sample has no usable taxonomy input.
+    run_taxonomy = bool(rows) and all(row.get("sample_taxonomy_paths") for row in rows)
+    runner = TrapicheWorkflowFromSequence(
+        workflow_params=TrapicheWorkflowParams(run_taxonomy=run_taxonomy)
+    )
     output = list(runner.run(rows) or [])
     return (
         {
             sample: (
-                _result(output[index]) if index < len(output) else PredictionResult(),
+                (
+                    convert_trapiche_response(output[index])
+                    if index < len(output)
+                    else PredictionResult()
+                ),
                 selected[sample],
             )
             for index, sample in enumerate(samples)
@@ -199,9 +189,9 @@ def predict_biomes(
 ) -> str:
     """Predict biomes for every sample in a study or selected sample accessions.
 
-    Predictions are stored as ``suggested`` records for curator review. Existing
-    predictions for the selected targets are replaced with the latest classifier
-    result, including their evidence and provenance.
+    Curations are stored as ``suggested`` records for curator review. Each run
+    creates new records, retaining previous classifier results, evidence, and
+    provenance for history.
     """
     study = Study.objects_not_suppressed.get_by_accession(study_accession)
     samples = None
@@ -211,8 +201,8 @@ def predict_biomes(
     predictions, study_summary = classify_study(study, samples=samples)
 
     for sample, (result, analysis) in predictions.items():
-        BiomeSampleBiomePrediction.objects.replace(
-            sample, result, [analysis] if analysis else []
+        TrapicheBiomeCuration.objects.record(
+            study, result, sample=sample, evidence=[analysis] if analysis else []
         )
 
     if sample_accessions is None:
@@ -227,10 +217,10 @@ def predict_biomes(
             "study_summary": study_summary,
         }
         evidence = [analysis for _, analysis in predictions.values() if analysis]
-        prediction = BiomeStudyBiomePrediction.objects.replace(
-            study, study_result, evidence
+        prediction = TrapicheBiomeCuration.objects.record(
+            study, study_result, evidence=evidence
         )
     else:
-        prediction = BiomeStudyBiomePrediction.objects.filter(study=study).first()
+        prediction = TrapicheBiomeCuration.objects.effective_for_study(study)
 
     return str(prediction.pk) if prediction else ""

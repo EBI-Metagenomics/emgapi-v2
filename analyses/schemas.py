@@ -19,7 +19,6 @@ from analyses.base_models.with_downloads_models import (
 )
 from analyses.base_models.with_experiment_type_models import WithExperimentTypeModel
 from emgapiv2.api.storage import private_storage
-from emgapiv2.api.third_party_metadata import EuropePmcAnnotationResponse
 from emgapiv2.enum_utils import FutureStrEnum
 from genomes.schemas.GenomeCatalogue import GenomeCatalogueList
 from workflows.data_io_utils.filenames import trailing_slash_ensured_dir
@@ -724,6 +723,3 @@ class MGnifyPublicationDetail(MGnifyPublication):
     class Meta:
         model = analyses.models.Publication
         fields = ["pubmed_id", "title", "published_year", "metadata"]
-
-
-class PublicationAnnotations(Schema, EuropePmcAnnotationResponse): ...
