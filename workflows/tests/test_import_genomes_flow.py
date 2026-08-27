@@ -100,6 +100,7 @@ from workflows.flows.import_genomes_flow import (
     import_genomes_flow,
     move_catalogue_files_to_web_results,
     parse_options,
+    run_genome_release_tasks,
     validate_pipeline_version,
 )
 from workflows.prefect_utils.testing_utils import run_flow_and_capture_logs
@@ -170,6 +171,43 @@ def test_move_catalogue_files_to_web_results_uses_slurm_ftp_results_dir():
     logger.return_value.info.assert_called_once_with(
         "Web results mover flowrun is flow-run"
     )
+
+
+def test_run_genome_release_tasks_registers_sourmash_index():
+    options = get_default_options()
+
+    with (
+        patch(
+            "workflows.flows.import_genomes_flow.move_catalogue_files_to_web_results"
+        ) as move_web,
+        patch(
+            "workflows.flows.import_genomes_flow.move_catalogue_files_to_ftp"
+        ) as move_ftp,
+        patch("workflows.flows.import_genomes_flow.make_cobs_index") as make_cobs,
+        patch(
+            "workflows.flows.import_genomes_flow.make_sourmash_sketches"
+        ) as make_sketches,
+        patch("workflows.flows.import_genomes_flow.make_sourmash_index") as make_index,
+        patch(
+            "workflows.flows.import_genomes_flow.place_cobs_index_on_embassy"
+        ) as place_cobs,
+        patch(
+            "workflows.flows.import_genomes_flow.place_sourmash_signatures"
+        ) as place_sigs,
+        patch(
+            "workflows.flows.import_genomes_flow.register_sourmash_search_index"
+        ) as register_index,
+    ):
+        run_genome_release_tasks(options)
+
+    move_web.assert_called_once_with(options)
+    move_ftp.assert_called_once_with(options)
+    make_cobs.assert_called_once_with(options)
+    make_sketches.assert_called_once_with(options)
+    make_index.assert_called_once_with(options)
+    place_cobs.assert_called_once_with(options)
+    place_sigs.assert_called_once_with(options)
+    register_index.assert_called_once_with(options)
 
 
 @pytest.mark.django_db
