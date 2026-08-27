@@ -3,13 +3,13 @@ import os
 import shutil
 import tempfile
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import pytest
 from django.conf import settings
 
 from analyses.models import Biome
-from genomes.models import CatalogueGenome, GenomeCatalogue
+from genomes.models import CatalogueGenome, GenomeCatalogue, GenomeCatalogueSeries
 
 genome_config = settings.EMG_CONFIG.genomes
 
@@ -100,6 +100,7 @@ from workflows.flows.import_genomes_flow import (
     import_genomes_flow,
     move_catalogue_files_to_web_results,
     parse_options,
+    register_sourmash_search_index,
     run_genome_release_tasks,
     validate_pipeline_version,
 )
@@ -208,6 +209,48 @@ def test_run_genome_release_tasks_registers_sourmash_index():
     place_cobs.assert_called_once_with(options)
     place_sigs.assert_called_once_with(options)
     register_index.assert_called_once_with(options)
+
+
+@pytest.mark.django_db
+def test_register_sourmash_search_index_returns_pk_and_logs():
+    biome = Biome.objects.create(biome_name="Root", path="root")
+    series = GenomeCatalogueSeries.objects.create(
+        name="Sheep Rumen",
+        catalogue_biome_label="Sheep Rumen",
+        catalogue_type=GenomeCatalogue.PROK,
+        biome=biome,
+    )
+    catalogue = GenomeCatalogue.objects.create(
+        catalogue_id="sheep-rumen-v1-0",
+        series=series,
+        version="1.0",
+        name="Sheep rumen v1.0",
+        status=GenomeCatalogue.Status.PUBLISHED,
+    )
+    fake_index = type("FakeIndex", (), {"pk": 123})()
+    logger = Mock()
+
+    with (
+        patch(
+            "workflows.flows.import_genomes_flow.get_run_logger",
+            return_value=logger,
+        ),
+        patch(
+            "workflows.flows.import_genomes_flow.upsert_sourmash_search_index",
+            return_value=(fake_index, True, 2),
+        ) as upsert,
+    ):
+        result = register_sourmash_search_index.fn({"catalogue_slug": catalogue.pk})
+
+    assert result == "123"
+    upsert.assert_called_once_with(catalogue)
+    logger.info.assert_called_once_with(
+        "Registered sourmash search index %s for %s (%s; retired %s previous active index(es))",
+        123,
+        "sheep-rumen-v1-0",
+        "created",
+        2,
+    )
 
 
 @pytest.mark.django_db
