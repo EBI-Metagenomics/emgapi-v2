@@ -38,6 +38,7 @@ class RunAdmin(ENABrowserLinkMixin, JSONFieldWidgetOverridesMixin, ModelAdmin):
         "study__accession",
     ]
     autocomplete_fields = ["ena_study", "study", "sample"]
+    readonly_fields = ["instrument_model", "instrument_platform"]
 
     @display(description="Accessions", label=True)
     def display_accessions(self, instance: Run):

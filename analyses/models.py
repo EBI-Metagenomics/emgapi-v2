@@ -378,18 +378,19 @@ class Run(
     public_objects = PublicRunManager()
 
     id = models.AutoField(primary_key=True)
-    instrument_platform = models.CharField(
-        db_column="instrument_platform", max_length=100, blank=True, null=True
-    )
-    instrument_model = models.CharField(
-        db_column="instrument_model", max_length=100, blank=True, null=True
-    )
-
     metadata = models.JSONField(default=dict, blank=True)
     study = models.ForeignKey(Study, on_delete=models.CASCADE, related_name="runs")
     sample = SuppressionFollowingForeignKey(
         Sample, on_delete=models.CASCADE, related_name="runs"
     )
+
+    @property
+    def instrument_platform(self) -> str | None:
+        return self.metadata.get(self.CommonMetadataKeys.INSTRUMENT_PLATFORM)
+
+    @property
+    def instrument_model(self) -> str | None:
+        return self.metadata.get(self.CommonMetadataKeys.INSTRUMENT_MODEL)
 
     @property
     def latest_analysis(self) -> "Analysis":

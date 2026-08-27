@@ -43,6 +43,18 @@ RETRY_DELAY = EMG_CONFIG.ena.portal_search_api_retry_delay_seconds
 base_logger = logging.getLogger(__name__)
 
 
+RUN_METADATA_FIELDS = [
+    ENAReadRunFields.LIBRARY_STRATEGY,
+    ENAReadRunFields.LIBRARY_LAYOUT,
+    ENAReadRunFields.LIBRARY_SOURCE,
+    ENAReadRunFields.SCIENTIFIC_NAME,
+    ENAReadRunFields.HOST_TAX_ID,
+    ENAReadRunFields.HOST_SCIENTIFIC_NAME,
+    ENAReadRunFields.INSTRUMENT_PLATFORM,
+    ENAReadRunFields.INSTRUMENT_MODEL,
+]
+
+
 def library_strategy_policy_to_filter(
     primary_library_strategy: str,
     other_library_strategies: list[str] = None,
@@ -244,19 +256,7 @@ def _make_run(
     run, __ = analyses.models.Run.objects.update_or_create_by_accession(
         known_accessions=[run_response[_.RUN_ACCESSION]],
         defaults={
-            "metadata": some(
-                run_response,
-                {
-                    _.LIBRARY_STRATEGY,
-                    _.LIBRARY_LAYOUT,
-                    _.LIBRARY_SOURCE,
-                    _.SCIENTIFIC_NAME,
-                    _.HOST_TAX_ID,
-                    _.HOST_SCIENTIFIC_NAME,
-                    _.INSTRUMENT_PLATFORM,
-                    _.INSTRUMENT_MODEL,
-                },
-            ),
+            "metadata": some(run_response, set(RUN_METADATA_FIELDS)),
             "is_private": study.is_private,
         },
         create_defaults={
@@ -812,6 +812,24 @@ def get_study_assemblies_from_ena(
         assembly.save()
         assemblies.append(assembly.first_accession)
     return assemblies
+
+
+def sync_run_metadata_from_ena(run: analyses.models.Run) -> None:
+    base_logger.info(f"Syncing run metadata from ENA for {run}")
+    run_accession = run.first_accession
+    if not run_accession:
+        raise ValueError(f"Run {run.pk} has no ENA accession")
+
+    portal_run_response = ENAAPIRequest(
+        result=ENAPortalResultType.READ_RUN,
+        fields=RUN_METADATA_FIELDS,
+        limit=1,
+        query=ENAReadRunQuery(run_accession=run_accession),
+    ).get(auth=dcc_auth, raise_on_empty=True)
+    base_logger.debug(f"Got run metadata from ENA: {len(portal_run_response)}")
+    if portal_run := portal_run_response[0]:
+        run.metadata.update(portal_run)
+        run.save(update_fields=["metadata"])
 
 
 def sync_sample_metadata_from_ena(sample: ena.models.Sample):

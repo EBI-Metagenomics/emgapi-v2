@@ -291,11 +291,8 @@ fileignoreconfig:
 - filename: workflows/flows/housekeeping/clean_nextflow_workdirs.py
   allowed_patterns: [key]
 
-- filename: workflows/flows/housekeeping/sync_samples_with_ena.py
-  allowed_patterns: [key]
-
-- filename: workflows/flows/housekeeping/sync_studies_with_ena.py
-  allowed_patterns: [key]
+- filename: workflows/flows/housekeeping/sync_*_with_ena.py
+  allowed_patterns: [key="failed]
 
 - filename: workflows/flows/housekeeping/fix_eggnog_tsv_headers.py
   allowed_patterns: [key]

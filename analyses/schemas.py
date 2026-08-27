@@ -317,7 +317,7 @@ class ExperimentTypeMixin(Schema):
     )
 
 
-class AnalysedRun(ModelSchema, ExperimentTypeMixin):
+class AnalysedRun(ExperimentTypeMixin):
     accession: Optional[str] = Field(
         None, alias="first_accession", examples=["ERR0000001"]
     )
@@ -346,12 +346,8 @@ class AnalysedRun(ModelSchema, ExperimentTypeMixin):
     def resolve_study_accession(obj: analyses.models.Run) -> Optional[str]:
         return obj.study.accession if obj.study else None
 
-    class Meta:
-        model = analyses.models.Run
-        fields = [
-            "instrument_model",
-            "instrument_platform",
-        ]
+    class Config:
+        from_attributes = True
 
 
 class AnalysedRunDetail(AnalysedRun):
