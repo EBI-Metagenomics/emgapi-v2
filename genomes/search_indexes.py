@@ -10,7 +10,6 @@ from django.utils import timezone
 
 from genomes.models import GenomeCatalogue, GenomeSearchIndex
 
-EMG_CONFIG = settings.EMG_CONFIG
 
 SOURMASH_ARTIFACT_CANDIDATES = (
     "genome_index.sbt.json",
