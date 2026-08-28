@@ -4,11 +4,13 @@ import hashlib
 from datetime import datetime
 from pathlib import Path
 
-from django.conf.settings import EMG_CONFIG
+from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
 
 from genomes.models import GenomeCatalogue, GenomeSearchIndex
+
+EMG_CONFIG = settings.EMG_CONFIG
 
 
 SOURMASH_ARTIFACT_CANDIDATES = (
