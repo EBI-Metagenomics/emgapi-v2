@@ -4,10 +4,13 @@ import shlex
 from datetime import timedelta
 from pathlib import Path
 
-from prefect import flow, get_run_logger, task
+from prefect import get_run_logger
 from prefect.deployments import run_deployment
 
 from activate_django_first import EMG_CONFIG
+
+from workflows.prefect_utils.flows_utils import django_db_flow as flow
+from workflows.prefect_utils.flows_utils import django_db_task as task
 
 genome_config = EMG_CONFIG.genomes
 
@@ -338,9 +341,9 @@ def place_sourmash_signatures(options: dict):
 
 
 @task
-def register_sourmash_search_index(options: dict):
+def register_sourmash_search_index(catalogue_slug: str):
     logger = get_run_logger()
-    catalogue = GenomeCatalogue.objects.get(pk=options["catalogue_slug"])
+    catalogue = GenomeCatalogue.objects.get(pk=catalogue_slug)
     index, created, retired_count = upsert_sourmash_search_index(catalogue)
     logger.info(
         "Registered sourmash search index %s for %s (%s; retired %s previous active index(es))",
@@ -407,7 +410,7 @@ def run_genome_release_tasks(
     make_sourmash_index(options)
     place_cobs_index_on_embassy(options)
     place_sourmash_signatures(options)
-    register_sourmash_search_index(options)
+    register_sourmash_search_index(options["catalogue_slug"])
 
 
 @task

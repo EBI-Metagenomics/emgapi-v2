@@ -208,7 +208,7 @@ def test_run_genome_release_tasks_registers_sourmash_index():
     make_index.assert_called_once_with(options)
     place_cobs.assert_called_once_with(options)
     place_sigs.assert_called_once_with(options)
-    register_index.assert_called_once_with(options)
+    register_index.assert_called_once_with(options["catalogue_slug"])
 
 
 @pytest.mark.django_db
@@ -240,7 +240,7 @@ def test_register_sourmash_search_index_returns_pk_and_logs():
             return_value=(fake_index, True, 2),
         ) as upsert,
     ):
-        result = register_sourmash_search_index.fn({"catalogue_slug": catalogue.pk})
+        result = register_sourmash_search_index.fn(catalogue.pk)
 
     assert result == "123"
     upsert.assert_called_once_with(catalogue)
