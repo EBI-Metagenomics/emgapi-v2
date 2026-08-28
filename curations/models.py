@@ -4,20 +4,7 @@ from django.db import models
 from django.db.models import Case, IntegerField, QuerySet, When
 
 from analyses.models import Analysis, Biome, Publication, Sample, Study
-
-
-def normalize_lineage(lineage: str | None) -> str:
-    """Remove empty lineage components and surrounding whitespace."""
-    return ":".join(part.strip() for part in (lineage or "").split(":") if part.strip())
-
-
-def map_lineage(lineage: str | None, biomes: QuerySet | None = None) -> Biome | None:
-    """Map a classifier lineage to the corresponding stored biome."""
-    normalized = normalize_lineage(lineage)
-    if not normalized:
-        return None
-    queryset = biomes if biomes is not None else Biome.objects.all()
-    return queryset.filter(path=Biome.lineage_to_path(normalized)).first()
+from emgapiv2.biome_lineage_utils import lineage_to_path, normalize_lineage
 
 
 class CurationLifecycleMixin(models.Model):
@@ -29,7 +16,7 @@ class CurationLifecycleMixin(models.Model):
         REJECTED = "rejected", "Rejected"
 
     status = models.CharField(
-        max_length=16, choices=Status.choices, default=Status.SUGGESTED, db_index=True
+        max_length=16, choices=Status, default=Status.SUGGESTED, db_index=True
     )
     provider = models.CharField(max_length=64, blank=True, db_index=True)
     confidence = models.FloatField(
@@ -50,22 +37,6 @@ class CurationLifecycleMixin(models.Model):
     note = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True, db_index=True)
-
-    class Meta:
-        abstract = True
-
-
-class AnalysisEvidenceMixin(models.Model):
-    """Evidence relationship shared by curations backed by analyses."""
-
-    evidence = models.ManyToManyField(Analysis, blank=True, related_name="+")
-
-    class Meta:
-        abstract = True
-
-
-class CurationMixin(CurationLifecycleMixin, AnalysisEvidenceMixin):
-    """Backward-compatible composite mixin for analysis-backed curations."""
 
     class Meta:
         abstract = True
@@ -92,64 +63,48 @@ class EffectiveCurationManagerMixin:
 
 
 class TrapicheBiomeCurationManager(EffectiveCurationManagerMixin, models.Manager):
-    """Create and select Trapiche biome curations."""
+    """Create and select the Trapiche curation for an analysis."""
 
-    def record(self, study, result, sample=None, evidence=()):
-        """Persist one Trapiche result without replacing previous runs."""
-        curation = self.create(
-            study=study,
-            sample=sample,
+    def map_lineage(
+        self,
+        lineage: str | None,
+        biomes: QuerySet | None = None,
+    ) -> Biome | None:
+        """Map a classifier lineage to the corresponding stored analysis.Biome."""
+        normalized = normalize_lineage(lineage)
+        if not normalized:
+            return None
+
+        queryset = biomes if biomes is not None else Biome.objects.all()
+        return queryset.filter(path=lineage_to_path(normalized)).first()
+
+    def record(self, analysis, result):
+        """Persist a Trapiche result, retaining earlier review history."""
+        return self.create(
+            analysis=analysis,
             provider="trapiche",
-            biome=map_lineage(result.lineage),
+            status=self.model.Status.SUGGESTED,
+            curator=None,
+            biome=self.map_lineage(result.lineage),
             raw_lineage=result.lineage,
             confidence=result.confidence,
             source_version=result.version,
             configuration=result.configuration or {},
             raw_result=result.raw_result or {},
         )
-        curation.evidence.set(evidence)
-        return curation
 
-    def effective_for_study(self, study):
-        """Return the effective study-level Trapiche curation."""
-        return self._effective(
-            self.select_related("study", "biome")
-            .prefetch_related("evidence")
-            .filter(study=study, sample__isnull=True)
-        )
-
-    def effective_for_sample(self, sample):
-        """Return a direct sample curation or its study-level fallback."""
-        direct = self._effective(
-            self.select_related("study", "sample", "biome")
-            .prefetch_related("evidence")
-            .filter(sample=sample)
-        )
-        if direct is not None:
-            return direct
-
-        return self._effective(
-            self.select_related("study", "biome")
-            .prefetch_related("evidence")
-            .filter(study__in=Study.objects_not_suppressed.all(), study__samples=sample)
-            .filter(sample__isnull=True)
-        )
+    def effective_for_analysis(self, analysis):
+        """Return the approved, non-rejected curation for an analysis."""
+        return self._effective(self.filter(analysis=analysis))
 
 
-class TrapicheBiomeCuration(CurationMixin):
-    """A biome curation produced by Trapiche for a study or sample."""
+class TrapicheBiomeCuration(CurationLifecycleMixin):
+    """A biome curation produced by Trapiche for an analysis."""
 
     objects = TrapicheBiomeCurationManager()
 
-    study = models.ForeignKey(
-        Study,
-        on_delete=models.CASCADE,
-        related_name="trapiche_biome_curations",
-    )
-    sample = models.ForeignKey(
-        Sample,
-        null=True,
-        blank=True,
+    analysis = models.ForeignKey(
+        Analysis,
         on_delete=models.CASCADE,
         related_name="trapiche_biome_curations",
     )
@@ -164,7 +119,10 @@ class TrapicheBiomeCuration(CurationMixin):
 
     class Meta:
         indexes = [
-            models.Index(fields=("study", "sample", "-updated_at")),
+            models.Index(
+                fields=("analysis", "-updated_at"),
+                name="curations_analysis_updated_idx",
+            ),
             models.Index(fields=("status", "-updated_at")),
         ]
 
@@ -175,14 +133,31 @@ class TrapicheBiomeCuration(CurationMixin):
 
     def __str__(self):
         """Return the target accession and curated lineage."""
-        target = self.sample if self.sample_id else self.study
-        return f"{target}: {self.raw_lineage or 'unclassified'}"
+        return f"{self.analysis}: {self.raw_lineage or 'unclassified'}"
+
+
+class TrapicheStudyReview(Study):
+    """Admin-only view of studies with Trapiche evidence."""
+
+    class Meta:
+        proxy = True
+        verbose_name = "Trapiche study review"
+        verbose_name_plural = "Trapiche study reviews"
+
+
+class TrapicheSampleReview(Sample):
+    """Admin-only view of samples with Trapiche evidence."""
+
+    class Meta:
+        proxy = True
+        verbose_name = "Trapiche sample review"
+        verbose_name_plural = "Trapiche sample reviews"
 
 
 class EuropePmcPublicationCurationManager(
     EffectiveCurationManagerMixin, models.Manager
 ):
-    """Select effective and historical Europe PMC publication curations."""
+    """Select the current Europe PMC publication curation."""
 
     def effective_for_publication(self, publication):
         return self._effective(
@@ -191,20 +166,13 @@ class EuropePmcPublicationCurationManager(
             )
         )
 
-    def history_for_publication(self, publication):
-        return (
-            self.filter(publication=publication)
-            .prefetch_related("groups__annotations__mentions__tags")
-            .order_by("-updated_at", "-pk")
-        )
-
 
 class EuropePmcPublicationCuration(CurationLifecycleMixin):
     """One persisted Europe PMC annotation assertion for a publication."""
 
     objects = EuropePmcPublicationCurationManager()
 
-    publication = models.ForeignKey(
+    publication = models.OneToOneField(
         Publication,
         on_delete=models.CASCADE,
         related_name="europe_pmc_curations",

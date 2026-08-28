@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import logging
 import os
-import re
 from collections.abc import Iterable, Mapping
 from pathlib import Path
 from typing import ClassVar, Literal, Optional, Union
@@ -36,6 +35,7 @@ from analyses.base_models.with_downloads_models import WithDownloadsModel
 from analyses.base_models.with_experiment_type_models import WithExperimentTypeModel
 from analyses.base_models.with_status_models import SelectByStatusManagerMixin
 from analyses.base_models.with_watchers_models import WithWatchersModel
+from emgapiv2.biome_lineage_utils import lineage_to_path
 from emgapiv2.enum_utils import DjangoChoicesCompatibleStrEnum, FutureStrEnum
 from emgapiv2.model_manager_mixins import SuppressionFilterManagerMixin
 from emgapiv2.model_utils import JSONFieldWithSchema
@@ -73,24 +73,7 @@ class Biome(TreeModel):
     def descendants_count(self):
         return self.descendants().count()
 
-    @staticmethod
-    def lineage_to_path(lineage: str) -> str:
-        """
-        E.g. "root:Host-associated:Human:Digestive system:estómago" -> root.host-associated.human.digestive_system:estmago
-        :param lineage: Lineage string in colon-separated form.
-        :return: Lineage as a dot-separated path suitable for a postgres ltree field (alphanumeric and _ only, nospaced)
-        """
-        ascii_lower = lineage.encode("ascii", "ignore").decode("ascii").lower()
-        dot_separated = ascii_lower.replace(":", ".")
-        underscore_punctuated = (
-            dot_separated.replace(" ", "_")
-            .replace("(", "_")
-            .replace(")", "_")
-            .replace("-", "_")
-            .replace("__", "_")
-            .strip("_.")
-        )
-        return re.sub(r"[^a-zA-Z0-9._]", "", underscore_punctuated)
+    lineage_to_path = staticmethod(lineage_to_path)
 
 
 class StudyManager(ENADerivedManager):

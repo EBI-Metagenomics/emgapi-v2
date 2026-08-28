@@ -6,8 +6,9 @@ from prefect import get_run_logger
 import analyses.models
 from curations.europe_pmc import (
     EUROPE_PMC_PROVIDER,
+    fetch_epmc_publication_annotations,
     publications_requiring_sync,
-    sync_publication_annotations,
+    record_publication_annotations,
 )
 from workflows.prefect_utils.flows_utils import django_db_flow as flow
 from workflows.prefect_utils.flows_utils import django_db_task as task
@@ -21,7 +22,9 @@ from workflows.prefect_utils.flows_utils import django_db_task as task
 def sync_publication(pubmed_id: int) -> int:
     """Fetch and persist one publication's Europe PMC annotation snapshot."""
     publication = analyses.models.Publication.objects.get(pubmed_id=pubmed_id)
-    sync_publication_annotations(publication)
+    record_publication_annotations(
+        publication, fetch_epmc_publication_annotations(publication.pubmed_id)
+    )
     return pubmed_id
 
 

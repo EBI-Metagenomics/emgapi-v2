@@ -1,13 +1,18 @@
+import json
+import os
+from pathlib import Path
+from tempfile import TemporaryDirectory
 from typing import Any
 
+from prefect.logging import get_logger
 from pydantic import BaseModel
-from trapiche.api import TrapicheWorkflowFromSequence
-from trapiche.config import TrapicheWorkflowParams
+from spython.main import Client
 
 from analyses.base_models.with_downloads_models import DownloadType
 from analyses.models import Analysis, Sample, Study
 from analyses.schemas import MGnifyAnalysisDownloadFile
-from curations.models import TrapicheBiomeCuration, normalize_lineage
+from curations.models import TrapicheBiomeCuration
+from emgapiv2.biome_lineage_utils import normalize_lineage
 from workflows.prefect_utils.flows_utils import django_db_flow as flow
 from workflows.prefect_utils.flows_utils import django_db_task as task
 
@@ -37,19 +42,19 @@ def latest_taxonomy_analysis(sample: Sample) -> Analysis | None:
 
 def get_study_sample_description(study: Study, sample: Sample) -> tuple[str, str]:
     """Get the study and sample title and description (if available) for Trapiche."""
-    study_description = study.metadata.get("description") or study.metadata.get(
-        "study_description", ""
-    )
     study_text = " ".join(
-        str(value) for value in (study.title, study_description) if value
+        str(part)
+        for part in (
+            study.title,
+            study.metadata.get("description")
+            or study.metadata.get("study_description", ""),
+        )
+        if part
     )
     sample_text = " ".join(
-        str(value)
-        for value in (
-            sample.sample_title,
-            sample.metadata.get("description", ""),
-        )
-        if value
+        str(part)
+        for part in (sample.sample_title, sample.metadata.get("description", ""))
+        if part
     )
     return study_text, sample_text
 
@@ -139,13 +144,13 @@ def convert_trapiche_response(raw: Any) -> PredictionResult:
         )
 
     return PredictionResult(
-        normalize_lineage(lineage),
-        confidence,
-        raw.get("method", "trapiche"),
-        raw.get("source", "trapiche"),
-        "v1",  # TODO: fill this with the trapiche version
-        {},  # TODO: capture how the workflow was run, text-only, tax....
-        raw,
+        lineage=normalize_lineage(lineage),
+        confidence=confidence,
+        method=raw.get("method", "trapiche"),
+        source=raw.get("source", "trapiche"),
+        version="v1",  # TODO: fill this with the trapiche version
+        configuration={},  # TODO: capture how the workflow was run, text-only, tax....
+        raw_result=raw,
     )
 
 
@@ -153,34 +158,61 @@ def convert_trapiche_response(raw: Any) -> PredictionResult:
 def classify_study(
     study: Study,
     samples=None,
-) -> tuple[dict[Sample, tuple[PredictionResult, Analysis | None]], dict[str, Any]]:
-    """Classify selected samples and return their results with the study summary."""
-    samples = list(study.samples.all() if samples is None else samples)
-    selected = {sample: latest_taxonomy_analysis(sample) for sample in samples}
-    rows = [trapiche_input(study, sample, selected[sample]) for sample in samples]
+) -> dict[Analysis, PredictionResult]:
+    """Classify selected samples and return their results."""
+    logger = get_logger()
 
-    # Trapiche's taxonomy step is configured for the whole batch and requires
-    # taxonomy paths for every row. Fall back to text-only classification when
-    # any selected sample has no usable taxonomy input.
-    run_taxonomy = bool(rows) and all(row.get("sample_taxonomy_paths") for row in rows)
-    runner = TrapicheWorkflowFromSequence(
-        workflow_params=TrapicheWorkflowParams(run_taxonomy=run_taxonomy)
-    )
-    output = list(runner.run(rows) or [])
-    return (
-        {
-            sample: (
-                (
-                    convert_trapiche_response(output[index])
-                    if index < len(output)
-                    else PredictionResult()
-                ),
-                selected[sample],
+    samples = list(study.samples.all() if samples is None else samples)
+    selected = [(sample, latest_taxonomy_analysis(sample)) for sample in samples]
+    rows = [
+        trapiche_input(study, sample, analysis)
+        for sample, analysis in selected
+        if analysis is not None
+    ]
+
+    if not rows:
+        logger.info("No samples selected for Trapiche to process.")
+        return {}
+
+    image = os.getenv("TRAPICHE_SINGULARITY_IMAGE")
+    if not image:
+        raise RuntimeError("TRAPICHE_SINGULARITY_IMAGE must point to a Trapiche image")
+
+    # TODO: should this be an artifact instead? to allow for better debugability
+    with TemporaryDirectory(prefix="trapiche-") as temp_dir:
+
+        logger.info(f"Running Trapiche on selected samples, total {len(rows)}.")
+
+        temp_path = Path(temp_dir)
+        input_path = temp_path / "input.ndjson"
+        output_path = temp_path / "input_trapiche_results.ndjson"
+        input_path.write_text(
+            "".join(json.dumps(row) + "\n" for row in rows), encoding="utf-8"
+        )
+
+        result = Client.execute(
+            image,
+            ["trapiche", str(input_path)],
+            bind=temp_dir,
+            return_result=True,
+        )
+
+        if result.get("return_code"):
+            raise RuntimeError(
+                f"Trapiche Singularity command failed: {result.get('message', '')}"
             )
-            for index, sample in enumerate(samples)
-        },
-        runner.study_summary or {},
-    )
+
+        output = [
+            json.loads(line)
+            for line in output_path.read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        ]
+        analyses = [analysis for _, analysis in selected if analysis is not None]
+
+        return {
+            analysis: convert_trapiche_response(result)
+            for analysis, result in zip(analyses, output)
+        }
 
 
 @flow(flow_run_name="Predict biomes for {study_accession}")
@@ -190,37 +222,17 @@ def predict_biomes(
     """Predict biomes for every sample in a study or selected sample accessions.
 
     Curations are stored as ``suggested`` records for curator review. Each run
-    creates new records, retaining previous classifier results, evidence, and
-    provenance for history.
+    updates the current curation for each analysis with the latest result.
     """
     study = Study.objects_not_suppressed.get_by_accession(study_accession)
     samples = None
     if sample_accessions is not None:
         samples = list(study.samples.filter(ena_accessions__overlap=sample_accessions))
 
-    predictions, study_summary = classify_study(study, samples=samples)
+    predictions = classify_study(study, samples=samples)
 
-    for sample, (result, analysis) in predictions.items():
-        TrapicheBiomeCuration.objects.record(
-            study, result, sample=sample, evidence=[analysis] if analysis else []
-        )
-
-    if sample_accessions is None:
-        lineages = [result for result, _ in predictions.values() if result.lineage]
-        study_result = max(
-            lineages,
-            key=lambda result: result.confidence or 0,
-            default=PredictionResult(),
-        )
-        study_result.configuration = {
-            **(study_result.configuration or {}),
-            "study_summary": study_summary,
-        }
-        evidence = [analysis for _, analysis in predictions.values() if analysis]
-        prediction = TrapicheBiomeCuration.objects.record(
-            study, study_result, evidence=evidence
-        )
-    else:
-        prediction = TrapicheBiomeCuration.objects.effective_for_study(study)
+    prediction = None
+    for analysis, result in predictions.items():
+        prediction = TrapicheBiomeCuration.objects.record(analysis, result)
 
     return str(prediction.pk) if prediction else ""

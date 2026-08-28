@@ -302,6 +302,22 @@ UNFOLD = {
                         "link": reverse_lazy("admin_jump_watched_studies"),
                         "permission": lambda request: request.user.is_superuser,
                     },
+                    {
+                        "title": _("Trapiche study reviews"),
+                        "icon": "fact_check",
+                        "link": reverse_lazy(
+                            "admin:curations_trapichestudyreview_changelist"
+                        ),
+                        "permission": lambda request: request.user.is_superuser,
+                    },
+                    {
+                        "title": _("Trapiche sample reviews"),
+                        "icon": "fact_check",
+                        "link": reverse_lazy(
+                            "admin:curations_trapichesamplereview_changelist"
+                        ),
+                        "permission": lambda request: request.user.is_superuser,
+                    },
                 ],
             },
             {

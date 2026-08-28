@@ -9,30 +9,27 @@ from django.db.models import Exists, OuterRef
 from activate_django_first import EMG_CONFIG
 
 from analyses.models import Publication
-
-from .models import (
-    EuropePmcAnnotation as EuropePmcAnnotationModel,
-)
-from .models import (
-    EuropePmcAnnotationGroup as EuropePmcAnnotationGroupModel,
-)
-from .models import (
-    EuropePmcAnnotationMention as EuropePmcAnnotationMentionModel,
-)
-from .models import (
-    EuropePmcAnnotationTag as EuropePmcAnnotationTagModel,
-)
-from .models import (
-    EuropePmcPublicationCuration,
-)
-from .schemas import (
-    AnnotationTypeDescriptor,
+from curations.models import (
     EuropePmcAnnotation,
     EuropePmcAnnotationGroup,
     EuropePmcAnnotationMention,
+    EuropePmcAnnotationTag,
+    EuropePmcPublicationCuration,
+)
+from curations.schemas import (
+    AnnotationTypeDescriptor,
     EuropePmcAnnotationResponse,
     annotation_type_humanize_map,
     sample_processing_annotation_types,
+)
+from curations.schemas import (
+    EuropePmcAnnotation as EuropePmcAnnotationSchema,
+)
+from curations.schemas import (
+    EuropePmcAnnotationGroup as EuropePmcAnnotationGroupSchema,
+)
+from curations.schemas import (
+    EuropePmcAnnotationMention as EuropePmcAnnotationMentionSchema,
 )
 
 EUROPE_PMC_PROVIDER = "europe_pmc"
@@ -79,18 +76,20 @@ def group_epmc_publication_annotations(payload: dict) -> EuropePmcAnnotationResp
     annotations = sorted(
         payload[ANNOTATIONS], key=lambda annotation: annotation.get(TYPE)
     )
-    grouped_annotations: list[EuropePmcAnnotationGroup] = []
+    grouped_annotations: list[EuropePmcAnnotationGroupSchema] = []
     for anno_type, annots_of_type in itertools.groupby(
         annotations, key=lambda annotation: annotation.get("type", "Other")
     ):
         mentions = sorted(
-            (EuropePmcAnnotationMention(**annot) for annot in annots_of_type),
+            (EuropePmcAnnotationMentionSchema(**annot) for annot in annots_of_type),
             key=lambda mention: mention.icase_text,
         )
         grouped_annotations.append(
-            EuropePmcAnnotationGroup(
+            EuropePmcAnnotationGroupSchema(
                 annotations=[
-                    EuropePmcAnnotation(annotation_text=text, mentions=group_mentions)
+                    EuropePmcAnnotationSchema(
+                        annotation_text=text, mentions=group_mentions
+                    )
                     for text, group_mentions in itertools.groupby(
                         mentions, key=lambda mention: mention.icase_text
                     )
@@ -129,31 +128,36 @@ def record_publication_annotations(
 ) -> EuropePmcPublicationCuration:
     """Persist one complete Europe PMC annotation snapshot transactionally."""
     grouped = group_epmc_publication_annotations(payload)
-    curation = EuropePmcPublicationCuration.objects.create(
+    curation, _ = EuropePmcPublicationCuration.objects.update_or_create(
         publication=publication,
-        provider=EUROPE_PMC_PROVIDER,
-        source_version="",
-        configuration={"articleIds": f"MED:{publication.pubmed_id}"},
-        raw_result=payload,
+        defaults={
+            "provider": EUROPE_PMC_PROVIDER,
+            "source_version": "",
+            "configuration": {"articleIds": f"MED:{publication.pubmed_id}"},
+            "raw_result": payload,
+            "status": EuropePmcPublicationCuration.Status.SUGGESTED,
+            "curator": None,
+        },
     )
+    curation.groups.all().delete()
 
     for category, groups in (
         ("sample_processing", grouped.sample_processing),
         ("other", grouped.other),
     ):
         for group in groups:
-            group_record = EuropePmcAnnotationGroupModel.objects.create(
+            group_record = EuropePmcAnnotationGroup.objects.create(
                 curation=curation,
                 annotation_type=group.annotation_type,
                 category=category,
             )
             for annotation in group.annotations:
-                annotation_record = EuropePmcAnnotationModel.objects.create(
+                annotation_record = EuropePmcAnnotation.objects.create(
                     group=group_record,
                     annotation_text=annotation.annotation_text,
                 )
                 for mention in annotation.mentions:
-                    mention_record = EuropePmcAnnotationMentionModel.objects.create(
+                    mention_record = EuropePmcAnnotationMention.objects.create(
                         annotation=annotation_record,
                         exact=mention.exact,
                         external_id=mention.id or "",
@@ -163,9 +167,9 @@ def record_publication_annotations(
                         annotation_type=mention.type,
                         section=mention.section or "",
                     )
-                    EuropePmcAnnotationTagModel.objects.bulk_create(
+                    EuropePmcAnnotationTag.objects.bulk_create(
                         [
-                            EuropePmcAnnotationTagModel(
+                            EuropePmcAnnotationTag(
                                 mention=mention_record,
                                 name=tag.name,
                                 uri=tag.uri,
@@ -174,27 +178,6 @@ def record_publication_annotations(
                         ]
                     )
     return curation
-
-
-def sync_publication_annotations(
-    publication: Publication,
-) -> EuropePmcPublicationCuration:
-    """Fetch and persist one publication's Europe PMC annotation snapshot."""
-    return record_publication_annotations(
-        publication, fetch_epmc_publication_annotations(publication.pubmed_id)
-    )
-
-
-def get_effective_publication_annotations(
-    publication: Publication,
-) -> EuropePmcPublicationCuration | None:
-    """Return the effective non-rejected Europe PMC snapshot."""
-    return EuropePmcPublicationCuration.objects.effective_for_publication(publication)
-
-
-def get_publication_annotation_history(publication: Publication):
-    """Return all Europe PMC snapshots for a publication, newest first."""
-    return EuropePmcPublicationCuration.objects.history_for_publication(publication)
 
 
 def publications_requiring_sync(
