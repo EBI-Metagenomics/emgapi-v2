@@ -4,7 +4,7 @@ import hashlib
 from datetime import datetime
 from pathlib import Path
 
-from django.conf import settings
+from django.conf.settings import EMG_CONFIG
 from django.db import transaction
 from django.utils import timezone
 
