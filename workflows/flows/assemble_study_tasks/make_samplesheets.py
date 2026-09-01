@@ -98,7 +98,7 @@ def make_samplesheet(
             ),
             "library_strategy": SamplesheetColumnSource(
                 lookup_string="runs__experiment_type",
-                renderer=EXPERIMENT_TYPES_TO_MIASSEMBLER_LIBRARY_STRATEGY.get,
+                renderer=EXPERIMENT_TYPES_TO_MIASSEMBLER_LIBRARY_STRATEGY.__getitem__,
             ),
             "library_layout": SamplesheetColumnSource(
                 lookup_string="runs__metadata",
