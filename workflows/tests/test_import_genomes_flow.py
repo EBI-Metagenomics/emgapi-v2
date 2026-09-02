@@ -174,32 +174,27 @@ def test_move_catalogue_files_to_web_results_uses_slurm_ftp_results_dir():
     )
 
 
-def test_run_genome_release_tasks_registers_sourmash_index():
+@patch("workflows.flows.import_genomes_flow.move_catalogue_files_to_web_results")
+@patch("workflows.flows.import_genomes_flow.move_catalogue_files_to_ftp")
+@patch("workflows.flows.import_genomes_flow.make_cobs_index")
+@patch("workflows.flows.import_genomes_flow.make_sourmash_sketches")
+@patch("workflows.flows.import_genomes_flow.make_sourmash_index")
+@patch("workflows.flows.import_genomes_flow.place_cobs_index_on_embassy")
+@patch("workflows.flows.import_genomes_flow.place_sourmash_signatures")
+@patch("workflows.flows.import_genomes_flow.register_sourmash_search_index")
+def test_run_genome_release_tasks_registers_sourmash_index(
+    register_index,
+    place_sigs,
+    place_cobs,
+    make_index,
+    make_sketches,
+    make_cobs,
+    move_ftp,
+    move_web,
+):
     options = get_default_options()
 
-    with (
-        patch(
-            "workflows.flows.import_genomes_flow.move_catalogue_files_to_web_results"
-        ) as move_web,
-        patch(
-            "workflows.flows.import_genomes_flow.move_catalogue_files_to_ftp"
-        ) as move_ftp,
-        patch("workflows.flows.import_genomes_flow.make_cobs_index") as make_cobs,
-        patch(
-            "workflows.flows.import_genomes_flow.make_sourmash_sketches"
-        ) as make_sketches,
-        patch("workflows.flows.import_genomes_flow.make_sourmash_index") as make_index,
-        patch(
-            "workflows.flows.import_genomes_flow.place_cobs_index_on_embassy"
-        ) as place_cobs,
-        patch(
-            "workflows.flows.import_genomes_flow.place_sourmash_signatures"
-        ) as place_sigs,
-        patch(
-            "workflows.flows.import_genomes_flow.register_sourmash_search_index"
-        ) as register_index,
-    ):
-        run_genome_release_tasks(options)
+    run_genome_release_tasks(options)
 
     move_web.assert_called_once_with(options)
     move_ftp.assert_called_once_with(options)

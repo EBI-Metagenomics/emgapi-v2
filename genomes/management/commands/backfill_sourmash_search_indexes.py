@@ -1,3 +1,5 @@
+import sys
+
 from django.core.management.base import BaseCommand, CommandError
 
 from genomes.models import GenomeCatalogue
@@ -51,14 +53,12 @@ class Command(BaseCommand):
                 )
 
         processed = 0
-        skipped = 0
         for catalogue in queryset:
             try:
                 artifact_path = resolve_sourmash_artifact_path(catalogue.catalogue_id)
             except FileNotFoundError as exc:
                 self.stderr.write(f"Skipping {catalogue.catalogue_id}: {exc}")
-                skipped += 1
-                continue
+                sys.exit(1)
             if dry_run:
                 self.stdout.write(
                     f"Would register sourmash index for {catalogue.catalogue_id}: {artifact_path}"
@@ -74,7 +74,3 @@ class Command(BaseCommand):
 
         if processed == 0:
             self.stdout.write("No eligible catalogue releases found.")
-        elif skipped:
-            self.stdout.write(
-                f"Processed {processed} catalogue(s); skipped {skipped} without artifacts."
-            )
