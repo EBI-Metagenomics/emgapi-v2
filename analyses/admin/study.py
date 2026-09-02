@@ -155,6 +155,7 @@ class StudyAdmin(
             "icon": "edit",
             "items": [
                 "curate_run_experiment_types",
+                "curate_run_experiment_types_in_run_admin",
             ],
         },
     ] + ENABrowserLinkMixin.actions_detail
@@ -384,6 +385,20 @@ class StudyAdmin(
                 "title": f"Curate experiment types of runs of {study.accession}",
                 **self.admin_site.each_context(request),
             },
+        )
+
+    @action(
+        description="Curate run types in Run admin",
+        url_path="study-curate-run-types-in-run-admin",
+    )
+    def curate_run_experiment_types_in_run_admin(self, request, object_id):
+        """Open the Run changelist filtered to this study for comparison."""
+        study = get_object_or_404(Study.objects, pk=object_id)
+        return redirect(
+            reverse_lazy(
+                "admin:analyses_run_changelist",
+                query={"study_accession": study.accession},
+            )
         )
 
     @action(
