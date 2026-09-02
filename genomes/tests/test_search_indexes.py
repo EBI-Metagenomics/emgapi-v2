@@ -262,7 +262,7 @@ def test_backfill_sourmash_search_indexes_command_rejects_unknown_catalogue_ids(
 
 
 @pytest.mark.django_db
-def test_backfill_sourmash_search_indexes_command_reports_skipped_catalogues(
+def test_backfill_sourmash_search_indexes_command_exits_for_missing_artifacts(
     settings, tmp_path
 ):
     settings.EMG_CONFIG.genomes.sourmash_public_signatures_dir = str(tmp_path)
@@ -270,22 +270,20 @@ def test_backfill_sourmash_search_indexes_command_reports_skipped_catalogues(
 
     stdout = StringIO()
     stderr = StringIO()
-    call_command(
-        "backfill_sourmash_search_indexes",
-        stdout=stdout,
-        stderr=stderr,
-    )
+    with pytest.raises(SystemExit) as exc_info:
+        call_command(
+            "backfill_sourmash_search_indexes",
+            stdout=stdout,
+            stderr=stderr,
+        )
 
+    assert exc_info.value.code == 1
     assert "Skipping human-gut-v2-0:" in stderr.getvalue()
-    assert (
-        "Processed 0 catalogue(s); skipped 1 without artifacts."
-        not in stdout.getvalue()
-    )
-    assert "No eligible catalogue releases found." in stdout.getvalue()
+    assert GenomeSearchIndex.objects.count() == 0
 
 
 @pytest.mark.django_db
-def test_backfill_sourmash_search_indexes_command_reports_processed_and_skipped(
+def test_backfill_sourmash_search_indexes_command_exits_after_missing_artifact(
     settings, tmp_path
 ):
     settings.EMG_CONFIG.genomes.sourmash_public_signatures_dir = str(tmp_path)
@@ -298,12 +296,13 @@ def test_backfill_sourmash_search_indexes_command_reports_processed_and_skipped(
 
     stdout = StringIO()
     stderr = StringIO()
-    call_command(
-        "backfill_sourmash_search_indexes",
-        stdout=stdout,
-        stderr=stderr,
-    )
+    with pytest.raises(SystemExit) as exc_info:
+        call_command(
+            "backfill_sourmash_search_indexes",
+            stdout=stdout,
+            stderr=stderr,
+        )
 
+    assert exc_info.value.code == 1
     assert "human-gut-v2-0: created" in stdout.getvalue()
-    assert "Processed 1 catalogue(s); skipped 1 without artifacts." in stdout.getvalue()
     assert "Skipping marine-v2-0:" in stderr.getvalue()
