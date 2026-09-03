@@ -28,9 +28,14 @@ def sourmash_index_directory(catalogue_slug: str) -> Path:
     ``genome_index.sbt.json`` or ``genome_index.sbt.zip``.
 
     :param catalogue_slug: Catalogue release identifier, e.g. ``human-gut-v2-0``.
-    :returns: Directory expected to contain the published sourmash index files.
+    :returns: ``<configured root>/<catalogue slug>/sourmash_sketches``, the
+        directory expected to contain the published sourmash index files.
     """
-    return Path(EMG_CONFIG.genomes.sourmash_public_signatures_dir) / catalogue_slug
+    return (
+        Path(EMG_CONFIG.genomes.sourmash_public_signatures_dir)
+        / catalogue_slug
+        / "sourmash_sketches"
+    )
 
 
 def resolve_sourmash_artifact_path(catalogue_slug: str) -> Path:
