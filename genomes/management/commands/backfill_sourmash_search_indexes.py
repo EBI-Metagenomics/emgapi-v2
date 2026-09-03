@@ -5,8 +5,15 @@ from django.core.management.base import BaseCommand, CommandError
 from genomes.models import GenomeCatalogue
 from genomes.search_indexes import (
     resolve_sourmash_artifact_path,
+    resolve_sourmash_manifest_path,
     upsert_sourmash_search_index,
 )
+
+# The published chicken-gut artifact predates the catalogue's patch release
+# identifier, so it remains in this legacy directory.
+SOURMASH_ARTIFACT_DIRECTORY_OVERRIDES = {
+    "chicken-gut-v1-0-1": "chicken-gut-v1-0",
+}
 
 
 class Command(BaseCommand):
@@ -54,17 +61,26 @@ class Command(BaseCommand):
 
         processed = 0
         for catalogue in queryset:
+            artifact_catalogue_id = SOURMASH_ARTIFACT_DIRECTORY_OVERRIDES.get(
+                catalogue.catalogue_id,
+                catalogue.catalogue_id,
+            )
             try:
-                artifact_path = resolve_sourmash_artifact_path(catalogue.catalogue_id)
+                artifact_path = resolve_sourmash_artifact_path(artifact_catalogue_id)
             except FileNotFoundError as exc:
                 self.stderr.write(f"Skipping {catalogue.catalogue_id}: {exc}")
                 sys.exit(1)
+            manifest_path = resolve_sourmash_manifest_path(artifact_catalogue_id)
             if dry_run:
                 self.stdout.write(
                     f"Would register sourmash index for {catalogue.catalogue_id}: {artifact_path}"
                 )
             else:
-                index, created, retired_count = upsert_sourmash_search_index(catalogue)
+                index, created, retired_count = upsert_sourmash_search_index(
+                    catalogue,
+                    artifact_path=artifact_path,
+                    manifest_path=manifest_path,
+                )
                 self.stdout.write(
                     f"{catalogue.catalogue_id}: {'created' if created else 'updated'} "
                     f"{index.pk} using {index.artifact_path} "
