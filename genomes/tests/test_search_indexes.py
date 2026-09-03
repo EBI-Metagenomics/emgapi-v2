@@ -37,7 +37,7 @@ def make_catalogue(catalogue_id: str = "human-gut-v2-0") -> GenomeCatalogue:
 @pytest.mark.django_db
 def test_resolve_sourmash_artifact_path_prefers_json(settings, tmp_path):
     settings.EMG_CONFIG.genomes.sourmash_public_signatures_dir = str(tmp_path)
-    index_dir = tmp_path / "human-gut-v2-0"
+    index_dir = tmp_path / "human-gut-v2-0" / "sourmash_sketches"
     index_dir.mkdir(parents=True)
     json_artifact = index_dir / "genome_index.sbt.json"
     zip_artifact = index_dir / "genome_index.sbt.zip"
@@ -51,7 +51,9 @@ def test_resolve_sourmash_artifact_path_prefers_json(settings, tmp_path):
 def test_sourmash_index_directory_uses_configured_root(settings, tmp_path):
     settings.EMG_CONFIG.genomes.sourmash_public_signatures_dir = str(tmp_path)
 
-    assert sourmash_index_directory("human-gut-v2-0") == tmp_path / "human-gut-v2-0"
+    assert sourmash_index_directory("human-gut-v2-0") == (
+        tmp_path / "human-gut-v2-0" / "sourmash_sketches"
+    )
 
 
 @pytest.mark.django_db
@@ -73,7 +75,7 @@ def test_resolve_sourmash_artifact_path_raises_with_expected_candidates(
 @pytest.mark.django_db
 def test_resolve_sourmash_manifest_path_prefers_all_fasta(settings, tmp_path):
     settings.EMG_CONFIG.genomes.sourmash_public_signatures_dir = str(tmp_path)
-    index_dir = tmp_path / "human-gut-v2-0"
+    index_dir = tmp_path / "human-gut-v2-0" / "sourmash_sketches"
     index_dir.mkdir(parents=True)
     all_fasta = index_dir / "all_fasta.txt"
     manifest = index_dir / "manifest.csv"
@@ -86,7 +88,7 @@ def test_resolve_sourmash_manifest_path_prefers_all_fasta(settings, tmp_path):
 @pytest.mark.django_db
 def test_resolve_sourmash_manifest_path_falls_back_to_manifest_csv(settings, tmp_path):
     settings.EMG_CONFIG.genomes.sourmash_public_signatures_dir = str(tmp_path)
-    index_dir = tmp_path / "human-gut-v2-0"
+    index_dir = tmp_path / "human-gut-v2-0" / "sourmash_sketches"
     index_dir.mkdir(parents=True)
     manifest = index_dir / "manifest.csv"
     manifest.write_text("accession,path\n", encoding="utf-8")
@@ -108,7 +110,12 @@ def test_upsert_sourmash_search_index_creates_and_retires_previous_active(
     settings.EMG_CONFIG.genomes.sourmash_public_signatures_dir = str(tmp_path)
     catalogue = make_catalogue()
 
-    old_artifact = tmp_path / catalogue.catalogue_id / "genomes_index.sbt.json"
+    old_artifact = (
+        tmp_path
+        / catalogue.catalogue_id
+        / "sourmash_sketches"
+        / "genomes_index.sbt.json"
+    )
     old_artifact.parent.mkdir(parents=True, exist_ok=True)
     old_artifact.write_text('{"old": true}', encoding="utf-8")
     old_index = GenomeSearchIndex.objects.create(
@@ -153,7 +160,7 @@ def test_upsert_sourmash_search_index_updates_existing_matching_artifact(
     settings.EMG_CONFIG.genomes.sourmash_public_signatures_dir = str(tmp_path)
     catalogue = make_catalogue("marine-v2-0")
 
-    artifact_dir = tmp_path / catalogue.catalogue_id
+    artifact_dir = tmp_path / catalogue.catalogue_id / "sourmash_sketches"
     artifact_dir.mkdir(parents=True, exist_ok=True)
     artifact_path = artifact_dir / "genome_index.sbt.json"
     artifact_path.write_text('{"artifact": true}', encoding="utf-8")
@@ -207,7 +214,7 @@ def test_backfill_sourmash_search_indexes_command(settings, tmp_path):
     settings.EMG_CONFIG.genomes.sourmash_public_signatures_dir = str(tmp_path)
     catalogue = make_catalogue("marine-v2-0")
 
-    artifact_dir = tmp_path / catalogue.catalogue_id
+    artifact_dir = tmp_path / catalogue.catalogue_id / "sourmash_sketches"
     artifact_dir.mkdir(parents=True, exist_ok=True)
     artifact_path = artifact_dir / "genome_index.sbt.json"
     artifact_path.write_text("{}", encoding="utf-8")
@@ -238,7 +245,7 @@ def test_backfill_sourmash_search_indexes_command_includes_ready_when_requested(
     ready_catalogue.status = GenomeCatalogue.Status.READY
     ready_catalogue.save(update_fields=["status"])
 
-    artifact_dir = tmp_path / ready_catalogue.catalogue_id
+    artifact_dir = tmp_path / ready_catalogue.catalogue_id / "sourmash_sketches"
     artifact_dir.mkdir(parents=True, exist_ok=True)
     artifact_path = artifact_dir / "genome_index.sbt.json"
     artifact_path.write_text("{}", encoding="utf-8")
@@ -290,7 +297,7 @@ def test_backfill_sourmash_search_indexes_command_exits_after_missing_artifact(
     seeded = make_catalogue("human-gut-v2-0")
     make_catalogue("marine-v2-0")
 
-    artifact_dir = tmp_path / seeded.catalogue_id
+    artifact_dir = tmp_path / seeded.catalogue_id / "sourmash_sketches"
     artifact_dir.mkdir(parents=True, exist_ok=True)
     (artifact_dir / "genome_index.sbt.json").write_text("{}", encoding="utf-8")
 
