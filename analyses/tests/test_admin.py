@@ -318,3 +318,60 @@ def test_curate_run_experiment_types_rejects_non_staff(client, raw_reads_mgnify_
 
     assert response.status_code == 302
     assert "/login" in response.url
+
+
+@pytest.mark.django_db
+def test_set_experiment_type_action_applies_across_the_filtered_runs(
+    admin_client, raw_reads_mgnify_study, raw_read_run
+):
+    """
+    "Select all runs matching this filter" must curate every filtered run, including the ones whose
+    ids the confirmation page does not carry.
+    """
+    other_study = Study.objects.create(
+        ena_study=raw_reads_mgnify_study.ena_study, title="Another study"
+    )
+    other_run = Run.objects.create(
+        ena_accessions=["SRR9999999"],
+        study=other_study,
+        ena_study=other_study.ena_study,
+        sample=raw_read_run[0].sample,
+        experiment_type=Run.ExperimentTypes.AMPLICON,
+    )
+
+    changelist_filtered_to_the_study = reverse(
+        "admin:analyses_run_changelist",
+        query={"study_accession": raw_reads_mgnify_study.accession},
+    )
+    confirmation = admin_client.post(
+        changelist_filtered_to_the_study,
+        {
+            "action": "set_experiment_type",
+            "index": "0",
+            "select_across": "1",
+            "_selected_action": [run.pk for run in raw_read_run],
+        },
+    )
+    assert confirmation.status_code == 200
+
+    # the confirmation page posts back a run id, without which the changelist would not dispatch
+    assert confirmation.context["selected_ids"]
+
+    response = admin_client.post(
+        changelist_filtered_to_the_study,
+        {
+            "action": "set_experiment_type",
+            "apply": "1",
+            "select_across": "1",
+            "_selected_action": list(confirmation.context["selected_ids"]),
+            "experiment_type": Run.ExperimentTypes.METATRANSCRIPTOMIC,
+        },
+    )
+
+    assert response.status_code == 302
+    for run in raw_read_run:
+        run.refresh_from_db()
+        assert run.experiment_type == Run.ExperimentTypes.METATRANSCRIPTOMIC
+
+    other_run.refresh_from_db()
+    assert other_run.experiment_type == Run.ExperimentTypes.AMPLICON

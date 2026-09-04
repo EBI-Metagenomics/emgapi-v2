@@ -112,7 +112,9 @@ class RunAdmin(ENABrowserLinkMixin, JSONFieldWidgetOverridesMixin, ModelAdmin):
                 "experiment_type_choices": Run.ExperimentTypes.choices,
                 "action_checkbox_name": helpers.ACTION_CHECKBOX_NAME,
                 "selected_ids": (
-                    [] if select_across else queryset.values_list("pk", flat=True)
+                    queryset.values_list("pk", flat=True)[:1]
+                    if select_across
+                    else queryset.values_list("pk", flat=True)
                 ),
                 "select_across": select_across,
             },
