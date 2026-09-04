@@ -5,6 +5,7 @@ import logging
 import os
 import re
 import shutil
+import time
 from enum import Enum
 from pathlib import Path
 from textwrap import dedent
@@ -36,6 +37,7 @@ from workflows.flows.analyse_study_tasks.shared.study_summary import (
 from workflows.flows.analysis_rawreads_study import analysis_rawreads_study
 from workflows.prefect_utils.analyses_models_helpers import get_users_as_choices
 from workflows.prefect_utils.testing_utils import (
+    get_logs_for_flow_run,
     run_flow_and_capture_logs,
     should_not_mock_httpx_requests_to_prefect_server,
 )
@@ -428,7 +430,7 @@ def test_prefect_analyse_rawreads_flow(
     httpx_mock.add_response(
         url=f"{EMG_CONFIG.ena.portal_search_api}?"
         f"result=read_run"
-        f"&query=%22%28%28study_accession={study_accession}+OR+secondary_study_accession={study_accession}%29%20AND%20library_strategy=WGS%29%22"
+        f"&query=%22%28%28study_accession={study_accession}+OR+secondary_study_accession={study_accession}%29+AND+%28%28%28%28%28library_strategy%3DWGS+OR+library_strategy%3DWGA%29+OR+library_strategy%3DRNA-Seq%29+OR+library_strategy%3DRibo-Seq%29+OR+library_strategy%3DHi-C%29+OR+library_strategy%3DWCS%29%29%22"
         f"&limit=10000"
         f"&format=json"
         f"&fields=run_accession%2Csample_accession%2Csample_title%2Csecondary_sample_accession%2Cfastq_md5%2Cfastq_ftp%2Clibrary_layout%2Clibrary_strategy%2Clibrary_source%2Cscientific_name%2Chost_tax_id%2Chost_scientific_name%2Cinstrument_platform%2Cinstrument_model%2Clocation%2Clat%2Clon"
@@ -973,7 +975,7 @@ def test_prefect_analyse_rawreads_flow_private_data(
     httpx_mock.add_response(
         url=f"{EMG_CONFIG.ena.portal_search_api}?"
         f"result=read_run"
-        f"&query=%22%28%28study_accession={study_accession}+OR+secondary_study_accession={study_accession}%29%20AND%20library_strategy=WGS%29%22"
+        f"&query=%22%28%28study_accession={study_accession}+OR+secondary_study_accession={study_accession}%29+AND+%28%28%28%28%28library_strategy%3DWGS+OR+library_strategy%3DWGA%29+OR+library_strategy%3DRNA-Seq%29+OR+library_strategy%3DRibo-Seq%29+OR+library_strategy%3DHi-C%29+OR+library_strategy%3DWCS%29%29%22"
         f"&limit=10000"
         f"&format=json"
         f"&fields=run_accession%2Csample_accession%2Csample_title%2Csecondary_sample_accession%2Cfastq_md5%2Cfastq_ftp%2Clibrary_layout%2Clibrary_strategy%2Clibrary_source%2Cscientific_name%2Chost_tax_id%2Chost_scientific_name%2Cinstrument_platform%2Cinstrument_model%2Clocation%2Clat%2Clon"
@@ -1416,7 +1418,7 @@ def test_prefect_analyse_rawreads_flow_no_functional(
     httpx_mock.add_response(
         url=f"{EMG_CONFIG.ena.portal_search_api}?"
         f"result=read_run"
-        f"&query=%22%28%28study_accession={study_accession}+OR+secondary_study_accession={study_accession}%29%20AND%20library_strategy=WGS%29%22"
+        f"&query=%22%28%28study_accession={study_accession}+OR+secondary_study_accession={study_accession}%29+AND+%28%28%28%28%28library_strategy%3DWGS+OR+library_strategy%3DWGA%29+OR+library_strategy%3DRNA-Seq%29+OR+library_strategy%3DRibo-Seq%29+OR+library_strategy%3DHi-C%29+OR+library_strategy%3DWCS%29%29%22"
         f"&limit=10000"
         f"&format=json"
         f"&fields=run_accession%2Csample_accession%2Csample_title%2Csecondary_sample_accession%2Cfastq_md5%2Cfastq_ftp%2Clibrary_layout%2Clibrary_strategy%2Clibrary_source%2Cscientific_name%2Chost_tax_id%2Chost_scientific_name%2Cinstrument_platform%2Cinstrument_model%2Clocation%2Clat%2Clon"
@@ -1520,3 +1522,63 @@ def test_prefect_analyse_rawreads_flow_no_functional(
     assert (
         analyses.models.Analysis.FUNCTIONAL_ANNOTATION not in analysis_obj.annotations
     )
+
+
+@pytest.mark.httpx_mock(should_mock=should_not_mock_httpx_requests_to_prefect_server)
+@pytest.mark.django_db(transaction=True)
+def test_prefect_analyse_rawreads_flow_logs_error_when_no_runs(
+    prefect_harness,
+    httpx_mock,
+):
+    """
+    An empty read-run response from ENA should fail the flow with an error in the Prefect log,
+    rather than silently continuing with zero runs.
+    """
+    study_accession = "ERP136389"
+
+    httpx_mock.add_response(
+        url=f"{EMG_CONFIG.ena.portal_search_api}?"
+        f"result=study"
+        f"&query=%22%28study_accession%3D{study_accession}+OR+secondary_study_accession%3D{study_accession}%29%22"
+        f"&fields=study_title%2Cstudy_description%2Ccenter_name%2Csecondary_study_accession%2Cstudy_name"
+        f"&limit=10"
+        f"&format=json"
+        f"&dataPortal=metagenome",
+        json=[
+            {
+                "study_accession": study_accession,
+                "secondary_study_accession": study_accession,
+                "study_title": "Study with no matching read-runs",
+            },
+        ],
+        is_reusable=True,
+    )
+    httpx_mock.add_response(
+        url=f"{EMG_CONFIG.ena.portal_search_api}?"
+        f"result=study"
+        f"&query=%22%28study_accession%3D{study_accession}+OR+secondary_study_accession%3D{study_accession}%29%22"
+        f"&fields=study_accession"
+        f"&limit="
+        f"&format=json"
+        f"&dataPortal=metagenome",
+        json=[{"study_accession": study_accession}],
+        is_reusable=True,
+    )
+    httpx_mock.add_response(
+        url=f"{EMG_CONFIG.ena.portal_search_api}?"
+        f"result=read_run"
+        f"&query=%22%28%28study_accession={study_accession}+OR+secondary_study_accession={study_accession}%29+AND+%28%28%28%28%28library_strategy%3DWGS+OR+library_strategy%3DWGA%29+OR+library_strategy%3DRNA-Seq%29+OR+library_strategy%3DRibo-Seq%29+OR+library_strategy%3DHi-C%29+OR+library_strategy%3DWCS%29%29%22"
+        f"&limit=10000"
+        f"&format=json"
+        f"&fields=run_accession%2Csample_accession%2Csample_title%2Csecondary_sample_accession%2Cfastq_md5%2Cfastq_ftp%2Clibrary_layout%2Clibrary_strategy%2Clibrary_source%2Cscientific_name%2Chost_tax_id%2Chost_scientific_name%2Cinstrument_platform%2Cinstrument_model%2Clocation%2Clat%2Clon"
+        f"&dataPortal=metagenome",
+        json=[],
+        is_reusable=True,
+    )
+
+    state = analysis_rawreads_study(study_accession, return_state=True)
+    time.sleep(0.5)  # wait for log flushing
+    logs = get_logs_for_flow_run(state.state_details.flow_run_id)
+
+    assert state.is_failed()
+    assert "No read-runs returned from ENA portal API" in logs

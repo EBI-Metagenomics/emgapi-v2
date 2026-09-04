@@ -21,6 +21,7 @@ from workflows.ena_utils.ena_policies import (
     ENALibrarySourcePolicy,
     ENALibraryStrategyPolicy,
 )
+from workflows.ena_utils.requestors import ENAAvailabilityException
 from workflows.ena_utils.webin_owner_utils import validate_and_set_webin_owner
 from workflows.flows.analyse_study_tasks.cleanup_pipeline_directories import (
     delete_study_nextflow_workdir,
@@ -49,6 +50,7 @@ from workflows.prefect_utils.analyses_models_helpers import (
 from workflows.prefect_utils.flows_utils import django_db_flow as flow
 
 _METAGENOMIC = "WGS"
+_OTHER_ACCEPTED_STRATEGIES = ["WGA", "RNA-Seq", "Ribo-Seq", "Hi-C", "WCS"]
 
 
 @flow(
@@ -82,15 +84,24 @@ def analysis_rawreads_study(study_accession: str):
     else:
         logger.info(f"{mgnify_study} is a public study.")
 
-    read_runs = get_study_readruns_from_ena(
-        ena_study.accession,
-        limit=EMG_CONFIG.ena.portal_max_readruns_to_fetch,
-        raise_on_empty=False,
-        filter_library_strategy=library_strategy_policy_to_filter(
-            _METAGENOMIC, policy=ENALibraryStrategyPolicy.ONLY_IF_CORRECT_IN_ENA
-        ),
-        expected_experiment_type=analyses.models.Run.ExperimentTypes.METAGENOMIC,
-    )
+    try:
+        read_runs = get_study_readruns_from_ena(
+            ena_study.accession,
+            limit=EMG_CONFIG.ena.portal_max_readruns_to_fetch,
+            raise_on_empty=True,
+            filter_library_strategy=library_strategy_policy_to_filter(
+                _METAGENOMIC,
+                other_library_strategies=_OTHER_ACCEPTED_STRATEGIES,
+                policy=ENALibraryStrategyPolicy.ONLY_IF_CORRECT_IN_ENA,
+            ),
+            expected_experiment_type=analyses.models.Run.ExperimentTypes.METAGENOMIC,
+        )
+    except ENAAvailabilityException as e:
+        logger.error(
+            f"No read-runs returned from ENA portal API for study {ena_study.accession} "
+            f"with library strategies {[_METAGENOMIC] + _OTHER_ACCEPTED_STRATEGIES}: {e}"
+        )
+        raise
     logger.info(f"Returned {len(read_runs)} runs from ENA portal API")
 
     BiomeChoices = get_biomes_as_choices()
@@ -160,7 +171,9 @@ def analysis_rawreads_study(study_accession: str):
             limit=EMG_CONFIG.ena.portal_max_readruns_to_fetch,
             raise_on_empty=True,
             filter_library_strategy=library_strategy_policy_to_filter(
-                _METAGENOMIC, policy=analyse_study_input.library_strategy_policy
+                _METAGENOMIC,
+                other_library_strategies=_OTHER_ACCEPTED_STRATEGIES,
+                policy=analyse_study_input.library_strategy_policy,
             ),
             library_strategy_policy=analyse_study_input.library_strategy_policy,
             library_source_policy=analyse_study_input.library_source_policy,
