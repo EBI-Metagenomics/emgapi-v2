@@ -50,7 +50,11 @@ from workflows.prefect_utils.analyses_models_helpers import (
 from workflows.prefect_utils.flows_utils import django_db_flow as flow
 
 # Library strategies accepted by the raw-reads pipeline; the first is the primary one.
-_METAGENOMIC = ["WGS", "WGA", "RNA-Seq", "ssRNA-seq", "WCS"]
+# WXS was supported by the previous pipeline version, but exome capture is a targeted
+# subset of the genome and so is not appropriate for the v6 raw-reads pipeline.
+# "ssRNA-seq" and "WCS" may be worth adding: both are untargeted shotgun libraries that
+# the v6 pipeline should handle, but they have not been validated against it yet.
+_METAGENOMIC = ["WGS", "WGA", "RNA-Seq"]
 
 
 @flow(
