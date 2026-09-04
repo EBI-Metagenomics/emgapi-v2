@@ -3,6 +3,7 @@ from unittest.mock import Mock, patch
 import pytest
 from django.urls import reverse
 
+from analyses.models import Run, Study
 from workflows.models import (
     AssemblyAnalysisBatch,
     AssemblyAnalysisBatchAnalysis,
@@ -223,3 +224,97 @@ def test_refresh_batch_counts_multiple_batches(
         assert batch.pipeline_status_counts.asa.pending == 0
         assert batch.pipeline_status_counts.virify.pending == 0
         assert batch.pipeline_status_counts.map.pending == 0
+
+
+@pytest.mark.django_db
+def test_curate_run_experiment_types_updates_only_target_study(
+    admin_client, raw_reads_mgnify_study, raw_read_run
+):
+    """
+    The curation action should set the experiment type of the selected runs of the study,
+    and leave runs of other studies alone.
+    """
+    other_study = Study.objects.create(
+        ena_study=raw_reads_mgnify_study.ena_study, title="Another study"
+    )
+    other_run = Run.objects.create(
+        ena_accessions=["SRR9999999"],
+        study=other_study,
+        ena_study=other_study.ena_study,
+        sample=raw_read_run[0].sample,
+        experiment_type=Run.ExperimentTypes.AMPLICON,
+    )
+
+    url = reverse(
+        "admin:analyses_study_curate_run_experiment_types",
+        args=[raw_reads_mgnify_study.pk],
+    )
+    response = admin_client.post(
+        url,
+        {
+            "experiment_type": Run.ExperimentTypes.METATRANSCRIPTOMIC,
+            "runs": [run.pk for run in raw_read_run],
+        },
+    )
+
+    assert response.status_code == 302
+    for run in raw_read_run:
+        run.refresh_from_db()
+        assert run.experiment_type == Run.ExperimentTypes.METATRANSCRIPTOMIC
+
+    other_run.refresh_from_db()
+    assert other_run.experiment_type == Run.ExperimentTypes.AMPLICON
+
+
+@pytest.mark.django_db
+def test_curate_run_experiment_types_lists_the_studys_runs(
+    admin_client, raw_reads_mgnify_study, raw_read_run
+):
+    """
+    The curation page should render the study's runs and the experiment types to choose from.
+    """
+    url = reverse(
+        "admin:analyses_study_curate_run_experiment_types",
+        args=[raw_reads_mgnify_study.pk],
+    )
+    response = admin_client.get(url)
+
+    assert response.status_code == 200
+    assert list(response.context["runs"]) == raw_read_run
+    assert response.context["experiment_type_choices"] == Run.ExperimentTypes.choices
+    assert raw_read_run[0].first_accession in response.content.decode()
+
+
+@pytest.mark.django_db
+def test_curate_run_experiment_types_without_selected_runs_changes_nothing(
+    admin_client, raw_reads_mgnify_study, raw_read_run
+):
+    """
+    Posting no runs should warn and leave the experiment types alone.
+    """
+    experiment_types_before = [run.experiment_type for run in raw_read_run]
+
+    url = reverse(
+        "admin:analyses_study_curate_run_experiment_types",
+        args=[raw_reads_mgnify_study.pk],
+    )
+    response = admin_client.post(
+        url, {"experiment_type": Run.ExperimentTypes.METAGENOMIC}
+    )
+
+    assert response.status_code == 200
+    for run, experiment_type_before in zip(raw_read_run, experiment_types_before):
+        run.refresh_from_db()
+        assert run.experiment_type == experiment_type_before
+
+
+@pytest.mark.django_db
+def test_curate_run_experiment_types_rejects_non_staff(client, raw_reads_mgnify_study):
+    url = reverse(
+        "admin:analyses_study_curate_run_experiment_types",
+        args=[raw_reads_mgnify_study.pk],
+    )
+    response = client.get(url)
+
+    assert response.status_code == 302
+    assert "/login" in response.url

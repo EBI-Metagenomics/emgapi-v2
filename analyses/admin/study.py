@@ -150,6 +150,13 @@ class StudyAdmin(
                 "show_assembly_analysis_status_summary",
             ],
         },
+        {
+            "title": "Curation",
+            "icon": "edit",
+            "items": [
+                "curate_run_experiment_types",
+            ],
+        },
     ] + ENABrowserLinkMixin.actions_detail
 
     autocomplete_fields = ["ena_study", "biome"]
@@ -323,6 +330,58 @@ class StudyAdmin(
                 "study": study,
                 "run_types_table": runs_types_table,
                 "title": f"Experiment types summary for runs of {study.accession}",
+                **self.admin_site.each_context(request),
+            },
+        )
+
+    @action(
+        description="Curate run types",
+        url_path="study-curate-run-types",
+    )
+    def curate_run_experiment_types(self, request, object_id):
+        """
+        Set the experiment type of selected runs of a study, e.g. so that an assembly upload
+        blocked by an unsupported experiment type can be retried.
+
+        :param request: Admin request, POSTing the selected run ids and the experiment type to apply.
+        :param object_id: Primary key of the study whose runs are being curated.
+        """
+        study = get_object_or_404(Study.objects, pk=object_id)
+        runs = study.runs.order_by("id")
+
+        if request.method == "POST":
+            experiment_type = request.POST.get("experiment_type")
+            run_ids = request.POST.getlist("runs")
+            if experiment_type not in Run.ExperimentTypes.values or not run_ids:
+                self.message_user(
+                    request,
+                    "Select at least one run, and an experiment type to set on it.",
+                    messages.WARNING,
+                )
+            else:
+                updated = runs.filter(pk__in=run_ids).update(
+                    experiment_type=experiment_type
+                )
+                self.message_user(
+                    request,
+                    f"Set experiment type to {Run.ExperimentTypes(experiment_type).label} "
+                    f"on {updated} run(s) of {study.accession}.",
+                    messages.SUCCESS,
+                )
+                return redirect(
+                    reverse_lazy(
+                        "admin:analyses_study_show_run_type_summary", args=[study.pk]
+                    )
+                )
+
+        return render(
+            request,
+            "admin/study_admin_curate_run_types.html",
+            {
+                "study": study,
+                "runs": runs,
+                "experiment_type_choices": Run.ExperimentTypes.choices,
+                "title": f"Curate experiment types of runs of {study.accession}",
                 **self.admin_site.each_context(request),
             },
         )
