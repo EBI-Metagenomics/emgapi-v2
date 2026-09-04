@@ -427,10 +427,22 @@ def test_prefect_analyse_rawreads_flow(
         is_optional=False,
     )
 
+    # the flow fetches metatranscriptomic read-runs separately; none in these fixtures
     httpx_mock.add_response(
         url=f"{EMG_CONFIG.ena.portal_search_api}?"
         f"result=read_run"
-        f"&query=%22%28%28study_accession={study_accession}+OR+secondary_study_accession={study_accession}%29+AND+%28%28library_strategy%3DWGS+OR+library_strategy%3DWGA%29+OR+library_strategy%3DRNA-Seq%29%29%22"
+        f"&query=%22%28%28study_accession={study_accession}+OR+secondary_study_accession={study_accession}%29+AND+library_strategy%3DRNA-Seq%29%22"
+        f"&limit=10000"
+        f"&format=json"
+        f"&fields=run_accession%2Csample_accession%2Csample_title%2Csecondary_sample_accession%2Cfastq_md5%2Cfastq_ftp%2Clibrary_layout%2Clibrary_strategy%2Clibrary_source%2Cscientific_name%2Chost_tax_id%2Chost_scientific_name%2Cinstrument_platform%2Cinstrument_model%2Clocation%2Clat%2Clon"
+        f"&dataPortal=metagenome",
+        json=[],
+        is_reusable=True,
+    )
+    httpx_mock.add_response(
+        url=f"{EMG_CONFIG.ena.portal_search_api}?"
+        f"result=read_run"
+        f"&query=%22%28%28study_accession={study_accession}+OR+secondary_study_accession={study_accession}%29+AND+%28library_strategy%3DWGS+OR+library_strategy%3DWGA%29%29%22"
         f"&limit=10000"
         f"&format=json"
         f"&fields=run_accession%2Csample_accession%2Csample_title%2Csecondary_sample_accession%2Cfastq_md5%2Cfastq_ftp%2Clibrary_layout%2Clibrary_strategy%2Clibrary_source%2Cscientific_name%2Chost_tax_id%2Chost_scientific_name%2Cinstrument_platform%2Cinstrument_model%2Clocation%2Clat%2Clon"
@@ -972,10 +984,22 @@ def test_prefect_analyse_rawreads_flow_private_data(
         is_reusable=True,
         is_optional=False,
     )
+    # the flow fetches metatranscriptomic read-runs separately; none in these fixtures
     httpx_mock.add_response(
         url=f"{EMG_CONFIG.ena.portal_search_api}?"
         f"result=read_run"
-        f"&query=%22%28%28study_accession={study_accession}+OR+secondary_study_accession={study_accession}%29+AND+%28%28library_strategy%3DWGS+OR+library_strategy%3DWGA%29+OR+library_strategy%3DRNA-Seq%29%29%22"
+        f"&query=%22%28%28study_accession={study_accession}+OR+secondary_study_accession={study_accession}%29+AND+library_strategy%3DRNA-Seq%29%22"
+        f"&limit=10000"
+        f"&format=json"
+        f"&fields=run_accession%2Csample_accession%2Csample_title%2Csecondary_sample_accession%2Cfastq_md5%2Cfastq_ftp%2Clibrary_layout%2Clibrary_strategy%2Clibrary_source%2Cscientific_name%2Chost_tax_id%2Chost_scientific_name%2Cinstrument_platform%2Cinstrument_model%2Clocation%2Clat%2Clon"
+        f"&dataPortal=metagenome",
+        json=[],
+        is_reusable=True,
+    )
+    httpx_mock.add_response(
+        url=f"{EMG_CONFIG.ena.portal_search_api}?"
+        f"result=read_run"
+        f"&query=%22%28%28study_accession={study_accession}+OR+secondary_study_accession={study_accession}%29+AND+%28library_strategy%3DWGS+OR+library_strategy%3DWGA%29%29%22"
         f"&limit=10000"
         f"&format=json"
         f"&fields=run_accession%2Csample_accession%2Csample_title%2Csecondary_sample_accession%2Cfastq_md5%2Cfastq_ftp%2Clibrary_layout%2Clibrary_strategy%2Clibrary_source%2Cscientific_name%2Chost_tax_id%2Chost_scientific_name%2Cinstrument_platform%2Cinstrument_model%2Clocation%2Clat%2Clon"
@@ -1415,10 +1439,22 @@ def test_prefect_analyse_rawreads_flow_no_functional(
         is_reusable=True,
         is_optional=False,
     )
+    # the flow fetches metatranscriptomic read-runs separately; none in these fixtures
     httpx_mock.add_response(
         url=f"{EMG_CONFIG.ena.portal_search_api}?"
         f"result=read_run"
-        f"&query=%22%28%28study_accession={study_accession}+OR+secondary_study_accession={study_accession}%29+AND+%28%28library_strategy%3DWGS+OR+library_strategy%3DWGA%29+OR+library_strategy%3DRNA-Seq%29%29%22"
+        f"&query=%22%28%28study_accession={study_accession}+OR+secondary_study_accession={study_accession}%29+AND+library_strategy%3DRNA-Seq%29%22"
+        f"&limit=10000"
+        f"&format=json"
+        f"&fields=run_accession%2Csample_accession%2Csample_title%2Csecondary_sample_accession%2Cfastq_md5%2Cfastq_ftp%2Clibrary_layout%2Clibrary_strategy%2Clibrary_source%2Cscientific_name%2Chost_tax_id%2Chost_scientific_name%2Cinstrument_platform%2Cinstrument_model%2Clocation%2Clat%2Clon"
+        f"&dataPortal=metagenome",
+        json=[],
+        is_reusable=True,
+    )
+    httpx_mock.add_response(
+        url=f"{EMG_CONFIG.ena.portal_search_api}?"
+        f"result=read_run"
+        f"&query=%22%28%28study_accession={study_accession}+OR+secondary_study_accession={study_accession}%29+AND+%28library_strategy%3DWGS+OR+library_strategy%3DWGA%29%29%22"
         f"&limit=10000"
         f"&format=json"
         f"&fields=run_accession%2Csample_accession%2Csample_title%2Csecondary_sample_accession%2Cfastq_md5%2Cfastq_ftp%2Clibrary_layout%2Clibrary_strategy%2Clibrary_source%2Cscientific_name%2Chost_tax_id%2Chost_scientific_name%2Cinstrument_platform%2Cinstrument_model%2Clocation%2Clat%2Clon"
@@ -1564,10 +1600,22 @@ def test_prefect_analyse_rawreads_flow_logs_error_when_no_runs(
         json=[{"study_accession": study_accession}],
         is_reusable=True,
     )
+    # the flow fetches metatranscriptomic read-runs separately; none in these fixtures
     httpx_mock.add_response(
         url=f"{EMG_CONFIG.ena.portal_search_api}?"
         f"result=read_run"
-        f"&query=%22%28%28study_accession={study_accession}+OR+secondary_study_accession={study_accession}%29+AND+%28%28library_strategy%3DWGS+OR+library_strategy%3DWGA%29+OR+library_strategy%3DRNA-Seq%29%29%22"
+        f"&query=%22%28%28study_accession={study_accession}+OR+secondary_study_accession={study_accession}%29+AND+library_strategy%3DRNA-Seq%29%22"
+        f"&limit=10000"
+        f"&format=json"
+        f"&fields=run_accession%2Csample_accession%2Csample_title%2Csecondary_sample_accession%2Cfastq_md5%2Cfastq_ftp%2Clibrary_layout%2Clibrary_strategy%2Clibrary_source%2Cscientific_name%2Chost_tax_id%2Chost_scientific_name%2Cinstrument_platform%2Cinstrument_model%2Clocation%2Clat%2Clon"
+        f"&dataPortal=metagenome",
+        json=[],
+        is_reusable=True,
+    )
+    httpx_mock.add_response(
+        url=f"{EMG_CONFIG.ena.portal_search_api}?"
+        f"result=read_run"
+        f"&query=%22%28%28study_accession={study_accession}+OR+secondary_study_accession={study_accession}%29+AND+%28library_strategy%3DWGS+OR+library_strategy%3DWGA%29%29%22"
         f"&limit=10000"
         f"&format=json"
         f"&fields=run_accession%2Csample_accession%2Csample_title%2Csecondary_sample_accession%2Cfastq_md5%2Cfastq_ftp%2Clibrary_layout%2Clibrary_strategy%2Clibrary_source%2Cscientific_name%2Chost_tax_id%2Chost_scientific_name%2Cinstrument_platform%2Cinstrument_model%2Clocation%2Clat%2Clon"

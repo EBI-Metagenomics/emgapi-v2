@@ -409,7 +409,9 @@ class Run(
         ena_scientific_name: str = "",
         library_strategy_policy: ENALibraryStrategyPolicy = ENALibraryStrategyPolicy.ONLY_IF_CORRECT_IN_ENA,
         library_source_policy: ENALibrarySourcePolicy = ENALibrarySourcePolicy.OVERRIDE_GENOMIC_IF_METAGENOMIC_SCIENTIFIC_NAME,
-        expected_experiment_type: Run.ExperimentTypes | None = None,
+        expected_experiment_type: Run.ExperimentTypes
+        | list[Run.ExperimentTypes]
+        | None = None,
     ):
         """
         Sets the experiment type based on provided metadata, with consideration for
@@ -425,9 +427,10 @@ class Run(
         :param library_source_policy: Policy governing how to interpret or override
             the ENA library source data. The Default behaviour overrides genomic sources
             in cases involving metagenomic scientific names.
-        :param expected_experiment_type: The expected experiment type to directly
-            override metadata-based determination when the library strategy policy
-            allows overriding.
+        :param expected_experiment_type: The experiment type(s) the caller is willing to
+            accept when the library strategy policy allows overriding. A list may be given
+            (e.g. metagenomic and metatranscriptomic), in which case a metadata-inferred type
+            within that list is kept and anything else falls back to the first entry.
         :return: None
         """
         ALLOWED_WHOLE_GENOME_LIBRARY_STRATEGIES = ["wgs", "wga"]
@@ -450,14 +453,13 @@ class Run(
             if METAGENOME_SCIENTIFIC_NAME in ena_scientific_name:
                 is_metagenomic_source = True
 
-        if library_strategy_policy == ENALibraryStrategyPolicy.OVERRIDE_ALL:
-            if expected_experiment_type is None:
-                raise ValueError(
-                    "expected_experiment_type is required when library_strategy_policy is OVERRIDE_ALL"
-                )
-            self.experiment_type = expected_experiment_type
-            self.save()
-            return
+        if (
+            library_strategy_policy == ENALibraryStrategyPolicy.OVERRIDE_ALL
+            and expected_experiment_type is None
+        ):
+            raise ValueError(
+                "expected_experiment_type is required when library_strategy_policy is OVERRIDE_ALL"
+            )
 
         if ena_library_strategy == "rna-seq" and (
             is_metagenomic_source or is_metatranscriptomic_source
@@ -480,6 +482,18 @@ class Run(
             self.experiment_type = Run.ExperimentTypes.AMPLICON
         else:
             self.experiment_type = Run.ExperimentTypes.UNKNOWN
+
+        if library_strategy_policy == ENALibraryStrategyPolicy.OVERRIDE_ALL:
+            # Ignore the ENA library strategy, but keep the inferred type if the caller
+            # accepts it — otherwise fall back to their primary expected type.
+            acceptable = (
+                expected_experiment_type
+                if isinstance(expected_experiment_type, list)
+                else [expected_experiment_type]
+            )
+            if self.experiment_type not in acceptable:
+                self.experiment_type = acceptable[0]
+
         self.save()
 
     def __str__(self):

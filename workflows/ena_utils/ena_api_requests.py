@@ -250,7 +250,9 @@ def _make_run(
     mgnify_sample: analyses.models.Sample,
     library_strategy_policy: ENALibraryStrategyPolicy = ENALibraryStrategyPolicy.ONLY_IF_CORRECT_IN_ENA,
     library_source_policy: ENALibrarySourcePolicy = ENALibrarySourcePolicy.OVERRIDE_GENOMIC_IF_METAGENOMIC_SCIENTIFIC_NAME,
-    expected_experiment_type: analyses.models.Run.ExperimentTypes | None = None,
+    expected_experiment_type: analyses.models.Run.ExperimentTypes
+    | list[analyses.models.Run.ExperimentTypes]
+    | None = None,
 ) -> analyses.models.Run:
     _ = ENAReadRunFields
     run, __ = analyses.models.Run.objects.update_or_create_by_accession(
@@ -283,7 +285,9 @@ def _make_samples_and_run(
     study: analyses.models.Study,
     library_strategy_policy: ENALibraryStrategyPolicy = ENALibraryStrategyPolicy.ONLY_IF_CORRECT_IN_ENA,
     library_source_policy: ENALibrarySourcePolicy = ENALibrarySourcePolicy.OVERRIDE_GENOMIC_IF_METAGENOMIC_SCIENTIFIC_NAME,
-    expected_experiment_type: analyses.models.Run.ExperimentTypes | None = None,
+    expected_experiment_type: analyses.models.Run.ExperimentTypes
+    | list[analyses.models.Run.ExperimentTypes]
+    | None = None,
 ) -> tuple[ena.models.Sample, analyses.models.Sample, analyses.models.Run]:
     ena_sample, mgnify_sample = _make_samples(run_response, study)
     run = _make_run(
@@ -311,7 +315,9 @@ def get_study_readruns_from_ena(
     raise_on_empty: bool = True,
     library_strategy_policy: ENALibraryStrategyPolicy = ENALibraryStrategyPolicy.ONLY_IF_CORRECT_IN_ENA,
     library_source_policy: ENALibrarySourcePolicy = ENALibrarySourcePolicy.OVERRIDE_GENOMIC_IF_METAGENOMIC_SCIENTIFIC_NAME,
-    expected_experiment_type: analyses.models.Run.ExperimentTypes | None = None,
+    expected_experiment_type: analyses.models.Run.ExperimentTypes
+    | list[analyses.models.Run.ExperimentTypes]
+    | None = None,
 ) -> List[str]:
     """
     Retrieve a list of read_runs from the ENA Portal API, for a given study.
@@ -649,7 +655,9 @@ def get_study_assemblies_from_ena(
     limit: int = 10,
     library_strategy_policy: ENALibraryStrategyPolicy = ENALibraryStrategyPolicy.ONLY_IF_CORRECT_IN_ENA,
     library_source_policy: ENALibrarySourcePolicy = ENALibrarySourcePolicy.OVERRIDE_GENOMIC_IF_METAGENOMIC_SCIENTIFIC_NAME,
-    expected_experiment_type: analyses.models.Run.ExperimentTypes | None = None,
+    expected_experiment_type: analyses.models.Run.ExperimentTypes
+    | list[analyses.models.Run.ExperimentTypes]
+    | None = None,
 ) -> list[str]:
     """
     Fetches a list of assemblies from the European Nucleotide Archive (ENA) for a given study accession.

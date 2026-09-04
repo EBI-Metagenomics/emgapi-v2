@@ -49,12 +49,65 @@ from workflows.prefect_utils.analyses_models_helpers import (
 )
 from workflows.prefect_utils.flows_utils import django_db_flow as flow
 
-# Library strategies accepted by the raw-reads pipeline; the first is the primary one.
-# WXS was supported by the previous pipeline version, but exome capture is a targeted
+# ENA library strategies accepted by the raw-reads pipeline, per experiment type.
+# The first entry of each list is the primary strategy for that type.
+# WXS was accepted by the previous pipeline version, but exome capture is a targeted
 # subset of the genome and so is not appropriate for the v6 raw-reads pipeline.
-# "ssRNA-seq" and "WCS" may be worth adding: both are untargeted shotgun libraries that
-# the v6 pipeline should handle, but they have not been validated against it yet.
-_METAGENOMIC = ["WGS", "WGA", "RNA-Seq"]
+# "WCS" may be worth adding to _METAGENOMIC, and "ssRNA-seq" to _METATRANSCRIPTOMIC:
+# both are untargeted shotgun libraries the v6 pipeline should handle, but neither has
+# been validated against it yet.
+_METAGENOMIC = ["WGS", "WGA"]
+_METATRANSCRIPTOMIC = ["RNA-Seq"]
+
+_STRATEGIES_BY_EXPERIMENT_TYPE = {
+    analyses.models.Run.ExperimentTypes.METAGENOMIC: _METAGENOMIC,
+    analyses.models.Run.ExperimentTypes.METATRANSCRIPTOMIC: _METATRANSCRIPTOMIC,
+}
+
+
+def _get_read_runs_for_all_experiment_types(
+    study_accession: str,
+    library_strategy_policy: ENALibraryStrategyPolicy,
+    library_source_policy: ENALibrarySourcePolicy,
+) -> List[str]:
+    """
+    Fetch the study's read-runs from ENA once per experiment type the raw-reads pipeline
+    handles, since each has its own set of acceptable ENA library strategies.
+
+    :param study_accession: ENA study accession to fetch read-runs for.
+    :param library_strategy_policy: How much to trust the ENA library strategy metadata.
+    :param library_source_policy: How to handle the ENA library source metadata.
+    :return: Accessions of all matching read-runs, de-duplicated.
+    :raises ENAAvailabilityException: If no read-runs matched any experiment type.
+    """
+    read_runs = []
+    for experiment_type, strategies in _STRATEGIES_BY_EXPERIMENT_TYPE.items():
+        # ponytail: the non-primary types are passed as fallbacks so that OVERRIDE_ALL
+        # (which drops the strategy filter entirely, so every call sees every run) still
+        # keeps each run's inferred type instead of forcing it to this call's type.
+        acceptable_types = [experiment_type] + [
+            other for other in _STRATEGIES_BY_EXPERIMENT_TYPE if other != experiment_type
+        ]
+        read_runs += get_study_readruns_from_ena(
+            study_accession,
+            limit=EMG_CONFIG.ena.portal_max_readruns_to_fetch,
+            raise_on_empty=False,  # a study may legitimately have no runs of one type
+            filter_library_strategy=library_strategy_policy_to_filter(
+                strategies[0],
+                other_library_strategies=strategies[1:],
+                policy=library_strategy_policy,
+            ),
+            library_strategy_policy=library_strategy_policy,
+            library_source_policy=library_source_policy,
+            expected_experiment_type=acceptable_types,
+        )
+
+    if not read_runs:
+        raise ENAAvailabilityException(
+            f"No read-runs matched library strategies "
+            f"{_METAGENOMIC + _METATRANSCRIPTOMIC} for study {study_accession}."
+        )
+    return list(dict.fromkeys(read_runs))
 
 
 @flow(
@@ -89,22 +142,13 @@ def analysis_rawreads_study(study_accession: str):
         logger.info(f"{mgnify_study} is a public study.")
 
     try:
-        read_runs = get_study_readruns_from_ena(
+        read_runs = _get_read_runs_for_all_experiment_types(
             ena_study.accession,
-            limit=EMG_CONFIG.ena.portal_max_readruns_to_fetch,
-            raise_on_empty=True,
-            filter_library_strategy=library_strategy_policy_to_filter(
-                _METAGENOMIC[0],
-                other_library_strategies=_METAGENOMIC[1:],
-                policy=ENALibraryStrategyPolicy.ONLY_IF_CORRECT_IN_ENA,
-            ),
-            expected_experiment_type=analyses.models.Run.ExperimentTypes.METAGENOMIC,
+            library_strategy_policy=ENALibraryStrategyPolicy.ONLY_IF_CORRECT_IN_ENA,
+            library_source_policy=ENALibrarySourcePolicy.OVERRIDE_GENOMIC_IF_METAGENOMIC_SCIENTIFIC_NAME,
         )
     except ENAAvailabilityException as e:
-        logger.error(
-            f"No read-runs returned from ENA portal API for study {ena_study.accession} "
-            f"with library strategies {_METAGENOMIC}: {e}"
-        )
+        logger.error(f"No read-runs returned from ENA portal API: {e}")
         raise
     logger.info(f"Returned {len(read_runs)} runs from ENA portal API")
 
@@ -170,18 +214,10 @@ def analysis_rawreads_study(study_accession: str):
         or analyse_study_input.library_source_policy
         != ENALibrarySourcePolicy.OVERRIDE_GENOMIC_IF_METAGENOMIC_SCIENTIFIC_NAME
     ):
-        read_runs = get_study_readruns_from_ena(
+        read_runs = _get_read_runs_for_all_experiment_types(
             ena_study.accession,
-            limit=EMG_CONFIG.ena.portal_max_readruns_to_fetch,
-            raise_on_empty=True,
-            filter_library_strategy=library_strategy_policy_to_filter(
-                _METAGENOMIC[0],
-                other_library_strategies=_METAGENOMIC[1:],
-                policy=analyse_study_input.library_strategy_policy,
-            ),
             library_strategy_policy=analyse_study_input.library_strategy_policy,
             library_source_policy=analyse_study_input.library_source_policy,
-            expected_experiment_type=analyses.models.Run.ExperimentTypes.METAGENOMIC,
         )
         logger.info(
             f"Using policies strategy:{analyse_study_input.library_strategy_policy} source:{analyse_study_input.library_source_policy}, "
