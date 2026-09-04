@@ -227,85 +227,25 @@ def test_refresh_batch_counts_multiple_batches(
 
 
 @pytest.mark.django_db
-def test_curate_run_experiment_types_updates_only_target_study(
-    admin_client, raw_reads_mgnify_study, raw_read_run
+def test_curate_run_experiment_types_redirects_to_the_studys_runs(
+    admin_client, raw_reads_mgnify_study
 ):
     """
-    The curation action should set the experiment type of the selected runs of the study,
-    and leave runs of other studies alone.
+    The study action opens the Run changelist filtered to that study, where the runs are curated
+    in bulk with the "Set experiment type on selected runs" action.
     """
-    other_study = Study.objects.create(
-        ena_study=raw_reads_mgnify_study.ena_study, title="Another study"
-    )
-    other_run = Run.objects.create(
-        ena_accessions=["SRR9999999"],
-        study=other_study,
-        ena_study=other_study.ena_study,
-        sample=raw_read_run[0].sample,
-        experiment_type=Run.ExperimentTypes.AMPLICON,
-    )
-
-    url = reverse(
-        "admin:analyses_study_curate_run_experiment_types",
-        args=[raw_reads_mgnify_study.pk],
-    )
-    response = admin_client.post(
-        url,
-        {
-            "experiment_type": Run.ExperimentTypes.METATRANSCRIPTOMIC,
-            "runs": [run.pk for run in raw_read_run],
-        },
+    response = admin_client.get(
+        reverse(
+            "admin:analyses_study_curate_run_experiment_types",
+            args=[raw_reads_mgnify_study.pk],
+        )
     )
 
     assert response.status_code == 302
-    for run in raw_read_run:
-        run.refresh_from_db()
-        assert run.experiment_type == Run.ExperimentTypes.METATRANSCRIPTOMIC
-
-    other_run.refresh_from_db()
-    assert other_run.experiment_type == Run.ExperimentTypes.AMPLICON
-
-
-@pytest.mark.django_db
-def test_curate_run_experiment_types_lists_the_studys_runs(
-    admin_client, raw_reads_mgnify_study, raw_read_run
-):
-    """
-    The curation page should render the study's runs and the experiment types to choose from.
-    """
-    url = reverse(
-        "admin:analyses_study_curate_run_experiment_types",
-        args=[raw_reads_mgnify_study.pk],
+    assert response.url == reverse(
+        "admin:analyses_run_changelist",
+        query={"study_accession": raw_reads_mgnify_study.accession},
     )
-    response = admin_client.get(url)
-
-    assert response.status_code == 200
-    assert list(response.context["runs"]) == raw_read_run
-    assert response.context["experiment_type_choices"] == Run.ExperimentTypes.choices
-    assert raw_read_run[0].first_accession in response.content.decode()
-
-
-@pytest.mark.django_db
-def test_curate_run_experiment_types_without_selected_runs_changes_nothing(
-    admin_client, raw_reads_mgnify_study, raw_read_run
-):
-    """
-    Posting no runs should warn and leave the experiment types alone.
-    """
-    experiment_types_before = [run.experiment_type for run in raw_read_run]
-
-    url = reverse(
-        "admin:analyses_study_curate_run_experiment_types",
-        args=[raw_reads_mgnify_study.pk],
-    )
-    response = admin_client.post(
-        url, {"experiment_type": Run.ExperimentTypes.METAGENOMIC}
-    )
-
-    assert response.status_code == 200
-    for run, experiment_type_before in zip(raw_read_run, experiment_types_before):
-        run.refresh_from_db()
-        assert run.experiment_type == experiment_type_before
 
 
 @pytest.mark.django_db
@@ -375,3 +315,27 @@ def test_set_experiment_type_action_applies_across_the_filtered_runs(
 
     other_run.refresh_from_db()
     assert other_run.experiment_type == Run.ExperimentTypes.AMPLICON
+
+
+@pytest.mark.django_db
+def test_set_experiment_type_action_without_an_experiment_type_changes_nothing(
+    admin_client, raw_read_run
+):
+    """
+    Applying the action without choosing an experiment type should warn and leave the runs alone.
+    """
+    run = raw_read_run[0]
+    experiment_type_before = run.experiment_type
+
+    response = admin_client.post(
+        reverse("admin:analyses_run_changelist"),
+        {
+            "action": "set_experiment_type",
+            "apply": "1",
+            "_selected_action": [run.pk],
+        },
+    )
+
+    assert response.status_code == 302
+    run.refresh_from_db()
+    assert run.experiment_type == experiment_type_before
