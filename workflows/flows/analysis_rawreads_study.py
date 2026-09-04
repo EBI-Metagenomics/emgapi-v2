@@ -50,17 +50,15 @@ from workflows.prefect_utils.analyses_models_helpers import (
 from workflows.prefect_utils.flows_utils import django_db_flow as flow
 
 # ENA library strategies accepted by the raw-reads pipeline, per experiment type.
-# The first entry of each list is the primary strategy for that type.
-# WXS was accepted by the previous pipeline version, but exome capture is a targeted
-# subset of the genome and so is not appropriate for the v6 raw-reads pipeline.
-# "WCS" may be worth adding to _METAGENOMIC, and "ssRNA-seq" to _METATRANSCRIPTOMIC:
-# both are untargeted shotgun libraries the v6 pipeline should handle, but neither has
-# been validated against it yet.
+# WXS was accepted by the previous pipeline version, but exome capture is not 
+# appropriate for the v6 raw-reads pipeline.
+# "WCS" may be suitable for _METAGENOMIC, and "ssRNA-seq" to _METATRANSCRIPTOMIC.
+# but this has not been validated
 _METAGENOMIC = ["WGS", "WGA"]
 _METATRANSCRIPTOMIC = ["RNA-Seq"]
 
-# Ordering matters: under the OVERRIDE_ALL strategy policy every fetch sees every run, so
-# the last entry's type is the one ambiguous runs end up with.
+# Ordering matters: under the OVERRIDE_ALL strategy policy the last entry's type 
+# is the one ambiguous runs end up with.
 _STRATEGIES_BY_EXPERIMENT_TYPE = {
     analyses.models.Run.ExperimentTypes.METATRANSCRIPTOMIC: _METATRANSCRIPTOMIC,
     analyses.models.Run.ExperimentTypes.METAGENOMIC: _METAGENOMIC,
@@ -84,9 +82,6 @@ def _get_read_runs_for_all_experiment_types(
     """
     read_runs = []
     for experiment_type, strategies in _STRATEGIES_BY_EXPERIMENT_TYPE.items():
-        # ponytail: the non-primary types are passed as fallbacks so that OVERRIDE_ALL
-        # (which drops the strategy filter entirely, so every call sees every run) still
-        # keeps each run's inferred type instead of forcing it to this call's type.
         # Runs with no inferable type fall back to METAGENOMIC, as the last fetch wins.
         acceptable_types = [experiment_type] + [
             other
