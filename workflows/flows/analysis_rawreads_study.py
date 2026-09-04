@@ -49,8 +49,8 @@ from workflows.prefect_utils.analyses_models_helpers import (
 )
 from workflows.prefect_utils.flows_utils import django_db_flow as flow
 
-_METAGENOMIC = "WGS"
-_OTHER_ACCEPTED_STRATEGIES = ["WGA", "RNA-Seq", "Ribo-Seq", "Hi-C", "WCS"]
+# Library strategies accepted by the raw-reads pipeline; the first is the primary one.
+_METAGENOMIC = ["WGS", "WGA", "RNA-Seq", "ssRNA-seq", "WCS"]
 
 
 @flow(
@@ -90,8 +90,8 @@ def analysis_rawreads_study(study_accession: str):
             limit=EMG_CONFIG.ena.portal_max_readruns_to_fetch,
             raise_on_empty=True,
             filter_library_strategy=library_strategy_policy_to_filter(
-                _METAGENOMIC,
-                other_library_strategies=_OTHER_ACCEPTED_STRATEGIES,
+                _METAGENOMIC[0],
+                other_library_strategies=_METAGENOMIC[1:],
                 policy=ENALibraryStrategyPolicy.ONLY_IF_CORRECT_IN_ENA,
             ),
             expected_experiment_type=analyses.models.Run.ExperimentTypes.METAGENOMIC,
@@ -99,7 +99,7 @@ def analysis_rawreads_study(study_accession: str):
     except ENAAvailabilityException as e:
         logger.error(
             f"No read-runs returned from ENA portal API for study {ena_study.accession} "
-            f"with library strategies {[_METAGENOMIC] + _OTHER_ACCEPTED_STRATEGIES}: {e}"
+            f"with library strategies {_METAGENOMIC}: {e}"
         )
         raise
     logger.info(f"Returned {len(read_runs)} runs from ENA portal API")
@@ -171,8 +171,8 @@ def analysis_rawreads_study(study_accession: str):
             limit=EMG_CONFIG.ena.portal_max_readruns_to_fetch,
             raise_on_empty=True,
             filter_library_strategy=library_strategy_policy_to_filter(
-                _METAGENOMIC,
-                other_library_strategies=_OTHER_ACCEPTED_STRATEGIES,
+                _METAGENOMIC[0],
+                other_library_strategies=_METAGENOMIC[1:],
                 policy=analyse_study_input.library_strategy_policy,
             ),
             library_strategy_policy=analyse_study_input.library_strategy_policy,
