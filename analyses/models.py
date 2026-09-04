@@ -409,9 +409,9 @@ class Run(
         ena_scientific_name: str = "",
         library_strategy_policy: ENALibraryStrategyPolicy = ENALibraryStrategyPolicy.ONLY_IF_CORRECT_IN_ENA,
         library_source_policy: ENALibrarySourcePolicy = ENALibrarySourcePolicy.OVERRIDE_GENOMIC_IF_METAGENOMIC_SCIENTIFIC_NAME,
-        expected_experiment_type: Run.ExperimentTypes
-        | list[Run.ExperimentTypes]
-        | None = None,
+        expected_experiment_type: (
+            Run.ExperimentTypes | list[Run.ExperimentTypes] | None
+        ) = None,
     ):
         """
         Sets the experiment type based on provided metadata, with consideration for

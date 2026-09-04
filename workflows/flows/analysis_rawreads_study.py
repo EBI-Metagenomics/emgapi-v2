@@ -89,7 +89,9 @@ def _get_read_runs_for_all_experiment_types(
         # keeps each run's inferred type instead of forcing it to this call's type.
         # Runs with no inferable type fall back to METAGENOMIC, as the last fetch wins.
         acceptable_types = [experiment_type] + [
-            other for other in _STRATEGIES_BY_EXPERIMENT_TYPE if other != experiment_type
+            other
+            for other in _STRATEGIES_BY_EXPERIMENT_TYPE
+            if other != experiment_type
         ]
         read_runs += get_study_readruns_from_ena(
             study_accession,
