@@ -50,14 +50,14 @@ from workflows.prefect_utils.analyses_models_helpers import (
 from workflows.prefect_utils.flows_utils import django_db_flow as flow
 
 # ENA library strategies accepted by the raw-reads pipeline, per experiment type.
-# WXS was accepted by the previous pipeline version, but exome capture is not 
+# WXS was accepted by the previous pipeline version, but exome capture is not
 # appropriate for the v6 raw-reads pipeline.
 # "WCS" may be suitable for _METAGENOMIC, and "ssRNA-seq" to _METATRANSCRIPTOMIC.
 # but this has not been validated
 _METAGENOMIC = ["WGS", "WGA"]
 _METATRANSCRIPTOMIC = ["RNA-Seq"]
 
-# Ordering matters: under the OVERRIDE_ALL strategy policy the last entry's type 
+# Ordering matters: under the OVERRIDE_ALL strategy policy the last entry's type
 # is the one ambiguous runs end up with.
 _STRATEGIES_BY_EXPERIMENT_TYPE = {
     analyses.models.Run.ExperimentTypes.METATRANSCRIPTOMIC: _METATRANSCRIPTOMIC,
