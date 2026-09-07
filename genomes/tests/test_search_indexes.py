@@ -285,7 +285,7 @@ def test_backfill_sourmash_search_indexes_command_rejects_unknown_catalogue_ids(
 
 
 @pytest.mark.django_db
-def test_backfill_sourmash_search_indexes_command_exits_for_missing_artifacts(
+def test_backfill_sourmash_search_indexes_command_skips_missing_artifacts(
     settings, tmp_path
 ):
     settings.EMG_CONFIG.genomes.sourmash_public_signatures_dir = str(tmp_path)
@@ -293,39 +293,39 @@ def test_backfill_sourmash_search_indexes_command_exits_for_missing_artifacts(
 
     stdout = StringIO()
     stderr = StringIO()
-    with pytest.raises(SystemExit) as exc_info:
-        call_command(
-            "backfill_sourmash_search_indexes",
-            stdout=stdout,
-            stderr=stderr,
-        )
+    call_command(
+        "backfill_sourmash_search_indexes",
+        stdout=stdout,
+        stderr=stderr,
+    )
 
-    assert exc_info.value.code == 1
     assert "Skipping human-gut-v2-0:" in stderr.getvalue()
+    assert "No sourmash indexes were registered." in stdout.getvalue()
     assert GenomeSearchIndex.objects.count() == 0
 
 
 @pytest.mark.django_db
-def test_backfill_sourmash_search_indexes_command_exits_after_missing_artifact(
+def test_backfill_sourmash_search_indexes_command_continues_after_missing_artifact(
     settings, tmp_path
 ):
     settings.EMG_CONFIG.genomes.sourmash_public_signatures_dir = str(tmp_path)
-    seeded = make_catalogue("human-gut-v2-0")
-    make_catalogue("marine-v2-0")
+    missing_catalogue = make_catalogue("human-gut-v2-0")
+    registered_catalogue = make_catalogue("marine-v2-0")
 
-    artifact_dir = tmp_path / seeded.catalogue_id / "sourmash_sketches"
+    artifact_dir = tmp_path / registered_catalogue.catalogue_id / "sourmash_sketches"
     artifact_dir.mkdir(parents=True, exist_ok=True)
     (artifact_dir / "genome_index.sbt.json").write_text("{}", encoding="utf-8")
 
     stdout = StringIO()
     stderr = StringIO()
-    with pytest.raises(SystemExit) as exc_info:
-        call_command(
-            "backfill_sourmash_search_indexes",
-            stdout=stdout,
-            stderr=stderr,
-        )
+    call_command(
+        "backfill_sourmash_search_indexes",
+        stdout=stdout,
+        stderr=stderr,
+    )
 
-    assert exc_info.value.code == 1
-    assert "human-gut-v2-0: created" in stdout.getvalue()
-    assert "Skipping marine-v2-0:" in stderr.getvalue()
+    assert "Skipping human-gut-v2-0:" in stderr.getvalue()
+    assert "marine-v2-0: created" in stdout.getvalue()
+    assert "Backfill completed: 1 registered, 1 skipped." in stdout.getvalue()
+    assert GenomeSearchIndex.objects.get().catalogue == registered_catalogue
+    assert not GenomeSearchIndex.objects.filter(catalogue=missing_catalogue).exists()
