@@ -285,6 +285,15 @@ def test_backfill_sourmash_search_indexes_command_rejects_unknown_catalogue_ids(
 
 
 @pytest.mark.django_db
+def test_backfill_sourmash_search_indexes_command_reports_no_eligible_catalogues():
+    stdout = StringIO()
+
+    call_command("backfill_sourmash_search_indexes", stdout=stdout)
+
+    assert stdout.getvalue().strip() == "No eligible catalogue releases found."
+
+
+@pytest.mark.django_db
 def test_backfill_sourmash_search_indexes_command_skips_missing_artifacts(
     settings, tmp_path
 ):
