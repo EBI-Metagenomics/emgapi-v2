@@ -37,6 +37,9 @@ from workflows.flows.assemble_study_tasks.get_assemblies_for_runs import (
 from workflows.flows.assemble_study_tasks.make_samplesheets import (
     make_samplesheets_for_runs_to_assemble,
 )
+from workflows.flows.assemble_study_tasks.study_has_existing_tpa import (
+    study_has_existing_tpa,
+)
 from workflows.flows.assemble_study_tasks.upload_assemblies import upload_assemblies
 from workflows.prefect_utils.analyses_models_helpers import (
     add_study_watchers,
@@ -99,6 +102,23 @@ def assemble_study(
 
     if mgnify_study.is_private:
         logger.info(f"{mgnify_study} is a private study.")
+
+    if study_has_existing_tpa(accession):
+
+        class ExistingAssemblyTPAInput(RunInput):
+            proceed: bool = Field(
+                False,
+                description="ENA may already have an assembly TPA for this reads study.",
+            )
+
+        confirmation = suspend_flow_run(
+            wait_for_input=ExistingAssemblyTPAInput.with_initial_data(proceed=False),
+            timeout=EMG_CONFIG.slurm.default_flow_suspend_awaiting_input_timeout_secs,
+            key=ask_every_time_suspend_for_input_key(),
+        )
+        if not confirmation.proceed:
+            logger.info("Existing assembly TPA found; assembly was not confirmed.")
+            return
 
     read_runs = get_study_readruns_from_ena(
         ena_study.accession,

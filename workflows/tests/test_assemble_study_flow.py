@@ -25,7 +25,10 @@ from workflows.flows.analyse_study_tasks.cleanup_pipeline_directories import (
     # delete_study_results_dir,
     delete_assemble_study_nextflow_workdir,
 )
-from workflows.flows.assemble_study import AssemblerChoices, assemble_study
+from workflows.flows.assemble_study import (
+    AssemblerChoices,
+    assemble_study,
+)
 from workflows.flows.assemble_study_tasks.assemble_samplesheets import (
     get_reference_genome,
     update_assemblers_and_contaminant_ref_of_assemblies_from_samplesheet,
@@ -33,6 +36,9 @@ from workflows.flows.assemble_study_tasks.assemble_samplesheets import (
 from workflows.flows.assemble_study_tasks.make_samplesheets import (
     make_samplesheet,
     make_samplesheets_for_runs_to_assemble,
+)
+from workflows.flows.assemble_study_tasks.study_has_existing_tpa import (
+    study_has_existing_tpa,
 )
 from workflows.prefect_utils.analyses_models_helpers import mark_assembly_status
 from workflows.prefect_utils.testing_utils import (
@@ -59,6 +65,57 @@ def assembly_study_input_mocker(biome_choices, user_choices):
     return MockAssembleStudyInput
 
 
+@patch(
+    "workflows.flows.assemble_study_tasks.study_has_existing_tpa.get_available_study_assembly_accessions"
+)
+@patch("workflows.flows.assemble_study_tasks.study_has_existing_tpa.get_run_logger")
+@patch(
+    "workflows.flows.assemble_study_tasks.study_has_existing_tpa.ENAAPIRequest.get",
+    autospec=True,
+)
+def test_study_has_existing_tpa(mock_ena_get, mock_get_run_logger, mock_get_assemblies):
+    mock_ena_get.side_effect = [
+        [
+            {
+                "study_accession": "PRJEB1",
+                "secondary_study_accession": "ERP1",
+            }
+        ],
+        [
+            {
+                "study_accession": "PRJEB2",
+                "secondary_study_accession": "ERP2",
+                "study_title": "Assembly of ERP1",
+            }
+        ],
+    ]
+    mock_get_assemblies.return_value = {"ERZ1"}
+
+    assert study_has_existing_tpa.fn("ERP1")
+    title_query = str(mock_ena_get.call_args_list[1].args[0].query)
+    assert "study_title=PRJEB1" in title_query
+    assert "study_title=ERP1" in title_query
+    mock_get_assemblies.assert_called_once_with(["PRJEB2"])
+    mock_get_run_logger.return_value.info.assert_called_once_with(
+        "Plausible assembly TPA study PRJEB2, ERP2: Assembly of ERP1"
+    )
+
+
+@patch(
+    "workflows.flows.assemble_study_tasks.study_has_existing_tpa.ENAAPIRequest.get",
+    autospec=True,
+    return_value=[],
+)
+@patch("workflows.flows.assemble_study_tasks.study_has_existing_tpa.get_run_logger")
+def test_study_has_existing_tpa_continues_when_study_is_unavailable(
+    mock_get_run_logger, mock_ena_get
+):
+    assert not study_has_existing_tpa.fn("ERP1")
+    assert "Could not check ENA for existing assemblies of ERP1" in (
+        mock_get_run_logger.return_value.warning.call_args.args[0]
+    )
+
+
 def simulate_copy_results(
     source: Path, target: Path, allowed_extensions: Union[set, list], logger=None
 ):
@@ -80,9 +137,11 @@ def simulate_copy_results(
 @pytest.mark.parametrize(
     "mock_suspend_flow_run", ["workflows.flows.assemble_study"], indirect=True
 )
+@patch("workflows.flows.assemble_study.study_has_existing_tpa", return_value=False)
 @patch("workflows.flows.assemble_study_tasks.make_samplesheets.queryset_hash")
 def test_prefect_assemble_study_flow(
     mock_queryset_hash_for_assemblies,
+    mock_study_has_existing_tpa,
     prefect_harness,
     httpx_mock,
     ena_any_sample_metadata,
@@ -605,9 +664,11 @@ def test_prefect_assemble_study_flow(
 @pytest.mark.parametrize(
     "mock_suspend_flow_run", ["workflows.flows.assemble_study"], indirect=True
 )
+@patch("workflows.flows.assemble_study.study_has_existing_tpa", return_value=False)
 @patch("workflows.flows.assemble_study_tasks.make_samplesheets.queryset_hash")
 def test_prefect_assemble_private_study_flow(
     mock_queryset_hash_for_assemblies,
+    mock_study_has_existing_tpa,
     prefect_harness,
     ena_any_sample_metadata,
     httpx_mock,
