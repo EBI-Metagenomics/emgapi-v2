@@ -3,6 +3,7 @@ from unittest.mock import Mock, patch
 import pytest
 from django.urls import reverse
 
+from analyses.models import Run, Study
 from workflows.models import (
     AssemblyAnalysisBatch,
     AssemblyAnalysisBatchAnalysis,
@@ -223,3 +224,118 @@ def test_refresh_batch_counts_multiple_batches(
         assert batch.pipeline_status_counts.asa.pending == 0
         assert batch.pipeline_status_counts.virify.pending == 0
         assert batch.pipeline_status_counts.map.pending == 0
+
+
+@pytest.mark.django_db
+def test_curate_run_experiment_types_redirects_to_the_studys_runs(
+    admin_client, raw_reads_mgnify_study
+):
+    """
+    The study action opens the Run changelist filtered to that study, where the runs are curated
+    in bulk with the "Set experiment type on selected runs" action.
+    """
+    response = admin_client.get(
+        reverse(
+            "admin:analyses_study_curate_run_experiment_types",
+            args=[raw_reads_mgnify_study.pk],
+        )
+    )
+
+    assert response.status_code == 302
+    assert response.url == reverse(
+        "admin:analyses_run_changelist",
+        query={"study_accession": raw_reads_mgnify_study.accession},
+    )
+
+
+@pytest.mark.django_db
+def test_curate_run_experiment_types_rejects_non_staff(client, raw_reads_mgnify_study):
+    url = reverse(
+        "admin:analyses_study_curate_run_experiment_types",
+        args=[raw_reads_mgnify_study.pk],
+    )
+    response = client.get(url)
+
+    assert response.status_code == 302
+    assert "/login" in response.url
+
+
+@pytest.mark.django_db
+def test_set_experiment_type_action_applies_across_the_filtered_runs(
+    admin_client, raw_reads_mgnify_study, raw_read_run
+):
+    """
+    "Select all runs matching this filter" must curate every filtered run, including the ones whose
+    ids the confirmation page does not carry.
+    """
+    other_study = Study.objects.create(
+        ena_study=raw_reads_mgnify_study.ena_study, title="Another study"
+    )
+    other_run = Run.objects.create(
+        ena_accessions=["SRR9999999"],
+        study=other_study,
+        ena_study=other_study.ena_study,
+        sample=raw_read_run[0].sample,
+        experiment_type=Run.ExperimentTypes.AMPLICON,
+    )
+
+    changelist_filtered_to_the_study = reverse(
+        "admin:analyses_run_changelist",
+        query={"study_accession": raw_reads_mgnify_study.accession},
+    )
+    confirmation = admin_client.post(
+        changelist_filtered_to_the_study,
+        {
+            "action": "set_experiment_type",
+            "index": "0",
+            "select_across": "1",
+            "_selected_action": [run.pk for run in raw_read_run],
+        },
+    )
+    assert confirmation.status_code == 200
+
+    # the confirmation page posts back a run id, without which the changelist would not dispatch
+    assert confirmation.context["selected_ids"]
+
+    response = admin_client.post(
+        changelist_filtered_to_the_study,
+        {
+            "action": "set_experiment_type",
+            "apply": "1",
+            "select_across": "1",
+            "_selected_action": list(confirmation.context["selected_ids"]),
+            "experiment_type": Run.ExperimentTypes.METATRANSCRIPTOMIC,
+        },
+    )
+
+    assert response.status_code == 302
+    for run in raw_read_run:
+        run.refresh_from_db()
+        assert run.experiment_type == Run.ExperimentTypes.METATRANSCRIPTOMIC
+
+    other_run.refresh_from_db()
+    assert other_run.experiment_type == Run.ExperimentTypes.AMPLICON
+
+
+@pytest.mark.django_db
+def test_set_experiment_type_action_without_an_experiment_type_changes_nothing(
+    admin_client, raw_read_run
+):
+    """
+    Applying the action without choosing an experiment type should warn and leave the runs alone.
+    """
+    run = raw_read_run[0]
+    experiment_type_before = run.experiment_type
+
+    response = admin_client.post(
+        reverse("admin:analyses_run_changelist"),
+        {
+            "action": "set_experiment_type",
+            "apply": "1",
+            "_selected_action": [run.pk],
+        },
+    )
+
+    assert response.status_code == 302
+    run.refresh_from_db()
+    assert run.experiment_type == experiment_type_before

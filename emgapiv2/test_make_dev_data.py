@@ -57,6 +57,44 @@ def seed_dev_searchable_sourmash_catalogue(top_level_biomes):
     return catalogue
 
 
+def seed_dev_runs_to_curate(study, sample):
+    """
+    Add enough runs to a study to exercise the run experiment type curation, which paginates and
+    filters by experiment type. ENA's `OTHER` library strategy is what leaves runs with an unknown
+    experiment type in real data, so those runs carry it in their metadata.
+
+    :param study: MGnify study to add the runs to.
+    :param sample: MGnify sample to attach the runs to.
+    """
+    runs_per_experiment_type = [
+        (Run.ExperimentTypes.UNKNOWN, 100, "OTHER"),
+        (Run.ExperimentTypes.UNKNOWN, 100, "WGS"),
+        (Run.ExperimentTypes.METAGENOMIC, 200, "WGS"),
+        (Run.ExperimentTypes.METATRANSCRIPTOMIC, 100, "RNA-Seq"),
+        (Run.ExperimentTypes.AMPLICON, 100, "AMPLICON"),
+    ]
+    runs = []
+    for experiment_type, run_count, library_strategy in runs_per_experiment_type:
+        for _ in range(run_count):
+            accession = f"SRR9{len(runs):06d}"
+            runs.append(
+                Run(
+                    ena_accessions=[accession],
+                    study=study,
+                    ena_study=study.ena_study,
+                    sample=sample,
+                    experiment_type=experiment_type,
+                    metadata={
+                        "library_strategy": library_strategy,
+                        Run.CommonMetadataKeys.FASTQ_FTPS: [
+                            f"ftp://example.org/{accession}.fastq"
+                        ],
+                    },
+                )
+            )
+    return Run.objects.bulk_create(runs)
+
+
 @pytest.fixture
 @patch(
     "workflows.flows.analyse_study_tasks.shared.copy_v6_pipeline_results.run_deployment"
@@ -251,6 +289,8 @@ def test_make_dev_data(
     top_level_biomes,
     assemblers,
     study_downloads,
+    raw_reads_mgnify_study,
+    raw_reads_mgnify_sample,
     mgnify_assemblies_completed,
     amplicon_analysis_with_downloads,
     assembly_analysis_with_downloads,
@@ -275,7 +315,16 @@ def test_make_dev_data(
     """
 
     seed_dev_searchable_sourmash_catalogue(top_level_biomes)
+    seed_dev_runs_to_curate(raw_reads_mgnify_study, raw_reads_mgnify_sample[0])
 
+    assert raw_reads_mgnify_study.accession == "MGYS00000001"
+    assert raw_reads_mgnify_study.runs.count() == 604  # 600 to curate, 4 from fixtures
+    assert (
+        raw_reads_mgnify_study.runs.filter(
+            experiment_type=Run.ExperimentTypes.UNKNOWN
+        ).count()
+        == 200
+    )
     assert Biome.objects.count() == 4
     assert GenomeSearchIndex.objects.filter(
         catalogue__catalogue_id=DEV_SOURMASH_CATALOGUE_ID,

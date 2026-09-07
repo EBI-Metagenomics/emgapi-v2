@@ -1,5 +1,6 @@
 import pytest
 import responses
+from django.urls import reverse
 from responses import matchers
 
 import analyses.models as mg_models
@@ -208,3 +209,36 @@ def test_process_study_multiple_assemblies(
     )
 
     assert should_be_same_as_assembly_study == first_assembly.assembly_study
+
+
+@pytest.mark.django_db(transaction=True)
+def test_prefect_assembly_upload_flow_blocked_for_unsupported_experiment_type(
+    prefect_harness,
+    mock_start_cluster_job,
+    raw_reads_mgnify_study,
+    raw_read_run,
+    mgnify_assemblies_completed,
+    assemblers,
+    tmp_path,
+):
+    """
+    An assembly whose runs have an experiment type that cannot be uploaded should fail the flow,
+    marking the assembly as blocked and submitting no webin-cli job.
+    """
+    assembly = mgnify_assemblies_completed.first()
+    assembly.runs.update(experiment_type=mg_models.Run.ExperimentTypes.UNKNOWN)
+
+    curation_url = reverse(
+        "admin:analyses_study_curate_run_experiment_types",
+        args=[raw_reads_mgnify_study.pk],
+    )
+    with pytest.raises(Exception, match=curation_url):
+        upload_assembly(assembly_id=assembly.id, dry_run=True)
+
+    mock_start_cluster_job.assert_not_called()
+
+    assembly.refresh_from_db()
+    assert assembly.status.get(
+        mg_models.Assembly.AssemblyStates.ASSEMBLY_UPLOAD_BLOCKED
+    )
+    assert not assembly.status.get(mg_models.Assembly.AssemblyStates.ASSEMBLY_UPLOADED)
