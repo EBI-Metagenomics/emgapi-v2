@@ -769,6 +769,10 @@ def get_study_assemblies_from_ena(
             logger.info(f"Creating sample for {assembly_data[_.SAMPLE_ACCESSION]}")
             __, mgnify_sample = _make_samples(assembly_data, study)
 
+        # This may be a TPA study (different assembly study to the reads study)
+        # and the sample may already have been created from the reads study. Link TPA if so.
+        mgnify_sample.studies.add(study)
+
         run_accessions = extract_all_accessions(assembly_data.get(_.RUN_ACCESSION, ""))
         runs = list(
             analyses.models.Run.objects.filter(ena_accessions__overlap=run_accessions)

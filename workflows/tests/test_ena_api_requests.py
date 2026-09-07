@@ -1135,6 +1135,53 @@ def test_get_study_assemblies_from_ena_links_coassembly_runs(
     ).exists()
 
 
+@pytest.mark.httpx_mock(should_mock=should_not_mock_httpx_requests_to_prefect_server)
+@pytest.mark.django_db
+def test_get_study_assemblies_from_ena_links_existing_sample_to_assembly_study(
+    monkeypatch, raw_reads_mgnify_study, raw_reads_mgnify_sample, httpx_mock
+):
+    sample = raw_reads_mgnify_sample[0]
+    assembly_study_title = (
+        f"Metagenome assembly of {raw_reads_mgnify_study.ena_study.accession}"
+    )
+    assembly_ena_study = ena.models.Study.objects.create(
+        accession="PRJEB999999",
+        title=assembly_study_title,
+    )
+    assembly_study = analyses.models.Study.objects.create(
+        ena_study=assembly_ena_study,
+        title=assembly_study_title,
+    )
+    sample_count = analyses.models.Sample.objects.count()
+
+    httpx_mock.add_response(
+        json=[
+            {
+                "sample_accession": sample.first_accession,
+                "sample_title": "Existing sample",
+                "secondary_sample_accession": "",
+                "run_accession": "",
+                "analysis_accession": "ERZ999998",
+                "scientific_name": "metagenome",
+                "generated_ftp": "ftp.example.org/ERZ999998.fa.gz",
+            }
+        ]
+    )
+    monkeypatch.setattr(
+        "workflows.ena_utils.ena_api_requests.get_study_readruns_from_ena",
+        lambda **kwargs: [],
+    )
+    monkeypatch.setattr(
+        "workflows.ena_utils.ena_api_requests.get_run_logger",
+        lambda: logging.getLogger(__name__),
+    )
+
+    get_study_assemblies_from_ena.fn(assembly_ena_study.accession)
+
+    assert sample.studies.filter(pk=assembly_study.pk).exists()
+    assert analyses.models.Sample.objects.count() == sample_count
+
+
 def test_ena_accession_parsing_from_study_title():
     assert (
         extract_study_accession_from_study_title(
