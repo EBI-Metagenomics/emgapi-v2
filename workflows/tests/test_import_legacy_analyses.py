@@ -5,9 +5,10 @@ import pytest
 from sqlalchemy import select
 
 import ena.models
-from analyses.models import Analysis, Assembly, Sample, Study
+from analyses.models import Analysis, Assembly, Run, Sample, Study
 from workflows.data_io_utils.legacy_emg_dbs import (
     LegacyAssembly,
+    LegacyRun,
     LegacySample,
     LegacyStudy,
     legacy_emg_db_session,
@@ -18,6 +19,9 @@ from workflows.flows.legacy.flows.import_legacy_analyses import (
 )
 from workflows.flows.legacy.tasks.make_assembly_from_legacy_emg_db import (
     get_or_create_assembly_for_legacy_accession,
+)
+from workflows.flows.legacy.tasks.make_run_from_legacy_emg_db import (
+    make_run_from_legacy_emg_db,
 )
 from workflows.flows.legacy.tasks.make_sample_from_legacy_emg_db import (
     make_sample_from_legacy_emg_db,
@@ -304,6 +308,59 @@ def test_make_sample_from_legacy_emg_db_multiple_studies(prefect_harness):
 
     # Also check ena_sample has NOT changed its study (ENA samples are 1:1 with ENA studies in our simplified data model)
     assert returned_sample.ena_sample.study == ena_study_1
+
+
+@pytest.mark.django_db
+def test_make_run_from_legacy_emg_db_reuses_existing_v6_run(
+    prefect_harness,
+    raw_read_run,
+):
+    existing_run = raw_read_run[0]
+    existing_accession = existing_run.first_accession
+    existing_run.metadata["v6_only_metadata"] = {
+        "source": "ENA",
+        "values": ["kept", "unchanged"],
+    }
+    existing_run.save(update_fields=["metadata"])
+    existing_metadata = existing_run.metadata.copy()
+    legacy_alias = "ERR6180434"
+    sample_accession = existing_run.sample.first_accession
+    legacy_sample = LegacySample(
+        sample_id=1000,
+        ext_sample_id=sample_accession,
+        primary_accession=sample_accession,
+    )
+    legacy_run = LegacyRun(
+        run_id=1001,
+        accession=existing_accession,
+        secondary_accession=legacy_alias,
+        instrument_platform="legacy platform",
+        instrument_model="legacy model",
+        sample_id=legacy_sample.sample_id,
+        sample=legacy_sample,
+        study_id=existing_run.study_id,
+        experiment_type_id=2,
+    )
+
+    returned_run = make_run_from_legacy_emg_db(legacy_run, existing_run.study)
+
+    existing_run.refresh_from_db()
+    assert returned_run.pk == existing_run.pk
+    assert set(returned_run.ena_accessions) == {
+        existing_accession,
+        legacy_alias,
+    }
+    assert existing_run.metadata["v6_only_metadata"] == {
+        "source": "ENA",
+        "values": ["kept", "unchanged"],
+    }
+    assert existing_run.metadata == existing_metadata
+    assert (
+        Run.objects.filter(
+            ena_accessions__overlap=[existing_accession, legacy_alias]
+        ).count()
+        == 1
+    )
 
 
 @pytest.mark.django_db
