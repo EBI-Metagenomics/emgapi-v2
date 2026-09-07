@@ -1,5 +1,4 @@
 from django.contrib import admin, messages
-from django.contrib.admin import helpers
 from django.shortcuts import render
 from unfold.admin import ModelAdmin
 from unfold.decorators import display
@@ -110,7 +109,6 @@ class RunAdmin(ENABrowserLinkMixin, JSONFieldWidgetOverridesMixin, ModelAdmin):
                 "runs": queryset.order_by("id")[:100],
                 "selected_count": selected_count,
                 "experiment_type_choices": Run.ExperimentTypes.choices,
-                "action_checkbox_name": helpers.ACTION_CHECKBOX_NAME,
                 "selected_ids": (
                     queryset.values_list("pk", flat=True)[:1]
                     if select_across
