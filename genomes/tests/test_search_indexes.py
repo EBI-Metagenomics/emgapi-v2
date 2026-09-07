@@ -237,11 +237,20 @@ def test_backfill_sourmash_search_indexes_command(settings, tmp_path):
 
 
 @pytest.mark.django_db
-def test_backfill_uses_legacy_chicken_gut_artifact_directory(settings, tmp_path):
+@pytest.mark.parametrize(
+    ("catalogue_id", "artifact_catalogue_id"),
+    [
+        ("chicken-gut-v1-0-1", "chicken-gut-v1-0"),
+        ("honey-bee-gut-v1-0-1", "honey-bee-gut-v1-0"),
+    ],
+)
+def test_backfill_uses_legacy_artifact_directory(
+    settings, tmp_path, catalogue_id, artifact_catalogue_id
+):
     settings.EMG_CONFIG.genomes.sourmash_public_signatures_dir = str(tmp_path)
-    catalogue = make_catalogue("chicken-gut-v1-0-1")
+    catalogue = make_catalogue(catalogue_id)
 
-    artifact_dir = tmp_path / "chicken-gut-v1-0" / "sourmash_sketches"
+    artifact_dir = tmp_path / artifact_catalogue_id / "sourmash_sketches"
     artifact_dir.mkdir(parents=True)
     artifact_path = artifact_dir / "genome_index.sbt.json"
     artifact_path.write_text("{}", encoding="utf-8")
