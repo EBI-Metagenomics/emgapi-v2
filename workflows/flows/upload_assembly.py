@@ -9,6 +9,7 @@ from typing import Optional
 from assembly_uploader import assembly_manifest, study_xmls, submit_study
 from Bio import SeqIO
 from django.core.exceptions import MultipleObjectsReturned, ObjectDoesNotExist
+from django.urls import reverse
 from prefect import flow, get_run_logger, task
 from prefect.tasks import task_input_hash
 
@@ -544,9 +545,13 @@ def upload_assembly(
             status=mgnify_assembly.AssemblyStates.ASSEMBLY_UPLOAD_BLOCKED,
             reason=f"Unsupported experiment type on runs: {unsupported}",
         )
+        curation_url = EMG_CONFIG.service_urls.app_root + reverse(
+            "admin:analyses_study_curate_run_experiment_types",
+            args=[runs_with_unsupported_experiment_type[0].study_id],
+        )
         raise Exception(
             f"Assembly {mgnify_assembly} cannot be uploaded: unsupported experiment type on runs {unsupported}. "
-            f"Curate the experiment types of those runs in the study admin, then retry this flow run."
+            f"Curate those runs' experiment types at {curation_url} and then retry this flow run."
         )
 
     if (

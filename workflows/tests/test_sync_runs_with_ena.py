@@ -54,6 +54,36 @@ def test_sync_run_metadata_from_ena_merges_metadata(httpx_mock, raw_read_run):
     assert request.url.params["fields"] == ",".join(RUN_METADATA_FIELDS)
 
 
+@pytest.mark.django_db
+def test_sync_run_metadata_from_ena_keeps_curated_experiment_type(
+    httpx_mock, raw_read_run
+):
+    """
+    Experiment types are only derived from ENA metadata when a run is created, so a curated
+    experiment type must survive a later metadata sync that disagrees with it.
+    """
+    run = raw_read_run[0]
+    run.experiment_type = analyses.models.Run.ExperimentTypes.METATRANSCRIPTOMIC
+    run.save(update_fields=["experiment_type"])
+
+    httpx_mock.add_response(
+        url=re.compile(r".*result=read_run.*"),
+        json=[
+            {
+                "library_strategy": "AMPLICON",
+                "library_source": "METAGENOMIC",
+                "instrument_model": "Illumina NovaSeq 6000",
+            }
+        ],
+    )
+
+    sync_run_metadata_from_ena(run)
+
+    run.refresh_from_db()
+    assert run.experiment_type == analyses.models.Run.ExperimentTypes.METATRANSCRIPTOMIC
+    assert run.metadata["library_strategy"] == "AMPLICON"
+
+
 @patch("workflows.flows.housekeeping.sync_runs_with_ena.sync_run_metadata_from_ena")
 @pytest.mark.django_db
 def test_sync_runs_with_ena_by_accessions(mock_sync, prefect_harness, raw_read_run):

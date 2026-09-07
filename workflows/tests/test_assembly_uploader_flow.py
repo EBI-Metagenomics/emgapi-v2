@@ -1,5 +1,6 @@
 import pytest
 import responses
+from django.urls import reverse
 from responses import matchers
 
 import analyses.models as mg_models
@@ -227,7 +228,11 @@ def test_prefect_assembly_upload_flow_blocked_for_unsupported_experiment_type(
     assembly = mgnify_assemblies_completed.first()
     assembly.runs.update(experiment_type=mg_models.Run.ExperimentTypes.UNKNOWN)
 
-    with pytest.raises(Exception, match="Curate the experiment types"):
+    curation_url = reverse(
+        "admin:analyses_study_curate_run_experiment_types",
+        args=[raw_reads_mgnify_study.pk],
+    )
+    with pytest.raises(Exception, match=curation_url):
         upload_assembly(assembly_id=assembly.id, dry_run=True)
 
     mock_start_cluster_job.assert_not_called()
