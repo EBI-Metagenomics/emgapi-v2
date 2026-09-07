@@ -4,10 +4,13 @@ import shlex
 from datetime import timedelta
 from pathlib import Path
 
-from prefect import flow, get_run_logger, task
+from prefect import get_run_logger
 from prefect.deployments import run_deployment
 
 from activate_django_first import EMG_CONFIG
+
+from workflows.prefect_utils.flows_utils import django_db_flow as flow
+from workflows.prefect_utils.flows_utils import django_db_task as task
 
 genome_config = EMG_CONFIG.genomes
 
@@ -31,6 +34,7 @@ from genomes.models import (
     GenomeCatalogue,
     GenomeCatalogueSeries,
 )
+from genomes.search_indexes import upsert_sourmash_search_index
 from workflows.data_io_utils.filenames import trailing_slash_ensured_dir
 from workflows.prefect_utils.build_cli_command import cli_command
 from workflows.prefect_utils.slurm_flow import run_cluster_job
@@ -337,6 +341,21 @@ def place_sourmash_signatures(options: dict):
 
 
 @task
+def register_sourmash_search_index(catalogue_slug: str):
+    logger = get_run_logger()
+    catalogue = GenomeCatalogue.objects.get(pk=catalogue_slug)
+    index, created, retired_count = upsert_sourmash_search_index(catalogue)
+    logger.info(
+        "Registered sourmash search index %s for %s (%s; retired %s previous active index(es))",
+        index.pk,
+        catalogue.catalogue_id,
+        "created" if created else "updated",
+        retired_count,
+    )
+    return str(index.pk)
+
+
+@task
 def release_rnacentral_json(options: dict):
     command = (
         f"cp {shell_quote(Path(options['results_directory']) / 'additional_data' / 'rnacentral')}/*json "
@@ -391,6 +410,7 @@ def run_genome_release_tasks(
     make_sourmash_index(options)
     place_cobs_index_on_embassy(options)
     place_sourmash_signatures(options)
+    register_sourmash_search_index(options["catalogue_slug"])
 
 
 @task

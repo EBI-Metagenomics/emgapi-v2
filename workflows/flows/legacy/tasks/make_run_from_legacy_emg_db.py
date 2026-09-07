@@ -14,14 +14,12 @@ def make_run_from_legacy_emg_db(legacy_run: LegacyRun, study: Study) -> Run:
 
     sample = Sample.objects.get_by_accession(legacy_run.sample.primary_accession)
 
-    run, created = Run.objects.get_or_create(
+    run, created = Run.objects.update_or_create_by_accession(
+        known_accessions=list({legacy_run.accession, legacy_run.secondary_accession}),
         ena_study=study.ena_study,
         study=study,
         sample=sample,
         experiment_type=LEGACY_EXPERIMENT_TYPE_MAP[legacy_run.experiment_type_id],
-        ena_accessions=list(
-            {legacy_run.accession, legacy_run.secondary_accession}
-        ),  # dedupes
         metadata={
             Run.CommonMetadataKeys.INSTRUMENT_PLATFORM: legacy_run.instrument_platform,
             Run.CommonMetadataKeys.INSTRUMENT_MODEL: legacy_run.instrument_model,
