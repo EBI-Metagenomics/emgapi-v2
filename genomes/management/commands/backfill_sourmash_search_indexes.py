@@ -7,10 +7,11 @@ from genomes.search_indexes import (
     upsert_sourmash_search_index,
 )
 
-# The published chicken-gut artifact predates the catalogue's patch release
-# identifier, so it remains in this legacy directory.
+# These published artifacts predate their catalogue patch-release identifiers,
+# so they remain in legacy directories.
 SOURMASH_ARTIFACT_DIRECTORY_OVERRIDES = {
     "chicken-gut-v1-0-1": "chicken-gut-v1-0",
+    "honey-bee-gut-v1-0-1": "honey-bee-gut-v1-0",
 }
 
 
