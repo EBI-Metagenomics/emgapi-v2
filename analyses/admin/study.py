@@ -150,6 +150,13 @@ class StudyAdmin(
                 "show_assembly_analysis_status_summary",
             ],
         },
+        {
+            "title": "Curation",
+            "icon": "edit",
+            "items": [
+                "curate_run_experiment_types",
+            ],
+        },
     ] + ENABrowserLinkMixin.actions_detail
 
     autocomplete_fields = ["ena_study", "biome"]
@@ -325,6 +332,27 @@ class StudyAdmin(
                 "title": f"Experiment types summary for runs of {study.accession}",
                 **self.admin_site.each_context(request),
             },
+        )
+
+    @action(
+        description="Curate run types",
+        url_path="study-curate-run-types",
+    )
+    def curate_run_experiment_types(self, request, object_id):
+        """
+        Send the curator to this study's runs in the Run changelist, where the "Set experiment type
+        on selected runs" action curates them in bulk, e.g. so that an assembly upload blocked by an
+        unsupported experiment type can be retried.
+
+        :param request: Admin request.
+        :param object_id: Primary key of the study whose runs are to be curated.
+        """
+        study = get_object_or_404(Study.objects, pk=object_id)
+        return redirect(
+            reverse_lazy(
+                "admin:analyses_run_changelist",
+                query={"study_accession": study.accession},
+            )
         )
 
     @action(

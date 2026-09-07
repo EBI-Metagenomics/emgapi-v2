@@ -9,6 +9,7 @@ from typing import Optional
 from assembly_uploader import assembly_manifest, study_xmls, submit_study
 from Bio import SeqIO
 from django.core.exceptions import MultipleObjectsReturned, ObjectDoesNotExist
+from django.urls import reverse
 from prefect import flow, get_run_logger, task
 from prefect.tasks import task_input_hash
 
@@ -83,16 +84,17 @@ def check_assembly(assembly: analyses.models.Assembly, assembly_path: Path):
     return True
 
 
-def define_library(run_experiment_type):
-    logger = get_run_logger()
-    library = ""
-    if run_experiment_type == analyses.models.Run.ExperimentTypes.METAGENOMIC:
-        library = "metagenome"
-    elif run_experiment_type == analyses.models.Run.ExperimentTypes.METATRANSCRIPTOMIC:
-        library = "metatranscriptome"
-    else:
-        logger.warning(f"Unsupported experiment type {run_experiment_type}")
-    return library
+def define_library(run_experiment_type: str) -> Optional[str]:
+    """
+    Map a run experiment type to the ENA library name used when registering an assembly study.
+
+    :param run_experiment_type: Experiment type of a run, i.e. one of Run.ExperimentTypes.
+    :return: The ENA library name, or None if assemblies of that experiment type cannot be uploaded.
+    """
+    return {
+        analyses.models.Run.ExperimentTypes.METAGENOMIC: "metagenome",
+        analyses.models.Run.ExperimentTypes.METATRANSCRIPTOMIC: "metatranscriptome",
+    }.get(run_experiment_type)
 
 
 @task(
@@ -443,7 +445,10 @@ def submit_assembly_slurm(
             mark_assembly_status(
                 mgnify_assembly,
                 status=mgnify_assembly.AssemblyStates.ASSEMBLY_UPLOADED,
-                unset_statuses=[mgnify_assembly.AssemblyStates.ASSEMBLY_UPLOAD_FAILED],
+                unset_statuses=[
+                    mgnify_assembly.AssemblyStates.ASSEMBLY_UPLOAD_FAILED,
+                    mgnify_assembly.AssemblyStates.ASSEMBLY_UPLOAD_BLOCKED,
+                ],
             )
         else:
             # check webin.report for ERZ
@@ -455,7 +460,8 @@ def submit_assembly_slurm(
                     mgnify_assembly,
                     status=mgnify_assembly.AssemblyStates.ASSEMBLY_UPLOADED,
                     unset_statuses=[
-                        mgnify_assembly.AssemblyStates.ASSEMBLY_UPLOAD_FAILED
+                        mgnify_assembly.AssemblyStates.ASSEMBLY_UPLOAD_FAILED,
+                        mgnify_assembly.AssemblyStates.ASSEMBLY_UPLOAD_BLOCKED,
                     ],
                 )
             else:
@@ -523,6 +529,30 @@ def upload_assembly(
             f"Assembly {mgnify_assembly} did not pass sanity check. No further action."
         )
         return
+
+    runs_with_unsupported_experiment_type = [
+        run
+        for run in mgnify_assembly.runs.all()
+        if not define_library(run.experiment_type)
+    ]
+    if runs_with_unsupported_experiment_type:
+        unsupported = ", ".join(
+            f"{run.first_accession} ({run.experiment_type})"
+            for run in runs_with_unsupported_experiment_type
+        )
+        mark_assembly_status(
+            mgnify_assembly,
+            status=mgnify_assembly.AssemblyStates.ASSEMBLY_UPLOAD_BLOCKED,
+            reason=f"Unsupported experiment type on runs: {unsupported}",
+        )
+        curation_url = EMG_CONFIG.service_urls.app_root + reverse(
+            "admin:analyses_study_curate_run_experiment_types",
+            args=[runs_with_unsupported_experiment_type[0].study_id],
+        )
+        raise Exception(
+            f"Assembly {mgnify_assembly} cannot be uploaded: unsupported experiment type on runs {unsupported}. "
+            f"Curate those runs' experiment types at {curation_url} and then retry this flow run."
+        )
 
     if (
         mgnify_assembly.is_private or mgnify_assembly.reads_study.is_private

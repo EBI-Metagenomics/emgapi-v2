@@ -1,4 +1,5 @@
-from django.contrib import admin
+from django.contrib import admin, messages
+from django.shortcuts import render
 from unfold.admin import ModelAdmin
 from unfold.decorators import display
 
@@ -12,6 +13,8 @@ from analyses.models import Run
 
 @admin.register(Run)
 class RunAdmin(ENABrowserLinkMixin, JSONFieldWidgetOverridesMixin, ModelAdmin):
+    actions = ["set_experiment_type"]
+
     class StudyFilterForRun(StudyFilter):
         study_accession_search_fields = [
             "ena_study__accession",
@@ -76,3 +79,41 @@ class RunAdmin(ENABrowserLinkMixin, JSONFieldWidgetOverridesMixin, ModelAdmin):
             },
         ),
     )
+
+    @admin.action(description="Set experiment type on selected runs")
+    def set_experiment_type(self, request, queryset):
+        if request.POST.get("apply") == "1":
+            experiment_type = request.POST.get("experiment_type")
+            if experiment_type not in Run.ExperimentTypes.values:
+                self.message_user(
+                    request, "Select an experiment type.", messages.WARNING
+                )
+                return None
+
+            updated = queryset.update(experiment_type=experiment_type)
+            self.message_user(
+                request,
+                f"Set experiment type on {updated} run(s).",
+                messages.SUCCESS,
+            )
+            return None
+
+        select_across = request.POST.get("select_across") == "1"
+        selected_count = queryset.count()
+        return render(
+            request,
+            "admin/run_set_experiment_type_confirmation.html",
+            {
+                **self.admin_site.each_context(request),
+                "title": "Set experiment type",
+                "runs": queryset.order_by("id")[:100],
+                "selected_count": selected_count,
+                "experiment_type_choices": Run.ExperimentTypes.choices,
+                "selected_ids": (
+                    queryset.values_list("pk", flat=True)[:1]
+                    if select_across
+                    else queryset.values_list("pk", flat=True)
+                ),
+                "select_across": select_across,
+            },
+        )

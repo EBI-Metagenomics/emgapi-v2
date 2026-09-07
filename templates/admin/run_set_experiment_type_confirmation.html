@@ -1,0 +1,54 @@
+{% extends "unfold/layouts/base.html" %}
+{% load unfold %}
+
+{% block content %}
+  {% component "unfold/components/card.html" %}
+    <form method="post">
+      {% csrf_token %}
+
+      {% for run_id in selected_ids %}
+        <input type="hidden" name="_selected_action" value="{{ run_id }}">
+      {% endfor %}
+      <input type="hidden" name="action" value="set_experiment_type">
+      {% if select_across %}
+        <input type="hidden" name="select_across" value="1">
+      {% endif %}
+      <input type="hidden" name="apply" value="1">
+
+      <p class="mb-4 text-font-important-light dark:text-font-important-dark">
+        Set the experiment type for {{ selected_count }} selected run{{ selected_count|pluralize }}.
+      </p>
+
+      <div class="flex items-center gap-2 mb-4">
+        <label for="experiment_type">Experiment type</label>
+        <select name="experiment_type" id="experiment_type" required class="border border-base-200 dark:border-base-700 bg-white dark:bg-base-900 px-3 py-2 rounded">
+          <option value="">Select an experiment type</option>
+          {% for value, label in experiment_type_choices %}
+            <option value="{{ value }}">{{ label }}</option>
+          {% endfor %}
+        </select>
+        <button type="submit" class="bg-primary-600 px-3 py-2 rounded text-white">Apply</button>
+      </div>
+
+      <table class="w-full text-left">
+        <thead>
+          <tr>
+            <th class="py-2">Run</th>
+            <th class="py-2">Current experiment type</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for run in runs %}
+            <tr>
+              <td class="py-1">{{ run.first_accession }}</td>
+              <td class="py-1">{{ run.get_experiment_type_display }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% if selected_count > 100 %}
+        <p class="mt-4">Showing the first 100 selected runs.</p>
+      {% endif %}
+    </form>
+  {% endcomponent %}
+{% endblock %}
