@@ -341,3 +341,4 @@ allowed_patterns:
 - monkeypatch
 - lineage_key
 - artifact_key
+- key="possible-tpa-studies"
