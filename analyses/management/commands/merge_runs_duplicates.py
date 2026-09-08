@@ -8,6 +8,7 @@ from django.db import connection, transaction
 from pydantic import BaseModel, Field
 
 from analyses.models import Analysis, Assembly, Run
+from genomes.models import AdditionalContainedGenomes
 
 
 class GroupMergeResult(BaseModel):
@@ -188,6 +189,11 @@ class Command(BaseCommand):
             )
             assembly_run_through.objects.filter(run_id=duplicate.id).delete()
 
+            # -- Additional contained genomes -- #
+            AdditionalContainedGenomes.objects.filter(run=duplicate).update(
+                run=canonical_run
+            )
+
     def run_is_fully_detached(self, run: Run) -> bool:
         """
         Check whether a Run has any remaining direct relations that block deletion.
@@ -199,6 +205,7 @@ class Command(BaseCommand):
             [
                 run.analyses.exists(),
                 run.assemblies.exists(),
+                run.additional_contained_genomes.exists(),
             ]
         )
 

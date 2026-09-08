@@ -5,6 +5,7 @@ from django.core.management import call_command
 
 from analyses.management.commands.merge_runs_duplicates import Command
 from analyses.models import Analysis, Assembly, Run
+from genomes.models import AdditionalContainedGenomes, Genome
 
 
 @pytest.fixture
@@ -93,7 +94,7 @@ def test_merge_runs_duplicates_rewires_relations(
     raw_reads_mgnify_sample,
     tmp_path,
 ):
-    """Reassigns related analyses and assemblies to the canonical run."""
+    """Reassigns related analyses, assemblies, and contained genomes."""
     raw_reads_sample, *_ = raw_reads_mgnify_sample
     run_old, run_new = run_pair
 
@@ -110,17 +111,27 @@ def test_merge_runs_duplicates_rewires_relations(
         run=run_new,
         ena_study=raw_reads_mgnify_study.ena_study,
     )
+    contained_genome = AdditionalContainedGenomes.objects.create(
+        run=run_new,
+        genome=Genome.objects.create(accession="MGYG000000001"),
+        assembly=assembly,
+        containment=0.95,
+        cani=0.99,
+    )
     report_path = tmp_path / "applied-report.csv"
 
     call_command("merge_runs_duplicates", "--apply", "--output-csv", str(report_path))
 
     analysis.refresh_from_db()
     assembly.refresh_from_db()
+    contained_genome.refresh_from_db()
 
     assert not Run.objects.filter(id=run_new.id).exists()
     assert analysis.run_id == run_old.id
     assert assembly.runs.filter(id=run_old.id).exists()
     assert not assembly.runs.filter(id=run_new.id).exists()
+    assert contained_genome.run_id == run_old.id
+    assert contained_genome.containment == 0.95
     with report_path.open(newline="", encoding="utf-8") as handle:
         rows = list(csv.DictReader(handle))
     assert len(rows) == 1
