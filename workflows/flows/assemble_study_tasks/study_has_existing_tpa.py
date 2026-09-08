@@ -17,6 +17,21 @@ from workflows.ena_utils.study import ENAStudyFields, ENAStudyQuery
 
 @task(task_run_name="Check for an existing assembly TPA: {reads_study_accession}")
 def study_has_existing_tpa(reads_study_accession: str) -> bool:
+    """
+    Check if a study seems to have an existing TPA (Third Party Assembly) study.
+
+    This queries the ENA portal API twice: once to fetch all known study accessions for the reads study,
+    and then again to check if any of those accessions are mentioned in the title of another study.
+
+    This relies on a convention to entitle TPA studies things like "Third Party Assembly of PRJxxx",
+    or "Metagenome assembly of ERPxxx", which is not enforced but is followed e.g. by MGnify and SPIRE
+    (e.g. https://github.com/EBI-Metagenomics/assembly_uploader/ does this).
+
+    N.B. this suppresses (with a warning) ENA fetch failures since these are expected for private data etc.
+
+    :param reads_study_accession: The accession of the reads study.
+    :return: True if the study has a plausible existing TPA study, False otherwise.
+    """
     logger = get_run_logger()
     try:
         reads_studies = ENAAPIRequest(
@@ -29,7 +44,7 @@ def study_has_existing_tpa(reads_study_accession: str) -> bool:
             ],
         ).get()
         reads_study = reads_studies[0]
-        reads_accessions = [
+        reads_study_accessions = [
             accession
             for accession in (
                 reads_study.get(ENAStudyFields.STUDY_ACCESSION),
@@ -43,7 +58,7 @@ def study_has_existing_tpa(reads_study_accession: str) -> bool:
                 operator.or_,
                 [
                     ENAStudyQuery(study_title=accession)
-                    for accession in reads_accessions
+                    for accession in reads_study_accessions
                 ],
             ),
             fields=[
