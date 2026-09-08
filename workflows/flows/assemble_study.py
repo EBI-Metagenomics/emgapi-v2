@@ -103,12 +103,12 @@ def assemble_study(
     if mgnify_study.is_private:
         logger.info(f"{mgnify_study} is a private study.")
 
-    if study_has_existing_tpa(accession):
+    if possible_tpas := study_has_existing_tpa(accession):
 
         class ExistingAssemblyTPAInput(RunInput):
             proceed: bool = Field(
                 False,
-                description="ENA may already have an assembly TPA for this reads study.",
+                description=f"ENA may already have an assembly TPA for this reads study: {possible_tpas} (see artifact)",
             )
 
         confirmation = suspend_flow_run(

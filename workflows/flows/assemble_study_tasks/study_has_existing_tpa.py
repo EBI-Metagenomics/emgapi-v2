@@ -2,11 +2,11 @@ import operator
 from functools import reduce
 
 from prefect import get_run_logger, task
+from prefect.artifacts import create_markdown_artifact
+
+from activate_django_first import EMG_CONFIG
 
 from workflows.ena_utils.abstract import ENAPortalResultType
-from workflows.ena_utils.ena_api_requests import (
-    get_available_study_assembly_accessions,
-)
 from workflows.ena_utils.requestors import (
     ENAAccessException,
     ENAAPIRequest,
@@ -16,7 +16,7 @@ from workflows.ena_utils.study import ENAStudyFields, ENAStudyQuery
 
 
 @task(task_run_name="Check for an existing assembly TPA: {reads_study_accession}")
-def study_has_existing_tpa(reads_study_accession: str) -> bool:
+def study_has_existing_tpa(reads_study_accession: str) -> list[str]:
     """
     Check if a study seems to have an existing TPA (Third Party Assembly) study.
 
@@ -30,9 +30,13 @@ def study_has_existing_tpa(reads_study_accession: str) -> bool:
     N.B. this suppresses (with a warning) ENA fetch failures since these are expected for private data etc.
 
     :param reads_study_accession: The accession of the reads study.
-    :return: True if the study has a plausible existing TPA study, False otherwise.
+    :return: A list of accessions of plausible assembly TPA studies.
     """
     logger = get_run_logger()
+    markdown = (
+        f"# Reads study {reads_study_accession}\n ## Possible existing TPA studies:\n"
+    )
+    tpas = []
     try:
         reads_studies = ENAAPIRequest(
             result=ENAPortalResultType.STUDY,
@@ -68,28 +72,20 @@ def study_has_existing_tpa(reads_study_accession: str) -> bool:
             ],
         ).get(raise_on_empty=False)
         for study in assembly_studies:
-            accessions = filter(
-                None,
-                (
-                    study.get(ENAStudyFields.STUDY_ACCESSION),
-                    study.get(ENAStudyFields.SECONDARY_STUDY_ACCESSION),
-                ),
+            an_accession = study.get(ENAStudyFields.STUDY_ACCESSION) or study.get(
+                ENAStudyFields.SECONDARY_STUDY_ACCESSION
             )
             logger.info(
-                f"Plausible assembly TPA study {', '.join(accessions)}: "
-                f"{study.get(ENAStudyFields.STUDY_TITLE, '')}"
+                f"Plausible assembly TPA study {an_accession}: "
+                f"{study.get(ENAStudyFields.STUDY_TITLE, '')}. "
+                f"{EMG_CONFIG.ena.browser_view_url_prefix}/{an_accession}"
             )
-        assemblies = (
-            get_available_study_assembly_accessions(
-                [study[ENAStudyFields.STUDY_ACCESSION] for study in assembly_studies]
-            )
-            if assembly_studies
-            else set()
-        )
+            tpas.append(an_accession)
+            markdown += f"\n* [{an_accession}]({EMG_CONFIG.ena.browser_view_url_prefix}/{an_accession}): {study.get(ENAStudyFields.STUDY_TITLE, '')}"
     except (ENAAccessException, ENAAvailabilityException, IndexError) as error:
         logger.warning(
             f"Could not check ENA for existing assemblies of {reads_study_accession}: {error}"
         )
-        return False
-
-    return bool(assemblies)
+        markdown = f"Could not check ENA for existing assemblies of {reads_study_accession}: {error}"
+    create_markdown_artifact(key="possible-tpa-studies", markdown=markdown)
+    return tpas

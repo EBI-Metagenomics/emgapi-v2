@@ -66,14 +66,16 @@ def assembly_study_input_mocker(biome_choices, user_choices):
 
 
 @patch(
-    "workflows.flows.assemble_study_tasks.study_has_existing_tpa.get_available_study_assembly_accessions"
+    "workflows.flows.assemble_study_tasks.study_has_existing_tpa.create_markdown_artifact"
 )
 @patch("workflows.flows.assemble_study_tasks.study_has_existing_tpa.get_run_logger")
 @patch(
     "workflows.flows.assemble_study_tasks.study_has_existing_tpa.ENAAPIRequest.get",
     autospec=True,
 )
-def test_study_has_existing_tpa(mock_ena_get, mock_get_run_logger, mock_get_assemblies):
+def test_study_has_existing_tpa(
+    mock_ena_get, mock_get_run_logger, mock_create_markdown_artifact
+):
     mock_ena_get.side_effect = [
         [
             {
@@ -89,15 +91,20 @@ def test_study_has_existing_tpa(mock_ena_get, mock_get_run_logger, mock_get_asse
             }
         ],
     ]
-    mock_get_assemblies.return_value = {"ERZ1"}
-
-    assert study_has_existing_tpa.fn("ERP1")
+    assert study_has_existing_tpa.fn("ERP1") == ["PRJEB2"]
     title_query = str(mock_ena_get.call_args_list[1].args[0].query)
     assert "study_title=PRJEB1" in title_query
     assert "study_title=ERP1" in title_query
-    mock_get_assemblies.assert_called_once_with(["PRJEB2"])
     mock_get_run_logger.return_value.info.assert_called_once_with(
-        "Plausible assembly TPA study PRJEB2, ERP2: Assembly of ERP1"
+        f"Plausible assembly TPA study PRJEB2: Assembly of ERP1. "
+        f"{EMG_CONFIG.ena.browser_view_url_prefix}/PRJEB2"
+    )
+    mock_create_markdown_artifact.assert_called_once_with(
+        key="possible-tpa-studies",
+        markdown=(
+            "# Reads study ERP1\n ## Possible existing TPA studies:\n"
+            f"\n* [PRJEB2]({EMG_CONFIG.ena.browser_view_url_prefix}/PRJEB2): Assembly of ERP1"
+        ),
     )
 
 
@@ -107,12 +114,18 @@ def test_study_has_existing_tpa(mock_ena_get, mock_get_run_logger, mock_get_asse
     return_value=[],
 )
 @patch("workflows.flows.assemble_study_tasks.study_has_existing_tpa.get_run_logger")
+@patch(
+    "workflows.flows.assemble_study_tasks.study_has_existing_tpa.create_markdown_artifact"
+)
 def test_study_has_existing_tpa_continues_when_study_is_unavailable(
-    mock_get_run_logger, mock_ena_get
+    mock_create_markdown_artifact, mock_get_run_logger, mock_ena_get
 ):
     assert not study_has_existing_tpa.fn("ERP1")
     assert "Could not check ENA for existing assemblies of ERP1" in (
         mock_get_run_logger.return_value.warning.call_args.args[0]
+    )
+    assert "Could not check ENA for existing assemblies of ERP1" in (
+        mock_create_markdown_artifact.call_args.kwargs["markdown"]
     )
 
 
