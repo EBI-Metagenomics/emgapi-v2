@@ -253,7 +253,7 @@ def _make_run(
     expected_experiment_type: analyses.models.Run.ExperimentTypes | None = None,
 ) -> analyses.models.Run:
     _ = ENAReadRunFields
-    run, __ = analyses.models.Run.objects.update_or_create_by_accession(
+    run, created = analyses.models.Run.objects.update_or_create_by_accession(
         known_accessions=[run_response[_.RUN_ACCESSION]],
         defaults={
             "metadata": some(run_response, set(RUN_METADATA_FIELDS)),
@@ -267,14 +267,17 @@ def _make_run(
     )
     # TODO: Review if this is the best way to handle this, but I've been loads of studies which
     #       have missing metadata, for example when trying to run the assembly analysis of ERP117856
-    run.set_experiment_type_by_metadata(
-        run_response.get(_.LIBRARY_STRATEGY, ""),
-        run_response.get(_.LIBRARY_SOURCE, ""),
-        run_response.get(_.SCIENTIFIC_NAME, ""),
-        library_strategy_policy=library_strategy_policy,
-        library_source_policy=library_source_policy,
-        expected_experiment_type=expected_experiment_type,
-    )
+    # An existing run keeps the experiment type MGnify has for it, so that curation is not undone
+    # by a flow re-reading the study, unless the caller explicitly asked to override it.
+    if created or library_strategy_policy == ENALibraryStrategyPolicy.OVERRIDE_ALL:
+        run.set_experiment_type_by_metadata(
+            run_response.get(_.LIBRARY_STRATEGY, ""),
+            run_response.get(_.LIBRARY_SOURCE, ""),
+            run_response.get(_.SCIENTIFIC_NAME, ""),
+            library_strategy_policy=library_strategy_policy,
+            library_source_policy=library_source_policy,
+            expected_experiment_type=expected_experiment_type,
+        )
     return run
 
 
