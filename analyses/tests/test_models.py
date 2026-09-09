@@ -82,6 +82,42 @@ def test_set_experiment_type_by_metadata():
     )
     assert run.experiment_type == Run.ExperimentTypes.AMPLICON
 
+    # OVERRIDE_ALL with several acceptable types keeps the inferred one if it is acceptable
+    run.set_experiment_type_by_metadata(
+        "OTHER",
+        "METATRANSCRIPTOMIC",
+        library_strategy_policy=ENALibraryStrategyPolicy.OVERRIDE_ALL,
+        expected_experiment_type=[
+            Run.ExperimentTypes.METAGENOMIC,
+            Run.ExperimentTypes.METATRANSCRIPTOMIC,
+        ],
+    )
+    # "OTHER" infers UNKNOWN, which is not acceptable, so falls back to the primary type
+    assert run.experiment_type == Run.ExperimentTypes.METAGENOMIC
+
+    run.set_experiment_type_by_metadata(
+        "RNA-Seq",
+        "METATRANSCRIPTOMIC",
+        library_strategy_policy=ENALibraryStrategyPolicy.OVERRIDE_ALL,
+        expected_experiment_type=[
+            Run.ExperimentTypes.METAGENOMIC,
+            Run.ExperimentTypes.METATRANSCRIPTOMIC,
+        ],
+    )
+    assert run.experiment_type == Run.ExperimentTypes.METATRANSCRIPTOMIC
+
+    # ...and falls back to the primary (first) type when the inferred one is not acceptable
+    run.set_experiment_type_by_metadata(
+        "AMPLICON",
+        "METAGENOMIC",
+        library_strategy_policy=ENALibraryStrategyPolicy.OVERRIDE_ALL,
+        expected_experiment_type=[
+            Run.ExperimentTypes.METAGENOMIC,
+            Run.ExperimentTypes.METATRANSCRIPTOMIC,
+        ],
+    )
+    assert run.experiment_type == Run.ExperimentTypes.METAGENOMIC
+
     with pytest.raises(ValueError):
         run.set_experiment_type_by_metadata(
             "OTHER",
