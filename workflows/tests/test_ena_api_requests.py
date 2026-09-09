@@ -21,6 +21,7 @@ from workflows.ena_utils.ena_accession_matching import (
 )
 from workflows.ena_utils.ena_api_requests import (
     ENALibraryStrategyPolicy,
+    _make_run,
     get_available_study_assembly_accessions,
     get_available_study_run_accessions,
     get_available_study_sample_accessions,
@@ -1307,3 +1308,59 @@ def test_get_study_accession_for_assembly_private(httpx_mock, prefect_harness):
 
     result = get_study_accession_for_assembly(assembly_accession)
     assert result == study_accession
+
+
+@pytest.mark.django_db
+def test_make_run_keeps_the_experiment_type_of_an_existing_run(
+    raw_reads_mgnify_study, raw_read_run
+):
+    """
+    A curated experiment type must survive a flow re-reading the study's runs from ENA, whose
+    metadata may still be the one that made the run unusable in the first place.
+    """
+    run = raw_read_run[0]
+    run.experiment_type = analyses.models.Run.ExperimentTypes.METAGENOMIC
+    run.save(update_fields=["experiment_type"])
+
+    _make_run(
+        {
+            "run_accession": run.first_accession,
+            "library_strategy": "OTHER",
+            "library_source": "METAGENOMIC",
+            "scientific_name": "gut metagenome",
+        },
+        raw_reads_mgnify_study,
+        run.sample,
+    )
+
+    run.refresh_from_db()
+    assert run.experiment_type == analyses.models.Run.ExperimentTypes.METAGENOMIC
+
+
+@pytest.mark.django_db
+def test_make_run_overrides_the_experiment_type_of_an_existing_run_when_asked(
+    raw_reads_mgnify_study, raw_read_run
+):
+    """
+    Curation aside, a caller asking to override all library strategies still gets its expected
+    experiment type applied to runs that already exist.
+    """
+    run = raw_read_run[0]
+    run.experiment_type = analyses.models.Run.ExperimentTypes.METAGENOMIC
+    run.save(update_fields=["experiment_type"])
+
+    _make_run(
+        {
+            "run_accession": run.first_accession,
+            "library_strategy": "OTHER",
+            "library_source": "METAGENOMIC",
+            "scientific_name": "gut metagenome",
+        },
+        raw_reads_mgnify_study,
+        run.sample,
+        library_strategy_policy=ENALibraryStrategyPolicy.OVERRIDE_ALL,
+        expected_experiment_type=analyses.models.Run.ExperimentTypes.AMPLICON,
+    )
+
+    run.refresh_from_db()
+    assert run.experiment_type == analyses.models.Run.ExperimentTypes.AMPLICON
