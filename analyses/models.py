@@ -1040,6 +1040,7 @@ class Analysis(
         v5 = "V5", "v5.0"
         v6 = "V6", "v6.0"
         v6_1 = "V6.1", "v6.1"
+        v6_2 = "V6.2", "v6.2"
 
     pipeline_version = models.CharField(
         choices=PipelineVersions, max_length=5, default=PipelineVersions.v6
