@@ -11,6 +11,8 @@ class Command(BaseCommand):
     def _infer_pipeline_version(analyses, inferred_type: str) -> str:
         if inferred_type == "amplicon":
             pipeline_versions = set(analyses.values_list("pipeline_version", flat=True))
+            if Analysis.PipelineVersions.v6_2 in pipeline_versions:
+                return "v6.2"
             if Analysis.PipelineVersions.v6_1 in pipeline_versions:
                 return "v6.1"
             if Analysis.PipelineVersions.v6 in pipeline_versions:
