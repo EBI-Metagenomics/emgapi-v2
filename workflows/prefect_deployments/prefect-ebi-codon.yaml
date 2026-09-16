@@ -154,6 +154,24 @@ deployments:
   work_pool:
     name: slurm
 
+- name: import_out_of_production_assembly_analysis_results_deployment
+  description: |-
+    Import assembly analysis results that were generated outside of production.
+
+    This flow takes samplesheet, a path to out-of-production ASA/VIRify/MAP results and:
+    1. Creates/fetches the required database models (study, assemblies and analyses)
+    2. Validates that the results match the samplesheet and expected folder structure
+    3. Imports the pipeline results into the production system
+    4. Triggers study summary creation and file copying
+
+    :param results_dir: Path to the directory containing out-of-production results.
+                        Should contain folders: asa/, virify/, map/
+    :param samplesheet_path: Path to the samplesheet CSV used for the out-of-production run.
+  entrypoint: workflows/flows/analysis/assembly/flows/import_out_of_production_assembly_analysis_results.py:import_out_of_production_assembly_analysis_results
+  schedule: null
+  work_pool:
+    name: slurm
+
 - name: sync_assembly_batch_results_deployment
   description: |-
     Copy the results from an assembly batch to external storage and the NFS mirror.

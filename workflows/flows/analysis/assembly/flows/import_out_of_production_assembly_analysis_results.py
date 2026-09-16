@@ -68,7 +68,7 @@ def import_out_of_production_assembly_analysis_results(
     samplesheet_path: str,
 ):
     """
-    Import Assembly Analysis Pipeline results that were run out-of-production.
+    Import assembly analysis results that were generated outside of production.
 
     This flow takes samplesheet, a path to out-of-production ASA/VIRify/MAP results and:
     1. Creates/fetches the required database models (study, assemblies and analyses)
