@@ -5,6 +5,7 @@ import logging
 import os
 import re
 import shutil
+import time
 from enum import Enum
 from pathlib import Path
 from textwrap import dedent
@@ -36,6 +37,7 @@ from workflows.flows.analyse_study_tasks.shared.study_summary import (
 from workflows.flows.analysis_rawreads_study import analysis_rawreads_study
 from workflows.prefect_utils.analyses_models_helpers import get_users_as_choices
 from workflows.prefect_utils.testing_utils import (
+    get_logs_for_flow_run,
     run_flow_and_capture_logs,
     should_not_mock_httpx_requests_to_prefect_server,
 )
@@ -428,7 +430,7 @@ def test_prefect_analyse_rawreads_flow(
     httpx_mock.add_response(
         url=f"{EMG_CONFIG.ena.portal_search_api}?"
         f"result=read_run"
-        f"&query=%22%28%28study_accession={study_accession}+OR+secondary_study_accession={study_accession}%29%20AND%20library_strategy=WGS%29%22"
+        f"&query=%22%28%28study_accession={study_accession}+OR+secondary_study_accession={study_accession}%29%20AND%20%28%28library_strategy=WGS%20OR%20library_strategy=WGA%29%20OR%20library_strategy=RNA-Seq%29%29%22"
         f"&limit=10000"
         f"&format=json"
         f"&fields=run_accession%2Csample_accession%2Csample_title%2Csecondary_sample_accession%2Cfastq_md5%2Cfastq_ftp%2Clibrary_layout%2Clibrary_strategy%2Clibrary_source%2Cscientific_name%2Chost_tax_id%2Chost_scientific_name%2Cinstrument_platform%2Cinstrument_model%2Clocation%2Clat%2Clon"
@@ -973,7 +975,7 @@ def test_prefect_analyse_rawreads_flow_private_data(
     httpx_mock.add_response(
         url=f"{EMG_CONFIG.ena.portal_search_api}?"
         f"result=read_run"
-        f"&query=%22%28%28study_accession={study_accession}+OR+secondary_study_accession={study_accession}%29%20AND%20library_strategy=WGS%29%22"
+        f"&query=%22%28%28study_accession={study_accession}+OR+secondary_study_accession={study_accession}%29%20AND%20%28%28library_strategy=WGS%20OR%20library_strategy=WGA%29%20OR%20library_strategy=RNA-Seq%29%29%22"
         f"&limit=10000"
         f"&format=json"
         f"&fields=run_accession%2Csample_accession%2Csample_title%2Csecondary_sample_accession%2Cfastq_md5%2Cfastq_ftp%2Clibrary_layout%2Clibrary_strategy%2Clibrary_source%2Cscientific_name%2Chost_tax_id%2Chost_scientific_name%2Cinstrument_platform%2Cinstrument_model%2Clocation%2Clat%2Clon"
@@ -1416,7 +1418,7 @@ def test_prefect_analyse_rawreads_flow_no_functional(
     httpx_mock.add_response(
         url=f"{EMG_CONFIG.ena.portal_search_api}?"
         f"result=read_run"
-        f"&query=%22%28%28study_accession={study_accession}+OR+secondary_study_accession={study_accession}%29%20AND%20library_strategy=WGS%29%22"
+        f"&query=%22%28%28study_accession={study_accession}+OR+secondary_study_accession={study_accession}%29%20AND%20%28%28library_strategy=WGS%20OR%20library_strategy=WGA%29%20OR%20library_strategy=RNA-Seq%29%29%22"
         f"&limit=10000"
         f"&format=json"
         f"&fields=run_accession%2Csample_accession%2Csample_title%2Csecondary_sample_accession%2Cfastq_md5%2Cfastq_ftp%2Clibrary_layout%2Clibrary_strategy%2Clibrary_source%2Cscientific_name%2Chost_tax_id%2Chost_scientific_name%2Cinstrument_platform%2Cinstrument_model%2Clocation%2Clat%2Clon"
@@ -1520,3 +1522,209 @@ def test_prefect_analyse_rawreads_flow_no_functional(
     assert (
         analyses.models.Analysis.FUNCTIONAL_ANNOTATION not in analysis_obj.annotations
     )
+
+
+@pytest.mark.httpx_mock(should_mock=should_not_mock_httpx_requests_to_prefect_server)
+@pytest.mark.django_db(transaction=True)
+def test_prefect_analyse_rawreads_flow_fails_when_no_read_runs(
+    prefect_harness,
+    httpx_mock,
+):
+    """
+    An empty read-run response from ENA should fail the flow with an error in the
+    Prefect log, rather than silently continuing with zero runs.
+    """
+    study_accession = "ERP136389"
+
+    httpx_mock.add_response(
+        url=f"{EMG_CONFIG.ena.portal_search_api}?"
+        f"result=study"
+        f"&query=%22%28study_accession%3D{study_accession}+OR+secondary_study_accession%3D{study_accession}%29%22"
+        f"&fields=study_title%2Cstudy_description%2Ccenter_name%2Csecondary_study_accession%2Cstudy_name"
+        f"&limit=10"
+        f"&format=json"
+        f"&dataPortal=metagenome",
+        json=[
+            {
+                "study_accession": study_accession,
+                "secondary_study_accession": study_accession,
+                "study_title": "Study with no matching read-runs",
+            },
+        ],
+        is_reusable=True,
+    )
+    httpx_mock.add_response(
+        url=f"{EMG_CONFIG.ena.portal_search_api}?"
+        f"result=study"
+        f"&query=%22%28study_accession%3D{study_accession}+OR+secondary_study_accession%3D{study_accession}%29%22"
+        f"&fields=study_accession"
+        f"&limit="
+        f"&format=json"
+        f"&dataPortal=metagenome",
+        json=[{"study_accession": study_accession}],
+        is_reusable=True,
+    )
+    httpx_mock.add_response(
+        url=f"{EMG_CONFIG.ena.portal_search_api}?"
+        f"result=read_run"
+        f"&query=%22%28%28study_accession={study_accession}+OR+secondary_study_accession={study_accession}%29%20AND%20%28%28library_strategy=WGS%20OR%20library_strategy=WGA%29%20OR%20library_strategy=RNA-Seq%29%29%22"
+        f"&limit=10000"
+        f"&format=json"
+        f"&fields=run_accession%2Csample_accession%2Csample_title%2Csecondary_sample_accession%2Cfastq_md5%2Cfastq_ftp%2Clibrary_layout%2Clibrary_strategy%2Clibrary_source%2Cscientific_name%2Chost_tax_id%2Chost_scientific_name%2Cinstrument_platform%2Cinstrument_model%2Clocation%2Clat%2Clon"
+        f"&dataPortal=metagenome",
+        json=[],
+        is_reusable=True,
+    )
+
+    state = analysis_rawreads_study(study_accession, return_state=True)
+    time.sleep(0.5)  # wait for log flushing
+    logs = get_logs_for_flow_run(state.state_details.flow_run_id)
+
+    assert state.is_failed()
+    assert "No read-runs with library strategy" in logs
+    assert study_accession in logs
+
+
+@pytest.mark.httpx_mock(should_mock=should_not_mock_httpx_requests_to_prefect_server)
+@pytest.mark.django_db(transaction=True)
+@patch("workflows.flows.analysis_rawreads_study.copy_v6_study_summaries")
+@patch("workflows.flows.analysis_rawreads_study.add_study_summaries_to_downloads")
+@patch("workflows.flows.analysis_rawreads_study.merge_study_summaries")
+@patch("workflows.flows.analysis_rawreads_study.run_rawreads_pipeline_via_samplesheet")
+@pytest.mark.parametrize(
+    "mock_suspend_flow_run", ["workflows.flows.analysis_rawreads_study"], indirect=True
+)
+def test_prefect_analyse_rawreads_flow_override_all_forces_metagenomic(
+    mock_run_rawreads_pipeline_via_samplesheet,
+    mock_merge_study_summaries,
+    mock_add_study_summaries_to_downloads,
+    mock_copy_v6_study_summaries,
+    prefect_harness,
+    httpx_mock,
+    ena_any_sample_metadata,
+    raw_read_ena_study,
+    mock_suspend_flow_run,
+    admin_user,
+    top_level_biomes,
+):
+    """
+    With library_strategy_policy=OVERRIDE_ALL, the flow should (like the assembly flow)
+    fetch every read-run of the study with no library-strategy filter at all, and force
+    every one of them to METAGENOMIC regardless of their real ENA library_strategy.
+    """
+    study_accession = "ERP136390"
+    wgs_run = "ERR20000001"
+    amplicon_run = "ERR20000002"
+
+    def read_run_json(run_accession, library_strategy):
+        return {
+            "run_accession": run_accession,
+            "sample_accession": f"SAM{run_accession}",
+            "sample_title": "stool",
+            "secondary_sample_accession": f"ERS{run_accession}",
+            "fastq_md5": "67613b1159c7d80eb3e3ca2479650ad5;6e6c5b0db3919b904a5e283827321fb9",
+            "fastq_ftp": (
+                f"ftp.sra.ebi.ac.uk/vol1/fastq/{run_accession}/{run_accession}_1.fastq.gz;"
+                f"ftp.sra.ebi.ac.uk/vol1/fastq/{run_accession}/{run_accession}_2.fastq.gz"
+            ),
+            "library_layout": "PAIRED",
+            "library_strategy": library_strategy,
+            "library_source": "METAGENOMIC",
+            "scientific_name": "human gut metagenome",
+            "host_tax_id": "",
+            "host_scientific_name": "",
+            "instrument_platform": "ILLUMINA",
+            "instrument_model": "Illumina HiSeq 2500",
+            "location": "19.754234 S 30.156915 E",
+            "lat": "-19.754234",
+            "lon": "30.156915",
+        }
+
+    httpx_mock.add_response(
+        url=f"{EMG_CONFIG.ena.portal_search_api}?"
+        f"result=study"
+        f"&query=%22%28study_accession%3D{study_accession}+OR+secondary_study_accession%3D{study_accession}%29%22"
+        f"&fields=study_title%2Cstudy_description%2Ccenter_name%2Csecondary_study_accession%2Cstudy_name"
+        f"&limit=10"
+        f"&format=json"
+        f"&dataPortal=metagenome",
+        json=[
+            {
+                "study_accession": study_accession,
+                "secondary_study_accession": study_accession,
+                "study_title": "Study with a mix of library strategies",
+            },
+        ],
+        is_reusable=True,
+    )
+    httpx_mock.add_response(
+        url=f"{EMG_CONFIG.ena.portal_search_api}?"
+        f"result=study"
+        f"&query=%22%28study_accession%3D{study_accession}+OR+secondary_study_accession%3D{study_accession}%29%22"
+        f"&fields=study_accession"
+        f"&limit="
+        f"&format=json"
+        f"&dataPortal=metagenome",
+        json=[{"study_accession": study_accession}],
+        is_reusable=True,
+    )
+
+    # Initial (default policy) fetch: only the WGS run matches the WGS/WGA/RNA-Seq filter.
+    httpx_mock.add_response(
+        url=f"{EMG_CONFIG.ena.portal_search_api}?"
+        f"result=read_run"
+        f"&query=%22%28%28study_accession={study_accession}+OR+secondary_study_accession={study_accession}%29%20AND%20%28%28library_strategy=WGS%20OR%20library_strategy=WGA%29%20OR%20library_strategy=RNA-Seq%29%29%22"
+        f"&limit=10000"
+        f"&format=json"
+        f"&fields=run_accession%2Csample_accession%2Csample_title%2Csecondary_sample_accession%2Cfastq_md5%2Cfastq_ftp%2Clibrary_layout%2Clibrary_strategy%2Clibrary_source%2Cscientific_name%2Chost_tax_id%2Chost_scientific_name%2Cinstrument_platform%2Cinstrument_model%2Clocation%2Clat%2Clon"
+        f"&dataPortal=metagenome",
+        json=[read_run_json(wgs_run, "WGS")],
+        is_reusable=True,
+    )
+
+    # Re-fetch under OVERRIDE_ALL: no library_strategy filter at all, so the AMPLICON
+    # run (which the default policy would have excluded) is now included too.
+    httpx_mock.add_response(
+        url=f"{EMG_CONFIG.ena.portal_search_api}?"
+        f"result=read_run"
+        f"&query=%22%28study_accession={study_accession}+OR+secondary_study_accession={study_accession}%29%22"
+        f"&limit=10000"
+        f"&format=json"
+        f"&fields=run_accession%2Csample_accession%2Csample_title%2Csecondary_sample_accession%2Cfastq_md5%2Cfastq_ftp%2Clibrary_layout%2Clibrary_strategy%2Clibrary_source%2Cscientific_name%2Chost_tax_id%2Chost_scientific_name%2Cinstrument_platform%2Cinstrument_model%2Clocation%2Clat%2Clon"
+        f"&dataPortal=metagenome",
+        json=[
+            read_run_json(wgs_run, "WGS"),
+            read_run_json(amplicon_run, "AMPLICON"),
+        ],
+        is_reusable=True,
+    )
+
+    BiomeChoices = Enum("BiomeChoices", {"root.engineered": "Root:Engineered"})
+    UserChoices = get_users_as_choices()
+
+    class AnalyseStudyInput(BaseModel):
+        biome: BiomeChoices
+        watchers: List[UserChoices]
+        library_strategy_policy: Optional[ENALibraryStrategyPolicy]
+        library_source_policy: Optional[ENALibrarySourcePolicy]
+        functional_analysis: bool
+        webin_owner: Optional[str]
+
+    def suspend_side_effect(wait_for_input=None, **kwargs):
+        if wait_for_input.__name__ == "AnalyseStudyInput":
+            return AnalyseStudyInput(
+                biome=BiomeChoices["root.engineered"],
+                watchers=[UserChoices[admin_user.username]],
+                library_strategy_policy=ENALibraryStrategyPolicy.OVERRIDE_ALL,
+                library_source_policy=ENALibrarySourcePolicy.OVERRIDE_GENOMIC_IF_METAGENOMIC_SCIENTIFIC_NAME,
+                functional_analysis=False,
+                webin_owner=None,
+            )
+
+    mock_suspend_flow_run.side_effect = suspend_side_effect
+
+    analysis_rawreads_study(study_accession=study_accession)
+
+    for run_accession in (wgs_run, amplicon_run):
+        run = analyses.models.Run.objects.get(ena_accessions__contains=[run_accession])
+        assert run.experiment_type == analyses.models.Run.ExperimentTypes.METAGENOMIC

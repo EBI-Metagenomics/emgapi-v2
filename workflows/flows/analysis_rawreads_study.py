@@ -21,6 +21,7 @@ from workflows.ena_utils.ena_policies import (
     ENALibrarySourcePolicy,
     ENALibraryStrategyPolicy,
 )
+from workflows.ena_utils.requestors import ENAAvailabilityException
 from workflows.ena_utils.webin_owner_utils import validate_and_set_webin_owner
 from workflows.flows.analyse_study_tasks.cleanup_pipeline_directories import (
     delete_study_nextflow_workdir,
@@ -49,10 +50,13 @@ from workflows.prefect_utils.analyses_models_helpers import (
 from workflows.prefect_utils.flows_utils import django_db_flow as flow
 
 _METAGENOMIC = "WGS"
+# WGA (whole genome amplification) is treated as metagenomic/metatranscriptomic raw-reads
+# (like WGS), and RNA-Seq is treated as metatranscriptomic - see Run.set_experiment_type_by_metadata.
+_OTHER_ALLOWED_LIBRARY_STRATEGIES = ["WGA", "RNA-Seq"]
 
 
 @flow(
-    name="Run analysis pipeline-v6 on raw-reads WGS study",
+    name="Run analysis pipeline-v6 on raw-reads (WGS, WGA, RNA-Seq) study",
     log_prints=True,
     flow_run_name="Analyse raw-reads: {study_accession}",
 )
@@ -87,10 +91,19 @@ def analysis_rawreads_study(study_accession: str):
         limit=EMG_CONFIG.ena.portal_max_readruns_to_fetch,
         raise_on_empty=False,
         filter_library_strategy=library_strategy_policy_to_filter(
-            _METAGENOMIC, policy=ENALibraryStrategyPolicy.ONLY_IF_CORRECT_IN_ENA
+            _METAGENOMIC,
+            other_library_strategies=_OTHER_ALLOWED_LIBRARY_STRATEGIES,
+            policy=ENALibraryStrategyPolicy.ONLY_IF_CORRECT_IN_ENA,
         ),
         expected_experiment_type=analyses.models.Run.ExperimentTypes.METAGENOMIC,
     )
+    if not read_runs:
+        error_message = (
+            f"No read-runs with library strategy {[_METAGENOMIC] + _OTHER_ALLOWED_LIBRARY_STRATEGIES} "
+            f"found for study {ena_study.accession}."
+        )
+        logger.error(error_message)
+        raise ENAAvailabilityException(error_message)
     logger.info(f"Returned {len(read_runs)} runs from ENA portal API")
 
     BiomeChoices = get_biomes_as_choices()
@@ -160,7 +173,9 @@ def analysis_rawreads_study(study_accession: str):
             limit=EMG_CONFIG.ena.portal_max_readruns_to_fetch,
             raise_on_empty=True,
             filter_library_strategy=library_strategy_policy_to_filter(
-                _METAGENOMIC, policy=analyse_study_input.library_strategy_policy
+                _METAGENOMIC,
+                other_library_strategies=_OTHER_ALLOWED_LIBRARY_STRATEGIES,
+                policy=analyse_study_input.library_strategy_policy,
             ),
             library_strategy_policy=analyse_study_input.library_strategy_policy,
             library_source_policy=analyse_study_input.library_source_policy,
