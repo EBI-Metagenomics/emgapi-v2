@@ -21,6 +21,7 @@ class Migration(migrations.Migration):
                     ("V5", "v5.0"),
                     ("V6", "v6.0"),
                     ("V6.1", "v6.1"),
+                    ("V6.2", "v6.2"),
                 ],
                 default="V6",
                 max_length=5,
