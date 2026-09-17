@@ -54,7 +54,12 @@ DEBUG_TOOLBAR_CONFIG = {
 }
 
 
-ALLOWED_HOSTS = ["apiv2-dev.mgnify.org", "localhost", "www.ebi.ac.uk"]
+ALLOWED_HOSTS = [
+    "apiv2-dev.mgnify.org",
+    "localhost",
+    "www.ebi.ac.uk",
+    "docs.mgnify.org",
+]
 
 
 emg_config_env = os.getenv("EMG_ENV_FILE")
@@ -125,6 +130,7 @@ CORS_ALLOWED_ORIGINS = [
     "http://wwwint.ebi.ac.uk",
     "http://apiv2-dev.mgnify.org",
     "http://branchwater-dev.mgnify.org",
+    "https://docs.mgnify.org",
 ]
 
 CORS_ALLOW_CREDENTIALS = True

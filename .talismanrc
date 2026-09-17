@@ -84,7 +84,7 @@ fileignoreconfig:
   checksum: 08e2680598ee0719f717dc73019948001ebfcbaf700a3ee2dfb0e442acaebd26
 
 - filename: emgapiv2/settings.py
-  checksum: 830b351ce75e66d6e35a3c7d270ab8f78bd0a9a82b28f8c2e53adc02b8cb32b3
+  checksum: 69508c261f047f8c9bdc40926a7a87b54cef942ca264baeef530095d5346b05d
 
 - filename: emgapiv2/settings_test.py
   checksum: ded898400b4eda7e3cf75694af1b66235975a85eb5b8f49f3a2c708163a7aad4
