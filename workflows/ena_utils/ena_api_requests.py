@@ -55,6 +55,15 @@ RUN_METADATA_FIELDS = [
 ]
 
 
+def quote_ena_query_value(value: str) -> str:
+    """
+    ENA's Portal API query parser chokes on unquoted string values that contain
+    non-alphanumeric characters (e.g. "RNA-Seq", with a hyphen, causes it to respond
+    with "Query is in wrong format or has invalid arguments"). Quote such values.
+    """
+    return value if value.isalnum() else f'"{value}"'
+
+
 def library_strategy_policy_to_filter(
     primary_library_strategy: str,
     other_library_strategies: list[str] = None,
@@ -340,7 +349,10 @@ def get_study_readruns_from_ena(
     if filter_library_strategy:
         strategy_queries = reduce(
             operator.or_,
-            [ENAReadRunQuery(library_strategy=ls) for ls in filter_library_strategy],
+            [
+                ENAReadRunQuery(library_strategy=quote_ena_query_value(ls))
+                for ls in filter_library_strategy
+            ],
         )
         query &= strategy_queries
 

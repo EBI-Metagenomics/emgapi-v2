@@ -430,7 +430,7 @@ def test_prefect_analyse_rawreads_flow(
     httpx_mock.add_response(
         url=f"{EMG_CONFIG.ena.portal_search_api}?"
         f"result=read_run"
-        f"&query=%22%28%28study_accession={study_accession}+OR+secondary_study_accession={study_accession}%29%20AND%20%28%28library_strategy=WGS%20OR%20library_strategy=WGA%29%20OR%20library_strategy=RNA-Seq%29%29%22"
+        f"&query=%22%28%28study_accession={study_accession}+OR+secondary_study_accession={study_accession}%29%20AND%20%28%28library_strategy=WGS%20OR%20library_strategy=WGA%29%20OR%20library_strategy=%22RNA-Seq%22%29%29%22"
         f"&limit=10000"
         f"&format=json"
         f"&fields=run_accession%2Csample_accession%2Csample_title%2Csecondary_sample_accession%2Cfastq_md5%2Cfastq_ftp%2Clibrary_layout%2Clibrary_strategy%2Clibrary_source%2Cscientific_name%2Chost_tax_id%2Chost_scientific_name%2Cinstrument_platform%2Cinstrument_model%2Clocation%2Clat%2Clon"
@@ -975,7 +975,7 @@ def test_prefect_analyse_rawreads_flow_private_data(
     httpx_mock.add_response(
         url=f"{EMG_CONFIG.ena.portal_search_api}?"
         f"result=read_run"
-        f"&query=%22%28%28study_accession={study_accession}+OR+secondary_study_accession={study_accession}%29%20AND%20%28%28library_strategy=WGS%20OR%20library_strategy=WGA%29%20OR%20library_strategy=RNA-Seq%29%29%22"
+        f"&query=%22%28%28study_accession={study_accession}+OR+secondary_study_accession={study_accession}%29%20AND%20%28%28library_strategy=WGS%20OR%20library_strategy=WGA%29%20OR%20library_strategy=%22RNA-Seq%22%29%29%22"
         f"&limit=10000"
         f"&format=json"
         f"&fields=run_accession%2Csample_accession%2Csample_title%2Csecondary_sample_accession%2Cfastq_md5%2Cfastq_ftp%2Clibrary_layout%2Clibrary_strategy%2Clibrary_source%2Cscientific_name%2Chost_tax_id%2Chost_scientific_name%2Cinstrument_platform%2Cinstrument_model%2Clocation%2Clat%2Clon"
@@ -1418,7 +1418,7 @@ def test_prefect_analyse_rawreads_flow_no_functional(
     httpx_mock.add_response(
         url=f"{EMG_CONFIG.ena.portal_search_api}?"
         f"result=read_run"
-        f"&query=%22%28%28study_accession={study_accession}+OR+secondary_study_accession={study_accession}%29%20AND%20%28%28library_strategy=WGS%20OR%20library_strategy=WGA%29%20OR%20library_strategy=RNA-Seq%29%29%22"
+        f"&query=%22%28%28study_accession={study_accession}+OR+secondary_study_accession={study_accession}%29%20AND%20%28%28library_strategy=WGS%20OR%20library_strategy=WGA%29%20OR%20library_strategy=%22RNA-Seq%22%29%29%22"
         f"&limit=10000"
         f"&format=json"
         f"&fields=run_accession%2Csample_accession%2Csample_title%2Csecondary_sample_accession%2Cfastq_md5%2Cfastq_ftp%2Clibrary_layout%2Clibrary_strategy%2Clibrary_source%2Cscientific_name%2Chost_tax_id%2Chost_scientific_name%2Cinstrument_platform%2Cinstrument_model%2Clocation%2Clat%2Clon"
@@ -1567,7 +1567,7 @@ def test_prefect_analyse_rawreads_flow_fails_when_no_read_runs(
     httpx_mock.add_response(
         url=f"{EMG_CONFIG.ena.portal_search_api}?"
         f"result=read_run"
-        f"&query=%22%28%28study_accession={study_accession}+OR+secondary_study_accession={study_accession}%29%20AND%20%28%28library_strategy=WGS%20OR%20library_strategy=WGA%29%20OR%20library_strategy=RNA-Seq%29%29%22"
+        f"&query=%22%28%28study_accession={study_accession}+OR+secondary_study_accession={study_accession}%29%20AND%20%28%28library_strategy=WGS%20OR%20library_strategy=WGA%29%20OR%20library_strategy=%22RNA-Seq%22%29%29%22"
         f"&limit=10000"
         f"&format=json"
         f"&fields=run_accession%2Csample_accession%2Csample_title%2Csecondary_sample_accession%2Cfastq_md5%2Cfastq_ftp%2Clibrary_layout%2Clibrary_strategy%2Clibrary_source%2Cscientific_name%2Chost_tax_id%2Chost_scientific_name%2Cinstrument_platform%2Cinstrument_model%2Clocation%2Clat%2Clon"
@@ -1673,7 +1673,7 @@ def test_prefect_analyse_rawreads_flow_override_all_forces_metagenomic(
     httpx_mock.add_response(
         url=f"{EMG_CONFIG.ena.portal_search_api}?"
         f"result=read_run"
-        f"&query=%22%28%28study_accession={study_accession}+OR+secondary_study_accession={study_accession}%29%20AND%20%28%28library_strategy=WGS%20OR%20library_strategy=WGA%29%20OR%20library_strategy=RNA-Seq%29%29%22"
+        f"&query=%22%28%28study_accession={study_accession}+OR+secondary_study_accession={study_accession}%29%20AND%20%28%28library_strategy=WGS%20OR%20library_strategy=WGA%29%20OR%20library_strategy=%22RNA-Seq%22%29%29%22"
         f"&limit=10000"
         f"&format=json"
         f"&fields=run_accession%2Csample_accession%2Csample_title%2Csecondary_sample_accession%2Cfastq_md5%2Cfastq_ftp%2Clibrary_layout%2Clibrary_strategy%2Clibrary_source%2Cscientific_name%2Chost_tax_id%2Chost_scientific_name%2Cinstrument_platform%2Cinstrument_model%2Clocation%2Clat%2Clon"
