@@ -108,7 +108,7 @@ def sanity_check_amplicon_results(
     # SEQUENCE CATEGORISATION optional folder
     if sequence_categorisation_folder.exists():
         # if folder exists - checking for required files
-        pattern_gene_fasta = re.compile(r"\w+_(SSU|LSU|ITS)(?:_rRNA)?\.fa(sta)?$")
+        pattern_gene_fasta = re.compile(r"\w+_(SSU|LSU|ITS|5_8S)(?:_rRNA)?\.fa(sta)?$")
         matching_gene_files = [
             True if f.is_file() and pattern_gene_fasta.match(f.name) else False
             for f in sequence_categorisation_folder.iterdir()
