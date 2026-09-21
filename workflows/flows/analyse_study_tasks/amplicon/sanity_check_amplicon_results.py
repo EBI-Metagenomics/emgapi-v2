@@ -11,6 +11,8 @@ from workflows.flows.analyse_study_tasks.shared.analysis_states import AnalysisS
 from workflows.prefect_utils.analyses_models_helpers import mark_analysis_status
 from workflows.prefect_utils.flows_utils import django_db_task as task
 
+from workflows.data_io_utils.file_rules.common_rules import TSVHasDataRule
+
 
 @task(
     cache_key_fn=task_input_hash,
@@ -264,9 +266,17 @@ def sanity_check_amplicon_results(
                 ):
                     reason = f"missing file in {db}"
             elif db.name in dada2_tax_names and asv_folder.exists():
-                if not Path(f"{db}/{run_id}_{db.name}.mseq").exists():
+                mseq_path = Path(f"{db}/{run_id}_{db.name}.mseq").exists()
+                if not mseq_path:
+                    # if mseq file does not exist - bad
                     reason = f"missing mseq in {db}"
                 else:
+                    try:
+                        # if mseq file exists and only contains the header - moving on
+                        File(path=Path(f"{db}/{run_id}_{db.name}.mseq"), rules=[TSVHasDataRule])
+                    except ValueError:
+                        print(f"missing seq in {db}. No other files expected in the folder.")
+
                     for region in amplified_regions:
                         region_krona = Path(
                             f"{db}/{run_id}_{region}_{db.name}_asv_krona_counts.txt"
