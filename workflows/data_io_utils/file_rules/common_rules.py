@@ -1,5 +1,5 @@
-from pathlib import Path
 import math
+from pathlib import Path
 from workflows.data_io_utils.csv.csv_comment_handler import (
     CommentAwareDictReader,
     CSVDelimiter,
