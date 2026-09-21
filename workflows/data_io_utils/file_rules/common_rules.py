@@ -1,10 +1,10 @@
 import math
 from pathlib import Path
+
 from workflows.data_io_utils.csv.csv_comment_handler import (
     CommentAwareDictReader,
     CSVDelimiter,
 )
-
 from workflows.data_io_utils.file_rules.base_rules import (
     DirectoryRule,
     FileRule,
@@ -35,14 +35,18 @@ GlobHasFilesRule = GlobRule(
     test=lambda matches: len(list(matches)) > 0,
 )
 
+
 def _tsv_has_data(f: Path):
     with f.open("r") as fh:
         reader = CommentAwareDictReader(fh, delimiter=CSVDelimiter.TAB)
         return any(reader)
+
+
 TSVHasDataRule = FileRule(
     rule_name="TSV should have data rows",
     test=_tsv_has_data,
 )
+
 
 class __GlobHasFilesCountMetaclass(type):
     def __getitem__(cls, expected_count):
