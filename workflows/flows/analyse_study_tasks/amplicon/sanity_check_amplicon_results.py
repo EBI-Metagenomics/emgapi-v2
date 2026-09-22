@@ -11,6 +11,8 @@ from workflows.flows.analyse_study_tasks.shared.analysis_states import AnalysisS
 from workflows.prefect_utils.analyses_models_helpers import mark_analysis_status
 from workflows.prefect_utils.flows_utils import django_db_task as task
 
+from workflows.data_io_utils.file_rules.common_rules import TSVHasDataRule
+
 
 @task(
     cache_key_fn=task_input_hash,
@@ -264,24 +266,37 @@ def sanity_check_amplicon_results(
                 ):
                     reason = f"missing file in {db}"
             elif db.name in dada2_tax_names and asv_folder.exists():
-                if not Path(f"{db}/{run_id}_{db.name}.mseq").exists():
+                mseq_path = Path(f"{db}/{run_id}_{db.name}.mseq").exists()
+                if not mseq_path:
+                    # if mseq file does not exist - bad
                     reason = f"missing mseq in {db}"
                 else:
-                    for region in amplified_regions:
-                        region_krona = Path(
-                            f"{db}/{run_id}_{region}_{db.name}_asv_krona_counts.txt"
+                    try:
+                        # if mseq file exists and has data, apply other checks
+                        # if it only contains the header, print exception
+                        File(
+                            path=Path(f"{db}/{run_id}_{db.name}.mseq"),
+                            rules=[TSVHasDataRule]
                         )
-                        region_html = Path(f"{db}/{run_id}_{region}.html")
-                        if not (region_html.exists() and region_krona.exists()):
-                            reason = f"missing {region} file in {db}"
-                    # checking concat folder
-                    if len(amplified_regions) == 2:
-                        concat_html = Path(f"{db}/{run_id}_concat.html")
-                        concat_krona = Path(
-                            f"{db}/{run_id}_concat_{db.name}_asv_krona_counts.txt"
+                        for region in amplified_regions:
+                            region_krona = Path(
+                                f"{db}/{run_id}_{region}_{db.name}_asv_krona_counts.txt"
+                            )
+                            region_html = Path(f"{db}/{run_id}_{region}.html")
+                            if not (region_html.exists() and region_krona.exists()):
+                                reason = f"missing {region} file in {db}"
+                        # checking concat folder
+                        if len(amplified_regions) == 2:
+                            concat_html = Path(f"{db}/{run_id}_concat.html")
+                            concat_krona = Path(
+                                f"{db}/{run_id}_concat_{db.name}_asv_krona_counts.txt"
+                            )
+                            if not (concat_krona.exists() and concat_html.exists()):
+                                reason = f"missing concat files in {db}"
+                    except ValueError:
+                        print(
+                            f"missing seq in {db}. No other files expected in the folder."
                         )
-                        if not (concat_krona.exists() and concat_html.exists()):
-                            reason = f"missing concat files in {db}"
             else:
                 reason = f"unknown {db} in {EMG_CONFIG.amplicon_pipeline.taxonomy_summary_folder}"
 
