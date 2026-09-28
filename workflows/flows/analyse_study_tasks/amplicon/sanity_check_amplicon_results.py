@@ -8,6 +8,7 @@ from activate_django_first import EMG_CONFIG
 
 import analyses.models
 from workflows.data_io_utils.file_rules.common_rules import TSVHasDataRule
+from workflows.data_io_utils.file_rules.nodes import File
 from workflows.flows.analyse_study_tasks.shared.analysis_states import AnalysisStates
 from workflows.prefect_utils.analyses_models_helpers import mark_analysis_status
 from workflows.prefect_utils.flows_utils import django_db_task as task
