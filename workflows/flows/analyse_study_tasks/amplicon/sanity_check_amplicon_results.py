@@ -7,11 +7,10 @@ from prefect.tasks import task_input_hash
 from activate_django_first import EMG_CONFIG
 
 import analyses.models
+from workflows.data_io_utils.file_rules.common_rules import TSVHasDataRule
 from workflows.flows.analyse_study_tasks.shared.analysis_states import AnalysisStates
 from workflows.prefect_utils.analyses_models_helpers import mark_analysis_status
 from workflows.prefect_utils.flows_utils import django_db_task as task
-
-from workflows.data_io_utils.file_rules.common_rules import TSVHasDataRule
 
 
 @task(
@@ -276,7 +275,7 @@ def sanity_check_amplicon_results(
                         # if it only contains the header, print exception
                         File(
                             path=Path(f"{db}/{run_id}_{db.name}.mseq"),
-                            rules=[TSVHasDataRule]
+                            rules=[TSVHasDataRule],
                         )
                         for region in amplified_regions:
                             region_krona = Path(
