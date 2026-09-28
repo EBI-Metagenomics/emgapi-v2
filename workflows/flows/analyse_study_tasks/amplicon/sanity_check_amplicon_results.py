@@ -266,8 +266,8 @@ def sanity_check_amplicon_results(
                 ):
                     reason = f"missing file in {db}"
             elif db.name in dada2_tax_names and asv_folder.exists():
-                mseq_path = Path(f"{db}/{run_id}_{db.name}.mseq").exists()
-                if not mseq_path:
+                mseq_path = Path(f"{db}/{run_id}_{db.name}.mseq")
+                if not mseq_path.exists():
                     # if mseq file does not exist - bad
                     reason = f"missing mseq in {db}"
                 else:
@@ -275,7 +275,7 @@ def sanity_check_amplicon_results(
                         # if mseq file exists and has data, apply other checks
                         # if it only contains the header, print exception
                         File(
-                            path=Path(f"{db}/{run_id}_{db.name}.mseq"),
+                            path=mseq_path,
                             rules=[TSVHasDataRule],
                         )
                         for region in amplified_regions:
