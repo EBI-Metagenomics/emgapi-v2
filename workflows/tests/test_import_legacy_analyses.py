@@ -45,7 +45,9 @@ def test_legacy_db_mocker(mock_legacy_emg_db_session):
     print("the session is ", legacy_emg_db_session)  # Should show the mock
 
     with legacy_emg_db_session() as session:
-        assert str(session.bind.url) == "sqlite:///:memory:"
+        # Parsed parts, not str(url): SQLAlchemy percent-encodes ":memory:" when rendering.
+        assert session.bind.url.drivername == "sqlite"
+        assert session.bind.url.database == ":memory:"
         # check fixture is working since it is a bit complicated in itself, as well as the legacy db tables
         study_select_stmt = select(LegacyStudy).where(LegacyStudy.id == 5000)
         legacy_study: LegacyStudy = session.scalar(study_select_stmt)
