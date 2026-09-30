@@ -16,14 +16,14 @@ OCEAN_EUK_CATALOGUE_FIXTURE_ROOT = (
 )
 
 
-def import_fixture_release(version, catalogue_slug):
+def import_fixture_release(version, catalogue_slug, pipeline_version="v3.0.0"):
     return run_flow_and_capture_logs(
         import_genomes_flow,
         results_directory=str(CATALOGUE_FIXTURE_ROOT / f"v{version}"),
         catalogue_name="Ocean Prokaryotes",
         catalogue_version=version,
         gold_biome="root",
-        pipeline_version="v3.0.0",
+        pipeline_version=pipeline_version,
         catalogue_type="prokaryotes",
         catalogue_biome_label="Ocean",
         destination_dir_name="ocean-prokaryotes",
@@ -110,3 +110,56 @@ def test_ocean_eukaryotes_fixture(prefect_harness):
     assert "genome/MGYG000000010.fna" in {
         download["path"] for download in entry.downloads
     }
+
+
+@pytest.mark.django_db(transaction=True)
+def test_ocean_prokaryotes_v4_fixture(prefect_harness):
+    Biome.objects.create(biome_name="root", path="root")
+    import_fixture_release("3.0", "ocean-prokaryotes-v3-0", pipeline_version="v4.0")
+
+    catalogue = GenomeCatalogue.objects.get(pk="ocean-prokaryotes-v3-0")
+    assert catalogue.status == GenomeCatalogue.Status.READY
+    assert catalogue.pipeline_version_tag == "v4.0"
+    entry = catalogue.genomes.get(genome__accession="MGYG000235960")
+    assert entry.annotations["cog_categories"] == [{"name": "G", "count": 171}]
+    assert entry.annotations["kegg_classes"] == [{"class_id": "09101", "count": 320}]
+    assert entry.annotations["kegg_modules"] == [{"name": "M00178", "count": 56}]
+    assert entry.num_genomes_total == 2
+
+    downloads = {download["path"]: download for download in entry.downloads}
+    assert set(downloads) >= {
+        "genome/MGYG000235960.faa.gz",
+        "genome/MGYG000235960.fna.gz",
+        "genome/MGYG000235960.gff.gz",
+        "genome/MGYG000235960_pathofact2_combined_report.tsv.gz",
+        "pan-genome/gene_presence_absence.Rtab.gz",
+        "pan-genome/gene_presence_absence.csv.gz",
+        "pan-genome/gene_prevalence_corrected.txt.gz",
+        "pan-genome/mashtree.nwk.gz",
+        "pan-genome/pan-genome.fna.gz",
+    }
+    assert not any(path.endswith((".fai", ".gzi", ".csi")) for path in downloads)
+    assert downloads["genome/MGYG000235960.fna.gz"]["index_file"] == [
+        {"index_type": "fai", "path": "genome/MGYG000235960.fna.gz.fai"},
+        {"index_type": "gzi", "path": "genome/MGYG000235960.fna.gz.gzi"},
+    ]
+    assert downloads["genome/MGYG000235960.gff.gz"]["index_file"] == {
+        "index_type": "csi",
+        "path": "genome/MGYG000235960.gff.gz.csi",
+    }
+    assert downloads["genome/MGYG000235960.fna.gz"]["file_type"] == "fasta"
+
+
+def test_v4_fixture_requires_compressed_files(tmp_path):
+    from shutil import copytree
+
+    from workflows.flows.import_genomes_flow import gather_genome_dirs
+
+    source = CATALOGUE_FIXTURE_ROOT / "v3.0" / "website"
+    copytree(source, tmp_path / "website")
+    genome_dir = tmp_path / "website" / "MGYG000235960" / "genome"
+    (genome_dir / "MGYG000235960.fna.gz.gzi").unlink()
+    with pytest.raises(ValueError, match=r"MGYG000235960\.fna\.gz\.gzi"):
+        gather_genome_dirs(tmp_path / "website", "prokaryotes", "v4.0")
+    with pytest.raises(ValueError, match=r"MGYG000235960\.fna"):
+        gather_genome_dirs(source, "prokaryotes", "v3.0")

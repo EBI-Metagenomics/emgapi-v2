@@ -1,5 +1,6 @@
 import csv
 import glob
+import gzip
 import json
 import logging
 import os
@@ -24,6 +25,14 @@ def get_expected_genome_files(accession):
         accession + ".gff",
         prefix + "eggNOG.tsv",
         prefix + "InterProScan.tsv",
+    }
+
+
+def get_expected_genome_files_v4(accession):
+    return {filename + ".gz" for filename in get_expected_genome_files(accession)} | {
+        accession + ".fna.gz.fai",
+        accession + ".fna.gz.gzi",
+        accession + ".gff.gz.csi",
     }
 
 
@@ -216,6 +225,24 @@ def sanity_check_genome_output_euks(d):
     sanity_check_genome_dir(json_data["accession"], genome_dir)
 
 
+def sanity_check_genome_output_proks_v4(d):
+    accession = sanity_check_genome_output_any(d)
+    data = read_json(os.path.join(d, f"{accession}.json"))
+    sanity_check_genome_json_proks(data)
+    sanity_check_genome_dir(
+        accession, os.path.join(d, "genome"), get_expected_genome_files_v4
+    )
+
+
+def sanity_check_genome_output_euks_v4(d):
+    accession = sanity_check_genome_output_any(d)
+    data = read_json(os.path.join(d, f"{accession}.json"))
+    sanity_check_genome_json_euks(data)
+    sanity_check_genome_dir(
+        accession, os.path.join(d, "genome"), get_expected_genome_files_v4
+    )
+
+
 def read_json(fs):
     with open(fs) as f:
         return json.load(f)
@@ -230,7 +257,8 @@ def read_tsv_w_headers(fs):
 
 
 def read_sep_f(fs, sep=None):
-    with open(fs) as f:
+    opener = gzip.open if str(fs).endswith(".gz") else open
+    with opener(fs, "rt") as f:
         reader = csv.reader(f, skipinitialspace=True, delimiter=sep)
         header = next(reader)
         data = [dict(zip(header, row)) for row in reader]
@@ -451,7 +479,53 @@ def upload_antismash_geneclusters(genome, directory, database="default"):
     logger.info(f"Loaded Genome AntiSMASH geneclusters for {genome.accession}")
 
 
+def upload_cog_results_v4(genome, directory, database="default"):
+    _upload_annotation_file(
+        genome,
+        directory,
+        "{accession}_cog_summary.tsv.gz",
+        "genome",
+        _parse_cog_row,
+        "cog_categories",
+        database,
+    )
+
+
+def upload_kegg_class_results_v4(genome, directory, database="default"):
+    _upload_annotation_file(
+        genome,
+        directory,
+        "{accession}_kegg_classes.tsv.gz",
+        "genome",
+        _parse_kegg_class_row,
+        "kegg_classes",
+        database,
+    )
+
+
+def upload_kegg_module_results_v4(genome, directory, database="default"):
+    _upload_annotation_file(
+        genome,
+        directory,
+        "{accession}_kegg_modules.tsv.gz",
+        "genome",
+        _parse_kegg_module_row,
+        "kegg_modules",
+        database,
+    )
+
+
 def upload_genome_files(genome, directory, has_pangenome, database="default"):
+    return _upload_genome_files(genome, directory, has_pangenome, database)
+
+
+def upload_genome_files_v4(genome, directory, has_pangenome, database="default"):
+    return _upload_genome_files(genome, directory, has_pangenome, database, v4=True)
+
+
+def _upload_genome_files(
+    genome, directory, has_pangenome, database="default", *, v4=False
+):
     """
     Upload genome files to a genome.
 
@@ -662,6 +736,41 @@ def upload_genome_files(genome, directory, has_pangenome, database="default"):
             ),
         ]
 
+    if v4:
+        files_to_upload = [
+            (
+                label,
+                fmt,
+                filename + ".gz",
+                group,
+                subdir,
+                required,
+            )
+            for label, fmt, filename, group, subdir, required in files_to_upload
+            if fmt != "fai"
+        ]
+        files_to_upload += [
+            (
+                "Genome PathoFact2 report",
+                "tsv",
+                f"{genome.accession}_pathofact2_combined_report.tsv.gz",
+                "Genome analysis",
+                "genome",
+                False,
+            ),
+        ]
+        if has_pangenome:
+            files_to_upload.append(
+                (
+                    "Corrected gene prevalence",
+                    "tab",
+                    "gene_prevalence_corrected.txt.gz",
+                    "Pan-Genome analysis",
+                    "pan-genome",
+                    False,
+                )
+            )
+
     for (
         desc_label,
         file_format,
@@ -680,6 +789,9 @@ def upload_genome_files(genome, directory, has_pangenome, database="default"):
             directory=directory,
             require_existent_and_non_empty=require,
             database=database,
+            download_factory=(
+                prepare_downloadable_file_v4 if v4 else prepare_downloadable_file
+            ),
         )
 
 
@@ -769,6 +881,28 @@ def prepare_downloadable_file(
     # )
 
 
+def prepare_downloadable_file_v4(
+    desc_label, file_format, file_name, group_type=None, subdir=None
+):
+    # Use the underlying format for metadata, while preserving compressed paths.
+    download = prepare_downloadable_file(
+        desc_label, file_format, file_name.removesuffix(".gz"), group_type, subdir
+    )
+    download.path = os.path.join(subdir or "", file_name)
+    download.alias = file_name
+    download.index_file = None
+    if file_name.endswith(".fna.gz") and subdir == "genome":
+        download.index_file = [
+            DownloadFileIndexFile(index_type=kind, path=f"{download.path}.{kind}")
+            for kind in ("fai", "gzi")
+        ]
+    elif file_name.endswith(".gff.gz") and "_" not in file_name:
+        download.index_file = DownloadFileIndexFile(
+            index_type="csi", path=f"{download.path}.csi"
+        )
+    return download
+
+
 def upload_file(
     model_instance,
     desc_label,
@@ -780,6 +914,7 @@ def upload_file(
     directory=None,
     require_existent_and_non_empty=False,
     database="default",
+    download_factory=prepare_downloadable_file,
 ):
     """
     Upload a file to a model instance.
@@ -810,7 +945,7 @@ def upload_file(
         )
         return
 
-    download_file = prepare_downloadable_file(
+    download_file = download_factory(
         desc_label, file_format, file_name, group_type, subdir
     )
     try:

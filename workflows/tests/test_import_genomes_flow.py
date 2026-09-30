@@ -112,11 +112,14 @@ def test_validate_pipeline_version():
     assert validate_pipeline_version("v2.0") == 2
     assert validate_pipeline_version("v3.0.0") == 3
     assert validate_pipeline_version("v3.0.0-dev") == 3
+    assert validate_pipeline_version("v4.0") == 4
+    assert validate_pipeline_version("4.0.0-dev") == 4
+    assert validate_pipeline_version("v10.0") == 10
 
     with pytest.raises(ValueError):
         validate_pipeline_version("invalid")
     with pytest.raises(ValueError):
-        validate_pipeline_version("v4")
+        validate_pipeline_version("v0")
 
 
 def test_parse_options():
@@ -166,8 +169,7 @@ def test_move_catalogue_files_to_web_results_uses_slurm_ftp_results_dir():
         "/nfs/donco/results/soil/1.0/website/"
     )
     assert run_deployment.call_args.kwargs["parameters"]["target"] == (
-        "/nfs/ftp/public/databases/metagenomics/mgnify_results/"
-        "mgnify_genomes/soil/1.0"
+        "/nfs/ftp/public/databases/metagenomics/mgnify_results/mgnify_genomes/soil/1.0"
     )
     logger.return_value.info.assert_called_once_with(
         "Web results mover flowrun is flow-run"
@@ -204,6 +206,51 @@ def test_run_genome_release_tasks_registers_sourmash_index(
     place_cobs.assert_called_once_with(options)
     place_sigs.assert_called_once_with(options)
     register_index.assert_called_once_with(options["catalogue_slug"])
+
+
+@pytest.mark.parametrize("pipeline_version", ["v4.0", "v5.0"])
+def test_run_genome_release_tasks_v4(pipeline_version):
+    options = get_default_options(pipeline_version=pipeline_version)
+    with (
+        patch(
+            "workflows.flows.import_genomes_flow.move_catalogue_files_to_web_results"
+        ),
+        patch("workflows.flows.import_genomes_flow.move_catalogue_files_to_ftp"),
+        patch("workflows.flows.import_genomes_flow.make_cobs_index") as old_cobs,
+        patch(
+            "workflows.flows.import_genomes_flow.make_sourmash_sketches"
+        ) as old_sketches,
+        patch("workflows.flows.import_genomes_flow.make_cobs_index_v4") as cobs,
+        patch(
+            "workflows.flows.import_genomes_flow.make_sourmash_sketches_v4"
+        ) as sketches,
+        patch("workflows.flows.import_genomes_flow.make_sourmash_index"),
+        patch("workflows.flows.import_genomes_flow.place_cobs_index_on_embassy"),
+        patch("workflows.flows.import_genomes_flow.place_sourmash_signatures"),
+        patch("workflows.flows.import_genomes_flow.register_sourmash_search_index"),
+    ):
+        run_genome_release_tasks(options)
+    cobs.assert_called_once_with(options)
+    sketches.assert_called_once_with(options)
+    old_cobs.assert_not_called()
+    old_sketches.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "task_name,glob",
+    [
+        ("make_cobs_index", "**/MGYG*.fna"),
+        ("make_cobs_index_v4", "**/MGYG*.fna.gz"),
+        ("make_sourmash_sketches", "*/genome/MGYG*.fna"),
+        ("make_sourmash_sketches_v4", "*/genome/MGYG*.fna.gz"),
+    ],
+)
+def test_search_tasks_fasta_patterns(task_name, glob):
+    from workflows.flows import import_genomes_flow as flow_module
+
+    with patch.object(flow_module, "run_cluster_job") as job:
+        getattr(flow_module, task_name).fn(get_default_options())
+    assert f"'{glob}'" in job.call_args.kwargs["command"]
 
 
 @pytest.mark.django_db
@@ -250,7 +297,6 @@ def test_register_sourmash_search_index_returns_pk_and_logs():
 
 @pytest.mark.django_db
 def test_get_catalogue():
-
     biome = Biome.objects.create(
         id=1,
         biome_name="Rumen",
