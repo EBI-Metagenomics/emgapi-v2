@@ -71,7 +71,7 @@ class GenomeCatalogue(WithDownloadsModel, TimeStampedModel):
         help_text="Description of the protein catalogue, if applicable.",
     )
     result_directory = models.CharField(
-        db_column="result_directory", max_length=100, null=True, blank=True
+        db_column="result_directory", max_length=240, null=True, blank=True
     )
     unclustered_genome_count = models.IntegerField(
         db_column="unclustered_genome_count",
