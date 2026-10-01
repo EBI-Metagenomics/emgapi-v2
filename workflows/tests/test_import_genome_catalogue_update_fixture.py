@@ -69,6 +69,16 @@ def test_realistic_catalogue_update_fixture(prefect_harness):
     assert "genome/MGYG000000005.fna" in {
         download["path"] for download in new_genome.downloads
     }
+    legacy_downloads = {download["path"]: download for download in new_genome.downloads}
+    assert legacy_downloads["genome/MGYG000000005.fna"]["long_description"] == (
+        "Genome assembly in FASTA format"
+    )
+    assert legacy_downloads["genome/MGYG000000005_eggNOG.tsv"]["short_description"] == (
+        "EggNOG annotation"
+    )
+    assert legacy_downloads["genome/MGYG000000005_eggNOG.tsv"]["long_description"] == (
+        "Result of orthology annotation at the protein level in TSV format"
+    )
 
     GenomeCatalogue.publish_ready([v2.pk])
     v1.refresh_from_db()
@@ -148,6 +158,30 @@ def test_ocean_prokaryotes_v4_fixture(prefect_harness):
         "path": "genome/MGYG000235960.gff.gz.csi",
     }
     assert downloads["genome/MGYG000235960.fna.gz"]["file_type"] == "fasta"
+    expected_descriptions = {
+        "genome/MGYG000235960.gff.gz": (
+            "Genome Annotation",
+            "Integrated genome annotation, including mobilome annotation, in GFF format",
+        ),
+        "genome/MGYG000235960_eggNOG.tsv.gz": (
+            "EggNOG annotation",
+            "Result of orthology annotation at the protein level in TSV format",
+        ),
+        "genome/MGYG000235960_pathofact2_combined_report.tsv.gz": (
+            "Pathofact2-style report",
+            "Pathogenicity-related annotations at protein level in TSV format",
+        ),
+        "pan-genome/gene_prevalence_corrected.txt.gz": (
+            "Corrected gene prevalence",
+            "Pan-genome gene frequencies (core/middle/rare) after completeness correction",
+        ),
+    }
+    for path, (label, description) in expected_descriptions.items():
+        assert downloads[path]["short_description"] == label
+        assert downloads[path]["long_description"] == description
+    assert downloads["pan-genome/pan-genome.fna.gz"]["long_description"] == (
+        "Pangenome DNA sequence"
+    )
 
 
 def test_v4_fixture_requires_compressed_files(tmp_path):
