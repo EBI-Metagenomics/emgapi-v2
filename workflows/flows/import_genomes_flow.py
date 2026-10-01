@@ -21,12 +21,18 @@ from genomes.management.lib.genome_util import (
     read_json,
     sanity_check_catalogue_dir,
     sanity_check_genome_output_euks,
+    sanity_check_genome_output_euks_v4,
     sanity_check_genome_output_proks,
+    sanity_check_genome_output_proks_v4,
     upload_antismash_geneclusters,
     upload_cog_results,
+    upload_cog_results_v4,
     upload_genome_files,
+    upload_genome_files_v4,
     upload_kegg_class_results,
+    upload_kegg_class_results_v4,
     upload_kegg_module_results,
+    upload_kegg_module_results_v4,
 )
 from genomes.models import (
     CatalogueGenome,
@@ -58,7 +64,7 @@ def catalogue_slug_from_options(options: dict) -> str:
 
 
 def validate_pipeline_version(version: str) -> int:
-    match = re.match(r"^v?([1-3])(?:\..*)?(?:[a-zA-Z0-9\-]*)?$", version)
+    match = re.match(r"^v?([1-9][0-9]*)(?:\..*)?(?:[a-zA-Z0-9\-]*)?$", version)
     if not match:
         raise ValueError(f"Invalid pipeline version: {version}")
     return int(match.group(1))
@@ -131,13 +137,18 @@ def get_catalogue(options):
     return catalogue
 
 
-def gather_genome_dirs(catalogue_dir, catalogue_type):
+def gather_genome_dirs(catalogue_dir, catalogue_type, pipeline_version="v3.0"):
     genome_dirs = find_genome_results(catalogue_dir)
 
     sanity_check_map = {
         "eukaryotes": sanity_check_genome_output_euks,
         "prokaryotes": sanity_check_genome_output_proks,
     }
+    if validate_pipeline_version(pipeline_version) >= 4:
+        sanity_check_map = {
+            "eukaryotes": sanity_check_genome_output_euks_v4,
+            "prokaryotes": sanity_check_genome_output_proks_v4,
+        }
     sanity_check = sanity_check_map.get(catalogue_type)
     if sanity_check:
         for d in genome_dirs:
@@ -198,6 +209,15 @@ def move_catalogue_files_to_ftp(options: dict, timeout: int = 86400):
 
 @task
 def make_cobs_index(options: dict):
+    return _make_cobs_index(options, "**/MGYG*.fna")
+
+
+@task
+def make_cobs_index_v4(options: dict):
+    return _make_cobs_index(options, "**/MGYG*.fna.gz")
+
+
+def _make_cobs_index(options: dict, fasta_glob: str):
     catalogue_slug = options["catalogue_slug"]
     catalogue_dir = (
         Path(genome_config.genome_search_project_dir) / "catalogues" / catalogue_slug
@@ -206,7 +226,7 @@ def make_cobs_index(options: dict):
         [
             f"mkdir -p {shell_quote(catalogue_dir)}",
             f"cd {shell_quote(catalogue_dir)}",
-            f"singularity run {genome_config.genome_search_singularity_image} -c index create {shell_quote(Path(options['results_directory']) / 'website')} {shell_quote(catalogue_slug)} --fasta_glob_filter '**/MGYG*.fna'",
+            f"singularity run {genome_config.genome_search_singularity_image} -c index create {shell_quote(Path(options['results_directory']) / 'website')} {shell_quote(catalogue_slug)} --fasta_glob_filter {shell_quote(fasta_glob)}",
         ]
     )
     return run_cluster_job(
@@ -222,6 +242,15 @@ def make_cobs_index(options: dict):
 
 @task
 def make_sourmash_sketches(options: dict):
+    return _make_sourmash_sketches(options, "*/genome/MGYG*.fna")
+
+
+@task
+def make_sourmash_sketches_v4(options: dict):
+    return _make_sourmash_sketches(options, "*/genome/MGYG*.fna.gz")
+
+
+def _make_sourmash_sketches(options: dict, fasta_glob: str):
     catalogue_slug = options["catalogue_slug"]
     catalogue_dir = (
         Path(genome_config.genome_search_project_dir) / "catalogues" / catalogue_slug
@@ -233,7 +262,7 @@ def make_sourmash_sketches(options: dict):
             f"mkdir -p {shell_quote(sketch_dir)}",
             f"cd {shell_quote(catalogue_dir)}",
             f"conda activate {shell_quote(genome_config.sourmash_conda_environment)}",
-            f"find {shell_quote(Path(options['results_directory']) / 'website')} -path '*/genome/MGYG*.fna' > sourmash_sketches/all_fasta.txt",
+            f"find {shell_quote(Path(options['results_directory']) / 'website')} -path {shell_quote(fasta_glob)} > sourmash_sketches/all_fasta.txt",
             "sourmash sketch dna --from-file sourmash_sketches/all_fasta.txt --outdir sourmash_sketches --name-from-first",
         ]
     )
@@ -405,8 +434,12 @@ def run_genome_release_tasks(
     move_catalogue_files_to_ftp(options)
     if not run_genome_search_tasks:
         return
-    make_cobs_index(options)
-    make_sourmash_sketches(options)
+    if validate_pipeline_version(options["pipeline_version"]) >= 4:
+        make_cobs_index_v4(options)
+        make_sourmash_sketches_v4(options)
+    else:
+        make_cobs_index(options)
+        make_sourmash_sketches(options)
     make_sourmash_index(options)
     place_cobs_index_on_embassy(options)
     place_sourmash_signatures(options)
@@ -415,6 +448,15 @@ def run_genome_release_tasks(
 
 @task
 def process_genome_dir(catalogue, genome_dir):
+    return _process_genome_dir(catalogue, genome_dir)
+
+
+@task
+def process_genome_dir_v4(catalogue, genome_dir):
+    return _process_genome_dir(catalogue, genome_dir, v4=True)
+
+
+def _process_genome_dir(catalogue, genome_dir, *, v4=False):
     accession = apparent_accession_of_genome_dir(genome_dir)
     logger = get_run_logger()
     logger.info(f"Processing genome: {accession}")
@@ -461,11 +503,17 @@ def process_genome_dir(catalogue, genome_dir):
 
     logger.info(f"Uploaded genome and metadata for {accession}")
 
-    upload_cog_results(catalogue_genome, genome_dir)
-    upload_kegg_class_results(catalogue_genome, genome_dir)
-    upload_kegg_module_results(catalogue_genome, genome_dir)
-    upload_antismash_geneclusters(catalogue_genome, genome_dir)
-    upload_genome_files(catalogue_genome, genome_dir, has_pangenome)
+    if v4:
+        upload_cog_results_v4(catalogue_genome, genome_dir)
+        upload_kegg_class_results_v4(catalogue_genome, genome_dir)
+        upload_kegg_module_results_v4(catalogue_genome, genome_dir)
+        upload_genome_files_v4(catalogue_genome, genome_dir, has_pangenome)
+    else:
+        upload_cog_results(catalogue_genome, genome_dir)
+        upload_kegg_class_results(catalogue_genome, genome_dir)
+        upload_kegg_module_results(catalogue_genome, genome_dir)
+        upload_antismash_geneclusters(catalogue_genome, genome_dir)
+        upload_genome_files(catalogue_genome, genome_dir, has_pangenome)
 
 
 @flow(name="import_genomes_flow")
@@ -497,6 +545,7 @@ def import_genomes_flow(
     }
 
     options = parse_options(options)
+    pipeline_major = validate_pipeline_version(options["pipeline_version"])
 
     catalogue = get_catalogue(options)
     catalogue.genomes.all().delete()
@@ -508,10 +557,13 @@ def import_genomes_flow(
     upload_catalogue_summary(catalogue, options["catalogue_dir"])
     upload_catalogue_files(catalogue, options["catalogue_dir"])
     genome_dirs = gather_genome_dirs(
-        options["catalogue_dir"], options["catalogue_type"]
+        options["catalogue_dir"], options["catalogue_type"], options["pipeline_version"]
     )
     for genome_dir in genome_dirs:
-        process_genome_dir(catalogue, genome_dir)
+        if pipeline_major >= 4:
+            process_genome_dir_v4(catalogue, genome_dir)
+        else:
+            process_genome_dir(catalogue, genome_dir)
     get_run_logger().info(
         f"Processed {len(genome_dirs)} genomes in catalogue {catalogue.name}"
     )
