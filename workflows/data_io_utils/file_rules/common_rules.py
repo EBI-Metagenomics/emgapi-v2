@@ -1,5 +1,6 @@
 import math
 from pathlib import Path
+from typing import Iterable
 
 from workflows.data_io_utils.csv.csv_comment_handler import (
     CommentAwareDictReader,
@@ -36,15 +37,25 @@ GlobHasFilesRule = GlobRule(
 )
 
 
-def _tsv_has_data(f: Path):
+def tsv_has_data(f: Path, required_fieldnames: Iterable[str] = ()) -> bool:
     with f.open("r") as fh:
         reader = CommentAwareDictReader(fh, delimiter=CSVDelimiter.TAB)
-        return any(reader)
+        if not reader.fieldnames:
+            raise ValueError("TSV has no header row")
+
+        missing_fieldnames = set(required_fieldnames) - set(reader.fieldnames)
+        if missing_fieldnames:
+            raise ValueError(
+                "TSV header is missing required fields: "
+                f"{', '.join(sorted(missing_fieldnames))}"
+            )
+
+        return next(reader, None) is not None
 
 
 TSVHasDataRule = FileRule(
     rule_name="TSV should have data rows",
-    test=_tsv_has_data,
+    test=tsv_has_data,
 )
 
 
