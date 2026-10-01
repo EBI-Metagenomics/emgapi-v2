@@ -249,7 +249,9 @@ def test_search_tasks_fasta_patterns(task_name, glob):
     from workflows.flows import import_genomes_flow as flow_module
 
     with patch.object(flow_module, "run_cluster_job") as job:
-        getattr(flow_module, task_name).fn(get_default_options())
+        getattr(flow_module, task_name).fn(
+            get_default_options(catalogue_slug="sheep-rumen-v1-0")
+        )
     assert f"'{glob}'" in job.call_args.kwargs["command"]
 
 
