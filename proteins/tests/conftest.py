@@ -27,24 +27,52 @@ def tier1(django_db_setup, django_db_blocker):
         cursor.execute("RESET search_path")
 
 
+def role_connection(role, **kwargs):
+    """A new connection to the proteindb test database as a role."""
+    settings = connections["proteindb"].settings_dict
+    return psycopg.connect(
+        host=settings["HOST"],
+        port=settings["PORT"] or None,
+        dbname=settings["NAME"],
+        user=role,
+        password=role,
+        **kwargs,
+    )
+
+
 @pytest.fixture
 def connect_as(tier1):
-    """Opens a new connection to the proteindb test database as a role, rolled back at teardown."""
-    settings = connections["proteindb"].settings_dict
+    """Opens connections as a role. Closing them at teardown discards what they did not commit."""
     opened = []
 
     def connect(role):
-        conn = psycopg.connect(
-            host=settings["HOST"],
-            port=settings["PORT"] or None,
-            dbname=settings["NAME"],
-            user=role,
-            password=role,
-        )
-        opened.append(conn)
-        return conn
+        opened.append(role_connection(role))
+        return opened[-1]
 
     yield connect
     for conn in opened:
-        conn.rollback()
         conn.close()
+
+
+@pytest.fixture
+def connect_accession(tier1):
+    """Opens autocommit connections as proteindb_accession, as mgyp-accession does.
+
+    What they commit is outside the test's transaction, so this is for transactional
+    tests only, and the tables are emptied afterwards.
+    """
+    opened = []
+
+    def connect():
+        opened.append(role_connection("proteindb_accession", autocommit=True))
+        return opened[-1]
+
+    yield connect
+    for conn in opened:
+        conn.close()
+    with connections["proteindb"].cursor() as cursor:
+        cursor.execute(
+            "TRUNCATE proteindb.protein_key, proteindb.assembly, proteindb.gene_caller,"
+            " proteindb.staging_protein, proteindb.staging_contig, proteindb.staging_occurrence"
+            " RESTART IDENTITY"
+        )
