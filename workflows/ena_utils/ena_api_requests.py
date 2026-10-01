@@ -213,6 +213,7 @@ def check_reads_fastq(
 def _make_samples(
     ena_response: dict, study: analyses.models.Study
 ) -> tuple[ena.models.Sample, analyses.models.Sample]:
+    logger = get_run_logger()
     _ = ENAReadRunFields  # fields used here are also present on ENAAnalysisFields
 
     ena_sample, ena_sample_was_created = ena.models.Sample.objects.update_or_create(
@@ -255,7 +256,7 @@ def _make_samples(
             # a run can be indexed as a read_run while its sample is not yet searchable.
             # That is transient, so leave the sample without metadata rather than failing the
             # whole study import. The sync_samples_with_ena housekeeping flow backfills these.
-            get_run_logger().warning(
+            logger.warning(
                 f"Sample {ena_sample.accession} is not (yet) in the ENA portal sample index. "
                 f"It has no metadata; run sync_samples_with_ena to backfill it."
             )
