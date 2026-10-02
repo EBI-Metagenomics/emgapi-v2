@@ -205,6 +205,8 @@ def test_api_analysis_downloads(raw_read_analyses, ninja_api_client):
         == f"http://localhost:8080/pub/databases/metagenomics/mgnify_results/analyses/{analysis.accession}/results/taxonomies.tsv.gz.gzi"
     )
     assert "path" not in dl_api
+    assert "index_file" not in dl_api
+    assert "path" not in dl_api["index_files"][0]
 
 
 @pytest.mark.django_db
@@ -344,6 +346,54 @@ def test_api_genome_real_download(ninja_api_client, real_genome_catalogue_files)
         "http://localhost:8080/pub/databases/metagenomics/mgnify_results/"
         "mgnify_genomes/ocean-prokaryotes/1.0/MGYG000000003/"
         "genome/MGYG000000003.fna"
+    )
+    assert nucleotide_fasta["index_files"] == [
+        {"index_type": "fai", "url": nucleotide_fasta["url"] + ".fai"}
+    ]
+    assert "index_file" not in nucleotide_fasta
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("result_directory", [None, "/genomes/test"])
+@pytest.mark.parametrize("index_types", [None, [], ["fai"], ["fai", "gzi"]])
+def test_api_genome_index_files(
+    ninja_api_client, genomes, result_directory, index_types
+):
+    genome = CatalogueGenome.objects.get(genome=genomes[0])
+    genome.result_directory = result_directory
+    genome.save()
+    genome.add_download(
+        DownloadFile(
+            path="genome/sequences.fna.gz",
+            alias="sequences.fna.gz",
+            download_type=DownloadType.SEQUENCE_DATA,
+            file_type=DownloadFileType.FASTA,
+            short_description="Sequences",
+            long_description="Genome sequences",
+            index_file=(
+                None
+                if index_types is None
+                else [
+                    DownloadFileIndexFile(
+                        index_type=kind, path=f"genome/sequences.fna.gz.{kind}"
+                    )
+                    for kind in index_types
+                ]
+            ),
+        )
+    )
+    data = call_endpoint_and_get_data(
+        ninja_api_client, f"/genomes/{genome.accession}", getter=_whole_object
+    )
+    entry = next(d for d in data["downloads"] if d["alias"] == "sequences.fna.gz")
+    assert "index_file" not in entry
+    assert entry["index_files"] == (
+        None
+        if index_types is None or result_directory is None
+        else [
+            {"index_type": kind, "url": entry["url"] + f".{kind}"}
+            for kind in index_types
+        ]
     )
 
 
@@ -527,7 +577,10 @@ def test_webin_admin_can_preview_an_unpublished_catalogue(
 
 
 @pytest.mark.django_db
-def test_api_genome_catalogue_downloads(ninja_api_client, genome_catalogues):
+@pytest.mark.parametrize("index_types", [None, [], ["gzi"], ["gzi", "csi"]])
+def test_api_genome_catalogue_downloads(
+    ninja_api_client, genome_catalogues, index_types
+):
     # Arrange: ensure the selected catalogue has a result_directory and one download
     cat = next(
         c for c in genome_catalogues if c.catalogue_id == "human-gut-prokaryotes"
@@ -541,6 +594,16 @@ def test_api_genome_catalogue_downloads(ninja_api_client, genome_catalogues):
         file_type=DownloadFileType.TSV,
         short_description="Summary table",
         long_description="Overall catalogue summary",
+        index_file=(
+            None
+            if index_types is None
+            else [
+                DownloadFileIndexFile(
+                    index_type=kind, path=f"catalogue_meta/summary.tsv.{kind}"
+                )
+                for kind in index_types
+            ]
+        ),
     )
     # Save result_directory first so URL resolver has it available when endpoint serializes
     cat.save()
@@ -573,6 +636,15 @@ def test_api_genome_catalogue_downloads(ninja_api_client, genome_catalogues):
     # Internal fields must not leak into the API
     assert "path" not in entry
     assert "parent_identifier" not in entry
+    assert "index_file" not in entry
+    assert entry["index_files"] == (
+        None
+        if index_types is None
+        else [
+            {"index_type": kind, "url": entry["url"] + f".{kind}"}
+            for kind in index_types
+        ]
+    )
 
 
 @pytest.mark.django_db
