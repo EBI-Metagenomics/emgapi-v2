@@ -18,6 +18,7 @@ import pyarrow.parquet as pq
 
 from proteins import tier2
 from proteins.dims import Resolve, snapshot
+from proteins.owner import Owner
 
 logger = logging.getLogger(__name__)
 
@@ -46,10 +47,11 @@ class Staged(NamedTuple):
     gene_callers: pa.Table
 
 
-def load(dsn: str, root: Path, day: date, resolve: Resolve) -> int | None:
-    """Loads everything staged as day `day`. Returns its load_log id, or None if the day was already done."""
+def load(dsn: str, root: Path, day: date, resolve: Resolve, owner: Owner) -> int | None:
+    """Loads everything staged as day `day`, as the owner of Tier 2. Returns its load_log id, or None if the day was already done."""
     compact_until = monotonic() + COMPACTION_BUDGET
     with psycopg.connect(dsn, autocommit=True) as conn:
+        owner.check()
         recover(conn, root)
         if conn.execute(
             "SELECT 1 FROM load_log WHERE ingest_date = %s AND status = 'done'", [day]
@@ -64,9 +66,11 @@ def load(dsn: str, root: Path, day: date, resolve: Resolve) -> int | None:
                 dims, unresolved = snapshot(
                     conn, staged.assemblies, staged.gene_callers, resolve
                 )
+                owner.check()
                 counts = write_day(root, day, staged, dims)
-                commit(conn, log_id, staged.assembly_ids, counts, unresolved)
+                commit(conn, owner, log_id, staged.assembly_ids, counts, unresolved)
                 committed = True
+            owner.check()
             publish(root, day)
         except Exception as e:
             if not committed:
@@ -75,7 +79,7 @@ def load(dsn: str, root: Path, day: date, resolve: Resolve) -> int | None:
         logger.info("loaded %s: %s, %d unresolved assemblies", day, counts, unresolved)
 
         try:
-            compacted = compact(root, day, compact_until)
+            compacted = compact(root, day, compact_until, owner)
         except Exception as e:
             record_error(dsn, log_id, e, failed=False)
             raise
@@ -215,6 +219,7 @@ def write_day(
 
 def commit(
     conn: psycopg.Connection,
+    owner: Owner,
     log_id: int,
     assembly_ids: list[int],
     counts: dict[str, int],
@@ -222,6 +227,7 @@ def commit(
 ) -> None:
     """Step 8. From here on, the day's rows exist only in its Tier 2 files."""
     with conn.transaction():
+        owner.confirm(conn)
         for table in ("occurrence", "contig", "protein"):
             conn.execute(
                 f"DELETE FROM staging_{table} WHERE assembly_id = ANY(%s)",
@@ -251,7 +257,7 @@ def publish(root: Path, day: date) -> None:
     (root / "dims" / f".tmp-snapshot={day}").rename(root / "dims" / f"snapshot={day}")
 
 
-def compact(root: Path, day: date, until: float) -> bool:
+def compact(root: Path, day: date, until: float, owner: Owner) -> bool:
     """Step 10: compacts each prefix that is due, starting none after `until`. Returns whether it compacted any."""
     by_prefix = defaultdict(list)
     for path in tier2.files(root, "protein", day):
@@ -270,6 +276,7 @@ def compact(root: Path, day: date, until: float) -> bool:
                 len(due) - compacted,
             )
             break
+        owner.check()
         compact_prefix(prefix, files, day)
         compacted += 1
     return compacted > 0

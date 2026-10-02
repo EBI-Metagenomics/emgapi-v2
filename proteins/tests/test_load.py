@@ -2,11 +2,11 @@ import hashlib
 import shutil
 from datetime import date, timedelta
 from functools import cache
+from uuid import uuid4
 
 import pyarrow as pa
 import pyarrow.parquet as pq
 import pytest
-from django.db import connections
 
 from proteins import load as load_module
 from proteins import tier2
@@ -14,7 +14,14 @@ from proteins.accession.accession import accession
 from proteins.accession.inputs import read_input
 from proteins.dims import Source
 from proteins.load import LoadError, load
-from proteins.tests.conftest import FIXTURES, read_published, role_dsn
+from proteins.owner import Owner, OwnershipError
+from proteins.tests.conftest import (
+    FIXTURES,
+    Killed,
+    query,
+    read_published,
+    role_dsn,
+)
 
 pytestmark = pytest.mark.django_db(databases=["default", "proteindb"], transaction=True)
 
@@ -57,23 +64,21 @@ def read(assembly):
 @pytest.fixture
 def stage(connect_accession):
     def stage(assembly, version="6.0"):
-        accession(connect_accession, assembly, version, read(assembly))
+        # Few connections, so that 8 xdist workers stay within the server's limit.
+        accession(connect_accession, assembly, version, read(assembly), connections=4)
 
     return stage
 
 
+def own():
+    """Makes a new execution the owner of Tier 2, as a flow run does."""
+    owner = Owner(role_dsn("proteindb_load"), uuid4())
+    query("UPDATE proteindb.tier2_owner SET execution_id = %s", [owner.execution_id])
+    return owner
+
+
 def run(root, day):
-    return load(role_dsn("proteindb_load"), root, day, resolve)
-
-
-class Killed(BaseException):
-    """Ends a load as a kill would: no handler of the load's own runs."""
-
-
-def query(sql, params=None):
-    with connections["proteindb"].cursor() as cursor:
-        cursor.execute(sql, params)
-        return cursor.fetchall() if cursor.description else None
+    return load(role_dsn("proteindb_load"), root, day, resolve, own())
 
 
 TIER2_COLUMNS = {
@@ -621,3 +626,62 @@ def test_a_compacted_base_is_sorted_in_full_row_groups(tmp_path):
         tier2.ROW_GROUP_SIZE,
         250_000 - 2 * tier2.ROW_GROUP_SIZE,
     ]
+
+
+@pytest.mark.parametrize(
+    "step, status",
+    [
+        ("read_staging", "running"),
+        ("write_day", "failed"),
+        ("commit", "done"),
+        ("compact_prefix", "done"),
+    ],
+)
+def test_a_load_that_loses_ownership_writes_nothing_more(
+    tmp_path, stage, monkeypatch, exits, step, status
+):
+    stage("ERZ101")
+    expected = staged()
+    day = D1
+    if step == "compact_prefix":
+        run(tmp_path, D1)
+        stage("ERZ29562087")
+        expected = joined(expected, staged())
+        day = D31
+    original = getattr(load_module, step)
+    when_lost = {}
+
+    def then_lose_ownership(*args):
+        result = original(*args)
+        query("UPDATE proteindb.tier2_owner SET execution_id = gen_random_uuid()")
+        when_lost.update(listing(tmp_path))
+        return result
+
+    monkeypatch.setattr(load_module, step, then_lose_ownership)
+    with pytest.raises(OwnershipError if step == "write_day" else Killed):
+        run(tmp_path, day)
+    monkeypatch.undo()
+
+    assert listing(tmp_path) == when_lost
+    assert statuses()[-1] == (day, status)
+    if status != "done":
+        assert staged() == expected
+    run(tmp_path, day)
+    assert in_tier2(tmp_path) == expected
+
+
+def test_a_load_that_does_not_own_tier2_does_nothing(tmp_path, stage, exits):
+    stage("ERZ101")
+    expected = staged()
+    own()
+    with pytest.raises(Killed):
+        load(
+            role_dsn("proteindb_load"),
+            tmp_path,
+            D1,
+            resolve,
+            Owner(role_dsn("proteindb_load"), uuid4()),
+        )
+    assert statuses() == []
+    assert listing(tmp_path) == {}
+    assert staged() == expected

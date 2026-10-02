@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 
 import psycopg
@@ -72,13 +73,45 @@ def connect_as(tier1):
         conn.close()
 
 
-@pytest.fixture
-def connect_accession(tier1):
-    """Opens autocommit connections as proteindb_accession, as mgyp-accession does.
+class Killed(BaseException):
+    """Ends a process as a kill would: no handler of its own runs."""
 
-    What they commit is outside the test's transaction, so this is for transactional
-    tests only, and the tables are emptied afterwards.
-    """
+
+@pytest.fixture
+def exits(monkeypatch):
+    """Makes os._exit raise Killed, so that a test sees the process exit."""
+
+    def exit(code):
+        raise Killed(code)
+
+    monkeypatch.setattr(os, "_exit", exit)
+
+
+def query(sql, params=None):
+    """Runs sql on the proteindb test database as its owner."""
+    with connections["proteindb"].cursor() as cursor:
+        cursor.execute(sql, params)
+        return cursor.fetchall() if cursor.description else None
+
+
+@pytest.fixture
+def emptied_tier1(tier1):
+    """For transactional tests, whose role connections commit outside the test's transaction."""
+    yield
+    query(
+        "TRUNCATE proteindb.protein_key, proteindb.assembly, proteindb.gene_caller,"
+        " proteindb.staging_protein, proteindb.staging_contig, proteindb.staging_occurrence,"
+        " proteindb.study, proteindb.biome, proteindb.load_log RESTART IDENTITY"
+    )
+    query(
+        "UPDATE proteindb.tier2_owner SET flow = NULL, slurm_job_id = NULL, slurm_submit_at = NULL,"
+        " execution_id = NULL, flow_run_id = NULL, acquired_at = NULL"
+    )
+
+
+@pytest.fixture
+def connect_accession(emptied_tier1):
+    """Opens autocommit connections as proteindb_accession, as mgyp-accession does."""
     opened = []
 
     def connect():
@@ -88,9 +121,3 @@ def connect_accession(tier1):
     yield connect
     for conn in opened:
         conn.close()
-    with connections["proteindb"].cursor() as cursor:
-        cursor.execute(
-            "TRUNCATE proteindb.protein_key, proteindb.assembly, proteindb.gene_caller,"
-            " proteindb.staging_protein, proteindb.staging_contig, proteindb.staging_occurrence,"
-            " proteindb.study, proteindb.biome, proteindb.load_log RESTART IDENTITY"
-        )
