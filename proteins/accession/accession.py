@@ -3,6 +3,7 @@
 import gzip
 import logging
 import os
+import time
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -232,7 +233,32 @@ def mgyp(id: int) -> str:
 
 
 def write_output(path, occurrences: list[Occurrence], ids: dict[bytes, int]) -> None:
-    """The input FASTA with each gene's MGYP after its ID, written under a temporary name and renamed into place."""
+    """The input FASTA with each gene's MGYP after its ID."""
+    write_lines(
+        path,
+        (
+            ">{}\n{}\n".format(
+                " ".join(filter(None, (o.gene_id, mgyp(ids[o.hash]), o.description))),
+                o.sequence,
+            )
+            for o in occurrences
+        ),
+    )
+
+
+def write_lookup(path, occurrences: list[Occurrence], ids: dict[bytes, int]) -> None:
+    """Each gene's MGYP, empty when its protein has none."""
+    write_lines(
+        path,
+        (
+            f"{o.gene_id}\t{mgyp(ids[o.hash]) if o.hash in ids else ''}\n"
+            for o in occurrences
+        ),
+    )
+
+
+def write_lines(path, lines) -> None:
+    """Written under a temporary name and renamed into place, gzipped if the name ends in .gz."""
     path = Path(path)
     tmp = path.with_name(f".{path.name}.tmp")
     with open(tmp, "wb") as raw:
@@ -241,13 +267,45 @@ def write_output(path, occurrences: list[Occurrence], ids: dict[bytes, int]) -> 
             if path.suffix == ".gz"
             else raw
         )
-        for o in occurrences:
-            header = " ".join(
-                filter(None, (o.gene_id, mgyp(ids[o.hash]), o.description))
-            )
-            out.write(f">{header}\n{o.sequence}\n".encode())
+        for line in lines:
+            out.write(line.encode())
         if out is not raw:
             out.close()
         raw.flush()
         os.fsync(raw.fileno())
     os.replace(tmp, path)
+
+
+class CannotConnect(Exception):
+    """A connection could not be opened: the connection limit, the network, a restarting server, or the DSN."""
+
+
+def connector(dsn: str, application_name: str) -> Connect:
+    def connect():
+        try:
+            return psycopg.connect(
+                dsn, autocommit=True, application_name=application_name
+            )
+        except psycopg.OperationalError as e:
+            raise CannotConnect(str(e).strip()) from e
+
+    return connect
+
+
+def retry_on_connect_failure(run: Callable, max_wait=1800.0, first_delay=1.0):
+    """Runs run() again, with backoff, while it fails to open a connection.
+
+    Errors after a connection is open are not retried. run() must close its
+    connections when it fails, so that waiting frees them for others.
+    """
+    waited, delay = 0.0, first_delay
+    while True:
+        try:
+            return run()
+        except CannotConnect as e:
+            if waited >= max_wait:
+                raise
+            logger.warning("cannot connect (%s); trying again in %.1f s", e, delay)
+        time.sleep(delay)
+        waited += delay
+        delay = min(2 * delay, 60.0)

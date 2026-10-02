@@ -1,20 +1,27 @@
 import logging
+import threading
 from pathlib import Path
 
+import psycopg
 import pytest
 from django.db import connections
+from psycopg.conninfo import make_conninfo
 
 from proteins.accession.accession import (
+    CannotConnect,
     IncompleteRerun,
     accession,
+    connector,
     lookup,
     lookup_partitions,
     register_gene_callers,
+    retry_on_connect_failure,
     write_output,
 )
 from proteins.accession.contract import protein_hash
 from proteins.accession.fasta import read_fasta
 from proteins.accession.inputs import Occurrence, read_input
+from proteins.tests.conftest import role_dsn
 
 pytestmark = pytest.mark.django_db(databases=["default", "proteindb"], transaction=True)
 
@@ -213,6 +220,71 @@ def test_known_gene_callers_need_no_identity_value(connect_accession, erz101):
     assert len(accession(connect_accession, "ERZ101", "6.0", erz101)) == len(
         erz101.proteins
     )
+
+
+@pytest.fixture
+def connect_limited(connect_accession, worker_id):
+    """Connections as a role with proteindb_accession's privileges and a limit of one connection.
+
+    Roles belong to the cluster, so each xdist worker gets its own.
+    """
+    role = f"proteindb_limited_{worker_id}"
+    query(f"DROP ROLE IF EXISTS {role}")
+    query(
+        f"CREATE ROLE {role} LOGIN PASSWORD '{role}' CONNECTION LIMIT 1"
+        " IN ROLE proteindb_accession"
+    )
+    # Role settings are not inherited.
+    yield connector(
+        make_conninfo(role_dsn(role), options="-c search_path=proteindb"), "test"
+    )
+    query(f"DROP ROLE {role}")
+
+
+def test_job_waits_for_the_connection_limit(connect_limited, erz101, caplog):
+    holder = connect_limited()
+    threading.Timer(1.0, holder.close).start()
+
+    ids = retry_on_connect_failure(
+        lambda: accession(connect_limited, "ERZ101", "6.0", erz101, connections=1),
+        first_delay=0.2,
+    )
+    assert len(ids) == len(erz101.proteins)
+    assert "cannot connect" in caplog.text
+
+
+def test_job_gives_up_on_the_connection_limit(connect_limited, erz101):
+    with connect_limited():
+        with pytest.raises(CannotConnect, match="too many connections"):
+            retry_on_connect_failure(
+                lambda: accession(
+                    connect_limited, "ERZ101", "6.0", erz101, connections=1
+                ),
+                max_wait=0.5,
+                first_delay=0.2,
+            )
+    assert counts()["assembly"] == 0
+
+
+def test_errors_after_connecting_are_not_retried():
+    calls = []
+
+    def run():
+        calls.append(1)
+        raise psycopg.errors.QueryCanceled(
+            "canceling statement due to statement timeout"
+        )
+
+    with pytest.raises(psycopg.errors.QueryCanceled):
+        retry_on_connect_failure(run, first_delay=0.01)
+    assert len(calls) == 1
+
+
+def test_failing_to_connect_for_any_reason_is_retried(caplog):
+    connect = connector("host=unreachable.invalid connect_timeout=1", "test")
+    with pytest.raises(CannotConnect):
+        retry_on_connect_failure(connect, max_wait=0.03, first_delay=0.01)
+    assert caplog.text.count("cannot connect") == 2
 
 
 @pytest.mark.parametrize("name", ["out.faa", "out.faa.gz"])

@@ -3,6 +3,7 @@ from pathlib import Path
 import psycopg
 import pytest
 from django.db import connections, transaction
+from psycopg.conninfo import make_conninfo
 
 TIER1_SQL = Path(__file__).parent.parent / "sql" / "tier1.sql"
 ROLES = ("proteindb_accession", "proteindb_load", "proteindb_read")
@@ -27,17 +28,20 @@ def tier1(django_db_setup, django_db_blocker):
         cursor.execute("RESET search_path")
 
 
-def role_connection(role, **kwargs):
-    """A new connection to the proteindb test database as a role."""
+def role_dsn(role) -> str:
+    """A libpq connection string for the proteindb test database, as a role."""
     settings = connections["proteindb"].settings_dict
-    return psycopg.connect(
+    return make_conninfo(
         host=settings["HOST"],
         port=settings["PORT"] or None,
         dbname=settings["NAME"],
         user=role,
         password=role,
-        **kwargs,
     )
+
+
+def role_connection(role, **kwargs):
+    return psycopg.connect(role_dsn(role), **kwargs)
 
 
 @pytest.fixture
