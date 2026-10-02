@@ -3,7 +3,6 @@
 import argparse
 import logging
 import os
-from importlib.metadata import PackageNotFoundError, version
 
 from .accession import (
     IncompleteRerun,
@@ -23,13 +22,6 @@ EXIT_INVALID_INPUT = 2
 EXIT_INCOMPLETE_RERUN = 3
 
 
-def package_version() -> str:
-    try:
-        return version("mgyp-accession")
-    except PackageNotFoundError:  # not installed, as when run from emgapi-v2's checkout
-        return "unknown"
-
-
 def positive_int(value: str) -> int:
     if not value.isdigit() or int(value) < 1:
         raise argparse.ArgumentTypeError(f"{value!r} is not a positive integer")
@@ -43,7 +35,11 @@ def parse_args(argv=None) -> argparse.Namespace:
         " the new proteins, the contigs and the occurrences for the daily load."
         " The Protein DB is reached through the libpq connection string in PROTEINDB_DSN.",
     )
-    parser.add_argument("--version", action="version", version=package_version())
+    parser.add_argument(
+        "--version",
+        action="version",
+        version=os.environ.get("MGYP_ACCESSION_VERSION", "unknown"),
+    )
     parser.add_argument(
         "--assembly", required=True, help="ENA assembly accession, e.g. ERZ101"
     )

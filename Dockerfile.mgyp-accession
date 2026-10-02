@@ -1,0 +1,23 @@
+# mgyp-accession, run by the assembly analysis pipeline. It holds proteins/accession/ only,
+# which imports nothing from the rest of emgapi-v2.
+FROM python:3.12-slim
+
+# Nextflow collects task metrics with ps.
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends procps && \
+    rm -rf /var/lib/apt/lists/*
+
+WORKDIR /opt/mgyp-accession
+COPY requirements-mgyp-accession.txt .
+RUN pip install --no-cache-dir -r requirements-mgyp-accession.txt
+
+COPY proteins/__init__.py proteins/
+COPY proteins/accession/ proteins/accession/
+RUN printf '#!/bin/sh\nexec python -m proteins.accession "$@"\n' > /usr/local/bin/mgyp-accession && \
+    chmod +x /usr/local/bin/mgyp-accession
+
+# The emgapi-v2 release the image is tagged with, which mgyp-accession --version reports as it is.
+ARG VERSION=unknown
+ENV PYTHONPATH=/opt/mgyp-accession MGYP_ACCESSION_VERSION=${VERSION}
+
+CMD ["mgyp-accession", "--help"]

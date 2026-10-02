@@ -58,6 +58,28 @@ jobs:
           files: coverage/coverage.xml
           token: ${{ secrets.CODECOV_TOKEN }}
 
+  mgyp-accession-image:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build the mgyp-accession image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile.mgyp-accession
+          build-args: VERSION=ci
+          tags: mgyp-accession:ci
+          load: true
+
+      - name: Check that it runs
+        run: |
+          test "$(docker run --rm mgyp-accession:ci mgyp-accession --version)" = ci
+
 
 # Debugging info:
 # This workflow file also works offline, using https://github.com/nektos/act.
