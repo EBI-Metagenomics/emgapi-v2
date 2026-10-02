@@ -182,6 +182,51 @@ def test_ocean_prokaryotes_v4_fixture(prefect_harness):
     assert downloads["pan-genome/pan-genome.fna.gz"]["long_description"] == (
         "Pangenome DNA sequence"
     )
+    expected_groups = {
+        "genome_sequence.assembly": ["genome/MGYG000235960.fna.gz"],
+        "genome_sequence.proteins": ["genome/MGYG000235960.faa.gz"],
+        "genome_sequence.rrna": ["genome/MGYG000235960_rRNAs.fasta.gz"],
+        "genome_sequence.pangenome": ["pan-genome/pan-genome.fna.gz"],
+        "genome_analysis.annotation": ["genome/MGYG000235960.gff.gz"],
+        "genome_analysis.bgcs": [
+            "genome/MGYG000235960_antismash.gff.gz",
+            "genome/MGYG000235960_sanntis.gff.gz",
+            "genome/MGYG000235960_gecco.gff.gz",
+        ],
+        "genome_analysis.crispr": [
+            "genome/MGYG000235960_crisprcasfinder.gff.gz",
+            "genome/MGYG000235960_crisprcasfinder.tsv.gz",
+        ],
+        "genome_analysis.amr": ["genome/MGYG000235960_amrfinderplus.tsv.gz"],
+        "genome_analysis.defense_systems": [
+            "genome/MGYG000235960_defense_finder.gff.gz"
+        ],
+        "genome_analysis.mobilome": ["genome/MGYG000235960_mobilome.gff.gz"],
+        "genome_analysis.dbcan": ["genome/MGYG000235960_dbcan.gff.gz"],
+        "genome_analysis.eggnog": ["genome/MGYG000235960_eggNOG.tsv.gz"],
+        "genome_analysis.interpro": ["genome/MGYG000235960_InterProScan.tsv.gz"],
+        "genome_analysis.kegg": ["genome/MGYG000235960_kegg_pathways.tsv.gz"],
+        "genome_analysis.pathogenicity": [
+            "genome/MGYG000235960_pathofact2_combined_report.tsv.gz"
+        ],
+        "genome_analysis.pangenome": [
+            "pan-genome/gene_presence_absence.Rtab.gz",
+            "pan-genome/gene_presence_absence.csv.gz",
+            "pan-genome/gene_prevalence_corrected.txt.gz",
+            "pan-genome/mashtree.nwk.gz",
+        ],
+    }
+    assert set(downloads) == {
+        path for paths in expected_groups.values() for path in paths
+    }
+    for group, paths in expected_groups.items():
+        for path in paths:
+            assert downloads[path]["download_group"] == group
+            assert downloads[path]["download_type"] == (
+                "Genome sequence"
+                if group.startswith("genome_sequence.")
+                else "Genome analysis"
+            )
 
 
 def test_v4_fixture_requires_compressed_files(tmp_path):
