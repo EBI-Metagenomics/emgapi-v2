@@ -1,0 +1,36 @@
+{
+  "accession": "MGYG000235960",
+  "completeness": 100,
+  "contamination": 0,
+  "eggnog_coverage": 88.07,
+  "ena_sample_accession": "ERS634912",
+  "ena_study_accession": "ERP009131",
+  "gc_content": 49.58,
+  "genome_accession": "CFUJSE01",
+  "geographic_origin": "North America",
+  "gold_biome": "root",
+  "ipr_coverage": 82.7,
+  "length": 58,
+  "n_50": 58,
+  "nc_rnas": 11,
+  "num_contigs": 1,
+  "num_proteins": 1,
+  "pangenome": {
+    "geographic_range": [
+      "Asia",
+      "Europe",
+      "North America"
+    ],
+    "num_genomes_non_redundant": 2,
+    "num_genomes_total": 2,
+    "pangenome_accessory_size": 1,
+    "pangenome_core_size": 1,
+    "pangenome_size": 2
+  },
+  "rna_16s": 0,
+  "rna_23s": 11.08,
+  "rna_5s": 94.12,
+  "taxon_lineage": "d__Bacteria;p__Bacteroidota;c__Bacteroidia;o__Bacteroidales;f__Muribaculaceae;g__Muribaculum;s__Muribaculum gordoncarteri",
+  "trnas": 20,
+  "type": "MAG"
+}
