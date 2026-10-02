@@ -1,3 +1,4 @@
+import csv
 import re
 from pathlib import Path
 
@@ -7,9 +8,45 @@ from prefect.tasks import task_input_hash
 from activate_django_first import EMG_CONFIG
 
 import analyses.models
+from workflows.data_io_utils.file_rules.common_rules import tsv_has_data
 from workflows.flows.analyse_study_tasks.shared.analysis_states import AnalysisStates
 from workflows.prefect_utils.analyses_models_helpers import mark_analysis_status
 from workflows.prefect_utils.flows_utils import django_db_task as task
+
+
+def _dada2_taxonomy_summary_failure_reason(
+    db: Path, run_id: str, amplified_regions: list[str]
+) -> str | None:
+    mseq_path = db / f"{run_id}_{db.name}.mseq"
+    if not mseq_path.is_file():
+        return f"missing mseq in {db}"
+
+    try:
+        has_data = tsv_has_data(
+            mseq_path,
+            required_fieldnames={"query", "dbhit"},
+        )
+    except (OSError, UnicodeError, csv.Error, ValueError) as error:
+        return f"invalid mseq in {db}: {error}"
+
+    # A valid header-only file means there were no taxonomic annotations, so
+    # the pipeline is not expected to produce Krona files for this database.
+    if not has_data:
+        return None
+
+    for region in amplified_regions:
+        region_krona = db / f"{run_id}_{region}_{db.name}_asv_krona_counts.txt"
+        region_html = db / f"{run_id}_{region}.html"
+        if not (region_html.exists() and region_krona.exists()):
+            return f"missing {region} file in {db}"
+
+    if len(amplified_regions) == 2:
+        concat_html = db / f"{run_id}_concat.html"
+        concat_krona = db / f"{run_id}_concat_{db.name}_asv_krona_counts.txt"
+        if not (concat_krona.exists() and concat_html.exists()):
+            return f"missing concat files in {db}"
+
+    return None
 
 
 @task(
@@ -264,24 +301,11 @@ def sanity_check_amplicon_results(
                 ):
                     reason = f"missing file in {db}"
             elif db.name in dada2_tax_names and asv_folder.exists():
-                if not Path(f"{db}/{run_id}_{db.name}.mseq").exists():
-                    reason = f"missing mseq in {db}"
-                else:
-                    for region in amplified_regions:
-                        region_krona = Path(
-                            f"{db}/{run_id}_{region}_{db.name}_asv_krona_counts.txt"
-                        )
-                        region_html = Path(f"{db}/{run_id}_{region}.html")
-                        if not (region_html.exists() and region_krona.exists()):
-                            reason = f"missing {region} file in {db}"
-                    # checking concat folder
-                    if len(amplified_regions) == 2:
-                        concat_html = Path(f"{db}/{run_id}_concat.html")
-                        concat_krona = Path(
-                            f"{db}/{run_id}_concat_{db.name}_asv_krona_counts.txt"
-                        )
-                        if not (concat_krona.exists() and concat_html.exists()):
-                            reason = f"missing concat files in {db}"
+                dada2_reason = _dada2_taxonomy_summary_failure_reason(
+                    db, run_id, amplified_regions
+                )
+                if dada2_reason:
+                    reason = dada2_reason
             else:
                 reason = f"unknown {db} in {EMG_CONFIG.amplicon_pipeline.taxonomy_summary_folder}"
 

@@ -325,7 +325,9 @@ def generate_fake_pipeline_all_results(amplicon_run_folder: Path, run):
         / "DADA2-SILVA"
     )
     (dada2_silva_dir / f"{run}_16S-V3-V4.html").touch()
-    (dada2_silva_dir / f"{run}_DADA2-SILVA.mseq").touch()
+    (dada2_silva_dir / f"{run}_DADA2-SILVA.mseq").write_text(
+        "#query\tdbhit\nseq_1\thit_1\n"
+    )
     (dada2_silva_dir / f"{run}_18S-V9.html").touch()
     (dada2_silva_dir / f"{run}_concat.html").touch()
     with (
@@ -377,7 +379,9 @@ def generate_fake_pipeline_all_results(amplicon_run_folder: Path, run):
         / "DADA2-PR2"
     )
     (dada2_pr2_dir / f"{run}_16S-V3-V4.html").touch()
-    (dada2_pr2_dir / f"{run}_DADA2-PR2.mseq").touch()
+    (dada2_pr2_dir / f"{run}_DADA2-PR2.mseq").write_text(
+        "#query\tdbhit\nseq_1\thit_1\n"
+    )
     (dada2_pr2_dir / f"{run}_18S-V9.html").touch()
     (dada2_pr2_dir / f"{run}_concat.html").touch()
     with (
@@ -1006,6 +1010,18 @@ def test_prefect_analyse_amplicon_flow(
     generate_fake_pipeline_all_results(
         amplicon_folder / amplicon_run_all_results, amplicon_run_all_results
     )
+    # MAPseq ran successfully but found no taxonomic matches. A valid
+    # header-only aggregate mseq therefore does not require Krona output.
+    dada2_silva_dir = (
+        amplicon_folder
+        / amplicon_run_all_results
+        / EMG_CONFIG.amplicon_pipeline.taxonomy_summary_folder
+        / "DADA2-SILVA"
+    )
+    (dada2_silva_dir / f"{amplicon_run_all_results}_DADA2-SILVA.mseq").write_text(
+        "#query\tdbhit\tbitscore\n"
+    )
+    (dada2_silva_dir / f"{amplicon_run_all_results}_16S-V3-V4.html").unlink()
     # ------- results for completed runs with no asv results
     generate_fake_pipeline_no_asvs(
         amplicon_folder / amplicon_run_no_asv, amplicon_run_no_asv
@@ -1116,6 +1132,10 @@ def test_prefect_analyse_amplicon_flow(
         study.analyses.filter(status__analysis_post_sanity_check_failed=True).count()
         == 2  # 2 fail sanity check for missing qc
     )
+    assert not study.analyses.filter(
+        run__ena_accessions__contains=[amplicon_run_all_results],
+        status__analysis_post_sanity_check_failed=True,
+    ).exists()
     assert (
         study.analyses.filter(status__analysis_completed_reason="all_results").count()
         == 1
@@ -1340,7 +1360,7 @@ def test_prefect_analyse_amplicon_flow(
             GlobRule(
                 rule_name="Recursive number of files",
                 glob_pattern="**/*",
-                test=lambda x: len(list(x)) == 157,
+                test=lambda x: len(list(x)) == 156,
             )
         ],
     )
