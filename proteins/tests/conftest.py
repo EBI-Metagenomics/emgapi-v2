@@ -91,6 +91,6 @@ def connect_accession(tier1):
     with connections["proteindb"].cursor() as cursor:
         cursor.execute(
             "TRUNCATE proteindb.protein_key, proteindb.assembly, proteindb.gene_caller,"
-            " proteindb.staging_protein, proteindb.staging_contig, proteindb.staging_occurrence"
-            " RESTART IDENTITY"
+            " proteindb.staging_protein, proteindb.staging_contig, proteindb.staging_occurrence,"
+            " proteindb.study, proteindb.biome, proteindb.load_log RESTART IDENTITY"
         )
