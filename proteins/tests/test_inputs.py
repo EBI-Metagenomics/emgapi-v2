@@ -55,18 +55,22 @@ def write(path: Path, text: str) -> Path:
     return path
 
 
-def gff_row(gene_id, contig="c1", source="Pyrodigal_v3.6.3"):
-    return f"{contig}\t{source}\tCDS\t1\t9\t.\t-\t0\tID={gene_id}\n"
+def gff_row(gene_id, contig="c1", source="Pyrodigal_v3.6.3", strand="-"):
+    return f"{contig}\t{source}\tCDS\t1\t9\t.\t{strand}\t0\tID={gene_id}\n"
 
 
 @pytest.fixture
 def files(tmp_path):
     """Writes an input of genes, given as {gene_id: sequence}, on contigs c1 and c2."""
 
-    def make(genes, gff=None, contigs=">c1\nACGTACGTA\n>c2\nacgt\n", contig_map=None):
-        faa = "".join(
-            f">{id} # 1 # 9 # -1 # ID=1\n{seq}\n" for id, seq in genes.items()
-        )
+    def make(
+        genes,
+        gff=None,
+        contigs=">c1\nACGTACGTA\n>c2\nacgt\n",
+        contig_map=None,
+        description="# 1 # 9 # -1 # ID=1;partial=00",
+    ):
+        faa = "".join(f">{id} {description}\n{seq}\n" for id, seq in genes.items())
         return (
             write(tmp_path / "in.faa.gz", faa),
             write(tmp_path / "in.gff", gff or "".join(gff_row(id) for id in genes)),
@@ -113,7 +117,7 @@ def test_fasta_and_gff_must_agree(files):
 
 def test_gene_ids_must_be_unique(files):
     paths = files({"g1": "MKV"}, gff=gff_row("g1") + gff_row("g1"))
-    write(paths[0], ">g1\nMKV\n>g1\nMAG\n")
+    write(paths[0], ">g1 partial=00\nMKV\n>g1 partial=00\nMAG\n")
     assert problems(*paths) == [
         "g1: more than one GFF row",
         "g1: more than one FASTA record",
@@ -180,6 +184,48 @@ def test_every_contig_carrying_a_gene_must_be_in_the_contig_map(files):
 def test_contig_map_must_have_the_pipeline_header(files):
     with pytest.raises(ValueError, match="header"):
         read_input(*files({"g1": "MKV"}, contig_map="x\tc1\n"))
+
+
+@pytest.mark.parametrize("strand", ["+", "-"])
+@pytest.mark.parametrize("partial", ["00", "01", "10", "11"])
+def test_pyrodigal_truncation_is_the_partial_flag(files, strand, partial):
+    (occurrence,) = read_input(
+        *files(
+            {"g1": "MKV"},
+            gff=gff_row("g1", strand=strand),
+            description=f"# 1 # 9 # {strand}1 # ID=1_1;partial={partial};start_type=ATG",
+        )
+    ).occurrences
+    assert occurrence.truncation == partial
+
+
+@pytest.mark.parametrize("description", ["", "# 1 # 9 # -1 # ID=1_1;partial=01"])
+def test_fraggenescan_has_no_truncation(files, description):
+    (occurrence,) = read_input(
+        *files(
+            {"g1": "MKV"},
+            gff=gff_row("g1", source="FragGeneScanRS_v1.1.0"),
+            description=description,
+        )
+    ).occurrences
+    assert occurrence.truncation is None
+
+
+@pytest.mark.parametrize(
+    "description",
+    [
+        "# 1 # 9 # -1 # ID=1_1;start_type=ATG",
+        "# 1 # 9 # -1 # ID=1_1;partial=00;partial=00",
+        "# 1 # 9 # -1 # ID=1_1;partial=2",
+        "# 1 # 9 # -1 # ID=1_1;partial=001",
+        "# 1 # 9 # -1 # ID=1_1;partial=",
+        "# 1 # 9 # -1 # ID=1_1;notpartial=00",
+    ],
+)
+def test_pyrodigal_needs_a_single_valid_partial_flag(files, description):
+    assert problems(*files({"g1": "MKV"}, description=description)) == [
+        "g1: no single valid partial= flag"
+    ]
 
 
 @pytest.mark.parametrize(

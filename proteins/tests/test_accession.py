@@ -20,7 +20,7 @@ from proteins.accession.accession import (
 )
 from proteins.accession.contract import protein_hash
 from proteins.accession.fasta import read_fasta
-from proteins.accession.inputs import Occurrence, read_input
+from proteins.accession.inputs import Contig, Input, Occurrence, read_input
 from proteins.tests.conftest import role_dsn
 
 pytestmark = pytest.mark.django_db(databases=["default", "proteindb"], transaction=True)
@@ -103,11 +103,36 @@ def test_new_assembly_is_staged_exactly(connect_accession, erz101):
                 o.start,
                 o.end,
                 o.strand,
-                None,
+                o.truncation,
             )
             for o in erz101.occurrences
         )
     )
+
+
+def test_truncation_is_staged_unchanged(connect_accession):
+    genes = [
+        (f"g{n}", "MK" + "V" * n, strand, truncation)
+        for n, (strand, truncation) in enumerate(
+            (strand, truncation)
+            for strand in (1, -1)
+            for truncation in ("00", "01", "10", "11", None)
+        )
+    ]
+    occurrences = [
+        Occurrence(id, "", seq, protein_hash(seq), "c1", 1, 9, strand, "P", "1", t)
+        for id, seq, strand, t in genes
+    ]
+    input = Input(
+        occurrences,
+        sorted({(o.hash, o.sequence) for o in occurrences}),
+        [Contig("c1", None, 9, b"\0" * 32, None)],
+    )
+    accession(connect_accession, "ERZ1", "6.0", input)
+
+    assert sorted(
+        query("SELECT gene_id, strand, truncation FROM proteindb.staging_occurrence")
+    ) == sorted((id, strand, t) for id, _, strand, t in genes)
 
 
 def test_assembly_with_only_known_proteins_adds_none(connect_accession, erz101):
@@ -302,7 +327,7 @@ def test_output_has_the_mgyp_after_the_gene_id(tmp_path, erz101, name):
 
 def test_output_header_without_description_has_no_trailing_space(tmp_path):
     occurrence = Occurrence(
-        "g1", "", "MKV", protein_hash("MKV"), "c1", 1, 9, 1, "P", "1"
+        "g1", "", "MKV", protein_hash("MKV"), "c1", 1, 9, 1, "P", "1", None
     )
     write_output(tmp_path / "out.faa", [occurrence], {protein_hash("MKV"): 42})
     assert (tmp_path / "out.faa").read_text() == ">g1 MGYP000000000042\nMKV\n"

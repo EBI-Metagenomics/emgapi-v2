@@ -202,8 +202,8 @@ def stage(
         copy_rows(
             conn,
             "staging_occurrence (assembly_id, gene_id, protein_id, contig_id, gene_caller_id,"
-            " start_position, end_position, strand)",
-            ["int4", "text", "int8", "int8", "int2", "int4", "int4", "int2"],
+            " start_position, end_position, strand, truncation)",
+            ["int4", "text", "int8", "int8", "int2", "int4", "int4", "int2", "text"],
             [
                 (
                     assembly_id,
@@ -214,6 +214,7 @@ def stage(
                     o.start,
                     o.end,
                     o.strand,
+                    o.truncation,
                 )
                 for o in input.occurrences
             ],

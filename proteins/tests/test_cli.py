@@ -134,6 +134,12 @@ def duplicate_first_record(text):
             "6.0",
             "has no gene caller version",
         ),
+        (
+            lambda t: t.replace("partial=01", "partial=1", 1),
+            None,
+            "6.0",
+            "ERZ101_2_5: no single valid partial= flag",
+        ),
         (None, None, "6.10", "one digit each"),
         (None, None, "10.0", "one digit each"),
     ],

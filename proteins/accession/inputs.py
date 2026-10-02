@@ -11,6 +11,8 @@ from .gff import read_gff
 
 PIPELINE_VERSION = re.compile(r"([0-9]\.[0-9])(\..*)?")
 SPADES_COVERAGE = re.compile(r"_cov_([0-9]+(?:\.[0-9]+)?)")
+PARTIAL = re.compile(r"(?<![^;\s])partial=([^;\s]*)")
+TRUNCATIONS = {"00", "01", "10", "11"}
 
 
 class InvalidInput(ValueError):
@@ -30,6 +32,7 @@ class Occurrence(NamedTuple):
     strand: int
     caller_name: str
     caller_version: str
+    truncation: str | None  # Pyrodigal's partial=XY; None for other callers
 
 
 class Contig(NamedTuple):
@@ -83,6 +86,13 @@ def read_input(faa, gff, contigs, contig_map=None) -> Input:
         except InvalidSequence as e:
             problems.append(f"{record.id}: {e}")
             continue
+        truncation = None
+        if gene.caller_name == "Pyrodigal":
+            flags = PARTIAL.findall(record.description)
+            if len(flags) != 1 or flags[0] not in TRUNCATIONS:
+                problems.append(f"{record.id}: no single valid partial= flag")
+                continue
+            truncation = flags[0]
         hash = protein_hash(sequence)
         proteins[hash] = sequence
         occurrences.append(
@@ -97,6 +107,7 @@ def read_input(faa, gff, contigs, contig_map=None) -> Input:
                 gene.strand,
                 gene.caller_name,
                 gene.caller_version,
+                truncation,
             )
         )
     problems += [f"{id}: not in the FASTA" for id in sorted(genes.keys() - seen)]
