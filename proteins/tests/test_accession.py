@@ -20,8 +20,8 @@ from proteins.accession.accession import (
 )
 from proteins.accession.contract import protein_hash
 from proteins.accession.fasta import read_fasta
-from proteins.accession.inputs import Contig, Input, Occurrence, read_input
-from proteins.tests.conftest import role_dsn
+from proteins.accession.inputs import Occurrence, read_input
+from proteins.tests.conftest import PUBLISHED_V6, read_published, role_dsn
 
 pytestmark = pytest.mark.django_db(databases=["default", "proteindb"], transaction=True)
 
@@ -57,28 +57,28 @@ def counts():
     }
 
 
-def test_new_assembly_is_staged_exactly(connect_accession, erz101):
-    ids = accession(connect_accession, "ERZ101", "6.0", erz101)
+@pytest.mark.parametrize("assembly", ["ERZ101", *PUBLISHED_V6])
+def test_new_assembly_is_staged_exactly(connect_accession, erz101, assembly):
+    input = erz101 if assembly == "ERZ101" else read_published(assembly)
+    ids = accession(connect_accession, assembly, "6.0", input)
 
-    assert set(ids) == {hash for hash, _ in erz101.proteins}
+    assert set(ids) == {hash for hash, _ in input.proteins}
     assert len(set(ids.values())) == len(ids)
     assert dict(query("SELECT hash, id FROM proteindb.protein_key")) == ids
     ((assembly_id, accession_, version),) = query(
         "SELECT id, accession, pipeline_version FROM proteindb.assembly"
     )
-    assert (accession_, version) == ("ERZ101", "6.0")
+    assert (accession_, version) == (assembly, "6.0")
     assert set(
         query("SELECT id, hash, sequence, assembly_id FROM proteindb.staging_protein")
-    ) == {
-        (ids[hash], hash, sequence, assembly_id) for hash, sequence in erz101.proteins
-    }
+    ) == {(ids[hash], hash, sequence, assembly_id) for hash, sequence in input.proteins}
     assert set(
         query(
             "SELECT name, original_name, length, hash, kmer_coverage"
             " FROM proteindb.staging_contig WHERE assembly_id = %s",
             [assembly_id],
         )
-    ) == set(erz101.contigs)
+    ) == set(input.contigs)
     assert (
         sorted(
             query(
@@ -105,34 +105,9 @@ def test_new_assembly_is_staged_exactly(connect_accession, erz101):
                 o.strand,
                 o.truncation,
             )
-            for o in erz101.occurrences
+            for o in input.occurrences
         )
     )
-
-
-def test_truncation_is_staged_unchanged(connect_accession):
-    genes = [
-        (f"g{n}", "MK" + "V" * n, strand, truncation)
-        for n, (strand, truncation) in enumerate(
-            (strand, truncation)
-            for strand in (1, -1)
-            for truncation in ("00", "01", "10", "11", None)
-        )
-    ]
-    occurrences = [
-        Occurrence(id, "", seq, protein_hash(seq), "c1", 1, 9, strand, "P", "1", t)
-        for id, seq, strand, t in genes
-    ]
-    input = Input(
-        occurrences,
-        sorted({(o.hash, o.sequence) for o in occurrences}),
-        [Contig("c1", None, 9, b"\0" * 32, None)],
-    )
-    accession(connect_accession, "ERZ1", "6.0", input)
-
-    assert sorted(
-        query("SELECT gene_id, strand, truncation FROM proteindb.staging_occurrence")
-    ) == sorted((id, strand, t) for id, _, strand, t in genes)
 
 
 def test_assembly_with_only_known_proteins_adds_none(connect_accession, erz101):

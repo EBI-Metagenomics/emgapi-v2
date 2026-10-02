@@ -5,8 +5,22 @@ import pytest
 from django.db import connections, transaction
 from psycopg.conninfo import make_conninfo
 
+from proteins.accession.inputs import read_input
+
+FIXTURES = Path(__file__).parent.parent / "fixtures"
 TIER1_SQL = Path(__file__).parent.parent / "sql" / "tier1.sql"
 ROLES = ("proteindb_accession", "proteindb_load", "proteindb_read")
+
+# Whole short contigs, with every gene on them, cut from the published V6 analyses
+# MGYA01028322, MGYA01030666 and MGYA01032591, chosen to cover each gene caller on
+# both strands and every partial= value.
+PUBLISHED_V6 = ("ERZ29562087", "ERZ25069264", "ERZ29895170")
+
+
+def read_published(assembly):
+    return read_input(
+        *(FIXTURES / f"{assembly}.{suffix}.gz" for suffix in ("faa", "gff", "fasta"))
+    )
 
 
 @pytest.fixture(scope="session")

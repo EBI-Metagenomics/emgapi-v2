@@ -7,6 +7,7 @@ import pytest
 from proteins.accession.contract import protein_hash
 from proteins.accession.fasta import read_fasta
 from proteins.accession.inputs import InvalidInput, major_minor, read_input
+from proteins.tests.conftest import PUBLISHED_V6, read_published
 
 FIXTURES = Path(__file__).parent.parent / "fixtures"
 FAA = FIXTURES / "ERZ101.faa.gz"
@@ -184,6 +185,29 @@ def test_every_contig_carrying_a_gene_must_be_in_the_contig_map(files):
 def test_contig_map_must_have_the_pipeline_header(files):
     with pytest.raises(ValueError, match="header"):
         read_input(*files({"g1": "MKV"}, contig_map="x\tc1\n"))
+
+
+@pytest.mark.parametrize("assembly", PUBLISHED_V6)
+def test_reads_published_v6_output(assembly):
+    occurrences = read_published(assembly).occurrences
+
+    for o in occurrences:
+        if o.caller_name == "Pyrodigal":
+            fields = dict(
+                f.split("=") for f in o.description.split(" # ")[-1].split(";")
+            )
+            assert o.truncation == fields["partial"]
+        else:
+            assert o.truncation is None
+    assert {(o.caller_name, o.strand, o.truncation) for o in occurrences} == {
+        *(
+            ("Pyrodigal", strand, partial)
+            for strand in (1, -1)
+            for partial in ("00", "01", "10", "11")
+        ),
+        ("FragGeneScanRS", 1, None),
+        ("FragGeneScanRS", -1, None),
+    }
 
 
 @pytest.mark.parametrize("strand", ["+", "-"])
