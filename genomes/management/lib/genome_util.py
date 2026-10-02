@@ -840,7 +840,7 @@ def prepare_downloadable_file(
         "fasta": DownloadFileType.FASTA,
         "fna": DownloadFileType.FASTA,
         "fai": DownloadFileType.OTHER,
-        "gff": DownloadFileType.OTHER,
+        "gff": DownloadFileType.GFF,
         "tsv": DownloadFileType.TSV,
         "csv": DownloadFileType.CSV,
         "json": DownloadFileType.JSON,
