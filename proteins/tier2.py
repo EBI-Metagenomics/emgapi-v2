@@ -4,6 +4,7 @@ import os
 import re
 from datetime import date
 from pathlib import Path
+from typing import Iterable
 
 import pyarrow as pa
 import pyarrow.parquet as pq
@@ -158,18 +159,30 @@ def write(path: Path, table: str, data: pa.Table) -> None:
         data.select(schema.names)
         .cast(schema)
         .sort_by([(column, "ascending") for column in SORT_ORDER[table]])
+        .combine_chunks()
+    )
+    write_sorted(path, table, data.to_batches(max_chunksize=ROW_GROUP_SIZE))
+
+
+def write_sorted(path: Path, table: str, batches: Iterable[pa.RecordBatch]) -> None:
+    """Writes batches already in the table's sort order, each one a row group, all or nothing."""
+    schema = SCHEMAS[table]
+    batches = (
+        pa.Table.from_batches([batch]).select(schema.names).cast(schema)
+        for batch in batches
     )
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_name(f".{path.name}.tmp")
     with open(tmp, "wb") as f:
-        pq.write_table(
-            data,
+        with pq.ParquetWriter(
             f,
+            schema,
             compression="zstd",
             compression_level=1,
-            row_group_size=ROW_GROUP_SIZE,
             write_statistics=True,
-        )
+        ) as writer:
+            for batch in batches:
+                writer.write_table(batch, row_group_size=ROW_GROUP_SIZE)
         f.flush()
         os.fsync(f.fileno())
     tmp.rename(path)

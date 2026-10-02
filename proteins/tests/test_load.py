@@ -1,7 +1,9 @@
+import hashlib
 import shutil
-from datetime import date
+from datetime import date, timedelta
 from functools import cache
 
+import pyarrow as pa
 import pyarrow.parquet as pq
 import pytest
 from django.db import connections
@@ -17,6 +19,7 @@ from proteins.tests.conftest import FIXTURES, read_published, role_dsn
 pytestmark = pytest.mark.django_db(databases=["default", "proteindb"], transaction=True)
 
 D1, D2 = date(2026, 10, 1), date(2026, 10, 2)
+D31, D32 = D1 + timedelta(days=31), D1 + timedelta(days=32)
 
 SOURCES = {
     "ERZ101": Source("ERZ101", "MGYS1", "root:Engineered", False, False, False, False),
@@ -260,7 +263,7 @@ def test_a_second_load_on_the_same_date_writes_nothing(tmp_path, stage):
     assert statuses() == [(D1, "done")]
 
 
-STEPS = ["read_staging", "snapshot", "write_day", "commit", "publish"]
+STEPS = ["read_staging", "snapshot", "write_day", "commit", "publish", "compact"]
 
 
 @pytest.mark.parametrize(
@@ -285,7 +288,7 @@ def test_a_crash_at_any_step_ends_as_an_uninterrupted_load(
     with pytest.raises(type(error)):
         run(tmp_path, D1)
     monkeypatch.undo()
-    committed = step == "publish" or (step, when) == ("commit", "after")
+    committed = step in ("publish", "compact") or (step, when) == ("commit", "after")
     if committed:
         assert statuses() == [(D1, "done")]
     elif isinstance(error, Killed):
@@ -461,3 +464,160 @@ def test_a_day_with_nothing_staged_is_complete(tmp_path, stage):
     assert tier2.complete_days(tmp_path) == [D1]
     assert in_tier2(tmp_path) == {table: [] for table in TIER2_COLUMNS}
     assert set(listing(tmp_path)) == layout(D1, [])
+
+
+def protein_files(root):
+    return sorted(str(p.relative_to(root)) for p in root.glob("protein/*/*.parquet"))
+
+
+def prefixes(proteins):
+    return {tier2.prefix(hash) for _, hash, _ in proteins}
+
+
+def test_compaction_merges_each_due_prefix_into_one_base(tmp_path, stage):
+    stage("ERZ101")
+    day1 = staged()
+    run(tmp_path, D1)
+    stage("ERZ29562087")
+    stage("ERZ25069264")
+    day31 = staged()
+    run(tmp_path, D31)
+
+    assert in_tier2(tmp_path) == joined(day1, day31)
+    old = prefixes(day1["protein"])
+    assert protein_files(tmp_path) == sorted(
+        [f"protein/prefix={p}/base-{D31}.parquet" for p in old]
+        + [
+            f"protein/prefix={p}/part-{D31}.parquet"
+            for p in prefixes(day31["protein"]) - old
+        ]
+    )
+    for path in tier2.files(tmp_path, "protein"):
+        stored = pq.read_table(path)
+        assert stored.schema == tier2.SCHEMAS["protein"]
+        assert stored["hash"].to_pylist() == sorted(stored["hash"].to_pylist())
+    assert query(
+        "SELECT ingest_date, compacted FROM proteindb.load_log ORDER BY id"
+    ) == [(D1, False), (D31, True)]
+    with pytest.raises(tier2.Tier2Error, match="oldest base"):
+        tier2.files(tmp_path, "protein", D1)
+
+
+def test_prefixes_are_not_compacted_within_30_days(tmp_path, stage):
+    stage("ERZ101")
+    run(tmp_path, D1)
+    stage("ERZ29562087")
+    run(tmp_path, D1 + timedelta(days=30))
+    assert not [f for f in protein_files(tmp_path) if "base-" in f]
+    assert query("SELECT compacted FROM proteindb.load_log") == [(False,), (False,)]
+
+
+@pytest.mark.parametrize(
+    "error", [RuntimeError("crash"), Killed()], ids=["error", "kill"]
+)
+@pytest.mark.parametrize("when", ["before", "after"])
+def test_a_crash_during_compaction_never_changes_what_readers_see(
+    tmp_path, stage, monkeypatch, when, error
+):
+    stage("ERZ101")
+    day1 = staged()
+    run(tmp_path, D1)
+    stage("ERZ29562087")
+    expected = joined(day1, staged())
+    write_sorted = tier2.write_sorted
+    bases = []
+
+    def crash_on_the_second_base(path, *args):
+        if path.name.startswith("base-"):
+            bases.append(path)
+            if len(bases) == 2:
+                if when == "after":
+                    write_sorted(path, *args)
+                raise error
+        write_sorted(path, *args)
+
+    monkeypatch.setattr(tier2, "write_sorted", crash_on_the_second_base)
+    with pytest.raises(type(error)):
+        run(tmp_path, D31)
+    monkeypatch.undo()
+
+    assert in_tier2(tmp_path) == expected
+    assert query(
+        f"SELECT status, compacted, message FROM proteindb.load_log WHERE ingest_date = '{D31}'"
+    ) == [("done", False, None if isinstance(error, Killed) else "RuntimeError: crash")]
+    before = listing(tmp_path)
+    assert run(tmp_path, D31) is None
+    after = listing(tmp_path)
+    assert {path: before[path] for path in after} == after
+    assert in_tier2(tmp_path) == expected
+
+    run(tmp_path, D32)
+    assert in_tier2(tmp_path) == expected
+    for prefix in prefixes(day1["protein"]):
+        (only,) = (tmp_path / "protein" / f"prefix={prefix}").iterdir()
+        assert only.name.startswith("base-")
+
+
+def test_compaction_stops_at_its_time_budget_and_the_next_load_continues(
+    tmp_path, stage, monkeypatch
+):
+    stage("ERZ101")
+    day1 = staged()
+    run(tmp_path, D1)
+    clock = [0.0]
+    compact_prefix = load_module.compact_prefix
+
+    def five_hours_each(*args):
+        compact_prefix(*args)
+        clock[0] += 5 * 3600
+
+    monkeypatch.setattr(load_module, "monotonic", lambda: clock[0])
+    monkeypatch.setattr(load_module, "compact_prefix", five_hours_each)
+    run(tmp_path, D31)
+    monkeypatch.undo()
+
+    assert len([f for f in protein_files(tmp_path) if "base-" in f]) == 2
+    assert query("SELECT compacted FROM proteindb.load_log ORDER BY id") == [
+        (False,),
+        (True,),
+    ]
+    run(tmp_path, D32)
+    assert protein_files(tmp_path) == sorted(
+        f"protein/prefix={p}/base-{D31 if n < 2 else D32}.parquet"
+        for n, p in enumerate(sorted(prefixes(day1["protein"])))
+    )
+    assert in_tier2(tmp_path) == day1
+
+
+def test_a_compacted_base_is_sorted_in_full_row_groups(tmp_path):
+    def proteins(ids):
+        return pa.table(
+            {
+                "id": ids,
+                "hash": [
+                    bytes([0]) + hashlib.sha256(str(n).encode()).digest()[1:]
+                    for n in ids
+                ],
+                "sequence": ["M"] * len(ids),
+            }
+        )
+
+    prefix = tmp_path / "prefix=00"
+    tier2.write(prefix / f"base-{D1}.parquet", "protein", proteins(range(150_000)))
+    tier2.write(
+        prefix / f"part-{D2}.parquet", "protein", proteins(range(150_000, 250_000))
+    )
+    load_module.compact_prefix(prefix, sorted(prefix.iterdir()), D31)
+
+    assert [p.name for p in prefix.iterdir()] == [f"base-{D31}.parquet"]
+    path = prefix / f"base-{D31}.parquet"
+    stored = pq.read_table(path)
+    assert stored.schema == tier2.SCHEMAS["protein"]
+    assert sorted(stored["id"].to_pylist()) == list(range(250_000))
+    assert stored["hash"].to_pylist() == sorted(stored["hash"].to_pylist())
+    metadata = pq.ParquetFile(path).metadata
+    assert [metadata.row_group(g).num_rows for g in range(metadata.num_row_groups)] == [
+        tier2.ROW_GROUP_SIZE,
+        tier2.ROW_GROUP_SIZE,
+        250_000 - 2 * tier2.ROW_GROUP_SIZE,
+    ]

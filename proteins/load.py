@@ -3,11 +3,14 @@
 import logging
 import shutil
 import tempfile
-from datetime import date
+from collections import defaultdict
+from datetime import date, timedelta
 from pathlib import Path
+from time import monotonic
 from typing import NamedTuple
 
 import adbc_driver_postgresql.dbapi as adbc
+import duckdb
 import psycopg
 import pyarrow as pa
 import pyarrow.compute as pc
@@ -26,6 +29,13 @@ STAGED_COLUMNS = {
 }
 
 
+# A prefix is compacted when its oldest file is older than this.
+COMPACT_AFTER = timedelta(days=30)
+# No prefix is started once the load has been running this long, so that the
+# load ends within its 12 h limit and a release never waits longer for it.
+COMPACTION_BUDGET = 8 * 3600
+
+
 class LoadError(Exception): ...
 
 
@@ -38,6 +48,7 @@ class Staged(NamedTuple):
 
 def load(dsn: str, root: Path, day: date, resolve: Resolve) -> int | None:
     """Loads everything staged as day `day`. Returns its load_log id, or None if the day was already done."""
+    compact_until = monotonic() + COMPACTION_BUDGET
     with psycopg.connect(dsn, autocommit=True) as conn:
         recover(conn, root)
         if conn.execute(
@@ -59,9 +70,18 @@ def load(dsn: str, root: Path, day: date, resolve: Resolve) -> int | None:
             publish(root, day)
         except Exception as e:
             if not committed:
-                fail(dsn, log_id, e)
+                record_error(dsn, log_id, e, failed=True)
             raise
-    logger.info("loaded %s: %s, %d unresolved assemblies", day, counts, unresolved)
+        logger.info("loaded %s: %s, %d unresolved assemblies", day, counts, unresolved)
+
+        try:
+            compacted = compact(root, day, compact_until)
+        except Exception as e:
+            record_error(dsn, log_id, e, failed=False)
+            raise
+        conn.execute(
+            "UPDATE load_log SET compacted = %s WHERE id = %s", [compacted, log_id]
+        )
     return log_id
 
 
@@ -231,14 +251,67 @@ def publish(root: Path, day: date) -> None:
     (root / "dims" / f".tmp-snapshot={day}").rename(root / "dims" / f"snapshot={day}")
 
 
-def fail(dsn: str, log_id: int, error: Exception) -> None:
-    """Records a failure before the commit. The condition on status keeps a committed day done."""
+def compact(root: Path, day: date, until: float) -> bool:
+    """Step 10: compacts each prefix that is due, starting none after `until`. Returns whether it compacted any."""
+    by_prefix = defaultdict(list)
+    for path in tier2.files(root, "protein", day):
+        by_prefix[path.parent].append(path)
+    due = [
+        (prefix, files)
+        for prefix, files in sorted(by_prefix.items())
+        if any(f.name.startswith("part-") for f in files)
+        and min(file_date(f) for f in files) < day - COMPACT_AFTER
+    ]
+    compacted = 0
+    for prefix, files in due:
+        if monotonic() >= until:
+            logger.info(
+                "compaction stopped at its time limit, %d prefixes wait for the next load",
+                len(due) - compacted,
+            )
+            break
+        compact_prefix(prefix, files, day)
+        compacted += 1
+    return compacted > 0
+
+
+def file_date(path: Path) -> date:
+    return date.fromisoformat(path.stem.split("-", 1)[1])
+
+
+def compact_prefix(prefix: Path, files: list[Path], day: date) -> None:
+    """Merges a prefix's base and parts into base-`day`, then deletes them."""
+    logger.info("compacting %s: %d files", prefix.name, len(files))
+    base = prefix / f"base-{day}.parquet"
+    spill = Path(tempfile.gettempdir()) / "proteindb-compaction"
+    with duckdb.connect(config={"temp_directory": str(spill)}) as con:
+        reader = con.execute(
+            "SELECT id, hash, sequence FROM read_parquet($files) ORDER BY hash",
+            {"files": [str(f) for f in files]},
+        ).to_arrow_reader(tier2.ROW_GROUP_SIZE)
+        tier2.write_sorted(base, "protein", reader)
+    for path in files:
+        if path != base:
+            path.unlink()
+
+
+def record_error(dsn: str, log_id: int, error: Exception, failed: bool) -> None:
+    """Records an error on the load's row, as far as it still can.
+
+    Only a load that has not committed is marked failed: the condition on status keeps a committed day done.
+    """
+    message = f"{type(error).__name__}: {error}"
     try:
         with psycopg.connect(dsn, autocommit=True) as conn:
-            conn.execute(
-                "UPDATE load_log SET status = 'failed', finished_at = now(), message = %s"
-                " WHERE id = %s AND status = 'running'",
-                [f"{type(error).__name__}: {error}", log_id],
-            )
+            if failed:
+                conn.execute(
+                    "UPDATE load_log SET status = 'failed', finished_at = now(), message = %s"
+                    " WHERE id = %s AND status = 'running'",
+                    [message, log_id],
+                )
+            else:
+                conn.execute(
+                    "UPDATE load_log SET message = %s WHERE id = %s", [message, log_id]
+                )
     except psycopg.Error:
-        logger.exception("could not record the failure in load_log row %s", log_id)
+        logger.exception("could not record the error in load_log row %s", log_id)
