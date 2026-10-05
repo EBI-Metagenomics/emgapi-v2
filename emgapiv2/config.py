@@ -377,6 +377,11 @@ class RequestTrackerConfig(BaseModel):
     token: str = Field(None)
 
 
+class ProteinDBConfig(BaseModel):
+    root: str = "/nfs/production/rdf/metagenomics/projects/protein_db"
+    tier2_concurrency_limit: str = "proteindb-tier2"
+
+
 class EMGConfig(BaseSettings):
     amplicon_pipeline: AmpliconPipelineConfig = AmpliconPipelineConfig()
     rawreads_pipeline: RawReadsPipelineConfig = RawReadsPipelineConfig()
@@ -401,6 +406,7 @@ class EMGConfig(BaseSettings):
     sentry_dsn: str = ""
     distribution: DataDistributionConfig = DataDistributionConfig()
     ebi_search: EBISearchConfig = EBISearchConfig()
+    proteindb: ProteinDBConfig = ProteinDBConfig()
 
     model_config = SettingsConfigDict(
         env_prefix="emg_",

@@ -5,6 +5,7 @@ import os
 import re
 import subprocess
 import uuid
+from collections import defaultdict
 from contextlib import contextmanager
 from datetime import datetime
 from typing import Iterator, NamedTuple
@@ -114,29 +115,34 @@ def take(dsn: str, flow: str) -> Owner:
 
 def check_ended(job_id: int, submit_at: datetime) -> None:
     try:
-        state = job_states(job_id).get(submit_at, "not found")
+        states = job_states(job_id).get(submit_at, [])
     except (OSError, subprocess.SubprocessError, ValueError) as e:
-        state = f"unknown, as sacct failed: {e}"
-    if state not in ENDED:
+        states = [f"unknown, as sacct failed: {e}"]
+    # A requeued job has a record for each time it ran, and the first may have run on a failed node.
+    if not states or not ENDED.issuperset(states):
         raise OwnershipError(
-            f"Tier 2 is owned by job {job_id}, submitted at {submit_at}, whose state is {state}."
+            f"Tier 2 is owned by job {job_id}, submitted at {submit_at},"
+            f" whose states are {', '.join(states) or 'not found'}."
             " No load can start until that job is known to have stopped."
         )
 
 
-def job_states(job_id: int) -> dict[datetime, str]:
-    """The state of each job SLURM has recorded with this id, by submit time, since ids can be reused."""
+def job_states(job_id: int) -> dict[datetime, list[str]]:
+    """The states SLURM has recorded for this job id, by submit time, since ids can be reused.
+
+    -D lists every record of the id, where sacct would otherwise show only the most recent.
+    """
     out = subprocess.run(
-        ["sacct", "-j", str(job_id), "-X", "-n", "-P", "-o", "State,Submit"],
+        ["sacct", "-j", str(job_id), "-X", "-D", "-n", "-P", "-o", "State,Submit"],
         capture_output=True,
         text=True,
         check=True,
     ).stdout
-    states = {}
+    states = defaultdict(list)
     for line in out.splitlines():
         state, submit = line.split("|")
         # "CANCELLED by 1234"
-        states[local_time(submit)] = state.split()[0]
+        states[local_time(submit)].append(state.split()[0])
     return states
 
 

@@ -464,3 +464,21 @@ deployments:
     name: slurm
     job_variables:
       memory: 4
+
+- name: proteindb_load_deployment
+  description: |-
+    Move everything staged in the protein DB's Tier 1 into a new day of Tier 2, and compact Tier 2 when due.
+    Each run takes ownership of Tier 2 through the proteindb-tier2 concurrency limit, so runs never overlap.
+  entrypoint: proteins/flows/load.py:proteindb_load
+  parameters: {}
+  work_pool:
+    name: slurm
+    job_variables:
+      cpu: 8
+      memory: 64
+      time_limit: 12
+  schedules:
+    - cron: "0 2 * * *"
+      timezone: UTC
+      # Activated at cutover, once the cluster team confirms that the partition tracks processes with cgroups.
+      active: false

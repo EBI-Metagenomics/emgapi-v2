@@ -1,66 +1,23 @@
 import contextvars
 import subprocess
 import threading
-from datetime import datetime
-from uuid import UUID, uuid4
+from uuid import UUID
 
 import pytest
 from prefect import flow
-from prefect.client.orchestration import get_client
-from prefect.client.schemas.actions import GlobalConcurrencyLimitCreate
 from prefect.runtime import flow_run
 
 from proteins.owner import Owner, OwnershipError, owner, release, take
-from proteins.tests.conftest import Killed, query, role_connection, role_dsn
+from proteins.tests.conftest import (
+    SUBMITTED,
+    Killed,
+    query,
+    role_connection,
+    role_dsn,
+    submitted,
+)
 
 pytestmark = pytest.mark.django_db(databases=["default", "proteindb"], transaction=True)
-
-SUBMITTED = {1: "2026-10-01T02:00:00", 2: "2026-10-02T02:00:00"}
-
-
-def submitted(job):
-    return datetime.fromisoformat(SUBMITTED[job]).astimezone()
-
-
-@pytest.fixture
-def slurm(monkeypatch, emptied_tier1):
-    """A mocked SLURM. `as_job(n)` makes this process job n, and `sacct[n]` is what sacct prints for it."""
-    sacct = {}
-
-    def run(argv, **kwargs):
-        if argv[0] == "scontrol":
-            job = int(argv[-1])
-            out = (
-                f"JobId={job} JobName=load SubmitTime={SUBMITTED[job]} EligibleTime=x\n"
-            )
-        else:
-            out = sacct[int(argv[2])]
-            if isinstance(out, Exception):
-                raise out
-        return subprocess.CompletedProcess(argv, 0, out, "")
-
-    monkeypatch.setattr(subprocess, "run", run)
-
-    def as_job(job):
-        monkeypatch.setenv("SLURM_JOB_ID", str(job))
-
-    as_job(2)
-    return sacct, as_job
-
-
-@pytest.fixture
-def limit(prefect_harness):
-    """Creates a concurrency limit with a name of its own, as the Prefect server outlives the test."""
-
-    def create(slots=1, active=True):
-        name = f"proteindb-tier2-{uuid4()}"
-        with get_client(sync_client=True) as client:
-            client.create_global_concurrency_limit(
-                GlobalConcurrencyLimitCreate(name=name, limit=slots, active=active)
-            )
-        return name
-
-    return create
 
 
 def dsn():
@@ -155,6 +112,7 @@ def test_a_second_flow_waits_for_the_slot(slurm, limit):
         f"COMPLETING|{SUBMITTED[1]}\n",
         f"NODE_FAIL|{SUBMITTED[1]}\n",
         f"COMPLETED|{SUBMITTED[2]}\n",
+        f"NODE_FAIL|{SUBMITTED[1]}\nFAILED|{SUBMITTED[1]}\n",
         "",
         subprocess.CalledProcessError(1, "sacct"),
         FileNotFoundError("sacct"),
@@ -164,6 +122,7 @@ def test_a_second_flow_waits_for_the_slot(slurm, limit):
         "completing",
         "node failed",
         "reused id",
+        "requeued",
         "unknown",
         "sacct fails",
         "no sacct",

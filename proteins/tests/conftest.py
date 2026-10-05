@@ -1,9 +1,14 @@
 import os
+import subprocess
+from datetime import datetime
 from pathlib import Path
+from uuid import uuid4
 
 import psycopg
 import pytest
 from django.db import connections, transaction
+from prefect.client.orchestration import get_client
+from prefect.client.schemas.actions import GlobalConcurrencyLimitCreate
 from psycopg.conninfo import make_conninfo
 
 from proteins.accession.inputs import read_input
@@ -121,3 +126,56 @@ def connect_accession(emptied_tier1):
     yield connect
     for conn in opened:
         conn.close()
+
+
+SUBMITTED = {1: "2026-10-01T02:00:00", 2: "2026-10-02T02:00:00"}
+
+
+def submitted(job):
+    return datetime.fromisoformat(SUBMITTED[job]).astimezone()
+
+
+@pytest.fixture
+def slurm(monkeypatch, emptied_tier1):
+    """A mocked SLURM. `as_job(n)` makes this process job n, and `sacct[n]` is every record of job n.
+
+    Like sacct, it prints only the most recent record without -D.
+    """
+    sacct = {}
+
+    def run(argv, **kwargs):
+        if argv[0] == "scontrol":
+            job = int(argv[-1])
+            out = (
+                f"JobId={job} JobName=load SubmitTime={SUBMITTED[job]} EligibleTime=x\n"
+            )
+        else:
+            out = sacct[int(argv[2])]
+            if isinstance(out, Exception):
+                raise out
+            if "-D" not in argv:
+                out = "".join(out.splitlines(keepends=True)[-1:])
+        return subprocess.CompletedProcess(argv, 0, out, "")
+
+    monkeypatch.setattr(subprocess, "run", run)
+
+    def as_job(job):
+        monkeypatch.setenv("SLURM_JOB_ID", str(job))
+
+    as_job(2)
+    return sacct, as_job
+
+
+@pytest.fixture
+def limit(prefect_harness):
+    """Creates a concurrency limit with a name of its own, as the Prefect server outlives the test."""
+
+    def create(slots=1, active=True):
+        name = f"proteindb-tier2-{uuid4()}"
+        with get_client(sync_client=True) as client:
+            client.create_global_concurrency_limit(
+                GlobalConcurrencyLimitCreate(name=name, limit=slots, active=active)
+            )
+        return name
+
+    return create

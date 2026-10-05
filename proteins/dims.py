@@ -1,10 +1,11 @@
-"""The daily snapshot of the dimensions: registering studies and biomes, and building the four tables."""
+"""The daily snapshot of the dimensions: what emgapi-v2 knows of each assembly, and the four tables built from it."""
 
 from typing import Callable, NamedTuple
 
 import psycopg
 import pyarrow as pa
 
+from analyses.models import Analysis, Biome
 from proteins.tier2 import SCHEMAS
 
 
@@ -13,7 +14,7 @@ class Source(NamedTuple):
 
     assembly_accession: str
     study_accession: str
-    biome_lineage: str
+    biome_lineage: str | None
     assembly_private: bool
     assembly_suppressed: bool
     study_private: bool
@@ -21,6 +22,57 @@ class Source(NamedTuple):
 
 
 Resolve = Callable[[list[str]], list[Source]]
+
+CHUNK = 10_000
+
+
+def resolve(accessions: list[str]) -> list[Source]:
+    """Each accession's assembly in emgapi-v2, with the study and biome of its newest analysis."""
+    newest = {}
+    for start in range(0, len(accessions), CHUNK):
+        chunk = accessions[start : start + CHUNK]
+        wanted = set(chunk)
+        rows = (
+            Analysis.objects.filter(assembly__ena_accessions__overlap=chunk)
+            .order_by("created_at", "id")
+            .values_list(
+                "assembly__ena_accessions",
+                "assembly__is_private",
+                "assembly__is_suppressed",
+                "study__accession",
+                "study__is_private",
+                "study__is_suppressed",
+                "study__biome_id",
+            )
+        )
+        for ena_accessions, *row in rows:
+            for accession in wanted.intersection(ena_accessions):
+                newest[accession] = row
+    lineages = {
+        biome.id: biome.pretty_lineage
+        for biome in Biome.objects.filter(
+            id__in={biome_id for *_, biome_id in newest.values()}
+        )
+    }
+    return [
+        Source(
+            accession,
+            study,
+            lineages.get(biome_id),
+            assembly_private,
+            assembly_suppressed,
+            study_private,
+            study_suppressed,
+        )
+        for accession, (
+            assembly_private,
+            assembly_suppressed,
+            study,
+            study_private,
+            study_suppressed,
+            biome_id,
+        ) in sorted(newest.items())
+    ]
 
 
 def snapshot(
@@ -39,7 +91,10 @@ def snapshot(
             conn, "study", "accession", {s.study_accession for s in source.values()}
         )
         biomes = register(
-            conn, "biome", "lineage", {s.biome_lineage for s in source.values()}
+            conn,
+            "biome",
+            "lineage",
+            {s.biome_lineage for s in source.values() if s.biome_lineage},
         )
 
     rows = []
@@ -49,7 +104,7 @@ def snapshot(
             {
                 **assembly,
                 "study_id": s and studies[s.study_accession],
-                "biome_id": s and biomes[s.biome_lineage],
+                "biome_id": s and biomes.get(s.biome_lineage),
                 "private": s and s.assembly_private,
                 "suppressed": s and s.assembly_suppressed,
             }
