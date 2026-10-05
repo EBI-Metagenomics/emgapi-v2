@@ -30,7 +30,7 @@ GENOME_DOWNLOAD_DESCRIPTIONS = {
     "Nucleic Acid Sequence": "Genome assembly in FASTA format",
     "Nucleic Acid Sequence index": "Genome assembly index",
     "Predicted CDS (aa)": "Predicted CDS translated into amino acid sequences in FASTA format",
-    "Pathofact2-style report": "Pathogenicity-related annotations at protein level in TSV format",
+    "PathoFact 2 style report": "Pathogenicity-related annotations at protein level in TSV format",
     "Corrected gene prevalence": "Pan-genome gene frequencies (core/middle/rare) after completeness correction",
 }
 
@@ -767,7 +767,7 @@ def _upload_genome_files(
             False,
         ),
         (
-            "Pathofact2-style report",
+            "PathoFact 2 style report",
             "tsv",
             f"{genome.accession}_pathofact2_combined_report.tsv",
             "Genome analysis",

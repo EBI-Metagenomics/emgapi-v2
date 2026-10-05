@@ -168,7 +168,7 @@ def test_ocean_prokaryotes_v4_fixture(prefect_harness):
             "Result of orthology annotation at the protein level in TSV format",
         ),
         "genome/MGYG000235960_pathofact2_combined_report.tsv.gz": (
-            "Pathofact2-style report",
+            "PathoFact 2 style report",
             "Pathogenicity-related annotations at protein level in TSV format",
         ),
         "pan-genome/gene_prevalence_corrected.txt.gz": (
