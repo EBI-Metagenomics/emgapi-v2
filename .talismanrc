@@ -122,6 +122,9 @@ fileignoreconfig:
 - filename: proteins/sql/tier1.sql
   ignore_detectors: [filename]
 
+- filename: proteins/sql/roles.sql
+  ignore_detectors: [filename]
+
 - filename: pyproject.toml
   allowed_patterns: [Config key]
 

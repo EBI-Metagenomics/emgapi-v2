@@ -14,7 +14,8 @@ from psycopg.conninfo import make_conninfo
 from proteins.accession.inputs import read_input
 
 FIXTURES = Path(__file__).parent.parent / "fixtures"
-TIER1_SQL = Path(__file__).parent.parent / "sql" / "tier1.sql"
+SQL = Path(__file__).parent.parent / "sql"
+TIER1_SQL, ROLES_SQL = SQL / "tier1.sql", SQL / "roles.sql"
 ROLES = ("proteindb_accession", "proteindb_load", "proteindb_read")
 
 # Whole short contigs, with every gene on them, cut from the published V6 analyses
@@ -29,6 +30,12 @@ def read_published(assembly):
     )
 
 
+# Roles belong to the cluster, which every xdist worker's database shares, and concurrent
+# changes to one role fail. This lock conflicts with itself but not with ALTER ROLE's, so a
+# test can hold it while a role that cannot take it changes the roles.
+LOCK_ROLES = "LOCK TABLE pg_catalog.pg_authid IN SHARE UPDATE EXCLUSIVE MODE"
+
+
 @pytest.fixture(scope="session")
 def tier1(django_db_setup, django_db_blocker):
     """The Tier 1 schema, applied once to the proteindb test database, and its runtime roles."""
@@ -37,24 +44,23 @@ def tier1(django_db_setup, django_db_blocker):
         transaction.atomic(using="proteindb"),
         connections["proteindb"].cursor() as cursor,
     ):
-        # Roles belong to the cluster, which every xdist worker's database shares,
-        # and concurrent changes to one role fail.
-        cursor.execute("LOCK TABLE pg_catalog.pg_authid IN SHARE ROW EXCLUSIVE MODE")
+        cursor.execute(LOCK_ROLES)
         for role in ROLES:
             cursor.execute("SELECT 1 FROM pg_roles WHERE rolname = %s", [role])
             if not cursor.fetchone():
                 cursor.execute(f"CREATE ROLE {role} LOGIN PASSWORD '{role}'")
         cursor.execute(TIER1_SQL.read_text())
+        cursor.execute(ROLES_SQL.read_text())
         cursor.execute("RESET search_path")
 
 
-def role_dsn(role) -> str:
-    """A libpq connection string for the proteindb test database, as a role."""
+def role_dsn(role, dbname=None) -> str:
+    """A libpq connection string for the proteindb test database, or dbname, as a role."""
     settings = connections["proteindb"].settings_dict
     return make_conninfo(
         host=settings["HOST"],
         port=settings["PORT"] or None,
-        dbname=settings["NAME"],
+        dbname=dbname or settings["NAME"],
         user=role,
         password=role,
     )
