@@ -33,6 +33,8 @@ deployment/**
 /staticfiles
 *env/
 dev-db.json
+slurm-dev-environment/fs/nfs/public/services/lexicmap/
+slurm-dev-environment/fs/nfs/production/lexicmap-builds/
 talisman_report/
 slurm-dev-environment/fs/nfs/ftp/public/databases/metagenomics/mgnify_results/*
 genomes/temp/*

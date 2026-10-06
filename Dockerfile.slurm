@@ -84,4 +84,8 @@ ENV PATH="/usr/bin/webin-cli:$PATH"
 COPY slurm-dev-environment/entrypoints/entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh
 
+ARG LEXICMAP_VERSION=0.9.0
+COPY utils/install_lexicmap.sh /tmp/install-lexicmap.sh
+RUN LEXICMAP_VERSION=${LEXICMAP_VERSION} sh /tmp/install-lexicmap.sh && rm /tmp/install-lexicmap.sh
+
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]

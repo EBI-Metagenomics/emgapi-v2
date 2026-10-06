@@ -65,6 +65,9 @@ fileignoreconfig:
 - filename: emgapiv2/api/auth.py
   checksum: 5d028587b866b9dd2ac7aa0c4279441cc0d495e4df9338729db30ac583e49299
 
+- filename: emgapiv2/api/genome_search.py
+  allowed_patterns: [by_key]
+
 - filename: emgapiv2/api/storage.py
   checksum: be76261cc58f5ccea9a0b0d9179894ff3260cb5672aa69a4cfc66732200fed0d
 
@@ -342,3 +345,4 @@ allowed_patterns:
 - lineage_key
 - artifact_key
 - key="possible-tpa-studies"
+- key=lambda

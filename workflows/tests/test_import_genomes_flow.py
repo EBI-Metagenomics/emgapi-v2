@@ -178,19 +178,17 @@ def test_move_catalogue_files_to_web_results_uses_slurm_ftp_results_dir():
 
 @patch("workflows.flows.import_genomes_flow.move_catalogue_files_to_web_results")
 @patch("workflows.flows.import_genomes_flow.move_catalogue_files_to_ftp")
-@patch("workflows.flows.import_genomes_flow.make_cobs_index")
 @patch("workflows.flows.import_genomes_flow.make_sourmash_sketches")
 @patch("workflows.flows.import_genomes_flow.make_sourmash_index")
-@patch("workflows.flows.import_genomes_flow.place_cobs_index_on_embassy")
+@patch("workflows.flows.import_genomes_flow.make_lexicmap_index")
 @patch("workflows.flows.import_genomes_flow.place_sourmash_signatures")
 @patch("workflows.flows.import_genomes_flow.register_sourmash_search_index")
 def test_run_genome_release_tasks_registers_sourmash_index(
     register_index,
     place_sigs,
-    place_cobs,
+    make_lexicmap,
     make_index,
     make_sketches,
-    make_cobs,
     move_ftp,
     move_web,
 ):
@@ -200,10 +198,12 @@ def test_run_genome_release_tasks_registers_sourmash_index(
 
     move_web.assert_called_once_with(options)
     move_ftp.assert_called_once_with(options)
-    make_cobs.assert_called_once_with(options)
     make_sketches.assert_called_once_with(options)
     make_index.assert_called_once_with(options)
-    place_cobs.assert_called_once_with(options)
+    make_lexicmap.assert_called_once_with(
+        catalogue_slug=options["catalogue_slug"],
+        results_directory=options["results_directory"],
+    )
     place_sigs.assert_called_once_with(options)
     register_index.assert_called_once_with(options["catalogue_slug"])
 
@@ -216,31 +216,29 @@ def test_run_genome_release_tasks_v4(pipeline_version):
             "workflows.flows.import_genomes_flow.move_catalogue_files_to_web_results"
         ),
         patch("workflows.flows.import_genomes_flow.move_catalogue_files_to_ftp"),
-        patch("workflows.flows.import_genomes_flow.make_cobs_index") as old_cobs,
         patch(
             "workflows.flows.import_genomes_flow.make_sourmash_sketches"
         ) as old_sketches,
-        patch("workflows.flows.import_genomes_flow.make_cobs_index_v4") as cobs,
         patch(
             "workflows.flows.import_genomes_flow.make_sourmash_sketches_v4"
         ) as sketches,
         patch("workflows.flows.import_genomes_flow.make_sourmash_index"),
-        patch("workflows.flows.import_genomes_flow.place_cobs_index_on_embassy"),
+        patch("workflows.flows.import_genomes_flow.make_lexicmap_index") as lexicmap,
         patch("workflows.flows.import_genomes_flow.place_sourmash_signatures"),
         patch("workflows.flows.import_genomes_flow.register_sourmash_search_index"),
     ):
         run_genome_release_tasks(options)
-    cobs.assert_called_once_with(options)
+    lexicmap.assert_called_once_with(
+        catalogue_slug=options["catalogue_slug"],
+        results_directory=options["results_directory"],
+    )
     sketches.assert_called_once_with(options)
-    old_cobs.assert_not_called()
     old_sketches.assert_not_called()
 
 
 @pytest.mark.parametrize(
     "task_name,glob",
     [
-        ("make_cobs_index", "**/MGYG*.fna"),
-        ("make_cobs_index_v4", "**/MGYG*.fna.gz"),
         ("make_sourmash_sketches", "*/genome/MGYG*.fna"),
         ("make_sourmash_sketches_v4", "*/genome/MGYG*.fna.gz"),
     ],

@@ -15,6 +15,20 @@ logger = logging.getLogger(__name__)
 EMG_CONFIG = settings.EMG_CONFIG
 
 
+@task(queue_name="default")
+def run_lexicmap_search(request_payload: dict) -> dict:
+    from genomes.lexicmap import search
+    from genomes.lexicmap_schema import SearchQuery
+
+    query = SearchQuery.model_validate(request_payload["query"])
+    indexes = request_payload["indexes"]
+    return {
+        "query": query.sequence,
+        "catalogues": [index["catalogue"] for index in indexes],
+        "results": search(query, indexes),
+    }
+
+
 def _build_request_archive_path(request_id: str) -> Path:
     return Path(EMG_CONFIG.sourmash.results_path) / request_id / f"{request_id}.tgz"
 
