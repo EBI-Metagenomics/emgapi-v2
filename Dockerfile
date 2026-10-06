@@ -60,6 +60,11 @@ COPY . .
 RUN python manage.py collectstatic --noinput
 
 FROM sourmash_base AS sourmash_worker
+ARG LEXICMAP_VERSION=0.9.0
+RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+COPY utils/install_lexicmap.sh /tmp/install-lexicmap.sh
+RUN LEXICMAP_VERSION=${LEXICMAP_VERSION} sh /tmp/install-lexicmap.sh && rm /tmp/install-lexicmap.sh
 COPY . .
 
 FROM django AS agent

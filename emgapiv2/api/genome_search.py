@@ -1,208 +1,151 @@
 import json
-import logging
-from json import JSONDecodeError
-from typing import Any, Dict, List, Optional, Tuple
+from uuid import UUID
 
-import httpx
 from django.conf import settings
-from ninja import Field, Schema
+from django.http import Http404
+from django_tasks.exceptions import TaskResultDoesNotExist, TaskResultMismatch
+from ninja import Schema
 from ninja.errors import HttpError
-from ninja_extra import api_controller, http_post
+from ninja_extra import api_controller, http_get, http_post
 
 from emgapiv2.api.schema_utils import ApiSections
-from genomes.models import CatalogueGenome
+from genomes.lexicmap_schema import LexicMapMatch, SearchQuery
+from genomes.models import CatalogueGenome, GenomeCatalogue, GenomeSearchIndex
 from genomes.schemas import GenomeList
+from genomes.tasks import run_lexicmap_search
 
-logger = logging.getLogger(__name__)
 EMG_CONFIG = settings.EMG_CONFIG
-
-
-class GenomeFragmentSearchIn(Schema):
-    sequence: Optional[str] = Field(None, description="FASTA or raw sequence")
-    kmer_size: Optional[int] = Field(None, ge=1)
-    max_results: Optional[int] = Field(None, ge=1)
-    threshold: Optional[float] = None
-    catalogues_filter: Optional[List[str]] = None
-
-
-class CobsMatch(Schema):
-    genome: str
-    percent_kmers_found: Optional[float] = 0.0
-    num_kmers: Optional[int] = None
-    num_kmers_found: Optional[int] = None
 
 
 class AnnotatedResult(Schema):
     mgnify: GenomeList
-    cobs: CobsMatch
+    lexicmap: LexicMapMatch
 
 
 class GenomeSearchData(Schema):
-    query: Optional[str] = None
-    threshold: Optional[float] = None
-    results: List[AnnotatedResult]
+    job_id: str
+    status: str
+    status_url: str
+    query: str | None = None
+    results: list[AnnotatedResult] | None = None
 
 
 class GenomeFragmentSearchOut(Schema):
     data: GenomeSearchData
 
 
-def _parse_request(request) -> Tuple[Dict[str, Any], Optional[Dict[str, Any]], bool]:
-    """
-    Returns (payload, files, as_form).
-
-    Ninja binds its parsing strategy to type annotations, so a single handler
-    cannot natively accept both JSON and multipart for the same fields. This
-    function handles that dispatch manually, keeping the handler thin.
-
-    `as_form` is True for multipart/form requests and tells _post_to_backend
-    to forward as form data rather than JSON.
-    """
-    content_type = request.headers.get("content-type", "").lower()
-    is_form = (
-        content_type.startswith("multipart/")
-        or content_type.startswith("application/x-www-form-urlencoded")
-        or (
-            hasattr(request, "POST")
-            and (bool(request.POST) or bool(getattr(request, "FILES", None)))
-        )
-    )
-
-    if is_form:
-        seq = request.POST.get("sequence") or request.POST.get("seq")
-        payload: Dict[str, Any] = {
-            k: v
-            for k, v in {
-                "seq": seq,
-                "kmer_size": request.POST.get("kmer_size"),
-                "max_results": request.POST.get("max_results"),
-                "threshold": request.POST.get("threshold"),
-            }.items()
-            if v not in (None, "")
-        }
-        for field, coerce in (
-            ("kmer_size", int),
-            ("max_results", int),
-            ("threshold", float),
-        ):
-            if field in payload:
-                try:
-                    payload[field] = coerce(payload[field])  # type: ignore[operator]
-                except ValueError:
-                    del payload[field]
-
-        if "catalogues_filter" in request.POST:
-            payload["catalogues_filter"] = request.POST.getlist("catalogues_filter")
-
-        files = None
-        if "sequence_file" in request.FILES:
-            f = request.FILES["sequence_file"]
-            files = {
-                "sequence_file": (
-                    getattr(f, "name", "sequence_file"),
-                    f,
-                    getattr(f, "content_type", "application/octet-stream")
-                    or "application/octet-stream",
-                )
-            }
-        return payload, files, True
-
+def _parse_request(request) -> SearchQuery:
     try:
-        data = json.loads(request.body or b"{}")
-    except (JSONDecodeError, ValueError):
-        data = {}
-    body = GenomeFragmentSearchIn(**data)
-    payload = body.dict(exclude_none=True)
-    if "sequence" in payload:
-        payload["seq"] = payload.pop("sequence")
-    return payload, None, False
-
-
-def _post_to_backend(
-    payload: Dict[str, Any],
-    files: Optional[Dict[str, Any]] = None,
-    as_form: bool = False,
-) -> Dict[str, Any]:
-    url = EMG_CONFIG.service_urls.genome_search_proxy
-    try:
-        if files or as_form:
-            resp = httpx.post(url, data=payload, files=files, timeout=30)
+        content_type = request.headers.get("content-type", "").split(";", 1)[0].lower()
+        if content_type in ("multipart/form-data", "application/x-www-form-urlencoded"):
+            data = request.POST.dict()
+            if "catalogues_filter" in request.POST:
+                data["catalogues_filter"] = request.POST.getlist("catalogues_filter")
+            upload = request.FILES.get("sequence_file")
+            if upload:
+                if upload.size > 100_000:
+                    raise HttpError(413, "Sequence file exceeds 100 KB")
+                if data.get("sequence") or data.get("seq"):
+                    raise HttpError(400, "Provide sequence text or a file, not both")
+                data["sequence"] = upload.read(100_001).decode("utf-8")
         else:
-            resp = httpx.post(url, json=payload, timeout=30)
-        resp.raise_for_status()
-    except httpx.HTTPStatusError as ex:
-        status = ex.response.status_code
-        logger.error(
-            "Genome search backend returned %s: %s", status, ex.response.text[:500]
-        )
-        if status >= 500:
-            raise HttpError(
-                502, "Genome search backend is unavailable. Please try later."
-            )
-        raise HttpError(400, "Genome search request was rejected by the backend.")
-    except httpx.RequestError as ex:
-        logger.exception("Failed to reach genome search backend at %s", url)
+            data = json.loads(request.body or b"{}")
+        if isinstance(data, dict) and "seq" in data:
+            data["sequence"] = data.pop("seq")
+        return SearchQuery.model_validate(data)
+    except ValueError as exc:
         raise HttpError(
-            503, "Genome search is temporarily unavailable. Please try later."
-        ) from ex
-
-    try:
-        return resp.json()
-    except (JSONDecodeError, ValueError) as ex:
-        logger.exception("Failed to decode JSON from genome search backend")
-        raise HttpError(
-            502, "Genome search backend returned an invalid response."
-        ) from ex
+            400,
+            "Invalid search. Provide one sequence of 50–100000 bases; use min_identity and min_query_coverage (0–100). COBS threshold and kmer_size are no longer supported.",
+        ) from exc
 
 
-def _annotate_results(raw_results: List[Dict[str, Any]]) -> List[AnnotatedResult]:
-    cobs_result_by_accession = {
-        r.get("genome"): r for r in raw_results if r.get("genome")
-    }
-    if not cobs_result_by_accession:
-        return []
-
-    genomes = (
-        CatalogueGenome.public_objects.filter(
-            genome__accession__in=list(cobs_result_by_accession.keys())
-        )
-        .select_related("genome", "catalogue", "catalogue__series", "biome")
-        .all()
+def _select_indexes(query):
+    indexes = GenomeSearchIndex.objects.filter(
+        backend=GenomeSearchIndex.Backend.LEXICMAP,
+        status=GenomeSearchIndex.Status.ACTIVE,
+        is_active=True,
+        catalogue__in=GenomeCatalogue.public_objects.all(),
     )
+    if query.catalogues_filter is not None:
+        indexes = indexes.filter(catalogue_id__in=query.catalogues_filter)
+    selected = list(indexes.values("catalogue_id", "artifact_path"))
+    if query.catalogues_filter and set(query.catalogues_filter) - {
+        i["catalogue_id"] for i in selected
+    }:
+        raise HttpError(400, "One or more catalogues has no published LexicMap index")
+    return [
+        {"catalogue": i["catalogue_id"], "path": i["artifact_path"]} for i in selected
+    ]
 
-    annotated: List[AnnotatedResult] = []
-    for genome in genomes:
-        cobs_result = cobs_result_by_accession.get(genome.accession)
-        if not cobs_result:
-            continue
-        annotated.append(
-            AnnotatedResult(
-                mgnify=GenomeList.from_orm(genome),
-                cobs=CobsMatch(**cobs_result),
-            )
+
+def _annotate_results(results, selected_catalogues):
+    snapshots = CatalogueGenome.public_objects.filter(
+        genome__accession__in={r.genome for r in results},
+        catalogue_id__in=selected_catalogues,
+    ).select_related("genome", "catalogue", "catalogue__series", "biome")
+    by_key = {(g.catalogue_id, g.accession): g for g in snapshots}
+    return [
+        AnnotatedResult(
+            mgnify=GenomeList.from_orm(by_key[(r.catalogue, r.genome)]), lexicmap=r
         )
-
-    annotated.sort(key=lambda r: (r.cobs.percent_kmers_found or 0), reverse=True)
-    return annotated
+        for r in results
+        if (r.catalogue, r.genome) in by_key
+    ]
 
 
 @api_controller("genome-search", tags=[ApiSections.GENOMES])
 class GenomeSearchController:
     @http_post(
         "/",
-        response=GenomeFragmentSearchOut,
-        summary="Search genomes by short sequence and annotate with MGnify metadata",
+        response={202: GenomeFragmentSearchOut},
+        summary="Submit a nucleotide sequence for LexicMap search",
+        openapi_extra={
+            "requestBody": {
+                "required": True,
+                "content": {
+                    "application/json": {"schema": SearchQuery.model_json_schema()},
+                },
+            }
+        },
         operation_id="genome_fragment_search",
     )
     def genome_fragment_search(self, request):
-        payload, files, as_form = _parse_request(request)
-        backend = _post_to_backend(payload, files=files, as_form=as_form)
-        results = backend.get("results") or []
-        annotated = _annotate_results(results)
-        return GenomeFragmentSearchOut(
-            data=GenomeSearchData(
-                query=payload.get("seq"),
-                threshold=payload.get("threshold"),
-                results=annotated,
+        query = _parse_request(request)
+        indexes = _select_indexes(query)
+        try:
+            job = run_lexicmap_search.enqueue(
+                request_payload={"query": query.model_dump(), "indexes": indexes}
             )
+        except Exception as exc:
+            raise HttpError(503, "Genome search queue is unavailable") from exc
+        return 202, self._response(job)
+
+    @http_get(
+        "/status/{job_id}/",
+        response=GenomeFragmentSearchOut,
+        summary="Get LexicMap search status and annotated results",
+        operation_id="genome_fragment_search_status",
+    )
+    def genome_fragment_search_status(self, request, job_id: UUID):
+        try:
+            job = run_lexicmap_search.get_result(str(job_id))
+        except (TaskResultDoesNotExist, TaskResultMismatch) as exc:
+            raise Http404 from exc
+        return self._response(job, include_results=True)
+
+    @staticmethod
+    def _response(job, include_results=False):
+        data = GenomeSearchData(
+            job_id=job.id,
+            status=job.status,
+            status_url=f"{EMG_CONFIG.service_urls.app_root.rstrip('/')}/{settings.BASE_URL}genome-search/status/{job.id}/",
         )
+        if include_results and job.status == "SUCCESSFUL":
+            payload = job.return_value
+            data.query = payload["query"]
+            data.results = _annotate_results(
+                [LexicMapMatch(**match) for match in payload["results"]],
+                payload["catalogues"],
+            )
+        return GenomeFragmentSearchOut(data=data)

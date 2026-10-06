@@ -224,6 +224,22 @@ deployments:
   work_pool:
     name: slurm
 
+- name: build_catalogue_lexicmap_index_deployment
+  description: Build a LexicMap index for the existing Ocean Prokaryotes v2 release.
+  entrypoint: workflows/flows/lexicmap_index.py:build_catalogue_lexicmap_index
+  parameters:
+    catalogue_slug: ocean-prokaryotes-v2-0
+    results_directory: /nfs/production/catalogs/ocean-prokaryotes/v2.0
+  work_pool:
+    name: slurm
+    job_variables:
+      env:
+        EMG_LEXICMAP__THREADS: "2"
+        EMG_LEXICMAP__CHUNKS: "2"
+        EMG_LEXICMAP__MEMORY_GB: "2"
+      cpu: 2
+      memory: 2
+
 - name: clean_old_nextflow_workdirs_deployment
   description: |-
     Scan a directory for old Nextflow work directories and delete them after human confirmation.

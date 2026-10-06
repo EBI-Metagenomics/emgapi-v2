@@ -145,7 +145,7 @@ services:
     networks: [emg]
 
   app-worker:
-    # Django Tasks worker for sourmash searches
+    # Django Tasks worker for Sourmash and LexicMap searches
     build:
       context: .
       target: sourmash_worker
