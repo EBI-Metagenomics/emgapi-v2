@@ -2,12 +2,14 @@ import hashlib
 from datetime import date
 
 import pyarrow as pa
+import pyarrow.dataset as ds
+import pyarrow.parquet as pq
 import pytest
 from django.core.management import CommandError, call_command
 
 from proteins import tier2
 from proteins.flows.load import proteindb_dsn
-from proteins.migrate import MigrateError, build_tier1
+from proteins.migrate import MigrateError, build_tier1, export, export_dims
 from proteins.tests.conftest import query
 
 pytestmark = [
@@ -214,3 +216,193 @@ def test_command_takes_rebuild_and_protein_id_start_together():
         call_command("proteindb_migrate", "tier1", "--rebuild")
     with pytest.raises(CommandError, match="go together"):
         call_command("proteindb_migrate", "tier1", "--protein-id-start", "1000")
+
+
+SEQUENCES = ["MKV", "MALW", "MSTTP", "MGGA", "MPEQ", "MRRL", "MDD", "MYYH"]
+CURRENT = """
+CREATE SCHEMA mgnprotein_ingestion;
+SET search_path = mgnprotein_ingestion;
+CREATE TYPE truncation_enum AS ENUM ('00', '01', '10', '11');
+CREATE TABLE protein_hash_0 (id bigint NOT NULL, sequence_sha256sum character(64) NOT NULL,
+    sequence text NOT NULL, suppressed boolean DEFAULT false, private boolean DEFAULT false);
+CREATE TABLE protein_contig_occurrence_hash_0 (id bigint NOT NULL, protein_id bigint NOT NULL,
+    contig_id bigint NOT NULL, assembly_id integer NOT NULL, gene_caller_id smallint,
+    truncation truncation_enum, start_position integer NOT NULL, end_position integer NOT NULL,
+    strand smallint NOT NULL);
+CREATE TABLE contig_hash_0 (id bigint NOT NULL, contig_name varchar(200), assembly_id integer NOT NULL,
+    sequence_sha256sum character(64) NOT NULL, kmer_coverage double precision, contig_length integer);
+CREATE TABLE assembly (id integer, accession varchar(45), study_id integer,
+    pipeline_version numeric(2,1), biome_id smallint, suppressed boolean, private boolean);
+CREATE TABLE study (id integer, accession varchar(45), private boolean, suppressed boolean);
+CREATE TABLE biome (id smallint, lineage varchar(255));
+CREATE TABLE gene_caller (id smallint, gene_caller varchar, version varchar);
+
+INSERT INTO protein_hash_0 (id, sequence_sha256sum, sequence)
+    SELECT 10 * n, encode(sha256(s::bytea), 'hex'), s FROM unnest(%s::text[]) WITH ORDINALITY AS t(s, n);
+INSERT INTO protein_contig_occurrence_hash_0 VALUES
+    (1, 10, 7, 1, 1, '01', 3, 101, -1), (2, 20, 7, 1, 2, NULL, 200, 290, 1);
+INSERT INTO contig_hash_0 VALUES (7, 'ERZ1.1', 1, encode(sha256('ACGT'), 'hex'), 2.5, 400);
+INSERT INTO assembly VALUES (1, 'ERZ1', 1, 4.1, 2, false, false), (2, 'ERZ1', 1, 6.0, 2, false, false);
+INSERT INTO study VALUES (1, 'MGYS1', false, false);
+INSERT INTO biome VALUES (2, 'root:Engineered');
+INSERT INTO gene_caller VALUES (1, 'Prodigal', '2.6.3'), (2, 'FragGeneScan', '1.20');
+RESET search_path;
+"""
+
+
+@pytest.fixture
+def current():
+    """A small copy of the frozen current database, with child 0 of each large table."""
+    query(CURRENT, [SEQUENCES])
+    yield proteindb_dsn()
+    query("DROP SCHEMA mgnprotein_ingestion CASCADE")
+
+
+def read(directory):
+    return ds.dataset(directory, partitioning="hive").to_table()
+
+
+def test_exports_proteins_split_by_prefix_with_32_byte_hashes(current, tmp_path):
+    assert export(current, tmp_path, "protein", 0) == len(SEQUENCES)
+
+    pieces = sorted((tmp_path / "protein" / "child=0").glob("prefix=*"))
+    exported = {}
+    for piece in pieces:
+        table = pq.read_table(list(piece.glob("*.parquet"))[0])
+        assert table.schema == tier2.SCHEMAS["protein"]
+        for row in table.to_pylist():
+            assert piece.name == f"prefix={tier2.prefix(row['hash'])}"
+            exported[row["sequence"]] = (row["id"], row["hash"])
+    assert exported == {
+        s: (10 * n, hashlib.sha256(s.encode()).digest())
+        for n, s in enumerate(SEQUENCES, 1)
+    }
+    assert len(pieces) > 1
+
+
+def test_exports_occurrences_and_contigs_in_tier2s_types(current, tmp_path):
+    export(current, tmp_path, "occurrence", 0)
+    export(current, tmp_path, "contig", 0)
+
+    occurrences = read(tmp_path / "occurrence" / "child=0")
+    assert occurrences.schema == tier2.SCHEMAS["occurrence"]
+    assert occurrences.sort_by("id").to_pylist() == [
+        {
+            "id": 1,
+            "protein_id": 10,
+            "contig_id": 7,
+            "assembly_id": 1,
+            "gene_caller_id": 1,
+            "start_position": 3,
+            "end_position": 101,
+            "strand": -1,
+            "truncation": "01",
+        },
+        {
+            "id": 2,
+            "protein_id": 20,
+            "contig_id": 7,
+            "assembly_id": 1,
+            "gene_caller_id": 2,
+            "start_position": 200,
+            "end_position": 290,
+            "strand": 1,
+            "truncation": None,
+        },
+    ]
+    contigs = read(tmp_path / "contig" / "child=0")
+    assert contigs.schema == tier2.SCHEMAS["contig"]
+    assert contigs.to_pylist() == [
+        {
+            "id": 7,
+            "assembly_id": 1,
+            "name": "ERZ1.1",
+            "original_name": None,
+            "length": 400,
+            "hash": hashlib.sha256(b"ACGT").digest(),
+            "kmer_coverage": 2.5,
+        }
+    ]
+
+
+def test_exports_the_reference_tables_as_snapshot_files(current, tmp_path):
+    export_dims(current, tmp_path)
+
+    def rows(name):
+        table = pq.read_table(tmp_path / "dims" / f"{name}.parquet")
+        assert table.schema == tier2.SCHEMAS[f"dims/{name}"]
+        return table.to_pylist()
+
+    assert rows("assembly") == [
+        {
+            "id": 1,
+            "accession": "ERZ1",
+            "pipeline_version": "4.1",
+            "study_id": 1,
+            "biome_id": 2,
+            "private": False,
+            "suppressed": False,
+        },
+        {
+            "id": 2,
+            "accession": "ERZ1",
+            "pipeline_version": "6.0",
+            "study_id": 1,
+            "biome_id": 2,
+            "private": False,
+            "suppressed": False,
+        },
+    ]
+    assert rows("study") == [
+        {"id": 1, "accession": "MGYS1", "private": False, "suppressed": False}
+    ]
+    assert rows("biome") == [{"id": 2, "lineage": "root:Engineered"}]
+    assert rows("gene_caller") == [
+        {"id": 1, "name": "Prodigal", "version": "2.6.3"},
+        {"id": 2, "name": "FragGeneScan", "version": "1.20"},
+    ]
+
+
+def test_refuses_to_export_a_child_twice(current, tmp_path):
+    export(current, tmp_path, "contig", 0)
+    with pytest.raises(MigrateError, match="already exported"):
+        export(current, tmp_path, "contig", 0)
+
+
+def test_refuses_nulls_that_tier2_does_not_allow(current, tmp_path):
+    query("UPDATE mgnprotein_ingestion.contig_hash_0 SET contig_name = NULL")
+    with pytest.raises(MigrateError, match="contig.name has NULLs"):
+        export(current, tmp_path, "contig", 0)
+    assert not (tmp_path / "contig" / "child=0").exists()
+
+
+def test_command_exports_a_child(current, tmp_path):
+    call_command(
+        "proteindb_migrate",
+        "export",
+        "--table",
+        "contig",
+        "--child",
+        "0",
+        "--source",
+        current,
+        "--out",
+        str(tmp_path),
+    )
+    assert read(tmp_path / "contig" / "child=0").num_rows == 1
+
+
+def test_command_takes_a_child_for_every_table_but_dims(tmp_path):
+    for table, child in [("contig", []), ("dims", ["--child", "0"])]:
+        with pytest.raises(CommandError, match="--child is needed"):
+            call_command(
+                "proteindb_migrate",
+                "export",
+                "--table",
+                table,
+                *child,
+                "--source",
+                "postgresql://",
+                "--out",
+                str(tmp_path),
+            )

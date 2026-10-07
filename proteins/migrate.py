@@ -1,6 +1,7 @@
-"""The migration's Tier 1 build, and the rebuild of Tier 1 from Tier 2 after it is lost."""
+"""The migration from the current database: its export, and the Tier 1 build, also used to rebuild Tier 1 from Tier 2."""
 
 import logging
+import shutil
 from collections import defaultdict
 from datetime import date
 from pathlib import Path
@@ -10,6 +11,7 @@ import adbc_driver_postgresql.dbapi as adbc
 import duckdb
 import psycopg
 import pyarrow as pa
+import pyarrow.dataset as ds
 import pyarrow.parquet as pq
 
 from proteins import tier2
@@ -41,7 +43,108 @@ SEQUENCES = {
 }
 
 
+# The frozen current database. Its three large tables are split into 64 children, <table>_hash_<n>.
+SOURCE = "mgnprotein_ingestion"
+EXPORTS = {
+    "protein": (
+        "protein",
+        "SELECT id, h AS hash, sequence, lpad(to_hex(get_byte(h, 0) >> 2), 2, '0') AS prefix"
+        " FROM {child}, LATERAL decode(sequence_sha256sum::text, 'hex') h",
+    ),
+    "occurrence": (
+        "protein_contig_occurrence",
+        "SELECT id, protein_id, contig_id, assembly_id, gene_caller_id, start_position,"
+        " end_position, strand, truncation::text AS truncation FROM {child}",
+    ),
+    "contig": (
+        "contig",
+        "SELECT id, assembly_id, contig_name AS name, NULL::text AS original_name,"
+        " contig_length AS length, decode(sequence_sha256sum::text, 'hex') AS hash,"
+        " kmer_coverage FROM {child}",
+    ),
+}
+DIMS = {
+    "assembly": "SELECT id, accession, pipeline_version::text AS pipeline_version, study_id,"
+    " biome_id, private, suppressed FROM {source}.assembly",
+    "study": "SELECT id, accession, private, suppressed FROM {source}.study",
+    "biome": "SELECT id, lineage FROM {source}.biome",
+    "gene_caller": "SELECT id, gene_caller AS name, version FROM {source}.gene_caller",
+}
+
+
 class MigrateError(Exception): ...
+
+
+def export(source: str, out: Path, table: str, child: int) -> int:
+    """Exports one child of a current table to out/<table>/child=<child>/ in Tier 2's types. Returns its rows.
+
+    Proteins are split by prefix into prefix=XX/, because the current database partitions them
+    on another function of the hash.
+    """
+    name, select = EXPORTS[table]
+    final = out / table / f"child={child}"
+    if final.exists():
+        raise MigrateError(f"{final} is already exported")
+    tmp = out / table / f".child={child}.tmp"
+    shutil.rmtree(tmp, ignore_errors=True)
+    tmp.mkdir(parents=True)
+    schema = tier2.SCHEMAS[table]
+    if table == "protein":
+        schema = schema.append(pa.field("prefix", pa.string(), False))
+    started, rows = monotonic(), 0
+
+    def batches(reader):
+        nonlocal rows
+        for batch in reader:
+            rows += batch.num_rows
+            yield conform(batch, schema, table)
+
+    with adbc.connect(source) as conn, conn.cursor() as cursor:
+        cursor.execute(select.format(child=f"{SOURCE}.{name}_hash_{child}"))
+        ds.write_dataset(
+            batches(cursor.fetch_record_batch()),
+            tmp,
+            schema=schema,
+            format="parquet",
+            partitioning=["prefix"] if table == "protein" else None,
+            partitioning_flavor="hive",
+            basename_template="part-{i}.parquet",
+            file_options=ds.ParquetFileFormat().make_write_options(
+                compression="zstd", compression_level=1
+            ),
+            # The Tier 2 build rewrites the pieces, so their row groups are kept small, and with
+            # them the buffers of the 64 prefixes.
+            min_rows_per_group=16_384,
+            max_rows_per_group=tier2.ROW_GROUP_SIZE,
+        )
+    tmp.rename(final)
+    logger.info(
+        "%s child %d: %d rows in %.0f s", table, child, rows, monotonic() - started
+    )
+    return rows
+
+
+def export_dims(source: str, out: Path) -> None:
+    """Exports the four reference tables to out/dims/, as Tier 2 snapshot files."""
+    with adbc.connect(source) as conn, conn.cursor() as cursor:
+        for name, select in DIMS.items():
+            cursor.execute(select.format(source=SOURCE))
+            schema = tier2.SCHEMAS[f"dims/{name}"]
+            rows = pa.Table.from_batches(
+                [conform(b, schema, name) for b in cursor.fetch_record_batch()],
+                schema,
+            )
+            tier2.write(out / "dims" / f"{name}.parquet", f"dims/{name}", rows)
+
+
+def conform(batch: pa.RecordBatch, schema: pa.Schema, table: str) -> pa.RecordBatch:
+    """The batch in Tier 2's types. A cast does not check nulls, so they are checked here."""
+    for field in schema:
+        if not field.nullable and batch.column(field.name).null_count:
+            raise MigrateError(
+                f"{table}.{field.name} has NULLs, which Tier 2 does not allow"
+            )
+    return batch.select(schema.names).cast(schema)
 
 
 def build_tier1(dsn: str, root: Path, protein_id_start: int | None = None) -> date:

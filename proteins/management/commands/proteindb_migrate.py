@@ -4,7 +4,7 @@ from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
 
 from proteins.flows.load import proteindb_dsn
-from proteins.migrate import MigrateError, build_tier1
+from proteins.migrate import EXPORTS, MigrateError, build_tier1, export, export_dims
 
 
 class Command(BaseCommand):
@@ -12,6 +12,25 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser):
         steps = parser.add_subparsers(dest="step", required=True)
+        exporting = steps.add_parser(
+            "export",
+            help="Export one child of a table of the frozen current database, or its reference tables",
+        )
+        exporting.add_argument("--table", required=True, choices=[*EXPORTS, "dims"])
+        exporting.add_argument(
+            "--child",
+            type=int,
+            choices=range(64),
+            metavar="0..63",
+            help="The child table, for every table but dims",
+        )
+        exporting.add_argument(
+            "--source",
+            required=True,
+            help="libpq URI of the current database, with the password in ~/.pgpass",
+        )
+        exporting.add_argument("--out", required=True, type=Path)
+
         tier1 = steps.add_parser(
             "tier1",
             help="Build Tier 1 from Tier 2, into a schema just created by tier1.sql",
@@ -28,14 +47,36 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, step, **options):
-        if options["rebuild"] != (options["protein_id_start"] is not None):
-            raise CommandError("--rebuild and --protein-id-start go together")
         try:
-            day = build_tier1(
-                proteindb_dsn(),
-                Path(settings.EMG_CONFIG.proteindb.root) / "tier2",
-                options["protein_id_start"],
-            )
+            if step == "export":
+                self.export(**options)
+            else:
+                self.tier1(**options)
         except MigrateError as e:
             raise CommandError(e)
+
+    def export(self, table, child, source, out, **options):
+        if (table == "dims") != (child is None):
+            raise CommandError(
+                "--child is needed for every table but dims, which takes none"
+            )
+        if table == "dims":
+            export_dims(source, out)
+            self.stdout.write(
+                self.style.SUCCESS(f"Exported the reference tables to {out}")
+            )
+        else:
+            rows = export(source, out, table, child)
+            self.stdout.write(
+                self.style.SUCCESS(f"Exported {rows} rows of {table} child {child}")
+            )
+
+    def tier1(self, rebuild, protein_id_start, **options):
+        if rebuild != (protein_id_start is not None):
+            raise CommandError("--rebuild and --protein-id-start go together")
+        day = build_tier1(
+            proteindb_dsn(),
+            Path(settings.EMG_CONFIG.proteindb.root) / "tier2",
+            protein_id_start,
+        )
         self.stdout.write(self.style.SUCCESS(f"Built Tier 1 from Tier 2 as of {day}"))
