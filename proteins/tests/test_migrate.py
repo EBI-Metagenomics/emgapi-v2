@@ -9,7 +9,14 @@ from django.core.management import CommandError, call_command
 
 from proteins import tier2
 from proteins.flows.load import proteindb_dsn
-from proteins.migrate import MigrateError, build_tier1, export, export_dims
+from proteins.migrate import (
+    EXPORTS,
+    MigrateError,
+    build_tier1,
+    build_tier2,
+    export,
+    export_dims,
+)
 from proteins.tests.conftest import query
 
 pytestmark = [
@@ -219,6 +226,7 @@ def test_command_takes_rebuild_and_protein_id_start_together():
 
 
 SEQUENCES = ["MKV", "MALW", "MSTTP", "MGGA", "MPEQ", "MRRL", "MDD", "MYYH"]
+SEQUENCES_1 = ["MWWC", "MHHK", "MNNQ", "MCCE"]
 CURRENT = """
 CREATE SCHEMA mgnprotein_ingestion;
 SET search_path = mgnprotein_ingestion;
@@ -231,6 +239,9 @@ CREATE TABLE protein_contig_occurrence_hash_0 (id bigint NOT NULL, protein_id bi
     strand smallint NOT NULL);
 CREATE TABLE contig_hash_0 (id bigint NOT NULL, contig_name varchar(200), assembly_id integer NOT NULL,
     sequence_sha256sum character(64) NOT NULL, kmer_coverage double precision, contig_length integer);
+CREATE TABLE protein_hash_1 (LIKE protein_hash_0 INCLUDING DEFAULTS);
+CREATE TABLE protein_contig_occurrence_hash_1 (LIKE protein_contig_occurrence_hash_0);
+CREATE TABLE contig_hash_1 (LIKE contig_hash_0);
 CREATE TABLE assembly (id integer, accession varchar(45), study_id integer,
     pipeline_version numeric(2,1), biome_id smallint, suppressed boolean, private boolean);
 CREATE TABLE study (id integer, accession varchar(45), private boolean, suppressed boolean);
@@ -242,6 +253,12 @@ INSERT INTO protein_hash_0 (id, sequence_sha256sum, sequence)
 INSERT INTO protein_contig_occurrence_hash_0 VALUES
     (1, 10, 7, 1, 1, '01', 3, 101, -1), (2, 20, 7, 1, 2, NULL, 200, 290, 1);
 INSERT INTO contig_hash_0 VALUES (7, 'ERZ1.1', 1, encode(sha256('ACGT'), 'hex'), 2.5, 400);
+INSERT INTO protein_hash_1 (id, sequence_sha256sum, sequence)
+    SELECT 100 + 10 * n, encode(sha256(s::bytea), 'hex'), s FROM unnest(%s::text[]) WITH ORDINALITY AS t(s, n);
+INSERT INTO protein_contig_occurrence_hash_1 VALUES
+    (3, 110, 9, 2, 1, '11', 500, 600, 1), (4, 30, 9, 2, 1, NULL, 5, 50, -1);
+INSERT INTO contig_hash_1 VALUES (9, 'ERZ1.9', 2, encode(sha256('GGCC'), 'hex'), NULL, 300),
+    (8, 'ERZ1.8', 2, encode(sha256('TTAA'), 'hex'), 1.0, 200);
 INSERT INTO assembly VALUES (1, 'ERZ1', 1, 4.1, 2, false, false), (2, 'ERZ1', 1, 6.0, 2, false, false);
 INSERT INTO study VALUES (1, 'MGYS1', false, false);
 INSERT INTO biome VALUES (2, 'root:Engineered');
@@ -253,7 +270,7 @@ RESET search_path;
 @pytest.fixture
 def current():
     """A small copy of the frozen current database, with child 0 of each large table."""
-    query(CURRENT, [SEQUENCES])
+    query(CURRENT, [SEQUENCES, SEQUENCES_1])
     yield proteindb_dsn()
     query("DROP SCHEMA mgnprotein_ingestion CASCADE")
 
@@ -406,3 +423,106 @@ def test_command_takes_a_child_for_every_table_but_dims(tmp_path):
                 "--out",
                 str(tmp_path),
             )
+
+
+@pytest.fixture
+def exported(current, tmp_path):
+    """The export of the current database, whose children but 0 and 1 are empty."""
+    out = tmp_path / "migration"
+    for table in EXPORTS:
+        for child in range(64):
+            if child < 2:
+                export(current, out, table, child)
+            else:
+                (out / table / f"child={child}").mkdir(parents=True)
+    export_dims(current, out)
+    return out
+
+
+def proteins():
+    return {
+        s: (id, hashlib.sha256(s.encode()).digest())
+        for id, s in [
+            *((10 * n, s) for n, s in enumerate(SEQUENCES, 1)),
+            *((100 + 10 * n, s) for n, s in enumerate(SEQUENCES_1, 1)),
+        ]
+    }
+
+
+def test_builds_tier2s_first_day_from_the_export(exported, tmp_path):
+    root = tmp_path / "tier2"
+    build_tier2(exported, root, M)
+
+    assert tier2.complete_days(root) == [M]
+    built = {}
+    for path in tier2.files(root, "protein"):
+        assert path.name == f"base-{M}.parquet"
+        table = pq.read_table(path)
+        assert table.schema == tier2.SCHEMAS["protein"]
+        hashes = table["hash"].to_pylist()
+        assert hashes == sorted(hashes)
+        assert {f"prefix={tier2.prefix(h)}" for h in hashes} == {path.parent.name}
+        built |= {r["sequence"]: (r["id"], r["hash"]) for r in table.to_pylist()}
+    assert built == proteins()
+
+    for table, ids in [("occurrence", [[1, 2], [4, 3]]), ("contig", [[7], [8, 9]])]:
+        parts = tier2.files(root, table)
+        assert [p.name for p in parts] == ["part-000.parquet", "part-001.parquet"]
+        for part, expected in zip(parts, ids):
+            rows = pq.read_table(part)
+            assert rows.schema == tier2.SCHEMAS[table]
+            assert rows["id"].to_pylist() == expected
+    for name in ("assembly", "study", "biome", "gene_caller"):
+        assert pq.read_table(tier2.files(root, f"dims/{name}")[0]) == pq.read_table(
+            exported / "dims" / f"{name}.parquet"
+        )
+
+
+def test_tier1_built_from_the_migrated_tier2_holds_every_protein(exported, tmp_path):
+    build_tier2(exported, tmp_path / "tier2", M)
+    build_tier1(proteindb_dsn(), tmp_path / "tier2")
+
+    assert {h: id for h, (id, _) in loaded().items()} == {
+        h: id for id, h in proteins().values()
+    }
+    assert next_ids() == (141, 10, 5)
+
+
+def test_refuses_an_incomplete_export(exported, tmp_path):
+    (exported / "contig" / "child=63").rmdir()
+    with pytest.raises(MigrateError, match="missing 1: contig/child=63"):
+        build_tier2(exported, tmp_path / "tier2", M)
+    assert not (tmp_path / "tier2").exists()
+
+
+def test_refuses_a_tier2_that_has_a_complete_day(exported, tmp_path):
+    build_tier2(exported, tmp_path / "tier2", M)
+    with pytest.raises(MigrateError, match="already has a complete day"):
+        build_tier2(exported, tmp_path / "tier2", M)
+
+
+def test_resumes_an_interrupted_build(exported, tmp_path):
+    root = tmp_path / "tier2"
+    build_tier2(exported, root, M)
+    before = {p: p.read_bytes() for p in root.rglob("*.parquet")}
+    kept, lost = tier2.files(root, "protein")[:2]
+    kept_at = kept.stat().st_mtime_ns
+    (root / "dims" / f"snapshot={M}").rename(root / "dims" / f".tmp-snapshot={M}")
+    lost.unlink()
+    (root / "occurrence" / f"ingest_date={M}" / "part-001.parquet").unlink()
+
+    build_tier2(exported, root, M)
+
+    assert {p: p.read_bytes() for p in root.rglob("*.parquet")} == before
+    assert kept.stat().st_mtime_ns == kept_at
+    assert tier2.complete_days(root) == [M]
+
+
+def test_command_builds_tier2_into_the_configured_root(
+    exported, tmp_path, settings, monkeypatch
+):
+    monkeypatch.setattr(settings.EMG_CONFIG.proteindb, "root", str(tmp_path))
+    call_command(
+        "proteindb_migrate", "tier2", "--date", str(M), "--export", str(exported)
+    )
+    assert tier2.complete_days(tmp_path / "tier2") == [M]

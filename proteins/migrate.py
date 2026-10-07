@@ -1,4 +1,4 @@
-"""The migration from the current database: its export, and the Tier 1 build, also used to rebuild Tier 1 from Tier 2."""
+"""The migration from the current database: its export, the Tier 2 build, and the Tier 1 build, also used to rebuild Tier 1 from Tier 2."""
 
 import logging
 import shutil
@@ -145,6 +145,56 @@ def conform(batch: pa.RecordBatch, schema: pa.Schema, table: str) -> pa.RecordBa
                 f"{table}.{field.name} has NULLs, which Tier 2 does not allow"
             )
     return batch.select(schema.names).cast(schema)
+
+
+def build_tier2(exported: Path, root: Path, day: date) -> None:
+    """Builds Tier 2's first day, `day`, from a complete export. Resumes where an interrupted build stopped."""
+    if tier2.complete_days(root):
+        raise MigrateError(f"Tier 2 in {root} already has a complete day")
+    missing = [
+        *(
+            f"{table}/child={child}"
+            for table in EXPORTS
+            for child in range(64)
+            if not (exported / table / f"child={child}").is_dir()
+        ),
+        *(
+            f"dims/{name}.parquet"
+            for name in DIMS
+            if not (exported / "dims" / f"{name}.parquet").exists()
+        ),
+    ]
+    if missing:
+        raise MigrateError(
+            f"the export is missing {len(missing)}: {', '.join(missing[:5])}"
+        )
+
+    # Each file is written all or nothing, so one that exists is complete.
+    for p in range(64):
+        base = root / "protein" / f"prefix={p:02x}" / f"base-{day}.parquet"
+        pieces = sorted(exported.glob(f"protein/child=*/prefix={p:02x}/*.parquet"))
+        if pieces and not base.exists():
+            started = monotonic()
+            tier2.merge(base, "protein", pieces)
+            logger.info("%s: %.0f s", base, monotonic() - started)
+    for table in ("occurrence", "contig"):
+        for child in range(64):
+            part = root / table / f"ingest_date={day}" / f"part-{child:03d}.parquet"
+            pieces = sorted((exported / table / f"child={child}").glob("*.parquet"))
+            if pieces and not part.exists():
+                started = monotonic()
+                tier2.merge(part, table, pieces)
+                logger.info("%s: %.0f s", part, monotonic() - started)
+
+    snapshot = root / "dims" / f".tmp-snapshot={day}"
+    shutil.rmtree(snapshot, ignore_errors=True)
+    for name in DIMS:
+        tier2.write(
+            snapshot / f"{name}.parquet",
+            f"dims/{name}",
+            pq.read_table(exported / "dims" / f"{name}.parquet"),
+        )
+    snapshot.rename(root / "dims" / f"snapshot={day}")
 
 
 def build_tier1(dsn: str, root: Path, protein_id_start: int | None = None) -> date:

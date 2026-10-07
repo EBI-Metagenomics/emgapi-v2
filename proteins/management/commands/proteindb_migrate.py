@@ -1,10 +1,18 @@
+from datetime import date
 from pathlib import Path
 
 from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
 
 from proteins.flows.load import proteindb_dsn
-from proteins.migrate import EXPORTS, MigrateError, build_tier1, export, export_dims
+from proteins.migrate import (
+    EXPORTS,
+    MigrateError,
+    build_tier1,
+    build_tier2,
+    export,
+    export_dims,
+)
 
 
 class Command(BaseCommand):
@@ -31,6 +39,17 @@ class Command(BaseCommand):
         )
         exporting.add_argument("--out", required=True, type=Path)
 
+        tier2 = steps.add_parser(
+            "tier2", help="Build Tier 2's first day from the complete export"
+        )
+        tier2.add_argument(
+            "--date",
+            required=True,
+            type=date.fromisoformat,
+            help="M, the date of the freeze, as YYYY-MM-DD",
+        )
+        tier2.add_argument("--export", required=True, type=Path)
+
         tier1 = steps.add_parser(
             "tier1",
             help="Build Tier 1 from Tier 2, into a schema just created by tier1.sql",
@@ -50,6 +69,11 @@ class Command(BaseCommand):
         try:
             if step == "export":
                 self.export(**options)
+            elif step == "tier2":
+                build_tier2(options["export"], tier2_root(), options["date"])
+                self.stdout.write(
+                    self.style.SUCCESS(f"Built Tier 2 as of {options['date']}")
+                )
             else:
                 self.tier1(**options)
         except MigrateError as e:
@@ -74,9 +98,9 @@ class Command(BaseCommand):
     def tier1(self, rebuild, protein_id_start, **options):
         if rebuild != (protein_id_start is not None):
             raise CommandError("--rebuild and --protein-id-start go together")
-        day = build_tier1(
-            proteindb_dsn(),
-            Path(settings.EMG_CONFIG.proteindb.root) / "tier2",
-            protein_id_start,
-        )
+        day = build_tier1(proteindb_dsn(), tier2_root(), protein_id_start)
         self.stdout.write(self.style.SUCCESS(f"Built Tier 1 from Tier 2 as of {day}"))
+
+
+def tier2_root() -> Path:
+    return Path(settings.EMG_CONFIG.proteindb.root) / "tier2"

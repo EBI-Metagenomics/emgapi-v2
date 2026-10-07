@@ -2,10 +2,12 @@
 
 import os
 import re
+import tempfile
 from datetime import date
 from pathlib import Path
 from typing import Iterable
 
+import duckdb
 import pyarrow as pa
 import pyarrow.parquet as pq
 
@@ -186,3 +188,16 @@ def write_sorted(path: Path, table: str, batches: Iterable[pa.RecordBatch]) -> N
         f.flush()
         os.fsync(f.fileno())
     tmp.rename(path)
+
+
+def merge(path: Path, table: str, files: list[Path]) -> None:
+    """Writes the rows of `files` to `path` in the table's sort order, spilling to disk, all or nothing."""
+    spill = Path(tempfile.gettempdir()) / "proteindb-merge"
+    with duckdb.connect(config={"temp_directory": str(spill)}) as con:
+        reader = con.execute(
+            f"SELECT {', '.join(SCHEMAS[table].names)}"
+            " FROM read_parquet($files, hive_partitioning = false)"
+            f" ORDER BY {', '.join(SORT_ORDER[table])}",
+            {"files": [str(f) for f in files]},
+        ).to_arrow_reader(ROW_GROUP_SIZE)
+        write_sorted(path, table, reader)

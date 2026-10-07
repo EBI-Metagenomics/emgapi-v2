@@ -10,7 +10,6 @@ from time import monotonic
 from typing import NamedTuple
 
 import adbc_driver_postgresql.dbapi as adbc
-import duckdb
 import psycopg
 import pyarrow as pa
 import pyarrow.compute as pc
@@ -290,13 +289,7 @@ def compact_prefix(prefix: Path, files: list[Path], day: date) -> None:
     """Merges a prefix's base and parts into base-`day`, then deletes them."""
     logger.info("compacting %s: %d files", prefix.name, len(files))
     base = prefix / f"base-{day}.parquet"
-    spill = Path(tempfile.gettempdir()) / "proteindb-compaction"
-    with duckdb.connect(config={"temp_directory": str(spill)}) as con:
-        reader = con.execute(
-            "SELECT id, hash, sequence FROM read_parquet($files) ORDER BY hash",
-            {"files": [str(f) for f in files]},
-        ).to_arrow_reader(tier2.ROW_GROUP_SIZE)
-        tier2.write_sorted(base, "protein", reader)
+    tier2.merge(base, "protein", files)
     for path in files:
         if path != base:
             path.unlink()
