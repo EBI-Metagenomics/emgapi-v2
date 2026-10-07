@@ -380,6 +380,11 @@ class RequestTrackerConfig(BaseModel):
 class ProteinDBConfig(BaseModel):
     root: str = "/nfs/production/rdf/metagenomics/projects/protein_db"
     tier2_concurrency_limit: str = "proteindb-tier2"
+    # The mgyp-accession tag the pipeline pins, as docker://quay.io/microbiome-informatics/mgyp-accession:<tag>
+    accession_image: str = ""
+    backfill_parallelism: int = 8
+    # Below the cluster's MaxArraySize, which bounds array indices
+    backfill_array_size: int = 1000
 
 
 class EMGConfig(BaseSettings):

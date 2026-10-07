@@ -87,7 +87,7 @@ fileignoreconfig:
   allowed_patterns: [key]
 
 - filename: emgapiv2/config.py
-  checksum: 95aa1872619562a66b68ff05d256fcdde0d1c00a39adc2a4af4e8a0375848b4f
+  checksum: eb92653ba1c132c2b9f7c4689e5003038b9963462e4b84f132d4d3b39b7e79da
 
 - filename: emgapiv2/settings.py
   checksum: 7f5aefa6b21be596b4737875e348e3bff4246c29728f884a8d8cda4aec760eda

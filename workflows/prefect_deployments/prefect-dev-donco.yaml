@@ -354,3 +354,14 @@ deployments:
     job_variables:
       memory: 4
       time_limit: 1
+
+- name: proteindb_backfill_deployment
+  description: |-
+    Submit mgyp-accession for every completed v6 assembly analysis the protein DB has not registered.
+  entrypoint: proteins/flows/backfill.py:proteindb_backfill
+  parameters: {}
+  work_pool:
+    name: slurm
+    job_variables:
+      memory: 4
+      time_limit: 1

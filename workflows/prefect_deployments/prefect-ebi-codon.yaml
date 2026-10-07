@@ -482,3 +482,16 @@ deployments:
       timezone: UTC
       # Activated at cutover, once the cluster team confirms that the partition tracks processes with cgroups.
       active: false
+
+- name: proteindb_backfill_deployment
+  description: |-
+    Submit mgyp-accession, as SLURM arrays, for every completed v6 assembly analysis the protein DB has not registered, or only those of one study.
+    Run by hand. It does not wait for the arrays: run it again once they have ended, and it submits only what is still unregistered.
+  entrypoint: proteins/flows/backfill.py:proteindb_backfill
+  parameters: {}
+  work_pool:
+    name: slurm
+    job_variables:
+      cpu: 1
+      memory: 4
+      time_limit: 2
