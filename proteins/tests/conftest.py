@@ -109,6 +109,10 @@ def query(sql, params=None):
 def emptied_tier1(tier1):
     """For transactional tests, whose role connections commit outside the test's transaction."""
     yield
+    empty_tier1()
+
+
+def empty_tier1():
     query(
         "TRUNCATE proteindb.protein_key, proteindb.assembly, proteindb.gene_caller,"
         " proteindb.staging_protein, proteindb.staging_contig, proteindb.staging_occurrence,"

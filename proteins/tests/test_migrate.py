@@ -1,4 +1,7 @@
+import gzip
 import hashlib
+import re
+import subprocess
 from datetime import date
 
 import pyarrow as pa
@@ -8,6 +11,7 @@ import pytest
 from django.core.management import CommandError, call_command
 
 from proteins import tier2
+from proteins.accession.cli import main as mgyp_accession
 from proteins.flows.load import proteindb_dsn
 from proteins.migrate import (
     EXPORTS,
@@ -16,8 +20,16 @@ from proteins.migrate import (
     build_tier2,
     export,
     export_dims,
+    verify,
 )
-from proteins.tests.conftest import query
+from proteins.tests.conftest import (
+    FIXTURES,
+    PUBLISHED_V6,
+    empty_tier1,
+    query,
+    role_connection,
+    role_dsn,
+)
 
 pytestmark = [
     pytest.mark.django_db(databases=["default", "proteindb"], transaction=True),
@@ -263,13 +275,17 @@ INSERT INTO assembly VALUES (1, 'ERZ1', 1, 4.1, 2, false, false), (2, 'ERZ1', 1,
 INSERT INTO study VALUES (1, 'MGYS1', false, false);
 INSERT INTO biome VALUES (2, 'root:Engineered');
 INSERT INTO gene_caller VALUES (1, 'Prodigal', '2.6.3'), (2, 'FragGeneScan', '1.20');
+CREATE VIEW protein AS SELECT * FROM protein_hash_0 UNION ALL SELECT * FROM protein_hash_1;
+CREATE VIEW protein_contig_occurrence AS
+    SELECT * FROM protein_contig_occurrence_hash_0 UNION ALL SELECT * FROM protein_contig_occurrence_hash_1;
+CREATE VIEW contig AS SELECT * FROM contig_hash_0 UNION ALL SELECT * FROM contig_hash_1;
 RESET search_path;
 """
 
 
 @pytest.fixture
 def current():
-    """A small copy of the frozen current database, with child 0 of each large table."""
+    """A small copy of the frozen current database, with children 0 and 1 of each large table."""
     query(CURRENT, [SEQUENCES, SEQUENCES_1])
     yield proteindb_dsn()
     query("DROP SCHEMA mgnprotein_ingestion CASCADE")
@@ -526,3 +542,149 @@ def test_command_builds_tier2_into_the_configured_root(
         "proteindb_migrate", "tier2", "--date", str(M), "--export", str(exported)
     )
     assert tier2.complete_days(tmp_path / "tier2") == [M]
+
+
+@pytest.fixture
+def rehearsed(exported, tmp_path):
+    """Tier 2 and Tier 1 migrated from the current database."""
+    build_tier2(exported, tmp_path / "tier2", M)
+    build_tier1(proteindb_dsn(), tmp_path / "tier2")
+    return tmp_path / "tier2"
+
+
+def test_a_rehearsal_passes_every_check(rehearsed):
+    assert verify(proteindb_dsn(), proteindb_dsn(), rehearsed) == []
+
+
+def lose_a_protein_key_row(root):
+    query("DELETE FROM proteindb.protein_key WHERE id = 10")
+
+
+def change_a_sequence(root):
+    path = tier2.files(root, "protein")[0]
+    rows = pq.read_table(path)
+    sequences = ["MXXX", *rows["sequence"].to_pylist()[1:]]
+    tier2.write(path, "protein", rows.set_column(2, "sequence", pa.array(sequences)))
+
+
+def duplicate_an_id(root):
+    path = next(
+        p for p in tier2.files(root, "protein") if pq.read_metadata(p).num_rows > 1
+    )
+    rows = pq.read_table(path)
+    ids = rows["id"].to_pylist()
+    tier2.write(
+        path,
+        "protein",
+        rows.set_column(0, "id", pa.array([ids[0], ids[0], *ids[2:]], pa.int64())),
+    )
+    query("UPDATE proteindb.protein_key SET id = %s WHERE id = %s", [ids[0], ids[1]])
+
+
+def add_a_contig_after_the_export(root):
+    query(
+        "INSERT INTO mgnprotein_ingestion.contig_hash_1 VALUES"
+        " (10, 'ERZ1.10', 2, encode(sha256('A'), 'hex'), NULL, 1)"
+    )
+
+
+@pytest.mark.parametrize(
+    "fault, failure",
+    [
+        (lose_a_protein_key_row, "protein_key has 11 rows, and Tier 2 protein 12"),
+        (
+            lose_a_protein_key_row,
+            r"prefix \w\w: \(rows, sum of ids\) \(\d+, \d+\) in Tier 1",
+        ),
+        (change_a_sequence, "1 sampled rows whose hash is not sha256"),
+        (duplicate_an_id, "Tier 2 protein has 12 rows, but 11 distinct ids"),
+        (
+            add_a_contig_after_the_export,
+            "Tier 2 contig has 3 rows, and the frozen table 4",
+        ),
+    ],
+)
+def test_verify_finds_a_fault(rehearsed, fault, failure):
+    fault(rehearsed)
+    failed = verify(proteindb_dsn(), proteindb_dsn(), rehearsed)
+    assert [f for f in failed if re.search(failure, f)], failed
+
+
+def test_verify_checks_the_migration_only(rehearsed):
+    write_day(rehearsed, D, {hash_of(0x80, 1): 500}, "part")
+    with pytest.raises(MigrateError, match="2 complete days"):
+        verify(proteindb_dsn(), proteindb_dsn(), rehearsed)
+
+
+def test_command_verifies(rehearsed, current, settings, monkeypatch):
+    monkeypatch.setattr(settings.EMG_CONFIG.proteindb, "root", str(rehearsed.parent))
+    call_command("proteindb_migrate", "verify", "--source", current)
+    add_a_contig_after_the_export(rehearsed)
+    with pytest.raises(CommandError, match="1 checks failed"):
+        call_command("proteindb_migrate", "verify", "--source", current)
+
+
+# Step 3 of restarting allocation after lost commits.
+HIGHEST_MGYP = (
+    "set -o pipefail; xargs -a outputs.txt zcat -f"
+    " | grep -o '^>[^ ]* MGYP[0-9]\\{12\\}' | grep -o 'MGYP[0-9]*' | sort | tail -n 1"
+)
+
+
+def accession_published(assembly, out):
+    assert (
+        mgyp_accession(
+            [
+                *("--assembly", assembly, "--pipeline-version", "6.0"),
+                *("--faa", str(FIXTURES / f"{assembly}.faa.gz")),
+                *("--gff", str(FIXTURES / f"{assembly}.gff.gz")),
+                *("--contigs", str(FIXTURES / f"{assembly}.fasta.gz")),
+                *("--out", str(out)),
+            ]
+        )
+        == 0
+    )
+    with gzip.open(out, "rt") as fasta:
+        return [int(m) for m in re.findall(r"^>\S+ MGYP(\d{12})", fasta.read(), re.M)]
+
+
+def test_allocation_restarts_above_every_mgyp_emitted_after_tier1_is_lost(
+    rehearsed, tmp_path, monkeypatch
+):
+    monkeypatch.setenv("PROTEINDB_DSN", role_dsn("proteindb_accession"))
+    first, last, after = PUBLISHED_V6
+    before = accession_published(first, tmp_path / f"{first}.faa.gz")
+    with role_connection("proteindb_accession") as conn:
+        conn.execute(
+            "INSERT INTO proteindb.protein_key (hash, id) SELECT sha256(n::text::bytea),"
+            " nextval('proteindb.protein_id_seq') FROM generate_series(1, 500) n"
+        )
+        conn.rollback()
+        conn.execute(
+            "INSERT INTO proteindb.protein_key (hash, id) SELECT hash,"
+            " nextval('proteindb.protein_id_seq') FROM proteindb.protein_key"
+            " ON CONFLICT DO NOTHING"
+        )
+    emitted = accession_published(last, tmp_path / f"{last}.faa.gz")
+    assert min(emitted) > max(before) + 500
+
+    empty_tier1()
+    (tmp_path / "outputs.txt").write_text(f"{first}.faa.gz\n{last}.faa.gz\n")
+    highest = subprocess.run(
+        ["bash", "-c", HIGHEST_MGYP],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.strip()
+    assert highest == f"MGYP{max(emitted):012d}"
+
+    build_tier1(proteindb_dsn(), rehearsed, protein_id_start=int(highest[4:]) + 1)
+    again = accession_published(last, tmp_path / f"recovered-{last}.faa.gz")
+    assert min(again) == max(emitted) + 1
+    assert min(accession_published(after, tmp_path / f"{after}.faa.gz")) > max(again)
+
+
+def test_reading_the_highest_mgyp_fails_on_a_missing_output(tmp_path):
+    (tmp_path / "outputs.txt").write_text("missing.faa.gz\n")
+    assert subprocess.run(["bash", "-c", HIGHEST_MGYP], cwd=tmp_path).returncode != 0

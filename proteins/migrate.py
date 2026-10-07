@@ -1,7 +1,8 @@
-"""The migration from the current database: its export, the Tier 2 build, and the Tier 1 build, also used to rebuild Tier 1 from Tier 2."""
+"""The migration from the current database: its export, the Tier 2 build, the Tier 1 build, also used to rebuild Tier 1 from Tier 2, and their verification."""
 
 import logging
 import shutil
+import tempfile
 from collections import defaultdict
 from datetime import date
 from pathlib import Path
@@ -332,3 +333,78 @@ def build_partition(
     conn.execute(f"ALTER TABLE {name} DROP CONSTRAINT {name}_range")
     conn.execute(f"GRANT SELECT ON {name} TO proteindb_accession, proteindb_read")
     logger.info("%s: %d rows in %.0f s", name, rows, monotonic() - started)
+
+
+def verify(source: str, dsn: str, root: Path, sample: int = 1_000_000) -> list[str]:
+    """The checks of the migration that compare the frozen current database, Tier 2 and Tier 1. Returns those that failed.
+
+    The hash contract is checked on `sample` rows of each prefix.
+    """
+    days = tier2.complete_days(root)
+    if len(days) != 1:
+        raise MigrateError(
+            f"Tier 2 has {len(days)} complete days, and verify checks the migration's only"
+        )
+    failed = []
+    with psycopg.connect(source) as conn:
+        frozen = {
+            table: conn.execute(f"SELECT count(*) FROM {SOURCE}.{name}").fetchone()[0]
+            for table, (name, _) in EXPORTS.items()
+        }
+    with psycopg.connect(dsn) as conn:
+        tier1 = {
+            name.removeprefix("protein_key_"): (rows, int(total))
+            for name, rows, total in conn.execute(
+                "SELECT c.relname, count(*), sum(k.id) FROM proteindb.protein_key k"
+                " JOIN pg_class c ON c.oid = k.tableoid GROUP BY c.relname"
+            )
+        }
+
+    spill = Path(tempfile.gettempdir()) / "proteindb-verify"
+    with duckdb.connect(config={"temp_directory": str(spill)}) as con:
+
+        def one(sql, files):
+            return con.execute(sql, {"files": [str(f) for f in files]}).fetchone()
+
+        proteins = tier2.files(root, "protein")
+        for table in EXPORTS:
+            (rows,) = one(
+                "SELECT count(*) FROM read_parquet($files)", tier2.files(root, table)
+            )
+            if rows != frozen[table]:
+                failed.append(
+                    f"Tier 2 {table} has {rows} rows, and the frozen table {frozen[table]}"
+                )
+        rows, distinct = one(
+            "SELECT count(*), count(DISTINCT id) FROM read_parquet($files)", proteins
+        )
+        if distinct != rows:
+            failed.append(
+                f"Tier 2 protein has {rows} rows, but {distinct} distinct ids"
+            )
+        in_tier1 = sum(count for count, _ in tier1.values())
+        if in_tier1 != rows:
+            failed.append(f"protein_key has {in_tier1} rows, and Tier 2 protein {rows}")
+
+        in_tier2 = {}
+        for path in proteins:
+            in_tier2[path.parent.name.removeprefix("prefix=")] = one(
+                "SELECT count(*), sum(id) FROM read_parquet($files)", [path]
+            )
+            (broken,) = one(
+                "SELECT count(*) FROM (SELECT hash, sequence FROM read_parquet($files)"
+                f" USING SAMPLE reservoir({sample} ROWS))"
+                " WHERE sha256(sequence) <> lower(hex(hash))",
+                [path],
+            )
+            if broken:
+                failed.append(
+                    f"{path}: {broken} sampled rows whose hash is not sha256(sequence)"
+                )
+        for p in sorted(set(tier1) | set(in_tier2)):
+            if tier1.get(p, (0, 0)) != in_tier2.get(p, (0, 0)):
+                failed.append(
+                    f"prefix {p}: (rows, sum of ids) {tier1.get(p, (0, 0))} in Tier 1,"
+                    f" and {in_tier2.get(p, (0, 0))} in Tier 2"
+                )
+    return failed

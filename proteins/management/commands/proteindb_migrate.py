@@ -12,6 +12,7 @@ from proteins.migrate import (
     build_tier2,
     export,
     export_dims,
+    verify,
 )
 
 
@@ -65,6 +66,22 @@ class Command(BaseCommand):
             help="With --rebuild, the first protein id to allocate: above every MGYP emitted",
         )
 
+        verifying = steps.add_parser(
+            "verify",
+            help="Compare Tier 2 and Tier 1 with the frozen current database",
+        )
+        verifying.add_argument(
+            "--source",
+            required=True,
+            help="libpq URI of the current database, with the password in ~/.pgpass",
+        )
+        verifying.add_argument(
+            "--sample",
+            type=int,
+            default=1_000_000,
+            help="Rows of each prefix whose hash is checked (default: %(default)s)",
+        )
+
     def handle(self, *args, step, **options):
         try:
             if step == "export":
@@ -74,8 +91,10 @@ class Command(BaseCommand):
                 self.stdout.write(
                     self.style.SUCCESS(f"Built Tier 2 as of {options['date']}")
                 )
-            else:
+            elif step == "tier1":
                 self.tier1(**options)
+            else:
+                self.verify(**options)
         except MigrateError as e:
             raise CommandError(e)
 
@@ -100,6 +119,16 @@ class Command(BaseCommand):
             raise CommandError("--rebuild and --protein-id-start go together")
         day = build_tier1(proteindb_dsn(), tier2_root(), protein_id_start)
         self.stdout.write(self.style.SUCCESS(f"Built Tier 1 from Tier 2 as of {day}"))
+
+    def verify(self, source, sample, **options):
+        failed = verify(source, proteindb_dsn(), tier2_root(), sample)
+        for failure in failed:
+            self.stderr.write(failure)
+        if failed:
+            raise CommandError(f"{len(failed)} checks failed")
+        self.stdout.write(
+            self.style.SUCCESS("Tier 2 and Tier 1 match the current database")
+        )
 
 
 def tier2_root() -> Path:
