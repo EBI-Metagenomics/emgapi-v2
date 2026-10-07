@@ -8,6 +8,7 @@ from activate_django_first import EMG_CONFIG
 
 from proteins import tier2
 from proteins.accession.accession import accession
+from proteins.flows import check as check_flow
 from proteins.flows import load as load_flow
 from proteins.tests.conftest import query, read_published, role_dsn
 
@@ -47,3 +48,27 @@ def test_the_load_flow_loads_todays_staging_as_the_owner_of_tier2(
         ("done", 1)
     ]
     assert query("SELECT execution_id FROM proteindb.tier2_owner") == [(None,)]
+
+
+@pytest.fixture
+def checked(monkeypatch, tmp_path, slurm):
+    monkeypatch.setattr(check_flow, "proteindb_dsn", lambda: role_dsn("proteindb_load"))
+    monkeypatch.setattr(EMG_CONFIG.proteindb, "root", str(tmp_path))
+
+
+def test_the_check_flow_succeeds_on_a_healthy_system(
+    prefect_harness, checked, tmp_path
+):
+    query(
+        "INSERT INTO proteindb.load_log (ingest_date, status, finished_at)"
+        " VALUES (current_date, 'done', now())"
+    )
+    check_flow.proteindb_check()
+
+
+def test_the_check_flow_fails_on_a_failed_check(prefect_harness, checked):
+    with pytest.raises(
+        check_flow.CheckFailed,
+        match="1 checks failed: the last successful load finished at None",
+    ):
+        check_flow.proteindb_check()

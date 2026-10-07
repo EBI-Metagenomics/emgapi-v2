@@ -483,6 +483,24 @@ deployments:
       # Activated at cutover, once the cluster team confirms that the partition tracks processes with cgroups.
       active: false
 
+- name: proteindb_check_deployment
+  description: |-
+    Log the protein DB's state, and fail if any of its checks fails: an overdue load, rows staged too long,
+    an owner of Tier 2 whose job is not running, an incomplete Tier 2 day before the last load, or protein ids near their limit.
+  entrypoint: proteins/flows/check.py:proteindb_check
+  parameters: {}
+  work_pool:
+    name: slurm
+    job_variables:
+      cpu: 1
+      memory: 2
+      time_limit: 1
+  schedules:
+    - cron: "0 8 * * *"
+      timezone: UTC
+      # Activated at cutover, with the load's.
+      active: false
+
 - name: proteindb_backfill_deployment
   description: |-
     Submit mgyp-accession, as SLURM arrays, for every completed v6 assembly analysis the protein DB has not registered, or only those of one study.

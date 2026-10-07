@@ -40,6 +40,37 @@ class Status(NamedTuple):
     last_protein_id: int
     unresolved: list[str]  # accessions emgapi-v2 did not know, in the latest snapshot
 
+    def report(self) -> str:
+        owner = self.owner
+        return "\n".join(
+            [
+                f"Last successful load: day {self.last_day}, finished at {self.last_load}",
+                *(
+                    f"  failed since: day {day}: {message}"
+                    for day, message in self.failed
+                ),
+                "Staged rows: "
+                + ", ".join(f"{table} {rows}" for table, rows in self.staged.items())
+                + (
+                    f", the oldest at {self.oldest_staged}"
+                    if self.oldest_staged
+                    else ""
+                ),
+                "Owner of Tier 2: "
+                + (
+                    f"{owner.flow}, job {owner.job} submitted at {owner.submit_at},"
+                    f" {', '.join(owner.states) or 'not found by sacct'}"
+                    if owner
+                    else "none"
+                ),
+                f"Latest complete Tier 2 day: {self.complete_day}",
+                f"Incomplete Tier 2 days: {', '.join(map(str, self.incomplete_days)) or 'none'}",
+                f"Last protein id: {self.last_protein_id}, {self.last_protein_id / MAX_PROTEIN_ID:.4%} of the MGYP range",
+                f"Unresolved assemblies in the latest snapshot: {len(self.unresolved)}",
+                *(f"  {accession}" for accession in self.unresolved),
+            ]
+        )
+
     def problems(self, now: datetime | None = None) -> list[str]:
         now = now or datetime.now(timezone.utc)
         found = []

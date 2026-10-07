@@ -355,6 +355,17 @@ deployments:
       memory: 4
       time_limit: 1
 
+- name: proteindb_check_deployment
+  description: |-
+    Log the protein DB's state, and fail if any of its checks fails.
+  entrypoint: proteins/flows/check.py:proteindb_check
+  parameters: {}
+  work_pool:
+    name: slurm
+    job_variables:
+      memory: 1
+      time_limit: 1
+
 - name: proteindb_backfill_deployment
   description: |-
     Submit mgyp-accession for every completed v6 assembly analysis the protein DB has not registered.
