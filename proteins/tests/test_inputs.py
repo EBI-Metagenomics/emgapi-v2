@@ -6,7 +6,12 @@ import pytest
 
 from proteins.accession.contract import protein_hash
 from proteins.accession.fasta import read_fasta
-from proteins.accession.inputs import InvalidInput, major_minor, read_input
+from proteins.accession.inputs import (
+    InvalidInput,
+    major_minor,
+    read_genes,
+    read_input,
+)
 from proteins.tests.conftest import PUBLISHED_V6, read_published
 
 FIXTURES = Path(__file__).parent.parent / "fixtures"
@@ -107,6 +112,19 @@ def test_names_every_invalid_sequence(files):
         "g1: invalid character 'ß' at position 3",
         "g3: invalid character '*' at position 2",
         "g4: empty sequence",
+    ]
+
+
+def test_reads_each_genes_hash_from_the_fasta_alone(files):
+    faa, *_ = files({"g2": "mkv", "g1": "MAG"})
+    assert read_genes(faa) == [("g2", protein_hash("MKV")), ("g1", protein_hash("MAG"))]
+
+    write(faa, ">g1\nMKV\n>g2\nM*\n>g1\nMAG\n")
+    with pytest.raises(InvalidInput) as excinfo:
+        read_genes(faa)
+    assert excinfo.value.problems == [
+        "g2: invalid character '*' at position 2",
+        "g1: more than one FASTA record",
     ]
 
 

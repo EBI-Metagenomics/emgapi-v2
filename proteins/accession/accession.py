@@ -291,19 +291,16 @@ def write_output(path, occurrences: list[Occurrence], ids: dict[bytes, int]) -> 
     )
 
 
-def write_lookup(path, occurrences: list[Occurrence], ids: dict[bytes, int]) -> None:
+def write_lookup(path, genes: list[tuple[str, bytes]], ids: dict[bytes, int]) -> None:
     """Each gene's MGYP, empty when its protein has none.
 
     :param path: The output file.
-    :param occurrences: The input's occurrences, in input order.
+    :param genes: Each gene's id and protein hash, in input order.
     :param ids: The ids the lookup found.
     """
     write_lines(
         path,
-        (
-            f"{o.gene_id}\t{mgyp(ids[o.hash]) if o.hash in ids else ''}\n"
-            for o in occurrences
-        ),
+        (f"{gene}\t{mgyp(ids[hash]) if hash in ids else ''}\n" for gene, hash in genes),
     )
 
 

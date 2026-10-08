@@ -64,6 +64,26 @@ def major_minor(pipeline_version: str) -> str:
     return match[1]
 
 
+def read_genes(faa) -> list[tuple[str, bytes]]:
+    """Each gene's id and protein hash, in the FASTA's order. Raises InvalidInput naming every problem found.
+
+    :param faa: A protein FASTA.
+    """
+    genes, seen, problems = [], set(), []
+    for record in read_fasta(faa):
+        if record.id in seen:
+            problems.append(f"{record.id}: more than one FASTA record")
+            continue
+        seen.add(record.id)
+        try:
+            genes.append((record.id, protein_hash(record.sequence)))
+        except InvalidSequence as e:
+            problems.append(f"{record.id}: {e}")
+    if problems:
+        raise InvalidInput(problems)
+    return genes
+
+
 def read_input(faa, gff, contigs, contig_map=None) -> Input:
     """Raises InvalidInput naming every problem found, or ValueError for a malformed file.
 

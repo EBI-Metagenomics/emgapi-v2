@@ -233,10 +233,27 @@ def test_rerun_with_a_protein_without_mgyp_exits_3(tmp_path, dsn):
     assert not (tmp_path / "rerun.faa.gz").exists()
 
 
+def lookup_args(tmp_path, out):
+    return [
+        *("--assembly", "ERZ101", "--pipeline-version", "6.0"),
+        *("--faa", str(FIXTURES / "ERZ101.faa.gz")),
+        *("--out", str(tmp_path / out), "--lookup-only"),
+    ]
+
+
+def test_needs_gff_and_contigs_without_lookup_only(tmp_path, unreachable, capsys):
+    with pytest.raises(SystemExit) as excinfo:
+        main(lookup_args(tmp_path, "out.faa.gz")[:-1])
+    assert excinfo.value.code == 2
+    assert "--gff and --contigs are required" in capsys.readouterr().err
+
+
 @db
-def test_lookup_only_writes_nothing_to_the_database(tmp_path, dsn, capsys):
+def test_lookup_only_reads_the_fasta_alone_and_writes_nothing_to_the_database(
+    tmp_path, dsn, capsys
+):
     before = counts()
-    assert main(args(tmp_path, out="before.tsv", extra=["--lookup-only"])) == 0
+    assert main(lookup_args(tmp_path, "before.tsv")) == 0
     assert counts() == before
     assert "found: 0\tnot found: 105" in capsys.readouterr().out
     lines = (tmp_path / "before.tsv").read_text().splitlines()
@@ -245,7 +262,7 @@ def test_lookup_only_writes_nothing_to_the_database(tmp_path, dsn, capsys):
 
     assert main(args(tmp_path)) == 0
     before = counts()
-    assert main(args(tmp_path, out="after.tsv", extra=["--lookup-only"])) == 0
+    assert main(lookup_args(tmp_path, "after.tsv")) == 0
     assert counts() == before
     assert "found: 105\tnot found: 0" in capsys.readouterr().out
     assert [

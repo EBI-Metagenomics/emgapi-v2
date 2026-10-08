@@ -13,7 +13,7 @@ from .accession import (
     write_lookup,
     write_output,
 )
-from .inputs import major_minor, read_input
+from .inputs import major_minor, read_genes, read_input
 
 logger = logging.getLogger("mgyp-accession")
 
@@ -60,10 +60,10 @@ def parse_args(argv=None) -> argparse.Namespace:
         "--faa", required=True, help="protein FASTA of the combined gene caller"
     )
     parser.add_argument(
-        "--gff", required=True, help="merged GFF of the combined gene caller"
+        "--gff", help="merged GFF of the combined gene caller; not with --lookup-only"
     )
     parser.add_argument(
-        "--contigs", required=True, help="the contigs the genes were called on"
+        "--contigs", help="the contigs the genes were called on; not with --lookup-only"
     )
     parser.add_argument(
         "--contig-map",
@@ -83,10 +83,13 @@ def parse_args(argv=None) -> argparse.Namespace:
     parser.add_argument(
         "--lookup-only",
         action="store_true",
-        help="look up only, never writing to the database: --out is a TSV of"
-        " gene ID and MGYP, empty when not found",
+        help="look up only the FASTA's proteins, never writing to the database:"
+        " --out is a TSV of gene ID and MGYP, empty when not found",
     )
-    return parser.parse_args(argv)
+    args = parser.parse_args(argv)
+    if not args.lookup_only and not (args.gff and args.contigs):
+        parser.error("--gff and --contigs are required without --lookup-only")
+    return args
 
 
 def main(argv=None) -> int:
@@ -102,7 +105,10 @@ def main(argv=None) -> int:
 
     try:
         pipeline_version = major_minor(args.pipeline_version)
-        input = read_input(args.faa, args.gff, args.contigs, args.contig_map)
+        if args.lookup_only:
+            genes = read_genes(args.faa)
+        else:
+            input = read_input(args.faa, args.gff, args.contigs, args.contig_map)
     except ValueError as e:
         logger.error("invalid input:\n%s", e)
         return EXIT_INVALID_INPUT
@@ -114,13 +120,13 @@ def main(argv=None) -> int:
     connect = connector(dsn, f"mgyp-accession {args.assembly}")
 
     if args.lookup_only:
-        hashes = [hash for hash, _ in input.proteins]
+        hashes = sorted({hash for _, hash in genes})
         ids = retry_on_connect_failure(
             lambda: lookup(connect, hashes, args.connections)
         )
-        write_lookup(args.out, input.occurrences, ids)
-        found = sum(o.hash in ids for o in input.occurrences)
-        print(f"found: {found}\tnot found: {len(input.occurrences) - found}")
+        write_lookup(args.out, genes, ids)
+        found = sum(hash in ids for _, hash in genes)
+        print(f"found: {found}\tnot found: {len(genes) - found}")
         return 0
 
     try:
