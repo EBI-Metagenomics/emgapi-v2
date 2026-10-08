@@ -94,7 +94,7 @@ def _annotate_results(results, selected_catalogues):
     ]
 
 
-@api_controller("genome-search", tags=[ApiSections.GENOMES])
+@api_controller("genomes/gene-search", tags=[ApiSections.GENOMES])
 class GenomeSearchController:
     @http_post(
         "/",
@@ -139,7 +139,7 @@ class GenomeSearchController:
         data = GenomeSearchData(
             job_id=job.id,
             status=job.status,
-            status_url=f"{EMG_CONFIG.service_urls.app_root.rstrip('/')}/{settings.BASE_URL}genome-search/status/{job.id}/",
+            status_url=f"{EMG_CONFIG.service_urls.app_root.rstrip('/')}/{settings.BASE_URL}genomes/gene-search/status/{job.id}/",
         )
         if include_results and job.status == "SUCCESSFUL":
             payload = job.return_value

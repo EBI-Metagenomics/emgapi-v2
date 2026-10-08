@@ -164,7 +164,7 @@ def test_genome_search_gather_submit_success(
     patcher.setattr("genomes.tasks.run_sourmash_gather", _fake_sourmash_run)
 
     response = http_tester.post(
-        "/genomes-search/gather/",
+        "/genomes/genome-search/",
         FILES=_make_uploaded_files(),
         data=_make_request_payload(),
     )
@@ -175,7 +175,9 @@ def test_genome_search_gather_submit_success(
     assert body["signatures_received"] == ["query.sig"]
     assert body["requested_catalogues"] == ["human-gut-v2-0"]
     assert body["children_ids"] == {}
-    assert body["status_url"].endswith(f"/genomes-search/status/{body['job_id']}/")
+    assert body["status_url"].endswith(
+        f"/genomes/genome-search/status/{body['job_id']}/"
+    )
     saved_files = list((tmp_path / "queries").glob("*/*.sig"))
     assert len(saved_files) == 1
 
@@ -185,7 +187,7 @@ def test_genome_search_gather_submit_invalid_signature(http_tester, make_search_
     make_search_index()
 
     response = http_tester.post(
-        "/genomes-search/gather/",
+        "/genomes/genome-search/",
         FILES=_make_uploaded_files(
             filename="bad.sig",
             content=b'{"type": "not a sourmash signature"}',
@@ -214,7 +216,7 @@ def test_genome_search_gather_submit_queue_unavailable(
     )
 
     response = http_tester.post(
-        "/genomes-search/gather/",
+        "/genomes/genome-search/",
         FILES=_make_uploaded_files(),
         data=_make_request_payload(),
     )
@@ -233,7 +235,7 @@ def test_genome_search_gather_status(
     patcher.setattr("genomes.tasks.run_sourmash_gather", _fake_sourmash_run)
 
     submit_response = http_tester.post(
-        "/genomes-search/gather/",
+        "/genomes/genome-search/",
         FILES=_make_uploaded_files(),
         data=_make_request_payload(),
     )
@@ -251,7 +253,7 @@ def test_genome_search_gather_status(
         ),
     )
 
-    response = http_tester.get(f"/genomes-search/status/{body['job_id']}/")
+    response = http_tester.get(f"/genomes/genome-search/status/{body['job_id']}/")
 
     assert response.status_code == 200, response.text
     status_body = response.json()["data"]
@@ -262,7 +264,7 @@ def test_genome_search_gather_status(
     assert status_body["signatures"][0]["status"] == "SUCCESS"
     assert status_body["signatures"][0]["catalogue"] == "human-gut-v2-0"
     assert status_body["signatures"][0]["results_url"].endswith(
-        f"/genomes-search/results/{body['job_id']}/"
+        f"/genomes/genome-search/results/{body['job_id']}/"
     )
 
 
@@ -276,7 +278,7 @@ def test_genome_search_gather_results_csv(
     patcher.setattr("genomes.tasks.run_sourmash_gather", _fake_sourmash_run)
 
     submit_response = http_tester.post(
-        "/genomes-search/gather/",
+        "/genomes/genome-search/",
         FILES=_make_uploaded_files(),
         data=_make_request_payload(),
     )
@@ -294,7 +296,7 @@ def test_genome_search_gather_results_csv(
         ),
     )
 
-    response = http_tester.get(f"/genomes-search/results/{job_id}/")
+    response = http_tester.get(f"/genomes/genome-search/results/{job_id}/")
 
     assert response.status_code == 200, response.text
     assert response.headers["Content-Type"].startswith("text/csv")
@@ -312,7 +314,7 @@ def test_genome_search_gather_results_archive(
     patcher.setattr("genomes.tasks.run_sourmash_gather", _fake_sourmash_run)
 
     submit_response = http_tester.post(
-        "/genomes-search/gather/",
+        "/genomes/genome-search/",
         FILES=_make_uploaded_files(),
         data=_make_request_payload("human-gut-v2-0", "marine-v2-0"),
     )
@@ -341,7 +343,7 @@ def test_genome_search_gather_results_archive(
         ),
     )
 
-    response = http_tester.get(f"/genomes-search/results/{job_id}/")
+    response = http_tester.get(f"/genomes/genome-search/results/{job_id}/")
 
     assert response.status_code == 200, response.text
     assert response.headers["Content-Type"].startswith("application/gzip")
