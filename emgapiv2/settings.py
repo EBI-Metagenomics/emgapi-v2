@@ -104,6 +104,7 @@ INSTALLED_APPS = [
     "workflows",
     "genomes",
     "kvstore",
+    "proteins",
 ]
 
 MIDDLEWARE = [
@@ -183,6 +184,15 @@ DATABASES = {
         default="postgres://postgres:postgres@localhost:5432/emg_test",
     ),
 }
+
+if os.getenv("PROTEINDB_DATABASE_URL"):
+    DATABASES["proteindb"] = dj_database_url.config(
+        env="PROTEINDB_DATABASE_URL",
+        conn_max_age=600,
+        conn_health_checks=True,
+    )
+
+DATABASE_ROUTERS = ["proteins.routers.ProteinDBRouter"]
 
 TASKS = {
     "default": {

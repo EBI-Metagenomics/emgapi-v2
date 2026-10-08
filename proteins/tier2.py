@@ -1,0 +1,243 @@
+"""Tier 2: the Parquet layout, the rule for which files make up a day, and atomic writes."""
+
+import os
+import re
+import tempfile
+from datetime import date
+from pathlib import Path
+from typing import Iterable, Iterator
+
+import duckdb
+import pyarrow as pa
+import pyarrow.parquet as pq
+from django.conf import settings
+
+HASH = pa.binary(32)
+
+
+def _schema(*fields):
+    return pa.schema(
+        [pa.field(name, type, nullable=nullable) for name, type, nullable in fields]
+    )
+
+
+SCHEMAS = {
+    "protein": _schema(
+        ("id", pa.int64(), False),
+        ("hash", HASH, False),
+        ("sequence", pa.string(), False),
+    ),
+    "occurrence": _schema(
+        ("id", pa.int64(), False),
+        ("protein_id", pa.int64(), False),
+        ("contig_id", pa.int64(), False),
+        ("assembly_id", pa.int32(), False),
+        ("gene_caller_id", pa.int16(), False),
+        ("start_position", pa.int32(), False),
+        ("end_position", pa.int32(), False),
+        ("strand", pa.int8(), False),
+        ("truncation", pa.string(), True),
+    ),
+    "contig": _schema(
+        ("id", pa.int64(), False),
+        ("assembly_id", pa.int32(), False),
+        ("name", pa.string(), False),
+        ("original_name", pa.string(), True),
+        ("length", pa.int32(), False),
+        ("hash", HASH, False),
+        ("kmer_coverage", pa.float64(), True),
+    ),
+    # study, biome and the flags are NULL when emgapi-v2 does not know the accession.
+    "dims/assembly": _schema(
+        ("id", pa.int32(), False),
+        ("accession", pa.string(), False),
+        ("pipeline_version", pa.string(), False),
+        ("study_id", pa.int32(), True),
+        ("biome_id", pa.int16(), True),
+        ("private", pa.bool_(), True),
+        ("suppressed", pa.bool_(), True),
+    ),
+    "dims/study": _schema(
+        ("id", pa.int32(), False),
+        ("accession", pa.string(), False),
+        ("private", pa.bool_(), False),
+        ("suppressed", pa.bool_(), False),
+    ),
+    "dims/biome": _schema(("id", pa.int16(), False), ("lineage", pa.string(), False)),
+    "dims/gene_caller": _schema(
+        ("id", pa.int16(), False),
+        ("name", pa.string(), False),
+        ("version", pa.string(), False),
+    ),
+}
+
+SORT_ORDER = {
+    "protein": ["hash"],
+    "occurrence": ["assembly_id", "contig_id", "start_position"],
+    "contig": ["assembly_id", "id"],
+    "dims/assembly": ["id"],
+    "dims/study": ["id"],
+    "dims/biome": ["id"],
+    "dims/gene_caller": ["id"],
+}
+
+ROW_GROUP_SIZE = 122_880
+DATED = re.compile(r"(base|part)-(\d{4}-\d{2}-\d{2})\.parquet")
+
+
+class Tier2Error(Exception):
+    """Tier 2 cannot be read as of the requested day."""
+
+
+def prefix(hash: bytes) -> str:
+    """The partition of a hash: its top 6 bits as two hex digits, as in Tier 1.
+
+    :param hash: A protein's 32-byte hash.
+    """
+    return f"{hash[0] >> 2:02x}"
+
+
+def complete_days(root: Path) -> list[date]:
+    """The days whose snapshot of the dimensions has been published, the last write of a load.
+
+    :param root: Tier 2's directory.
+    """
+    return sorted(
+        date.fromisoformat(path.name.removeprefix("snapshot="))
+        for path in (root / "dims").glob("snapshot=*")
+    )
+
+
+def files(root: Path, table: str, as_of: date | None = None) -> list[Path]:
+    """The files that make up `table` as of a complete day, by default the latest one.
+
+    :param root: Tier 2's directory.
+    :param table: The table, e.g. protein or dims/assembly.
+    :param as_of: A complete day, by default the latest.
+    """
+    if table not in SCHEMAS:
+        raise ValueError(f"unknown Tier 2 table {table!r}")
+    days = complete_days(root)
+    if as_of is None:
+        if not days:
+            raise Tier2Error("Tier 2 has no complete day")
+        as_of = days[-1]
+    elif as_of not in days:
+        raise Tier2Error(f"{as_of} is not a complete day of Tier 2")
+    complete = set(days)
+
+    if table.startswith("dims/"):
+        return [
+            root
+            / "dims"
+            / f"snapshot={as_of}"
+            / f"{table.removeprefix('dims/')}.parquet"
+        ]
+
+    if table != "protein":
+        return [
+            file
+            for directory in sorted((root / table).glob("ingest_date=*"))
+            if (day := date.fromisoformat(directory.name.removeprefix("ingest_date=")))
+            <= as_of
+            and day in complete
+            for file in sorted(directory.glob("*.parquet"))
+        ]
+
+    selected = []
+    for directory in sorted((root / "protein").glob("prefix=*")):
+        bases, parts = {}, {}
+        for path in directory.glob("*.parquet"):
+            if match := DATED.fullmatch(path.name):
+                kind, day = match[1], date.fromisoformat(match[2])
+                (bases if kind == "base" else parts)[day] = path
+        base = max((day for day in bases if day <= as_of), default=None)
+        if base is None and bases:
+            raise Tier2Error(
+                f"{as_of} is older than the oldest base of {directory.name}, "
+                "and compaction has deleted the files it needs"
+            )
+        if base is not None:
+            selected.append(bases[base])
+        selected += [
+            parts[day]
+            for day in sorted(parts)
+            if (base is None or base < day) and day <= as_of and day in complete
+        ]
+    return selected
+
+
+def write(path: Path, table: str, data: pa.Table) -> None:
+    """Writes `data` to `path` in the table's schema and sort order, all or nothing.
+
+    :param path: The file to write.
+    :param table: The table whose schema and sort order the file has.
+    :param data: The rows.
+    """
+    schema = SCHEMAS[table]
+    data = (
+        data.select(schema.names)
+        .cast(schema)
+        .sort_by([(column, "ascending") for column in SORT_ORDER[table]])
+        .combine_chunks()
+    )
+    write_sorted(path, table, data.to_batches(max_chunksize=ROW_GROUP_SIZE))
+
+
+def write_sorted(path: Path, table: str, batches: Iterable[pa.RecordBatch]) -> None:
+    """Writes batches already in the table's sort order, each one a row group, all or nothing.
+
+    :param path: The file to write.
+    :param table: The table whose schema the file has.
+    :param batches: The rows, in the table's sort order.
+    """
+    schema = SCHEMAS[table]
+    batches = (
+        pa.Table.from_batches([batch]).select(schema.names).cast(schema)
+        for batch in batches
+    )
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(f".{path.name}.tmp")
+    with open(tmp, "wb") as f:
+        with pq.ParquetWriter(
+            f,
+            schema,
+            compression="zstd",
+            compression_level=1,
+            write_statistics=True,
+        ) as writer:
+            for batch in batches:
+                writer.write_table(batch, row_group_size=ROW_GROUP_SIZE)
+        f.flush()
+        os.fsync(f.fileno())
+    tmp.rename(path)
+
+
+def merge(path: Path, table: str, files: list[Path]) -> None:
+    """Writes the rows of `files` to `path` in the table's sort order, spilling to disk, all or nothing.
+
+    :param path: The file to write.
+    :param table: The table whose schema and sort order the file has.
+    :param files: The files to merge.
+    """
+    write_sorted(path, table, sorted_batches(table, files))
+
+
+def sorted_batches(table: str, files: list[Path]) -> Iterator[pa.RecordBatch]:
+    """The rows of `files` in the table's sort order, sorted by DuckDB, which spills to disk.
+
+    :param table: The table whose columns and sort order the rows have.
+    :param files: The files to read.
+    """
+    spill = Path(tempfile.gettempdir()) / "proteindb-merge"
+    config = {
+        "temp_directory": str(spill),
+        "memory_limit": settings.EMG_CONFIG.proteindb.sort_memory_limit,
+    }
+    with duckdb.connect(config=config) as con:
+        yield from con.execute(
+            f"SELECT {', '.join(SCHEMAS[table].names)}"
+            " FROM read_parquet($files, hive_partitioning = false)"
+            f" ORDER BY {', '.join(SORT_ORDER[table])}",
+            {"files": [str(f) for f in files]},
+        ).to_arrow_reader(ROW_GROUP_SIZE)

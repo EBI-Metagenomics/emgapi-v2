@@ -464,3 +464,52 @@ deployments:
     name: slurm
     job_variables:
       memory: 4
+
+- name: proteindb_load_deployment
+  description: |-
+    Move everything staged in the protein DB's Tier 1 into a new day of Tier 2, and compact Tier 2 when due.
+    Each run takes ownership of Tier 2 through the proteindb-tier2 concurrency limit, so runs never overlap.
+  entrypoint: proteins/flows/load.py:proteindb_load
+  parameters: {}
+  work_pool:
+    name: slurm
+    job_variables:
+      cpu: 8
+      memory: 64
+      time_limit: 12
+  schedules:
+    - cron: "0 2 * * *"
+      timezone: UTC
+      # Activated at cutover, once the cluster team confirms that the partition tracks processes with cgroups.
+      active: false
+
+- name: proteindb_check_deployment
+  description: |-
+    Log the protein DB's state, and fail if any of its checks fails: an overdue load, rows staged too long,
+    an owner of Tier 2 whose job is not running, an incomplete Tier 2 day before the last load, or protein ids near their limit.
+  entrypoint: proteins/flows/check.py:proteindb_check
+  parameters: {}
+  work_pool:
+    name: slurm
+    job_variables:
+      cpu: 1
+      memory: 2
+      time_limit: 1
+  schedules:
+    - cron: "0 8 * * *"
+      timezone: UTC
+      # Activated at cutover, with the load's.
+      active: false
+
+- name: proteindb_backfill_deployment
+  description: |-
+    Submit mgyp-accession, as SLURM arrays, for every completed v6 assembly analysis the protein DB has not registered, or only those of one study.
+    Run by hand. It does not wait for the arrays: run it again once they have ended, and it submits only what is still unregistered.
+  entrypoint: proteins/flows/backfill.py:proteindb_backfill
+  parameters: {}
+  work_pool:
+    name: slurm
+    job_variables:
+      cpu: 1
+      memory: 4
+      time_limit: 2
