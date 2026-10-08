@@ -9,7 +9,8 @@ from proteins.status import status
 from workflows.prefect_utils.flows_utils import django_db_flow as flow
 
 
-class CheckFailed(Exception): ...
+class CheckFailed(Exception):
+    """At least one check of the protein DB's state failed."""
 
 
 @flow(flow_run_name="Check the protein DB")

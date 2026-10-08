@@ -36,7 +36,8 @@ COMPACT_AFTER = timedelta(days=30)
 COMPACTION_BUDGET = 8 * 3600
 
 
-class LoadError(Exception): ...
+class LoadError(Exception):
+    """load_log does not allow the load to go on."""
 
 
 class Staged(NamedTuple):

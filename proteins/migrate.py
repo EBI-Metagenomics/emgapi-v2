@@ -73,7 +73,8 @@ DIMS = {
 }
 
 
-class MigrateError(Exception): ...
+class MigrateError(Exception):
+    """A migration step's inputs are missing, invalid or already used."""
 
 
 def export(source: str, out: Path, table: str, child: int) -> int:

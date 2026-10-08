@@ -84,7 +84,8 @@ ROW_GROUP_SIZE = 122_880
 DATED = re.compile(r"(base|part)-(\d{4}-\d{2}-\d{2})\.parquet")
 
 
-class Tier2Error(Exception): ...
+class Tier2Error(Exception):
+    """Tier 2 cannot be read as of the requested day."""
 
 
 def prefix(hash: bytes) -> str:

@@ -23,7 +23,8 @@ logger = logging.getLogger(__name__)
 ENDED = {"COMPLETED", "FAILED", "CANCELLED", "TIMEOUT", "OUT_OF_MEMORY"}
 
 
-class OwnershipError(Exception): ...
+class OwnershipError(Exception):
+    """Tier 2 cannot be safely owned by this load."""
 
 
 class Owner(NamedTuple):
