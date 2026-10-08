@@ -4,6 +4,7 @@ import re
 import subprocess
 from datetime import date
 
+import psycopg
 import pyarrow as pa
 import pyarrow.dataset as ds
 import pyarrow.parquet as pq
@@ -14,6 +15,7 @@ import analyses.models as mg_models
 from proteins import tier2
 from proteins.accession.cli import main as mgyp_accession
 from proteins.flows.load import proteindb_dsn
+from proteins.load import recover
 from proteins.migrate import (
     EXPORTS,
     MigrateError,
@@ -223,7 +225,11 @@ def test_a_rebuild_builds_the_latest_day_and_starts_protein_ids_at_the_value_giv
         for hash, id in {**MIGRATED, hash_of(0x80, 1): 50}.items()
     }
     assert next_ids() == (1000, 9, 14)
-    assert query("SELECT ingest_date, status FROM proteindb.load_log") == [(D, "done")]
+    assert query(
+        "SELECT ingest_date, status FROM proteindb.load_log ORDER BY ingest_date"
+    ) == [(M, "done"), (D, "done")]
+    with psycopg.connect(role_dsn("proteindb_load"), autocommit=True) as conn:
+        recover(conn, migrated)
 
 
 def test_command_builds_tier1_from_the_configured_root(migrated, settings, monkeypatch):

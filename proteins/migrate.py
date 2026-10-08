@@ -274,10 +274,11 @@ def build_tier1(dsn: str, root: Path, protein_id_start: int | None = None) -> da
 
         logger.info("vacuuming protein_key")
         conn.execute("VACUUM (ANALYZE) protein_key")
-        conn.execute(
+        # The load requires every complete day of Tier 2 to be done in load_log.
+        conn.cursor().executemany(
             "INSERT INTO load_log (ingest_date, status, finished_at, message)"
             " VALUES (%s, 'done', now(), 'built by proteindb_migrate tier1')",
-            [day],
+            [[d] for d in days],
         )
     return day
 
