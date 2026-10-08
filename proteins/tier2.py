@@ -88,12 +88,18 @@ class Tier2Error(Exception): ...
 
 
 def prefix(hash: bytes) -> str:
-    """The partition of a hash: its top 6 bits as two hex digits, as in Tier 1."""
+    """The partition of a hash: its top 6 bits as two hex digits, as in Tier 1.
+
+    :param hash: A protein's 32-byte hash.
+    """
     return f"{hash[0] >> 2:02x}"
 
 
 def complete_days(root: Path) -> list[date]:
-    """The days whose snapshot of the dimensions has been published, the last write of a load."""
+    """The days whose snapshot of the dimensions has been published, the last write of a load.
+
+    :param root: Tier 2's directory.
+    """
     return sorted(
         date.fromisoformat(path.name.removeprefix("snapshot="))
         for path in (root / "dims").glob("snapshot=*")
@@ -101,7 +107,12 @@ def complete_days(root: Path) -> list[date]:
 
 
 def files(root: Path, table: str, as_of: date | None = None) -> list[Path]:
-    """The files that make up `table` as of a complete day, by default the latest one."""
+    """The files that make up `table` as of a complete day, by default the latest one.
+
+    :param root: Tier 2's directory.
+    :param table: The table, e.g. protein or dims/assembly.
+    :param as_of: A complete day, by default the latest.
+    """
     if table not in SCHEMAS:
         raise ValueError(f"unknown Tier 2 table {table!r}")
     days = complete_days(root)
@@ -155,7 +166,12 @@ def files(root: Path, table: str, as_of: date | None = None) -> list[Path]:
 
 
 def write(path: Path, table: str, data: pa.Table) -> None:
-    """Writes `data` to `path` in the table's schema and sort order, all or nothing."""
+    """Writes `data` to `path` in the table's schema and sort order, all or nothing.
+
+    :param path: The file to write.
+    :param table: The table whose schema and sort order the file has.
+    :param data: The rows.
+    """
     schema = SCHEMAS[table]
     data = (
         data.select(schema.names)
@@ -167,7 +183,12 @@ def write(path: Path, table: str, data: pa.Table) -> None:
 
 
 def write_sorted(path: Path, table: str, batches: Iterable[pa.RecordBatch]) -> None:
-    """Writes batches already in the table's sort order, each one a row group, all or nothing."""
+    """Writes batches already in the table's sort order, each one a row group, all or nothing.
+
+    :param path: The file to write.
+    :param table: The table whose schema the file has.
+    :param batches: The rows, in the table's sort order.
+    """
     schema = SCHEMAS[table]
     batches = (
         pa.Table.from_batches([batch]).select(schema.names).cast(schema)
@@ -191,7 +212,12 @@ def write_sorted(path: Path, table: str, batches: Iterable[pa.RecordBatch]) -> N
 
 
 def merge(path: Path, table: str, files: list[Path]) -> None:
-    """Writes the rows of `files` to `path` in the table's sort order, spilling to disk, all or nothing."""
+    """Writes the rows of `files` to `path` in the table's sort order, spilling to disk, all or nothing.
+
+    :param path: The file to write.
+    :param table: The table whose schema and sort order the file has.
+    :param files: The files to merge.
+    """
     spill = Path(tempfile.gettempdir()) / "proteindb-merge"
     with duckdb.connect(config={"temp_directory": str(spill)}) as con:
         reader = con.execute(

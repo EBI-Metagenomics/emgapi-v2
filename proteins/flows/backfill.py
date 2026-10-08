@@ -14,6 +14,8 @@ def proteindb_backfill(study: str | None = None):
     """Submits mgyp-accession for every completed v6 assembly analysis not yet registered, or only those of `study`.
 
     Does not wait for the tasks: running it again submits whatever is still unregistered.
+
+    :param study: A study accession, to backfill only its analyses.
     """
     config = EMG_CONFIG.proteindb
     if not os.environ.get("PROTEINDB_DSN"):

@@ -45,7 +45,10 @@ class Owner(NamedTuple):
             os._exit(1)
 
     def confirm(self, conn: psycopg.Connection) -> None:
-        """Locks the owner row for the rest of `conn`'s transaction, which then commits as the owner."""
+        """Locks the owner row for the rest of `conn`'s transaction, which then commits as the owner.
+
+        :param conn: A connection to Tier 1, in a transaction.
+        """
         current = current_execution(conn, lock=True)
         if current != self.execution_id:
             raise OwnershipError(
@@ -54,6 +57,11 @@ class Owner(NamedTuple):
 
 
 def current_execution(conn: psycopg.Connection, lock: bool = False) -> uuid.UUID | None:
+    """The execution that owns Tier 2, if any.
+
+    :param conn: A connection to Tier 1.
+    :param lock: Whether to lock the row for the rest of the transaction.
+    """
     return conn.execute(
         "SELECT execution_id FROM tier2_owner" + (" FOR UPDATE" if lock else "")
     ).fetchone()[0]
@@ -61,7 +69,12 @@ def current_execution(conn: psycopg.Connection, lock: bool = False) -> uuid.UUID
 
 @contextmanager
 def owner(dsn: str, flow: str, limit: str) -> Iterator[Owner]:
-    """Makes this flow run the owner of Tier 2 for the duration."""
+    """Makes this flow run the owner of Tier 2 for the duration.
+
+    :param dsn: libpq connection string of Tier 1, as proteindb_load.
+    :param flow: The flow's name, recorded in tier2_owner.
+    :param limit: The name of the Prefect global concurrency limit.
+    """
     slot = find_limit(limit)
     if slot is None:
         raise OwnershipError(f"the concurrency limit {limit} does not exist")
@@ -80,6 +93,10 @@ def owner(dsn: str, flow: str, limit: str) -> Iterator[Owner]:
 
 
 def find_limit(name: str) -> GlobalConcurrencyLimitResponse | None:
+    """The Prefect global concurrency limit with this name, if it exists.
+
+    :param name: The limit's name.
+    """
     # Read by name, a missing limit is a 404, which the client retries for an hour (pyproject.toml).
     with get_client(sync_client=True) as client:
         offset = 0
@@ -92,7 +109,11 @@ def find_limit(name: str) -> GlobalConcurrencyLimitResponse | None:
 
 
 def take(dsn: str, flow: str) -> Owner:
-    """Records this job as the owner, once SLURM shows that the previous owner's job has ended."""
+    """Records this job as the owner, once SLURM shows that the previous owner's job has ended.
+
+    :param dsn: libpq connection string of Tier 1, as proteindb_load.
+    :param flow: The flow's name, recorded in tier2_owner.
+    """
     job_id = int(os.environ["SLURM_JOB_ID"])
     submit_at = own_submit_time(job_id)
     execution_id = uuid.uuid4()
@@ -114,6 +135,11 @@ def take(dsn: str, flow: str) -> Owner:
 
 
 def check_ended(job_id: int, submit_at: datetime) -> None:
+    """Raises OwnershipError unless SLURM shows that every run of the job has ended.
+
+    :param job_id: The SLURM job id.
+    :param submit_at: When the job was submitted, which tells it from others with the same id.
+    """
     try:
         states = job_states(job_id).get(submit_at, [])
     except (OSError, subprocess.SubprocessError, ValueError) as e:
@@ -131,6 +157,8 @@ def job_states(job_id: int) -> dict[datetime, list[str]]:
     """The states SLURM has recorded for this job id, by submit time, since ids can be reused.
 
     -D lists every record of the id, where sacct would otherwise show only the most recent.
+
+    :param job_id: The SLURM job id.
     """
     out = subprocess.run(
         ["sacct", "-j", str(job_id), "-X", "-D", "-n", "-P", "-o", "State,Submit"],
@@ -147,6 +175,10 @@ def job_states(job_id: int) -> dict[datetime, list[str]]:
 
 
 def own_submit_time(job_id: int) -> datetime:
+    """When this job was submitted.
+
+    :param job_id: This job's SLURM job id.
+    """
     # From the controller rather than accounting, which can lag behind a job that has just started.
     out = subprocess.run(
         ["scontrol", "show", "job", "-o", str(job_id)],
@@ -158,11 +190,18 @@ def own_submit_time(job_id: int) -> datetime:
 
 
 def local_time(slurm_time: str) -> datetime:
-    """SLURM prints times without a zone, in the zone of the host."""
+    """SLURM prints times without a zone, in the zone of the host.
+
+    :param slurm_time: A time as SLURM prints it.
+    """
     return datetime.fromisoformat(slurm_time).astimezone()
 
 
 def release(owner: Owner) -> None:
+    """Gives up ownership of Tier 2, unless another execution has taken it over.
+
+    :param owner: This run's ownership of Tier 2.
+    """
     try:
         with psycopg.connect(owner.dsn) as conn:
             conn.execute(

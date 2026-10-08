@@ -30,7 +30,14 @@ def accession(
     input: Input,
     connections: int = 16,
 ) -> dict[bytes, int]:
-    """Each protein's id, allocating and staging those that have none."""
+    """Each protein's id, allocating and staging those that have none.
+
+    :param connect: Opens a connection to Tier 1, as made by connector().
+    :param assembly: The ENA assembly accession.
+    :param pipeline_version: The pipeline's major.minor.
+    :param input: The analysis's proteins, contigs and occurrences, from read_input().
+    :param connections: How many connections the lookups use.
+    """
     hashes = [hash for hash, _ in input.proteins]
     ids = lookup(connect, hashes, connections)
     with connect() as conn:
@@ -56,7 +63,12 @@ def accession(
 
 
 def lookup(connect: Connect, hashes: list[bytes], connections: int) -> dict[bytes, int]:
-    """The ids of the hashes that have one, looked up partition by partition."""
+    """The ids of the hashes that have one, looked up partition by partition.
+
+    :param connect: Opens a connection to Tier 1, as made by connector().
+    :param hashes: The distinct protein hashes.
+    :param connections: How many connections look up partitions at once.
+    """
     groups = defaultdict(list)
     for hash in hashes:
         groups[hash[0] >> 2].append(hash)
@@ -82,6 +94,11 @@ def lookup(connect: Connect, hashes: list[bytes], connections: int) -> dict[byte
 def lookup_partitions(
     conn: psycopg.Connection, groups: list[tuple[int, list[bytes]]]
 ) -> dict[bytes, int]:
+    """The ids of the hashes that have one, one partition after another, on one connection.
+
+    :param conn: A connection to Tier 1, in autocommit.
+    :param groups: Each partition with its hashes.
+    """
     conn.execute("CREATE TEMP TABLE IF NOT EXISTS q (hash bytea)")
     found = {}
     for partition, hashes in groups:
@@ -108,6 +125,9 @@ def register_gene_callers(
 
     Done before the transaction so that a new caller is committed at once, and
     other jobs meeting it do not wait for this job's transaction.
+
+    :param conn: A connection to Tier 1, in autocommit.
+    :param callers: The (name, version) of each gene caller, sorted.
     """
     names, versions = [name for name, _ in callers], [v for _, v in callers]
     # PostgreSQL takes an identity value for every candidate row, even one ON CONFLICT discards,
@@ -140,7 +160,15 @@ def stage(
     found: dict[bytes, int],
     callers: dict[tuple[str, str], int],
 ) -> dict[bytes, int] | None:
-    """The transaction: the ids of the proteins step 3 did not find, or None if the analysis is already registered."""
+    """The transaction: the ids of the proteins step 3 did not find, or None if the analysis is already registered.
+
+    :param conn: A connection to Tier 1, in autocommit.
+    :param assembly: The ENA assembly accession.
+    :param pipeline_version: The pipeline's major.minor.
+    :param input: The analysis's proteins, contigs and occurrences, from read_input().
+    :param found: The ids the lookup found.
+    :param callers: Each gene caller's id, by (name, version).
+    """
     staged = None
     with conn.transaction():
         row = conn.execute(
@@ -223,6 +251,13 @@ def stage(
 
 
 def copy_rows(conn: psycopg.Connection, table: str, types: list[str], rows) -> None:
+    """Writes rows to a table with a binary COPY.
+
+    :param conn: A connection to Tier 1.
+    :param table: The table, with its column list.
+    :param types: The PostgreSQL type of each column.
+    :param rows: Tuples in column order.
+    """
     with conn.cursor().copy(f"COPY {table} FROM STDIN (FORMAT binary)") as copy:
         copy.set_types(types)
         for row in rows:
@@ -230,11 +265,20 @@ def copy_rows(conn: psycopg.Connection, table: str, types: list[str], rows) -> N
 
 
 def mgyp(id: int) -> str:
+    """The MGYP accession of a protein id.
+
+    :param id: The protein's id.
+    """
     return f"MGYP{id:012d}"
 
 
 def write_output(path, occurrences: list[Occurrence], ids: dict[bytes, int]) -> None:
-    """The input FASTA with each gene's MGYP after its ID."""
+    """The input FASTA with each gene's MGYP after its ID.
+
+    :param path: The output file.
+    :param occurrences: The input's occurrences, in input order.
+    :param ids: Each protein hash's id.
+    """
     write_lines(
         path,
         (
@@ -248,7 +292,12 @@ def write_output(path, occurrences: list[Occurrence], ids: dict[bytes, int]) -> 
 
 
 def write_lookup(path, occurrences: list[Occurrence], ids: dict[bytes, int]) -> None:
-    """Each gene's MGYP, empty when its protein has none."""
+    """Each gene's MGYP, empty when its protein has none.
+
+    :param path: The output file.
+    :param occurrences: The input's occurrences, in input order.
+    :param ids: The ids the lookup found.
+    """
     write_lines(
         path,
         (
@@ -259,7 +308,11 @@ def write_lookup(path, occurrences: list[Occurrence], ids: dict[bytes, int]) -> 
 
 
 def write_lines(path, lines) -> None:
-    """Written under a temporary name and renamed into place, gzipped if the name ends in .gz."""
+    """Written under a temporary name and renamed into place, gzipped if the name ends in .gz.
+
+    :param path: The file to write.
+    :param lines: Text lines, each ending in a newline.
+    """
     path = Path(path)
     tmp = path.with_name(f".{path.name}.tmp")
     with open(tmp, "wb") as raw:
@@ -282,6 +335,12 @@ class CannotConnect(Exception):
 
 
 def connector(dsn: str, application_name: str) -> Connect:
+    """A function that opens an autocommit connection to Tier 1, and raises CannotConnect when it cannot.
+
+    :param dsn: libpq connection string of Tier 1.
+    :param application_name: The name its connections show in pg_stat_activity.
+    """
+
     def connect():
         try:
             return psycopg.connect(
@@ -298,6 +357,11 @@ def retry_on_connect_failure(run: Callable, max_wait=1800.0, first_delay=1.0):
 
     Errors after a connection is open are not retried. run() must close its
     connections when it fails, so that waiting frees them for others.
+
+    :param run: The function to run.
+    :param max_wait: Seconds of waiting after which a failure to connect is raised.
+    :param first_delay: Seconds before the first retry. Each delay doubles, up to a minute.
+    :return: What run() returns.
     """
     waited, delay = 0.0, first_delay
     while True:

@@ -35,7 +35,10 @@ class InvalidSequence(ValueError):
 
 
 def validate_sequence(sequence: str) -> bytes:
-    """Return the sequence as upper-cased ASCII bytes, or raise InvalidSequence."""
+    """Return the sequence as upper-cased ASCII bytes, or raise InvalidSequence.
+
+    :param sequence: A protein sequence.
+    """
     # isascii() before upper(): upper() maps some non-ASCII letters to ASCII ones
     # ("ß" -> "SS", "ı" -> "I"), which would then pass.
     if not sequence or not sequence.isascii() or not sequence.isalpha():
@@ -44,5 +47,8 @@ def validate_sequence(sequence: str) -> bytes:
 
 
 def protein_hash(sequence: str) -> bytes:
-    """The protein's identity: sha256 of its validated sequence, 32 bytes."""
+    """The protein's identity: sha256 of its validated sequence, 32 bytes.
+
+    :param sequence: A protein sequence.
+    """
     return hashlib.sha256(validate_sequence(sequence)).digest()

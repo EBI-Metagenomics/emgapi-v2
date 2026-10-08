@@ -72,6 +72,10 @@ class Status(NamedTuple):
         )
 
     def problems(self, now: datetime | None = None) -> list[str]:
+        """The checks that fail.
+
+        :param now: The time to check against, by default now.
+        """
         now = now or datetime.now(timezone.utc)
         found = []
         if self.last_load is None or now - self.last_load > LOAD_OVERDUE:
@@ -96,7 +100,11 @@ class Status(NamedTuple):
 
 
 def status(dsn: str, root: Path) -> Status:
-    """Read as proteindb_load."""
+    """The state of the protein DB, read as proteindb_load.
+
+    :param dsn: libpq connection string of Tier 1, as proteindb_load.
+    :param root: Tier 2's directory.
+    """
     with psycopg.connect(dsn) as conn:
         last_load, last_day = conn.execute(
             "SELECT finished_at, ingest_date FROM proteindb.load_log WHERE status = 'done'"

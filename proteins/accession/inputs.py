@@ -50,7 +50,10 @@ class Input(NamedTuple):
 
 
 def major_minor(pipeline_version: str) -> str:
-    """6.0.5 -> 6.0. The registry's version is decimal(2,1) in the release, so one digit each."""
+    """6.0.5 -> 6.0. The registry's version is decimal(2,1) in the release, so one digit each.
+
+    :param pipeline_version: The pipeline's version, e.g. 6.0.5.
+    """
     match = PIPELINE_VERSION.fullmatch(pipeline_version)
     if not match:
         raise InvalidInput(
@@ -62,7 +65,14 @@ def major_minor(pipeline_version: str) -> str:
 
 
 def read_input(faa, gff, contigs, contig_map=None) -> Input:
-    """Raises InvalidInput naming every problem found, or ValueError for a malformed file."""
+    """Raises InvalidInput naming every problem found, or ValueError for a malformed file.
+
+    :param faa: The combined gene caller's protein FASTA.
+    :param gff: Its merged GFF.
+    :param contigs: The contigs the genes were called on.
+    :param contig_map: The RENAME_CONTIGS mapping, if any.
+    :return: The analysis's proteins, contigs and occurrences.
+    """
     problems = []
 
     genes = {}
@@ -147,7 +157,10 @@ def read_input(faa, gff, contigs, contig_map=None) -> Input:
 
 
 def read_contig_map(path) -> dict[str, str]:
-    """Each renamed contig's original name, from the pipeline's RENAME_CONTIGS mapping."""
+    """Each renamed contig's original name, from the pipeline's RENAME_CONTIGS mapping.
+
+    :param path: A TSV with the header 'original<TAB>renamed'.
+    """
     with open_text(path) as f:
         rows = csv.reader(f, delimiter="\t")
         if next(rows, None) != ["original", "renamed"]:

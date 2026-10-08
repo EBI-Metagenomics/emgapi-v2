@@ -27,7 +27,10 @@ CHUNK = 10_000
 
 
 def resolve(accessions: list[str]) -> list[Source]:
-    """Each accession's assembly in emgapi-v2, with the study and biome of its newest analysis."""
+    """Each accession's assembly in emgapi-v2, with the study and biome of its newest analysis.
+
+    :param accessions: Assembly accessions.
+    """
     newest = {}
     for start in range(0, len(accessions), CHUNK):
         chunk = accessions[start : start + CHUNK]
@@ -81,7 +84,13 @@ def snapshot(
     gene_callers: pa.Table,
     resolve: Resolve,
 ) -> tuple[dict[str, pa.Table], int]:
-    """The four tables for every registry assembly, and how many of them emgapi-v2 does not know."""
+    """The four tables for every registry assembly, and how many of them emgapi-v2 does not know.
+
+    :param conn: A connection to Tier 1, as proteindb_load.
+    :param assemblies: The assembly registry.
+    :param gene_callers: The gene_caller registry.
+    :param resolve: resolve(), or a stand-in for it in tests.
+    """
     source = {
         row.assembly_accession: row
         for row in resolve(sorted(set(assemblies["accession"].to_pylist())))
@@ -140,7 +149,13 @@ def snapshot(
 def register(
     conn: psycopg.Connection, table: str, column: str, values: set[str]
 ) -> dict[str, int]:
-    """Each value's id in a registry, adding new values."""
+    """Each value's id in a registry, adding new values.
+
+    :param conn: A connection to Tier 1, in a transaction.
+    :param table: The registry: study or biome.
+    :param column: The registry's value column.
+    :param values: The values to find or add.
+    """
     ordered = sorted(values)
     # As for gene callers: known values are filtered out first, so that they take no identity value.
     conn.execute(

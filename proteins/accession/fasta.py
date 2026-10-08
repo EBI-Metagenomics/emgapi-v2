@@ -11,7 +11,10 @@ class FastaRecord(NamedTuple):
 
 
 def open_text(path) -> IO[str]:
-    """Open a file for reading as text, decompressing it if it is gzipped."""
+    """Open a file for reading as text, decompressing it if it is gzipped.
+
+    :param path: A plain or gzipped file.
+    """
     with open(path, "rb") as f:
         gzipped = f.read(2) == b"\x1f\x8b"
     # Decoding errors raise UnicodeDecodeError, a ValueError, like any other invalid input.
@@ -23,6 +26,8 @@ def read_fasta(path) -> Iterator[FastaRecord]:
 
     Only the line breaks between a record's lines are removed. The sequence is
     otherwise returned as it is: validating it is the hash contract's job.
+
+    :param path: A plain or gzipped FASTA file.
     """
     with open_text(path) as f:
         header, lines = None, []

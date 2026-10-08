@@ -18,7 +18,10 @@ class Gene(NamedTuple):
 
 
 def read_gff(path) -> Iterator[Gene]:
-    """Yield a Gene for each CDS line. Other features and comments are skipped."""
+    """Yield a Gene for each CDS line. Other features and comments are skipped.
+
+    :param path: A plain or gzipped GFF3 file.
+    """
     with open_text(path) as f:
         for lineno, line in enumerate(f, 1):
             if line.startswith("#") or not line.strip():

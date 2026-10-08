@@ -23,12 +23,20 @@ EXIT_INCOMPLETE_RERUN = 3
 
 
 def positive_int(value: str) -> int:
+    """An argparse type: an integer of at least 1.
+
+    :param value: The argument as given.
+    """
     if not value.isdigit() or int(value) < 1:
         raise argparse.ArgumentTypeError(f"{value!r} is not a positive integer")
     return int(value)
 
 
 def parse_args(argv=None) -> argparse.Namespace:
+    """mgyp-accession's arguments.
+
+    :param argv: The arguments, by default the command line's.
+    """
     parser = argparse.ArgumentParser(
         prog="mgyp-accession",
         description="Give every protein predicted for an assembly its MGYP, and stage"
@@ -82,6 +90,11 @@ def parse_args(argv=None) -> argparse.Namespace:
 
 
 def main(argv=None) -> int:
+    """Runs mgyp-accession.
+
+    :param argv: The arguments, by default the command line's.
+    :return: The exit code.
+    """
     logging.basicConfig(
         format="%(name)s: %(levelname)s: %(message)s", level=logging.INFO
     )

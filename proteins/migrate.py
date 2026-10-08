@@ -81,6 +81,11 @@ def export(source: str, out: Path, table: str, child: int) -> int:
 
     Proteins are split by prefix into prefix=XX/, because the current database partitions them
     on another function of the hash.
+
+    :param source: libpq URI of the current database.
+    :param out: The export directory.
+    :param table: protein, occurrence or contig.
+    :param child: The child table, 0 to 63.
     """
     name, select = EXPORTS[table]
     final = out / table / f"child={child}"
@@ -126,7 +131,11 @@ def export(source: str, out: Path, table: str, child: int) -> int:
 
 
 def export_dims(source: str, out: Path) -> None:
-    """Exports the four reference tables to out/dims/, as Tier 2 snapshot files."""
+    """Exports the four reference tables to out/dims/, as Tier 2 snapshot files.
+
+    :param source: libpq URI of the current database.
+    :param out: The export directory.
+    """
     with adbc.connect(source) as conn, conn.cursor() as cursor:
         for name, select in DIMS.items():
             cursor.execute(select.format(source=SOURCE))
@@ -139,7 +148,12 @@ def export_dims(source: str, out: Path) -> None:
 
 
 def conform(batch: pa.RecordBatch, schema: pa.Schema, table: str) -> pa.RecordBatch:
-    """The batch in Tier 2's types. A cast does not check nulls, so they are checked here."""
+    """The batch in Tier 2's types. A cast does not check nulls, so they are checked here.
+
+    :param batch: Rows read from the current database.
+    :param schema: The table's Tier 2 schema.
+    :param table: The table, named in errors.
+    """
     for field in schema:
         if not field.nullable and batch.column(field.name).null_count:
             raise MigrateError(
@@ -149,7 +163,12 @@ def conform(batch: pa.RecordBatch, schema: pa.Schema, table: str) -> pa.RecordBa
 
 
 def build_tier2(exported: Path, root: Path, day: date) -> None:
-    """Builds Tier 2's first day, `day`, from a complete export. Resumes where an interrupted build stopped."""
+    """Builds Tier 2's first day, `day`, from a complete export. Resumes where an interrupted build stopped.
+
+    :param exported: The export directory.
+    :param root: Tier 2's directory.
+    :param day: M, the date of the freeze.
+    """
     if tier2.complete_days(root):
         raise MigrateError(f"Tier 2 in {root} already has a complete day")
     missing = [
@@ -203,6 +222,10 @@ def build_tier1(dsn: str, root: Path, protein_id_start: int | None = None) -> da
 
     Without `protein_id_start`, this is the migration, and Tier 2 must hold its day only. With it,
     it is a rebuild, and protein ids start there. Returns the day built from.
+
+    :param dsn: libpq connection string of Tier 1, as proteindb_owner.
+    :param root: Tier 2's directory.
+    :param protein_id_start: For a rebuild, the first protein id to allocate.
     """
     days = tier2.complete_days(root)
     if not days:
@@ -259,6 +282,10 @@ def build_tier1(dsn: str, root: Path, protein_id_start: int | None = None) -> da
 
 
 def max_id(files: list[Path]) -> int:
+    """The highest id in the files, or 0 if there are none.
+
+    :param files: Parquet files with an id column.
+    """
     if not files:
         return 0
     with duckdb.connect() as con:
@@ -270,7 +297,10 @@ def max_id(files: list[Path]) -> int:
 
 
 def check_empty(conn: psycopg.Connection) -> None:
-    """An interrupted build is not resumed, so it must start from the schema tier1.sql creates."""
+    """An interrupted build is not resumed, so it must start from the schema tier1.sql creates.
+
+    :param conn: A connection to Tier 1, as proteindb_owner.
+    """
     (partitions,) = conn.execute(
         "SELECT count(*) FROM pg_inherits WHERE inhparent = 'protein_key'::regclass"
     ).fetchone()
@@ -292,7 +322,13 @@ def check_empty(conn: psycopg.Connection) -> None:
 def build_partition(
     conn: psycopg.Connection, dsn: str, p: int, files: list[Path]
 ) -> None:
-    """Replaces an empty partition with one loaded before its index is built, which is faster."""
+    """Replaces an empty partition with one loaded before its index is built, which is faster.
+
+    :param conn: A connection to Tier 1, as proteindb_owner.
+    :param dsn: Its libpq connection string, for the connection that copies.
+    :param p: The partition, 0 to 63.
+    :param files: The prefix's protein files.
+    """
     started = monotonic()
     name = f"protein_key_{p:02x}"
     low = "MINVALUE" if p == 0 else f"'\\x{4 * p:02x}'::bytea"
@@ -339,6 +375,11 @@ def verify(source: str, dsn: str, root: Path, sample: int = 1_000_000) -> list[s
     """The checks of the migration that compare the frozen current database, Tier 2 and Tier 1. Returns those that failed.
 
     The hash contract is checked on `sample` rows of each prefix.
+
+    :param source: libpq URI of the current database.
+    :param dsn: libpq connection string of Tier 1.
+    :param root: Tier 2's directory.
+    :param sample: The rows of each prefix whose hash is checked.
     """
     days = tier2.complete_days(root)
     if len(days) != 1:
@@ -414,6 +455,8 @@ def unresolved(source: str) -> tuple[int, list[tuple[str, str]]]:
     """The current database's assemblies that emgapi-v2 does not know, as (pipeline version, accession), and how many accessions it has.
 
     The first load after cutover takes the dimensions from emgapi-v2, so these would be left out of every release.
+
+    :param source: libpq URI of the current database.
     """
     with psycopg.connect(source) as conn:
         assemblies = conn.execute(

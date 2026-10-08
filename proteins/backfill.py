@@ -36,6 +36,10 @@ def pending(cds: str, qc: str, study: str | None = None) -> list[Pending]:
     """Completed v6 assembly analyses whose accession and major.minor Tier 1 has not registered.
 
     Of several analyses of one assembly under one version, the newest is taken.
+
+    :param cds: The directory of the CDS outputs, within an analysis's results directory.
+    :param qc: The directory of the QC outputs, within an analysis's results directory.
+    :param study: A study accession, to list only its analyses.
     """
     analyses = (
         Analysis.objects.filter_by_statuses(
@@ -68,6 +72,11 @@ def pending(cds: str, qc: str, study: str | None = None) -> list[Pending]:
 
 
 def output(root: Path, analysis: Pending) -> Path:
+    """Where the backfill writes an analysis's FASTA with MGYPs.
+
+    :param root: The backfill's directory.
+    :param analysis: The analysis.
+    """
     return (
         root
         / analysis.accession
@@ -77,7 +86,11 @@ def output(root: Path, analysis: Pending) -> Path:
 
 
 def image(root: Path, uri: str) -> Path:
-    """The image as a SIF under root, pulled once, so that the tasks do not each pull it."""
+    """The image as a SIF under root, pulled once, so that the tasks do not each pull it.
+
+    :param root: The backfill's directory.
+    :param uri: The image's URI, docker://….
+    """
     sif = root / "images" / (uri.rsplit("/", 1)[-1].replace(":", "_") + ".sif")
     if not sif.exists():
         sif.parent.mkdir(parents=True, exist_ok=True)
@@ -103,6 +116,13 @@ def submit(
     """Lists the analyses under a new run directory of root, and submits arrays for those with every input.
 
     Each array waits for the previous one, so that at most `parallelism` tasks run at once.
+
+    :param root: The backfill's directory.
+    :param analyses: The analyses to accession.
+    :param uri: The mgyp-accession image's URI.
+    :param parallelism: How many tasks run at once.
+    :param array_size: The most tasks in one array.
+    :return: The run directory, how many analyses were submitted, those left out, and the arrays' job ids.
     """
     run = root / "runs" / datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
     (run / "logs").mkdir(parents=True)
@@ -139,4 +159,9 @@ def submit(
 
 
 def write(path: Path, rows: list[list]) -> None:
+    """Writes rows as TSV.
+
+    :param path: The file to write.
+    :param rows: The rows, each a list of values.
+    """
     path.write_text("".join("\t".join(map(str, row)) + "\n" for row in rows))

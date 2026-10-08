@@ -47,7 +47,14 @@ class Staged(NamedTuple):
 
 
 def load(dsn: str, root: Path, day: date, resolve: Resolve, owner: Owner) -> int | None:
-    """Loads everything staged as day `day`, as the owner of Tier 2. Returns its load_log id, or None if the day was already done."""
+    """Loads everything staged as day `day`, as the owner of Tier 2. Returns its load_log id, or None if the day was already done.
+
+    :param dsn: libpq connection string of Tier 1, as proteindb_load.
+    :param root: Tier 2's directory.
+    :param day: D, the day to load as.
+    :param resolve: dims.resolve(), or a stand-in for it in tests.
+    :param owner: This run's ownership of Tier 2.
+    """
     compact_until = monotonic() + COMPACTION_BUDGET
     with psycopg.connect(dsn, autocommit=True) as conn:
         owner.check()
@@ -89,7 +96,11 @@ def load(dsn: str, root: Path, day: date, resolve: Resolve, owner: Owner) -> int
 
 
 def recover(conn: psycopg.Connection, root: Path) -> None:
-    """Step 1: publishes committed days left unpublished, and deletes what failed loads left."""
+    """Step 1: publishes committed days left unpublished, and deletes what failed loads left.
+
+    :param conn: A connection to Tier 1, in autocommit.
+    :param root: Tier 2's directory.
+    """
     done = {
         row[0]
         for row in conn.execute(
@@ -122,6 +133,10 @@ def recover(conn: psycopg.Connection, root: Path) -> None:
 
 
 def days_with_files(root: Path) -> set[date]:
+    """The days that have any Tier 2 file, complete or not.
+
+    :param root: Tier 2's directory.
+    """
     names = [
         *(p.name.removeprefix("part-")[:10] for p in root.glob("protein/*/part-*")),
         *(p.name.removeprefix("ingest_date=") for p in root.glob("*/ingest_date=*")),
@@ -131,6 +146,11 @@ def days_with_files(root: Path) -> set[date]:
 
 
 def delete_day(root: Path, day: date) -> None:
+    """Deletes a failed day's files.
+
+    :param root: Tier 2's directory.
+    :param day: The day.
+    """
     for path in root.glob(f"protein/*/part-{day}.parquet"):
         path.unlink()
     for directory in (
@@ -142,7 +162,12 @@ def delete_day(root: Path, day: date) -> None:
 
 
 def start(conn: psycopg.Connection, day: date) -> int:
-    """Step 3. Only the owner of Tier 2 runs a load, so any other running load is dead."""
+    """Step 3. Only the owner of Tier 2 runs a load, so any other running load is dead.
+
+    :param conn: A connection to Tier 1, in autocommit.
+    :param day: D.
+    :return: The id of D's load_log row.
+    """
     with conn.transaction():
         conn.execute(
             "UPDATE load_log SET status = 'failed', finished_at = now(),"
@@ -155,7 +180,11 @@ def start(conn: psycopg.Connection, day: date) -> int:
 
 
 def read_staging(dsn: str, scratch: Path) -> Staged:
-    """Steps 4 and 5, in one snapshot, so that the registries hold no analysis without its rows."""
+    """Steps 4 and 5, in one snapshot, so that the registries hold no analysis without its rows.
+
+    :param dsn: libpq connection string of Tier 1, as proteindb_load.
+    :param scratch: A local directory for the staged rows' Parquet.
+    """
     with adbc.connect(dsn, autocommit=True) as conn, conn.cursor() as cursor:
         cursor.execute("BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY")
         assembly_ids = choose_assemblies(cursor)
@@ -180,7 +209,11 @@ def read_staging(dsn: str, scratch: Path) -> Staged:
 
 
 def choose_assemblies(cursor) -> list[int]:
-    """Step 4: every analysis's rows are committed together and never staged again, so they are complete."""
+    """Step 4: every analysis's rows are committed together and never staged again, so they are complete.
+
+    :param cursor: A cursor in the snapshot of step 5.
+    :return: A, the ids of the assemblies with staged rows.
+    """
     cursor.execute(
         "SELECT assembly_id FROM staging_protein"
         " UNION SELECT assembly_id FROM staging_contig"
@@ -192,7 +225,13 @@ def choose_assemblies(cursor) -> list[int]:
 def write_day(
     root: Path, day: date, staged: Staged, dims: dict[str, pa.Table]
 ) -> dict[str, int]:
-    """Step 7. Returns the number of rows written to each table."""
+    """Step 7. Returns the number of rows written to each table.
+
+    :param root: Tier 2's directory.
+    :param day: D.
+    :param staged: What read_staging() read.
+    :param dims: The four tables of the dimension snapshot.
+    """
     proteins = pq.read_table(staged.files["protein"])
     for prefix in sorted(set(proteins["prefix"].to_pylist())):
         tier2.write(
@@ -224,7 +263,15 @@ def commit(
     counts: dict[str, int],
     unresolved: int,
 ) -> None:
-    """Step 8. From here on, the day's rows exist only in its Tier 2 files."""
+    """Step 8. From here on, the day's rows exist only in its Tier 2 files.
+
+    :param conn: A connection to Tier 1, in autocommit.
+    :param owner: This run's ownership of Tier 2.
+    :param log_id: The id of D's load_log row.
+    :param assembly_ids: A, the assemblies whose staged rows were written.
+    :param counts: The rows written to each table.
+    :param unresolved: How many registry assemblies emgapi-v2 did not know.
+    """
     with conn.transaction():
         owner.confirm(conn)
         for table in ("occurrence", "contig", "protein"):
@@ -252,12 +299,22 @@ def commit(
 
 
 def publish(root: Path, day: date) -> None:
-    """Step 9: the day is complete once its snapshot is in place."""
+    """Step 9: the day is complete once its snapshot is in place.
+
+    :param root: Tier 2's directory.
+    :param day: D.
+    """
     (root / "dims" / f".tmp-snapshot={day}").rename(root / "dims" / f"snapshot={day}")
 
 
 def compact(root: Path, day: date, until: float, owner: Owner) -> bool:
-    """Step 10: compacts each prefix that is due, starting none after `until`. Returns whether it compacted any."""
+    """Step 10: compacts each prefix that is due, starting none after `until`. Returns whether it compacted any.
+
+    :param root: Tier 2's directory.
+    :param day: D, the date of the new bases.
+    :param until: The time.monotonic() after which no prefix is started.
+    :param owner: This run's ownership of Tier 2.
+    """
     by_prefix = defaultdict(list)
     for path in tier2.files(root, "protein", day):
         by_prefix[path.parent].append(path)
@@ -282,11 +339,20 @@ def compact(root: Path, day: date, until: float, owner: Owner) -> bool:
 
 
 def file_date(path: Path) -> date:
+    """The date in a Tier 2 file's name.
+
+    :param path: A protein base or part.
+    """
     return date.fromisoformat(path.stem.split("-", 1)[1])
 
 
 def compact_prefix(prefix: Path, files: list[Path], day: date) -> None:
-    """Merges a prefix's base and parts into base-`day`, then deletes them."""
+    """Merges a prefix's base and parts into base-`day`, then deletes them.
+
+    :param prefix: The prefix's directory.
+    :param files: Its base and parts.
+    :param day: The date of the new base.
+    """
     logger.info("compacting %s: %d files", prefix.name, len(files))
     base = prefix / f"base-{day}.parquet"
     tier2.merge(base, "protein", files)
@@ -299,6 +365,11 @@ def record_error(dsn: str, log_id: int, error: Exception, failed: bool) -> None:
     """Records an error on the load's row, as far as it still can.
 
     Only a load that has not committed is marked failed: the condition on status keeps a committed day done.
+
+    :param dsn: libpq connection string of Tier 1, as proteindb_load.
+    :param log_id: The id of the load's load_log row.
+    :param error: The error.
+    :param failed: Whether to mark the load failed. False for an error in compaction, after the commit.
     """
     message = f"{type(error).__name__}: {error}"
     try:
