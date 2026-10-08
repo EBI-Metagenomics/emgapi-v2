@@ -8,7 +8,7 @@ from pydantic import Field
 
 import analyses.models
 from analyses.schemas import (
-    AnalysisOrderByFilter,
+    ANALYSIS_ORDERING_OPTIONS,
     MGnifyAnalysis,
     MGnifyPublication,
     MGnifySampleWithMetadata,
@@ -147,7 +147,7 @@ class StudyController(UnauthorisedIsUnfoundController):
     def list_mgnify_study_analyses(
         self,
         accession: str,
-        order: AnalysisOrderByFilter = Query(...),
+        order: OrderByFilter[ANALYSIS_ORDERING_OPTIONS] = Query(...),
     ):
         study = self.get_object_or_exception(
             analyses.models.Study.objects_not_suppressed, accession=accession
@@ -155,7 +155,7 @@ class StudyController(UnauthorisedIsUnfoundController):
         qs = analyses.models.Analysis.objects_not_suppressed.filter(
             study=study, is_ready=True
         )
-        return order.order_by(qs)
+        return analyses.models.order_analyses(qs, order.order)
 
     @http_get(
         "/{accession}/publications/",

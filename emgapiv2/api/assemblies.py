@@ -6,12 +6,13 @@ from ninja_extra.schemas import NinjaPaginationResponseSchema
 
 import analyses.models
 from analyses.schemas import (
+    ANALYSIS_ORDERING_OPTIONS,
     AdditionalContainedGenomeSchema,
-    AnalysisOrderByFilter,
     Assembly,
     AssemblyDetail,
     GenomeAssemblyLinkSchema,
     MGnifyAnalysis,
+    OrderByFilter,
 )
 from emgapiv2.api.perms import UnauthorisedIsUnfoundController
 from emgapiv2.api.schema_utils import (
@@ -164,7 +165,7 @@ class AssemblyController(UnauthorisedIsUnfoundController):
     def list_analyses_for_assembly(
         self,
         accession: str,
-        order: AnalysisOrderByFilter = Query(...),
+        order: OrderByFilter[ANALYSIS_ORDERING_OPTIONS] = Query(...),
     ):
         assembly = get_object_or_404(
             analyses.models.Assembly.public_objects,
@@ -173,4 +174,4 @@ class AssemblyController(UnauthorisedIsUnfoundController):
         qs = analyses.models.Analysis.public_objects.select_related(
             "study", "sample", "run", "assembly"
         ).filter(assembly=assembly)
-        return order.order_by(qs)
+        return analyses.models.order_analyses(qs, order.order)

@@ -15,6 +15,7 @@ from django.core.exceptions import MultipleObjectsReturned, ObjectDoesNotExist
 from django.core.files.storage import storages
 from django.db import models
 from django.db.models import Count, Func, JSONField, Q, Value
+from django.db.models.functions import Coalesce
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 from django.utils.text import Truncator
@@ -886,6 +887,39 @@ class PublicAnalysisManagerIncludingAnnotations(
     """
 
     pass
+
+
+def order_analyses(queryset, requested_order: str | None):
+    """Order analyses using the field names accepted by the API."""
+    if not requested_order:
+        return queryset
+
+    descending = requested_order.startswith("-")
+    requested_field = requested_order.removeprefix("-")
+    database_field_by_api_field = {
+        "accession": "accession",
+        "sample_accession": "sample__ena_sample__accession",
+        "sample_title": "sample__sample_title",
+        "pipeline_version": "pipeline_version",
+    }
+
+    if requested_field == "run_or_assembly_accession":
+        database_order_field = "displayed_run_or_assembly_accession"
+        queryset = queryset.annotate(
+            displayed_run_or_assembly_accession=Coalesce(
+                Assembly.build_first_accession_expression("assembly__ena_accessions"),
+                "run__ena_accessions__0",
+                output_field=models.CharField(),
+            )
+        )
+    else:
+        database_order_field = database_field_by_api_field[requested_field]
+
+    direction = "-" if descending else ""
+    return queryset.order_by(
+        f"{direction}{database_order_field}",
+        f"{direction}accession",
+    )
 
 
 class Analysis(

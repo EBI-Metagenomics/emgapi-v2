@@ -10,11 +10,12 @@ from pydantic import Field
 
 import analyses.models
 from analyses.schemas import (
+    ANALYSIS_ORDERING_OPTIONS,
     AnalysedRun,
     AnalysedRunDetail,
-    AnalysisOrderByFilter,
     AssemblyDetail,
     MGnifyAnalysis,
+    OrderByFilter,
 )
 from emgapiv2.api import ApiSections, perms
 from emgapiv2.api.auth import DjangoSuperUserAuth, NoAuth, WebinJWTAuth
@@ -166,7 +167,7 @@ class AnalysedRunController(UnauthorisedIsUnfoundController):
     def list_runs_analyses(
         self,
         accession: str,
-        order: AnalysisOrderByFilter = Query(...),
+        order: OrderByFilter[ANALYSIS_ORDERING_OPTIONS] = Query(...),
     ):
         try:
             run = analyses.models.Run.objects_not_suppressed.get_by_accession(accession)
@@ -180,7 +181,7 @@ class AnalysedRunController(UnauthorisedIsUnfoundController):
         qs = analyses.models.Analysis.objects_not_suppressed.filter(
             run=run, is_ready=True
         )
-        return order.order_by(qs)
+        return analyses.models.order_analyses(qs, order.order)
 
     @http_get(
         "/{accession}/assemblies/",
