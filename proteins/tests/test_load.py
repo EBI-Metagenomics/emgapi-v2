@@ -398,6 +398,20 @@ def test_a_done_day_without_its_snapshot_fails_and_names_the_day(
             run(tmp_path, day)
 
 
+def test_a_tier1_behind_tier2_stops_the_load_and_names_the_days(tmp_path, stage):
+    stage("ERZ101")
+    run(tmp_path, D1)
+    # A restore of Tier 1 to before the load
+    query("DELETE FROM proteindb.load_log")
+    stage("ERZ29562087")
+    before, pending = listing(tmp_path), staged()
+
+    with pytest.raises(LoadError, match=str(D1)):
+        run(tmp_path, D2)
+    assert listing(tmp_path) == before
+    assert staged() == pending
+
+
 def test_leftovers_of_failed_loads_are_deleted(tmp_path, stage):
     stage("ERZ101")
     run(tmp_path, D1)

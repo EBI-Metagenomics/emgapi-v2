@@ -110,6 +110,12 @@ def recover(conn: psycopg.Connection, root: Path) -> None:
         )
     }
     complete = set(tier2.complete_days(root))
+    # As after a restore of Tier 1 to before a load: that load's rows are staged again.
+    if ahead := sorted(complete - done):
+        raise LoadError(
+            f"Tier 2 has days that load_log has not done: {', '.join(map(str, ahead))}."
+            " Tier 1 is behind Tier 2, so loading again would duplicate their rows"
+        )
     for day in sorted((days_with_files(root) | done) - complete):
         if day not in done:
             logger.warning("deleting the files of %s, left by a failed load", day)

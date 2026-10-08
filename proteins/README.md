@@ -77,6 +77,7 @@ A failed run of any deployment is seen in Prefect. Nothing else notifies anyone.
 | A Tier 2 file is lost or corrupted | Restore it from the `/nfs/production` backup. Files are never modified once written, so the restored one is correct |
 | Tier 1 restored by point-in-time recovery that lost, or may have lost, commits | [Restart allocation](#restarting-allocation-after-lost-commits) before accessioning resumes |
 | Tier 1 lost, with no recovery | [Restart allocation](#restarting-allocation-after-lost-commits), rebuilding Tier 1 from Tier 2 |
+| A load fails at start with "Tier 2 has days that load_log has not done" | Tier 1 was restored to before those loads. Their rows are staged again, and Tier 1's registries and id sequences are behind Tier 2. Treat Tier 1 as lost: [restart allocation](#restarting-allocation-after-lost-commits), rebuilding Tier 1 from Tier 2 |
 
 ### Clearing ownership of Tier 2
 
