@@ -58,6 +58,63 @@ def call_endpoint_and_get_data(
     return getter(j)
 
 
+def analysis_order_value(item: dict, field: str):
+    if field == "accession":
+        return item["accession"]
+    if field == "sample_accession":
+        return item["sample"]["accession"]
+    if field == "sample_title":
+        return item["sample"]["sample_title"]
+    if field == "run_or_assembly_accession":
+        parent = item["assembly"] or item["run"]
+        return parent["accession"]
+    if field == "pipeline_version":
+        return item["pipeline_version"]
+    raise ValueError(f"Unknown analysis order field {field}")
+
+
+def optional_string_sort_key(value: Optional[str]):
+    return value is None, value or ""
+
+
+def assert_analysis_ordering(
+    client: TestClient,
+    endpoint: str,
+    expected_values: dict[str, list[Optional[str]]],
+):
+    count = len(next(iter(expected_values.values())))
+    for field, values in expected_values.items():
+        ascending = call_endpoint_and_get_data(
+            client, f"{endpoint}?order={field}", count=count
+        )
+        assert [analysis_order_value(item, field) for item in ascending] == sorted(
+            values, key=optional_string_sort_key
+        )
+
+        descending = call_endpoint_and_get_data(
+            client, f"{endpoint}?order=-{field}", count=count
+        )
+        assert [analysis_order_value(item, field) for item in descending] == sorted(
+            values, key=optional_string_sort_key, reverse=True
+        )
+
+
+def analysis_order_values(
+    analyses: list[Analysis],
+) -> dict[str, list[Optional[str]]]:
+    return {
+        "accession": [analysis.accession for analysis in analyses],
+        "sample_accession": [analysis.sample.first_accession for analysis in analyses],
+        "sample_title": [
+            analysis.sample.metadata.get("sample_title") for analysis in analyses
+        ],
+        "run_or_assembly_accession": [
+            (analysis.assembly or analysis.run).first_accession for analysis in analyses
+        ],
+        "pipeline_version": [analysis.pipeline_version for analysis in analyses],
+    }
+
+
 @pytest.mark.django_db
 def test_api_study(raw_reads_mgnify_study, ninja_api_client):
     items = call_endpoint_and_get_data(ninja_api_client, "/studies/", count=1)
@@ -145,14 +202,34 @@ def test_api_analyses_list(raw_read_analyses, ninja_api_client):
 
 @pytest.mark.django_db
 def test_api_study_analyses_list(raw_read_analyses, ninja_api_client):
-    finished_analyses = list(filter(lambda a: a.is_ready, raw_read_analyses))
+    sample_titles = ["Zulu sample", "Alpha sample", "Middle sample"]
+    pipeline_versions = [
+        Analysis.PipelineVersions.v6_2,
+        Analysis.PipelineVersions.v4,
+        Analysis.PipelineVersions.v5,
+    ]
+    for analysis, sample_title, pipeline_version in zip(
+        raw_read_analyses, sample_titles, pipeline_versions
+    ):
+        analysis.sample.metadata["sample_title"] = sample_title
+        analysis.sample.save()
+        analysis.pipeline_version = pipeline_version
+        analysis.save()
+        analysis.mark_status(Analysis.AnalysisStates.ANALYSIS_ANNOTATIONS_IMPORTED)
+
     items = call_endpoint_and_get_data(
         ninja_api_client,
         f"/studies/{raw_read_analyses[0].study.accession}/analyses/",
-        count=len(finished_analyses),
+        count=len(raw_read_analyses),
     )
-    assert items[0]["accession"] in [a.accession for a in finished_analyses]
+    assert items[0]["accession"] in [a.accession for a in raw_read_analyses]
     assert items[0]["experiment_type"] in ["Metagenomic", "Amplicon"]
+
+    assert_analysis_ordering(
+        ninja_api_client,
+        f"/studies/{raw_read_analyses[0].study.accession}/analyses/",
+        analysis_order_values(raw_read_analyses),
+    )
 
 
 @pytest.mark.django_db
@@ -761,6 +838,43 @@ def test_api_assembly_detail(mgnify_assemblies_with_ena, ninja_api_client):
 
 
 @pytest.mark.django_db
+def test_api_study_assembly_analyses_ordering(assembly_with_analyses, ninja_api_client):
+    preferred_accessions = ["ERZ300000", "ERZ100000", "ERZ200000"]
+    secondary_accessions = ["AAA000001", "ZZZ000001", "MMM000001"]
+
+    for analysis, preferred, secondary in zip(
+        assembly_with_analyses, preferred_accessions, secondary_accessions
+    ):
+        analysis.assembly.ena_accessions = [secondary, preferred]
+        analysis.assembly.save()
+        analysis.mark_status(Analysis.AnalysisStates.ANALYSIS_ANNOTATIONS_IMPORTED)
+
+    assert_analysis_ordering(
+        ninja_api_client,
+        f"/studies/{assembly_with_analyses[0].study.accession}/analyses/",
+        analysis_order_values(assembly_with_analyses),
+    )
+
+
+@pytest.mark.django_db
+def test_api_assembly_analyses_ordering(assembly_with_analyses, ninja_api_client):
+    assembly = assembly_with_analyses[0].assembly
+    assembly.ena_accessions = ["GCA000001", "ERZ999999"]
+    assembly.save()
+
+    for analysis in assembly_with_analyses:
+        analysis.assembly = assembly
+        analysis.run = None
+        analysis.mark_status(Analysis.AnalysisStates.ANALYSIS_ANNOTATIONS_IMPORTED)
+
+    assert_analysis_ordering(
+        ninja_api_client,
+        f"/assemblies/{assembly.first_accession}/analyses",
+        analysis_order_values(assembly_with_analyses),
+    )
+
+
+@pytest.mark.django_db
 def test_api_assembly_genome_links_with_no_data(
     mgnify_assemblies_with_ena, ninja_api_client
 ):
@@ -929,20 +1043,28 @@ def test_runs_detail_nonexistent(ninja_api_client):
 
 @pytest.mark.django_db
 def test_runs_analyses_list(ninja_api_client, raw_read_run, raw_read_analyses):
-    finished_analyses = list(filter(lambda a: a.is_ready, raw_read_analyses))
-
     run = raw_read_run[0]
+
+    for analysis in raw_read_analyses:
+        analysis.run = run
+        analysis.mark_status(Analysis.AnalysisStates.ANALYSIS_ANNOTATIONS_IMPORTED)
 
     items = call_endpoint_and_get_data(
         ninja_api_client,
         f"/runs/{run.ena_accessions[0]}/analyses/",
-        count=len(finished_analyses),
+        count=len(raw_read_analyses),
     )
 
-    assert items[0]["accession"] in [a.accession for a in finished_analyses]
+    assert items[0]["accession"] in [a.accession for a in raw_read_analyses]
     assert items[0]["experiment_type"] in ["Metagenomic", "Amplicon"]
     assert "sample" in items[0]
     assert "study_accession" in items[0]
+
+    assert_analysis_ordering(
+        ninja_api_client,
+        f"/runs/{run.ena_accessions[0]}/analyses/",
+        analysis_order_values(raw_read_analyses),
+    )
 
 
 @pytest.mark.django_db

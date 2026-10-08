@@ -1,11 +1,13 @@
 from django.db.models import Prefetch
 from django.shortcuts import get_object_or_404
+from ninja import Query
 from ninja_extra import api_controller, http_get, paginate
 from ninja_extra.schemas import NinjaPaginationResponseSchema
 
 import analyses.models
 from analyses.schemas import (
     AdditionalContainedGenomeSchema,
+    AnalysisOrderByFilter,
     Assembly,
     AssemblyDetail,
     GenomeAssemblyLinkSchema,
@@ -159,7 +161,11 @@ class AssemblyController(UnauthorisedIsUnfoundController):
         tags=[ApiSections.ASSEMBLIES, ApiSections.ANALYSES],
     )
     @paginate()
-    def list_analyses_for_assembly(self, accession: str):
+    def list_analyses_for_assembly(
+        self,
+        accession: str,
+        order: AnalysisOrderByFilter = Query(...),
+    ):
         assembly = get_object_or_404(
             analyses.models.Assembly.public_objects,
             ena_accessions__contains=[accession],
@@ -167,4 +173,4 @@ class AssemblyController(UnauthorisedIsUnfoundController):
         qs = analyses.models.Analysis.public_objects.select_related(
             "study", "sample", "run", "assembly"
         ).filter(assembly=assembly)
-        return qs
+        return order.order_by(qs)

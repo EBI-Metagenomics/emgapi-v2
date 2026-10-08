@@ -12,6 +12,7 @@ import analyses.models
 from analyses.schemas import (
     AnalysedRun,
     AnalysedRunDetail,
+    AnalysisOrderByFilter,
     AssemblyDetail,
     MGnifyAnalysis,
 )
@@ -162,7 +163,11 @@ class AnalysedRunController(UnauthorisedIsUnfoundController):
         ],
     )
     @paginate()
-    def list_runs_analyses(self, accession: str):
+    def list_runs_analyses(
+        self,
+        accession: str,
+        order: AnalysisOrderByFilter = Query(...),
+    ):
         try:
             run = analyses.models.Run.objects_not_suppressed.get_by_accession(accession)
         except (
@@ -172,9 +177,10 @@ class AnalysedRunController(UnauthorisedIsUnfoundController):
             raise NotFound(detail=f"Analysed run with accession {accession} not found.")
         # raise not found if user doesn't have permission to see
         self.check_object_permissions(run)
-        return analyses.models.Analysis.objects_not_suppressed.filter(
+        qs = analyses.models.Analysis.objects_not_suppressed.filter(
             run=run, is_ready=True
         )
+        return order.order_by(qs)
 
     @http_get(
         "/{accession}/assemblies/",

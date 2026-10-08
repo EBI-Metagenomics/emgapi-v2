@@ -3,11 +3,13 @@ from __future__ import annotations
 import logging
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, Generic, List, Optional, TypeVar, Union
+from typing import Any, Dict, Generic, List, Literal, Optional, TypeVar, Union
 from urllib.parse import urljoin
 from zoneinfo import ZoneInfo
 
 from django.conf import settings
+from django.db.models import CharField
+from django.db.models.functions import Coalesce
 from ninja import Field, ModelSchema, Schema
 from pydantic import BaseModel
 from typing_extensions import Annotated
@@ -124,6 +126,57 @@ class OrderByFilter(BaseModel, Generic[T]):
         if self.order:
             return qs.order_by(self.order)
         return qs
+
+
+class AnalysisOrderByFilter(
+    OrderByFilter[
+        Literal[
+            "accession",
+            "-accession",
+            "sample_accession",
+            "-sample_accession",
+            "sample_title",
+            "-sample_title",
+            "run_or_assembly_accession",
+            "-run_or_assembly_accession",
+            "pipeline_version",
+            "-pipeline_version",
+            "",
+        ]
+    ]
+):
+    """Translate public analysis table columns to their database fields."""
+
+    def order_by(self, qs):
+        if not self.order:
+            return qs
+
+        descending = self.order.startswith("-")
+        public_field = self.order.removeprefix("-")
+        database_fields_mapping = {
+            "accession": "accession",
+            "sample_accession": "sample__ena_sample__accession",
+            "sample_title": "sample__sample_title",
+            "pipeline_version": "pipeline_version",
+        }
+
+        if public_field == "run_or_assembly_accession":
+            database_field = "_run_or_assembly_accession"
+            qs = qs.annotate(
+                _run_or_assembly_accession=Coalesce(
+                    analyses.models.Assembly.first_accession_expression(
+                        "assembly__ena_accessions"
+                    ),
+                    "run__ena_accessions__0",
+                    output_field=CharField(),
+                )
+            )
+        else:
+            database_field = database_fields_mapping[public_field]
+
+        prefix = "-" if descending else ""
+        ordering = f"{prefix}{database_field}"
+        return qs.order_by(ordering, f"{prefix}accession")
 
 
 class MGnifySample(ModelSchema):

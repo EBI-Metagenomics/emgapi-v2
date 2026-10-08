@@ -11,6 +11,7 @@ from django.core.exceptions import MultipleObjectsReturned, ObjectDoesNotExist
 from django.db import models
 
 import ena.models
+from analyses.db_functions import PreferredENAAccession
 from emgapiv2.model_manager_mixins import SuppressionFilterManagerMixin
 
 
@@ -195,6 +196,16 @@ class ENADerivedModel(VisibilityControlledModel):
                 self.ena_accessions[0],
             )
         return None
+
+    @classmethod
+    def first_accession_expression(
+        cls, field_name: str = "ena_accessions"
+    ) -> PreferredENAAccession:
+        """Return the database expression equivalent of ``first_accession``."""
+        return PreferredENAAccession(
+            field_name,
+            cls.PREFERRED_ENA_ACCESSION_REGEX.pattern,
+        )
 
     @property
     def ena_browser_url(self):
