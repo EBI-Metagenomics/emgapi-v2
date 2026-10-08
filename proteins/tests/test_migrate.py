@@ -23,7 +23,7 @@ from proteins.migrate import (
     build_tier2,
     export,
     export_dims,
-    unresolved,
+    resolution,
     verify,
 )
 from proteins.tests.conftest import (
@@ -634,7 +634,7 @@ def test_command_verifies(rehearsed, current, settings, monkeypatch):
 
 @pytest.fixture
 def analysed(current, mgnify_assemblies, raw_reads_mgnify_study):
-    """ERZ1, under 4.1 and 6.0, analysed in emgapi-v2, and ERZ5 under 5.0, not."""
+    """ERZ1, under 4.1 and 6.0, analysed in emgapi-v2 with the same study and biome, and ERZ5 under 5.0, not."""
     assembly = mgnify_assemblies[0]
     assembly.ena_accessions = ["ERZ1"]
     assembly.save()
@@ -646,23 +646,53 @@ def analysed(current, mgnify_assemblies, raw_reads_mgnify_study):
         pipeline_version=mg_models.Analysis.PipelineVersions.v6,
     )
     query(
+        "UPDATE mgnprotein_ingestion.study SET accession = %s",
+        [raw_reads_mgnify_study.accession],
+    )
+    query(
+        "UPDATE mgnprotein_ingestion.biome SET lineage = %s",
+        [raw_reads_mgnify_study.biome.pretty_lineage],
+    )
+    query(
         "INSERT INTO mgnprotein_ingestion.assembly VALUES (3, 'ERZ5', 1, 5.0, 2, false, false)"
     )
     return current
 
 
 def test_lists_the_assemblies_emgapi_v2_does_not_know(analysed):
-    assert unresolved(analysed) == (2, [("5.0", "ERZ5")])
+    assert resolution(analysed) == (2, [["5.0", "ERZ5", "not in emgapi-v2"]])
+
+
+def test_lists_the_assemblies_emgapi_v2_knows_with_another_study_or_biome(
+    analysed, raw_reads_mgnify_study
+):
+    query("DELETE FROM mgnprotein_ingestion.assembly WHERE accession = 'ERZ5'")
+    query("UPDATE mgnprotein_ingestion.assembly SET study_id = 9 WHERE id = 1")
+    query("UPDATE mgnprotein_ingestion.biome SET lineage = 'root:Engineered'")
+
+    study, biome = raw_reads_mgnify_study.accession, raw_reads_mgnify_study.biome
+    assert resolution(analysed) == (
+        1,
+        [
+            [
+                "4.1",
+                "ERZ1",
+                f"study None -> {study}",
+                f"biome root:Engineered -> {biome.pretty_lineage}",
+            ],
+            ["6.0", "ERZ1", f"biome root:Engineered -> {biome.pretty_lineage}"],
+        ],
+    )
 
 
 def test_command_lists_the_assemblies_emgapi_v2_does_not_know(analysed, capsys):
-    with pytest.raises(CommandError, match="1 of 2 assembly accessions resolve"):
+    with pytest.raises(CommandError, match="1 assemblies, of 2 accessions, are not"):
         call_command("proteindb_migrate", "resolve", "--source", analysed)
-    assert capsys.readouterr().out == "5.0\tERZ5\n"
+    assert capsys.readouterr().out == "5.0\tERZ5\tnot in emgapi-v2\n"
 
     query("DELETE FROM mgnprotein_ingestion.assembly WHERE accession = 'ERZ5'")
     call_command("proteindb_migrate", "resolve", "--source", analysed)
-    assert "1 of 1 assembly accessions resolve" in capsys.readouterr().out
+    assert "0 assemblies, of 1 accessions, are not" in capsys.readouterr().out
 
 
 # Step 3 of restarting allocation after lost commits.

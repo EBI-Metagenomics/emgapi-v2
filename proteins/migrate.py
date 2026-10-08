@@ -453,17 +453,36 @@ def verify(source: str, dsn: str, root: Path, sample: int = 1_000_000) -> list[s
     return failed
 
 
-def unresolved(source: str) -> tuple[int, list[tuple[str, str]]]:
-    """The current database's assemblies that emgapi-v2 does not know, as (pipeline version, accession), and how many accessions it has.
+def resolution(source: str) -> tuple[int, list[list[str]]]:
+    """How many assembly accessions the current database has, and each of its assemblies that emgapi-v2 does not know, or knows with another study or biome.
 
-    The first load after cutover takes the dimensions from emgapi-v2, so these would be left out of every release.
+    The first load after cutover takes the dimensions from emgapi-v2, so an unknown assembly would
+    be left out of every release, and a changed one would be released with emgapi-v2's study and biome.
+    Each is listed as its pipeline version and accession, then what differs.
 
     :param source: libpq URI of the current database.
     """
     with psycopg.connect(source) as conn:
         assemblies = conn.execute(
-            f"SELECT DISTINCT pipeline_version::text, accession FROM {SOURCE}.assembly"
+            f"SELECT DISTINCT a.pipeline_version::text, a.accession, s.accession, b.lineage"
+            f" FROM {SOURCE}.assembly a LEFT JOIN {SOURCE}.study s ON s.id = a.study_id"
+            f" LEFT JOIN {SOURCE}.biome b ON b.id = a.biome_id"
         ).fetchall()
-    accessions = sorted({accession for _, accession in assemblies})
-    known = {s.assembly_accession for s in dims.resolve(accessions)}
-    return len(accessions), sorted(a for a in assemblies if a[1] not in known)
+    accessions = sorted({accession for _, accession, *_ in assemblies})
+    known = {s.assembly_accession: s for s in dims.resolve(accessions)}
+    differing = []
+    for version, accession, study, lineage in sorted(assemblies):
+        if (now := known.get(accession)) is None:
+            differing.append([version, accession, "not in emgapi-v2"])
+            continue
+        changes = [
+            f"{name} {was} -> {now_}"
+            for name, was, now_ in [
+                ("study", study, now.study_accession),
+                ("biome", lineage, now.biome_lineage),
+            ]
+            if was != now_
+        ]
+        if changes:
+            differing.append([version, accession, *changes])
+    return len(accessions), differing

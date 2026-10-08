@@ -12,7 +12,7 @@ from proteins.migrate import (
     build_tier2,
     export,
     export_dims,
-    unresolved,
+    resolution,
     verify,
 )
 
@@ -85,7 +85,7 @@ class Command(BaseCommand):
 
         resolving = steps.add_parser(
             "resolve",
-            help="List the current database's assemblies that emgapi-v2 does not know",
+            help="List the current database's assemblies that emgapi-v2 does not know, or knows with another study or biome",
         )
         resolving.add_argument(
             "--source",
@@ -144,12 +144,11 @@ class Command(BaseCommand):
         )
 
     def resolve(self, source, **options):
-        total, missing = unresolved(source)
-        for version, accession in missing:
-            self.stdout.write(f"{version}\t{accession}")
-        resolved = total - len({accession for _, accession in missing})
-        message = f"{resolved} of {total} assembly accessions resolve"
-        if missing:
+        total, differing = resolution(source)
+        for row in differing:
+            self.stdout.write("\t".join(row))
+        message = f"{len(differing)} assemblies, of {total} accessions, are not in emgapi-v2 or differ in study or biome"
+        if differing:
             raise CommandError(message)
         self.stdout.write(self.style.SUCCESS(message))
 
