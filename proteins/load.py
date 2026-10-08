@@ -5,14 +5,15 @@ import shutil
 import tempfile
 from collections import defaultdict
 from datetime import date, timedelta
+from itertools import groupby
+from operator import itemgetter
 from pathlib import Path
 from time import monotonic
-from typing import NamedTuple
+from typing import Iterable, Iterator, NamedTuple
 
 import adbc_driver_postgresql.dbapi as adbc
 import psycopg
 import pyarrow as pa
-import pyarrow.compute as pc
 import pyarrow.parquet as pq
 
 from proteins import tier2
@@ -22,7 +23,7 @@ from proteins.owner import Owner
 logger = logging.getLogger(__name__)
 
 STAGED_COLUMNS = {
-    "protein": "id, hash, sequence, get_byte(hash, 0) >> 2 AS prefix",
+    "protein": "id, hash, sequence",
     "contig": "id, assembly_id, name, original_name, length, hash, kmer_coverage",
     "occurrence": "id, protein_id, contig_id, assembly_id, gene_caller_id,"
     " start_position, end_position, strand, truncation",
@@ -233,20 +234,24 @@ def write_day(
     :param staged: What read_staging() read.
     :param dims: The four tables of the dimension snapshot.
     """
-    proteins = pq.read_table(staged.files["protein"])
-    for prefix in sorted(set(proteins["prefix"].to_pylist())):
-        tier2.write(
-            root / "protein" / f"prefix={prefix:02x}" / f"part-{day}.parquet",
+    # A backlog can outgrow the job's memory, so the rows are sorted by DuckDB, which spills to disk.
+    # Sorted by hash, the rows are also grouped by prefix, the hash's top bits.
+    batches = tier2.sorted_batches("protein", [staged.files["protein"]])
+    for prefix, slices in groupby(by_prefix(batches), itemgetter(0)):
+        tier2.write_sorted(
+            root / "protein" / f"prefix={prefix}" / f"part-{day}.parquet",
             "protein",
-            proteins.filter(pc.equal(proteins["prefix"], prefix)),
+            (batch for _, batch in slices),
         )
-    counts = {"proteins": proteins.num_rows}
+    counts = {}
+    for table in ("protein", "occurrence", "contig"):
+        counts[f"{table}s"] = pq.ParquetFile(staged.files[table]).metadata.num_rows
     for table in ("occurrence", "contig"):
-        rows = pq.read_table(staged.files[table])
-        tier2.write(
-            root / table / f"ingest_date={day}" / "part-000.parquet", table, rows
+        tier2.merge(
+            root / table / f"ingest_date={day}" / "part-000.parquet",
+            table,
+            [staged.files[table]],
         )
-        counts[f"{table}s"] = rows.num_rows
     for name, table in dims.items():
         tier2.write(
             root / "dims" / f".tmp-snapshot={day}" / f"{name}.parquet",
@@ -254,6 +259,22 @@ def write_day(
             table,
         )
     return counts
+
+
+def by_prefix(
+    batches: Iterable[pa.RecordBatch],
+) -> Iterator[tuple[str, pa.RecordBatch]]:
+    """Cuts protein batches sorted by hash wherever the prefix changes.
+
+    :param batches: Proteins sorted by hash.
+    :return: Each slice with its prefix, in order.
+    """
+    for batch in batches:
+        start = 0
+        for prefix, run in groupby(map(tier2.prefix, batch["hash"].to_pylist())):
+            length = sum(1 for _ in run)
+            yield prefix, batch.slice(start, length)
+            start += length
 
 
 def commit(

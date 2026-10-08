@@ -35,6 +35,7 @@ Gives every protein predicted by the assembly analysis pipeline its MGYP accessi
 | `EMG_PROTEINDB__ROOT` | `$PROTEIN_DB`. The `slurm` work pool's jobs must be able to create and delete files under `tier2/` |
 | `EMG_PROTEINDB__ACCESSION_IMAGE` | The `mgyp-accession` image the pipeline pins, as `docker://quay.io/microbiome-informatics/mgyp-accession:<tag>`, for the backfill. Move it with the pipeline's pin |
 | `EMG_PROTEINDB__TIER2_CONCURRENCY_LIMIT` | The Prefect limit that keeps loads apart, `proteindb-tier2` |
+| `EMG_PROTEINDB__SORT_MEMORY_LIMIT` | DuckDB's memory limit when it sorts Tier 2's rows, `32GB`. DuckDB goes over it by about 1 GB, so keep it about half of the job's memory |
 
 ## Setting up an environment
 

@@ -195,6 +195,22 @@ def test_two_days_load_every_staged_row_once(tmp_path, stage):
     ]
 
 
+def test_a_day_is_written_in_the_schema_and_sort_order_of_tier2(tmp_path, stage):
+    stage("ERZ101")
+    stage("ERZ29562087")
+    assert run(tmp_path, D1)
+
+    for table in TIER2_COLUMNS:
+        for path in tier2.files(tmp_path, table, D1):
+            stored = pq.read_table(path)
+            assert stored.schema == tier2.SCHEMAS[table]
+            order = [
+                tuple(row[c] for c in tier2.SORT_ORDER[table])
+                for row in stored.to_pylist()
+            ]
+            assert order == sorted(order)
+
+
 def test_dimensions_snapshot_the_registries_and_the_source(tmp_path, stage):
     stage("ERZ101")
     stage("ERZ29562087")

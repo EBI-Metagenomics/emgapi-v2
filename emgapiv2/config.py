@@ -385,6 +385,9 @@ class ProteinDBConfig(BaseModel):
     backfill_parallelism: int = 8
     # Below the cluster's MaxArraySize, which bounds array indices
     backfill_array_size: int = 1000
+    # DuckDB goes over its memory limit while sorting, so this is about half of the 64 GB
+    # that the load and the migration's Tier 2 build run with.
+    sort_memory_limit: str = "32GB"
 
 
 class EMGConfig(BaseSettings):

@@ -5,11 +5,12 @@ import re
 import tempfile
 from datetime import date
 from pathlib import Path
-from typing import Iterable
+from typing import Iterable, Iterator
 
 import duckdb
 import pyarrow as pa
 import pyarrow.parquet as pq
+from django.conf import settings
 
 HASH = pa.binary(32)
 
@@ -219,12 +220,24 @@ def merge(path: Path, table: str, files: list[Path]) -> None:
     :param table: The table whose schema and sort order the file has.
     :param files: The files to merge.
     """
+    write_sorted(path, table, sorted_batches(table, files))
+
+
+def sorted_batches(table: str, files: list[Path]) -> Iterator[pa.RecordBatch]:
+    """The rows of `files` in the table's sort order, sorted by DuckDB, which spills to disk.
+
+    :param table: The table whose columns and sort order the rows have.
+    :param files: The files to read.
+    """
     spill = Path(tempfile.gettempdir()) / "proteindb-merge"
-    with duckdb.connect(config={"temp_directory": str(spill)}) as con:
-        reader = con.execute(
+    config = {
+        "temp_directory": str(spill),
+        "memory_limit": settings.EMG_CONFIG.proteindb.sort_memory_limit,
+    }
+    with duckdb.connect(config=config) as con:
+        yield from con.execute(
             f"SELECT {', '.join(SCHEMAS[table].names)}"
             " FROM read_parquet($files, hive_partitioning = false)"
             f" ORDER BY {', '.join(SORT_ORDER[table])}",
             {"files": [str(f) for f in files]},
         ).to_arrow_reader(ROW_GROUP_SIZE)
-        write_sorted(path, table, reader)
