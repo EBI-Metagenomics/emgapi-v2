@@ -286,7 +286,19 @@ class ServiceURLsConfig(BaseModel):
         "http://localhost:8080/pub/databases/metagenomics/mgnify_results/"
     )
     private_data_url_root: str = "http://localhost:8081/private-data/"
-    genome_search_proxy: str = "https://cobs-genome-search-01.mgnify.org/search"
+
+
+class LexicMapConfig(BaseModel):
+    binary_path: str = "/usr/local/bin/lexicmap"
+    build_root: str = "/nfs/production/lexicmap-builds"
+    publish_root: str = "/publicnfs/services/lexicmap"
+    index_root: str = "/app/data/services/lexicmap"
+    threads: int = 8
+    chunks: int = 4
+    batch_size: int = 1000
+    memory_gb: int = 32
+    search_threads: int = 4
+    search_timeout: int = 120
 
 
 class SourmashConfig(BaseModel):
@@ -340,12 +352,6 @@ class GenomeConfig(BaseModel):
     ftp_genomes_root: str = "/path/to/ftp-genomes"
 
     genome_search_project_dir: str = "/path/to/genome-search-project"
-    genome_search_singularity_image: str = "/path/to/genome-search.sif"
-    cobs_search_host: str = "user@cobs-genome-search.example.org"
-    cobs_search_ssh_key: str = "cobs-genome-search-ssh.pem"
-    cobs_remote_index_dir: str = "/mnt/data/cobs"
-    cobs_remote_config_path: str = "cobs/cobs.yaml"
-    cobs_remote_service: str = "cobs"
 
     sourmash_conda_environment: str = "sourmash"
     sourmash_public_signatures_dir: str = "/path/to/sourmash-signatures"
@@ -391,6 +397,7 @@ class EMGConfig(BaseSettings):
     legacy_service: LegacyServiceConfig = LegacyServiceConfig()
     service_urls: ServiceURLsConfig = ServiceURLsConfig()
     sourmash: SourmashConfig = SourmashConfig()
+    lexicmap: LexicMapConfig = LexicMapConfig()
     slurm: SlurmConfig = SlurmConfig()
     webin: WebinConfig = WebinConfig()
     log_masking: LogMaskingConfig = LogMaskingConfig()

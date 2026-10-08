@@ -129,6 +129,25 @@ tasks:
       - mkdir -p slurm-dev-environment/fs/nfs/production/dev-slurm-work-dir
       - chmod -R o+w slurm-dev-environment/fs
 
+  make-dev-lexicmap-indexes:
+    desc: "Build development LexicMap indexes using the existing Prefect flow on Donco"
+    cmds:
+      - docker compose build slurm_node
+      - docker compose up -d app prefect-server prefect-slurm-worker slurm_node
+      - task: create-pool
+      - >-
+        docker compose run -e PREFECT_CLIENT_RETRY_EXTRA_CODES=0 app
+        python manage.py prefectcli --no-prompt deploy
+        --name build_catalogue_lexicmap_index_deployment
+        --prefect-file workflows/prefect_deployments/prefect-dev-donco.yaml
+      - for: [ocean-prokaryotes, ocean-eukaryotes]
+        task: prefect
+        vars:
+          CLI_ARGS: >-
+            deployment run 'Build catalogue LexicMap index/build_catalogue_lexicmap_index_deployment'
+            -p catalogue_slug={{.ITEM}}
+            -p results_directory=/nfs/production/catalogs/{{.ITEM}}/v1.0 --watch
+
   run-dev-genome-catalogue-update:
     desc: "Import the Ocean Prokaryotes v2.0 fixture as a ready catalogue release"
     cmds:

@@ -42,6 +42,7 @@ from genomes.models import (
 )
 from genomes.search_indexes import upsert_sourmash_search_index
 from workflows.data_io_utils.filenames import trailing_slash_ensured_dir
+from workflows.flows.lexicmap_index import make_lexicmap_index
 from workflows.prefect_utils.build_cli_command import cli_command
 from workflows.prefect_utils.slurm_flow import run_cluster_job
 from workflows.prefect_utils.slurm_policies import ResubmitAlwaysPolicy
@@ -208,39 +209,6 @@ def move_catalogue_files_to_ftp(options: dict, timeout: int = 86400):
 
 
 @task
-def make_cobs_index(options: dict):
-    return _make_cobs_index(options, "**/MGYG*.fna")
-
-
-@task
-def make_cobs_index_v4(options: dict):
-    return _make_cobs_index(options, "**/MGYG*.fna.gz")
-
-
-def _make_cobs_index(options: dict, fasta_glob: str):
-    catalogue_slug = options["catalogue_slug"]
-    catalogue_dir = (
-        Path(genome_config.genome_search_project_dir) / "catalogues" / catalogue_slug
-    )
-    command = shell_join(
-        [
-            f"mkdir -p {shell_quote(catalogue_dir)}",
-            f"cd {shell_quote(catalogue_dir)}",
-            f"singularity run {genome_config.genome_search_singularity_image} -c index create {shell_quote(Path(options['results_directory']) / 'website')} {shell_quote(catalogue_slug)} --fasta_glob_filter {shell_quote(fasta_glob)}",
-        ]
-    )
-    return run_cluster_job(
-        name=f"Make COBS index for {catalogue_slug}",
-        command=command,
-        expected_time=timedelta(hours=24),
-        memory="32G",
-        working_dir=catalogue_dir,
-        environment={},
-        resubmit_policy=ResubmitAlwaysPolicy,
-    )
-
-
-@task
 def make_sourmash_sketches(options: dict):
     return _make_sourmash_sketches(options, "*/genome/MGYG*.fna")
 
@@ -302,41 +270,6 @@ def make_sourmash_index(options: dict):
         environment={},
         resubmit_policy=ResubmitAlwaysPolicy,
         cpus_per_task=8,
-    )
-
-
-@task
-def place_cobs_index_on_embassy(options: dict):
-    # TODO: move COBS to k8s
-    catalogue_slug = options["catalogue_slug"]
-    project_dir = Path(genome_config.genome_search_project_dir)
-    key = shell_quote(project_dir / genome_config.cobs_search_ssh_key)
-    local_index = shell_quote(
-        project_dir / "catalogues" / catalogue_slug / f"{catalogue_slug}.cobs_compact"
-    )
-    host = shell_quote(genome_config.cobs_search_host)
-    remote_index = f"{host}:{shell_quote(Path(genome_config.cobs_remote_index_dir) / f'{catalogue_slug}.cobs_compact')}"
-    remote_command = shell_join(
-        [
-            f"grep -qxF '  {catalogue_slug}: {Path(genome_config.cobs_remote_index_dir) / f'{catalogue_slug}.cobs_compact'}' {shell_quote(genome_config.cobs_remote_config_path)} || echo '  {catalogue_slug}: {Path(genome_config.cobs_remote_index_dir) / f'{catalogue_slug}.cobs_compact'}' >> {shell_quote(genome_config.cobs_remote_config_path)}",
-            f"sudo systemctl restart {shell_quote(genome_config.cobs_remote_service)}",
-            "echo 'COBS was restarted'",
-        ]
-    )
-    command = shell_join(
-        [
-            f"scp -i {key} {local_index} {remote_index}",
-            f"ssh -i {key} {host} {shell_quote(remote_command)}",
-        ]
-    )
-    return run_cluster_job(
-        name=f"Place COBS index for {catalogue_slug} on Embassy",
-        command=command,
-        expected_time=timedelta(hours=2),
-        memory="1G",
-        working_dir=project_dir,
-        environment={},
-        resubmit_policy=ResubmitAlwaysPolicy,
     )
 
 
@@ -435,13 +368,14 @@ def run_genome_release_tasks(
     if not run_genome_search_tasks:
         return
     if validate_pipeline_version(options["pipeline_version"]) >= 4:
-        make_cobs_index_v4(options)
         make_sourmash_sketches_v4(options)
     else:
-        make_cobs_index(options)
         make_sourmash_sketches(options)
     make_sourmash_index(options)
-    place_cobs_index_on_embassy(options)
+    make_lexicmap_index(
+        catalogue_slug=options["catalogue_slug"],
+        results_directory=options["results_directory"],
+    )
     place_sourmash_signatures(options)
     register_sourmash_search_index(options["catalogue_slug"])
 

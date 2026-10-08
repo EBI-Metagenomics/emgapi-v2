@@ -144,12 +144,12 @@ services:
       - "8000:8000"
     networks: [emg]
 
-  app-worker:
-    # Django Tasks worker for sourmash searches
+  genome-search-worker:
+    # Django Tasks worker for Sourmash and LexicMap searches
     build:
       context: .
-      target: sourmash_worker
-    container_name: app-worker
+      target: genome_search_worker
+    container_name: genome-search-worker
     profiles: ["all"]
     command: "python manage.py db_worker --skip-checks"
     env_file:
