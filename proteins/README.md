@@ -142,7 +142,11 @@ From the frozen current database (`mgnprotein_ingestion`), once. Run in emgapi-v
    sbatch --mem=64G --cpus-per-task=16 --time=24:00:00 -J tier2 --wrap "python manage.py proteindb_migrate tier2 --date M --export $OUT"
    ```
 
-3. **Build Tier 1**, into a schema just created by `tier1.sql`: `python manage.py proteindb_migrate tier1`. An interrupted build is started over: drop the schema and apply `tier1.sql` and `roles.sql` again.
+3. **Build Tier 1**, into a schema just created by `tier1.sql`. It streams the hashes and ids, so it needs little memory, but it takes hours, and an interrupted build is started over: drop the schema and apply `tier1.sql` and `roles.sql` again. Its time limit is therefore generous.
+
+   ```
+   sbatch --mem=8G --cpus-per-task=2 --time=72:00:00 -J tier1 --wrap "python manage.py proteindb_migrate tier1"
+   ```
 4. **Verify**: Tier 2 against the frozen tables, Tier 1 against Tier 2, and a sample of the hash contract. It prints each check that fails.
 
    ```
