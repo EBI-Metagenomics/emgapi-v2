@@ -253,6 +253,14 @@ def test_fraggenescan_has_no_truncation(files, description):
     assert occurrence.truncation is None
 
 
+@pytest.mark.parametrize("source", ["Prodigal_v2.6.3", "pyrodigal_v3.6.3"])
+def test_only_pyrodigal_and_fraggenescanrs_are_known_gene_callers(files, source):
+    caller = source.rsplit("_v", 1)[0]
+    assert problems(*files({"g1": "MKV"}, gff=gff_row("g1", source=source))) == [
+        f"g1: gene caller {caller!r} is neither Pyrodigal nor FragGeneScanRS"
+    ]
+
+
 @pytest.mark.parametrize(
     "description",
     [

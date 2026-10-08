@@ -32,7 +32,7 @@ class Occurrence(NamedTuple):
     strand: int
     caller_name: str
     caller_version: str
-    truncation: str | None  # Pyrodigal's partial=XY; None for other callers
+    truncation: str | None  # Pyrodigal's partial=XY; None for FragGeneScanRS
 
 
 class Contig(NamedTuple):
@@ -123,6 +123,11 @@ def read_input(faa, gff, contigs, contig_map=None) -> Input:
                 problems.append(f"{record.id}: no single valid partial= flag")
                 continue
             truncation = flags[0]
+        elif gene.caller_name != "FragGeneScanRS":
+            problems.append(
+                f"{record.id}: gene caller {gene.caller_name!r} is neither Pyrodigal nor FragGeneScanRS"
+            )
+            continue
         hash = protein_hash(sequence)
         proteins[hash] = sequence
         occurrences.append(
