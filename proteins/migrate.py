@@ -246,12 +246,7 @@ def build_tier1(dsn: str, root: Path, protein_id_start: int | None = None) -> da
     with psycopg.connect(dsn, autocommit=True) as conn:
         conn.execute("SET search_path = proteindb")
         check_empty(conn)
-        by_prefix = defaultdict(list)
-        for path in files["protein"]:
-            by_prefix[int(path.parent.name.removeprefix("prefix="), 16)].append(path)
-        for p in range(64):
-            build_partition(conn, dsn, p, by_prefix[p])
-
+        # Before the hours of the partitions, so their unique constraints fail early.
         with adbc.connect(dsn) as registries, registries.cursor() as cursor:
             for name, columns in REGISTRIES.items():
                 rows = pq.read_table(
@@ -261,6 +256,11 @@ def build_tier1(dsn: str, root: Path, protein_id_start: int | None = None) -> da
                     name, rows, mode="append", db_schema_name="proteindb"
                 )
             registries.commit()
+        by_prefix = defaultdict(list)
+        for path in files["protein"]:
+            by_prefix[int(path.parent.name.removeprefix("prefix="), 16)].append(path)
+        for p in range(64):
+            build_partition(conn, dsn, p, by_prefix[p])
         for name in REGISTRIES:
             (start,) = conn.execute(
                 f"SELECT coalesce(max(id), 0) + 1 FROM {name}"

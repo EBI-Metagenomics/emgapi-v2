@@ -200,6 +200,25 @@ def test_refuses_a_schema_that_is_not_empty(migrated):
         build_tier1(proteindb_dsn(), migrated)
 
 
+def test_a_duplicate_in_a_registry_stops_the_build_before_the_partitions(migrated):
+    tier2.write(
+        migrated / "dims" / f"snapshot={M}" / "biome.parquet",
+        "dims/biome",
+        pa.Table.from_pylist(
+            [
+                {"id": 2, "lineage": "root:Engineered"},
+                {"id": 3, "lineage": "root:Engineered"},
+            ],
+            tier2.SCHEMAS["dims/biome"],
+        ),
+    )
+    before = partitions()
+    with pytest.raises(Exception, match="duplicate key"):
+        build_tier1(proteindb_dsn(), migrated)
+    assert partitions() == before
+    assert loaded() == {}
+
+
 def test_a_migration_refuses_tier2_with_days_after_it(migrated):
     write_day(migrated, D, {hash_of(0x80, 1): 50}, "part")
     with pytest.raises(MigrateError, match="needs --protein-id-start"):
