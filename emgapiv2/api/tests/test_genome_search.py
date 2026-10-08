@@ -45,14 +45,16 @@ def test_submit_and_poll(ninja_api_client, search_index, monkeypatch):
     job = SimpleNamespace(id=str(uuid4()), status="READY")
     task.enqueue.return_value = task.get_result.return_value = job
     monkeypatch.setattr("emgapiv2.api.genome_search.run_lexicmap_search", task)
-    response = ninja_api_client.post("/genome-search/", json={"sequence": SEQUENCE})
+    response = ninja_api_client.post(
+        "/genomes/gene-search/", json={"sequence": SEQUENCE}
+    )
     assert response.status_code == 202
     assert response.json()["data"]["job_id"] == job.id
     payload = task.enqueue.call_args.kwargs["request_payload"]
     assert payload["indexes"] == [
         {"catalogue": search_index.catalogue_id, "path": search_index.artifact_path}
     ]
-    status_path = f"/genome-search/status/{job.id}/"
+    status_path = f"/genomes/gene-search/status/{job.id}/"
     assert ninja_api_client.get(status_path).json()["data"]["status"] == "READY"
 
     with patch(
@@ -68,7 +70,7 @@ def test_submit_and_poll(ninja_api_client, search_index, monkeypatch):
     search_index.catalogue.status = "retired"
     search_index.catalogue.save()
     assert ninja_api_client.get(status_path).json()["data"]["results"] == []
-    ninja_api_client.post("/genome-search/", json={"sequence": SEQUENCE})
+    ninja_api_client.post("/genomes/gene-search/", json={"sequence": SEQUENCE})
     assert task.enqueue.call_args.kwargs["request_payload"]["indexes"] == []
 
 
@@ -77,17 +79,20 @@ def test_failed_and_missing_job(ninja_api_client, monkeypatch):
     job_id = str(uuid4())
     task.get_result.return_value = SimpleNamespace(id=job_id, status="FAILED")
     monkeypatch.setattr("emgapiv2.api.genome_search.run_lexicmap_search", task)
-    response = ninja_api_client.get(f"/genome-search/status/{job_id}/")
+    response = ninja_api_client.get(f"/genomes/gene-search/status/{job_id}/")
     assert response.json()["data"]["status"] == "FAILED"
     assert response.json()["data"]["results"] is None
     task.get_result.side_effect = TaskResultDoesNotExist
-    assert ninja_api_client.get(f"/genome-search/status/{job_id}/").status_code == 404
+    assert (
+        ninja_api_client.get(f"/genomes/gene-search/status/{job_id}/").status_code
+        == 404
+    )
 
 
 def test_multipart():
     query = _parse_request(
         RequestFactory().post(
-            "/genome-search/",
+            "/genomes/gene-search/",
             {
                 "sequence_file": SimpleUploadedFile(
                     "query.fa", f">q\n{SEQUENCE}".encode()
@@ -104,6 +109,8 @@ def test_multipart():
 
 def test_invalid_sequence(ninja_api_client):
     assert (
-        ninja_api_client.post("/genome-search/", json={"sequence": "ACGT"}).status_code
+        ninja_api_client.post(
+            "/genomes/gene-search/", json={"sequence": "ACGT"}
+        ).status_code
         == 400
     )
