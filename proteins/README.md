@@ -148,6 +148,11 @@ From the frozen current database (`mgnprotein_ingestion`), once. Run in emgapi-v
    ```
 
    Delete `$OUT` once verified.
+5. **Resolve** the assemblies, in emgapi-v2's production environment, any time before cutover. It lists, by pipeline version, every assembly accession of the current database that emgapi-v2 does not know. The first load after cutover takes the dimensions from emgapi-v2, so these would be left out of every release. The team reviews the list before cutover.
+
+   ```
+   python manage.py proteindb_migrate resolve --source "$SRC"
+   ```
 
 ## Tests
 

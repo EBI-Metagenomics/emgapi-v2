@@ -10,6 +10,7 @@ import pyarrow.parquet as pq
 import pytest
 from django.core.management import CommandError, call_command
 
+import analyses.models as mg_models
 from proteins import tier2
 from proteins.accession.cli import main as mgyp_accession
 from proteins.flows.load import proteindb_dsn
@@ -20,6 +21,7 @@ from proteins.migrate import (
     build_tier2,
     export,
     export_dims,
+    unresolved,
     verify,
 )
 from proteins.tests.conftest import (
@@ -622,6 +624,39 @@ def test_command_verifies(rehearsed, current, settings, monkeypatch):
     add_a_contig_after_the_export(rehearsed)
     with pytest.raises(CommandError, match="1 checks failed"):
         call_command("proteindb_migrate", "verify", "--source", current)
+
+
+@pytest.fixture
+def analysed(current, mgnify_assemblies, raw_reads_mgnify_study):
+    """ERZ1, under 4.1 and 6.0, analysed in emgapi-v2, and ERZ5 under 5.0, not."""
+    assembly = mgnify_assemblies[0]
+    assembly.ena_accessions = ["ERZ1"]
+    assembly.save()
+    mg_models.Analysis.objects.create(
+        study=raw_reads_mgnify_study,
+        sample=assembly.sample,
+        assembly=assembly,
+        ena_study=raw_reads_mgnify_study.ena_study,
+        pipeline_version=mg_models.Analysis.PipelineVersions.v6,
+    )
+    query(
+        "INSERT INTO mgnprotein_ingestion.assembly VALUES (3, 'ERZ5', 1, 5.0, 2, false, false)"
+    )
+    return current
+
+
+def test_lists_the_assemblies_emgapi_v2_does_not_know(analysed):
+    assert unresolved(analysed) == (2, [("5.0", "ERZ5")])
+
+
+def test_command_lists_the_assemblies_emgapi_v2_does_not_know(analysed, capsys):
+    with pytest.raises(CommandError, match="1 of 2 assembly accessions resolve"):
+        call_command("proteindb_migrate", "resolve", "--source", analysed)
+    assert capsys.readouterr().out == "5.0\tERZ5\n"
+
+    query("DELETE FROM mgnprotein_ingestion.assembly WHERE accession = 'ERZ5'")
+    call_command("proteindb_migrate", "resolve", "--source", analysed)
+    assert "1 of 1 assembly accessions resolve" in capsys.readouterr().out
 
 
 # Step 3 of restarting allocation after lost commits.

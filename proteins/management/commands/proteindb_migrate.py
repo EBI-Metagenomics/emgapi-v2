@@ -12,6 +12,7 @@ from proteins.migrate import (
     build_tier2,
     export,
     export_dims,
+    unresolved,
     verify,
 )
 
@@ -82,6 +83,16 @@ class Command(BaseCommand):
             help="Rows of each prefix whose hash is checked (default: %(default)s)",
         )
 
+        resolving = steps.add_parser(
+            "resolve",
+            help="List the current database's assemblies that emgapi-v2 does not know",
+        )
+        resolving.add_argument(
+            "--source",
+            required=True,
+            help="libpq URI of the current database, with the password in ~/.pgpass",
+        )
+
     def handle(self, *args, step, **options):
         try:
             if step == "export":
@@ -93,6 +104,8 @@ class Command(BaseCommand):
                 )
             elif step == "tier1":
                 self.tier1(**options)
+            elif step == "resolve":
+                self.resolve(**options)
             else:
                 self.verify(**options)
         except MigrateError as e:
@@ -129,6 +142,16 @@ class Command(BaseCommand):
         self.stdout.write(
             self.style.SUCCESS("Tier 2 and Tier 1 match the current database")
         )
+
+    def resolve(self, source, **options):
+        total, missing = unresolved(source)
+        for version, accession in missing:
+            self.stdout.write(f"{version}\t{accession}")
+        resolved = total - len({accession for _, accession in missing})
+        message = f"{resolved} of {total} assembly accessions resolve"
+        if missing:
+            raise CommandError(message)
+        self.stdout.write(self.style.SUCCESS(message))
 
 
 def tier2_root() -> Path:

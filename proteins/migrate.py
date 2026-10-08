@@ -1,4 +1,4 @@
-"""The migration from the current database: its export, the Tier 2 build, the Tier 1 build, also used to rebuild Tier 1 from Tier 2, and their verification."""
+"""The migration from the current database: its export, the Tier 2 build, the Tier 1 build, also used to rebuild Tier 1 from Tier 2, and their verification, with the check of its assemblies against emgapi-v2."""
 
 import logging
 import shutil
@@ -15,7 +15,7 @@ import pyarrow as pa
 import pyarrow.dataset as ds
 import pyarrow.parquet as pq
 
-from proteins import tier2
+from proteins import dims, tier2
 
 logger = logging.getLogger(__name__)
 
@@ -408,3 +408,17 @@ def verify(source: str, dsn: str, root: Path, sample: int = 1_000_000) -> list[s
                     f" and {in_tier2.get(p, (0, 0))} in Tier 2"
                 )
     return failed
+
+
+def unresolved(source: str) -> tuple[int, list[tuple[str, str]]]:
+    """The current database's assemblies that emgapi-v2 does not know, as (pipeline version, accession), and how many accessions it has.
+
+    The first load after cutover takes the dimensions from emgapi-v2, so these would be left out of every release.
+    """
+    with psycopg.connect(source) as conn:
+        assemblies = conn.execute(
+            f"SELECT DISTINCT pipeline_version::text, accession FROM {SOURCE}.assembly"
+        ).fetchall()
+    accessions = sorted({accession for _, accession in assemblies})
+    known = {s.assembly_accession for s in dims.resolve(accessions)}
+    return len(accessions), sorted(a for a in assemblies if a[1] not in known)
