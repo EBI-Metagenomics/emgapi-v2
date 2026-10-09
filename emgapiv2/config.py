@@ -106,6 +106,12 @@ class MGnifyPipelineConfig(BaseModel):
 
     Provides common default values for pipeline repository, config file, and profile.
     Subclasses must override pipeline_repo and pipeline_git_revision.
+
+    git_revision_determines_pipeline_version: set True in subclasses whose Nextflow
+    release tags map onto MGnify versions (6.0.x -> v6, 6.1.x -> v6.1, 6.2.x -> v6.2).
+    The config is then rejected if pipeline_version (the MGnify version analyses are
+    recorded under) doesn't match pipeline_git_revision (the Nextflow version that runs).
+    Leave False for pipelines with their own versioning, e.g. miassembler v3.0.3.
     """
 
     pipeline_name: str = ...  # Required
@@ -116,9 +122,6 @@ class MGnifyPipelineConfig(BaseModel):
     pipeline_nf_profile: str = "codon"
     has_fire_access: bool = True  # Only available on-prem @ EBI
 
-    # Whether release tags of pipeline_git_revision map onto pipeline_version
-    # (e.g. 6.1.x -> v6.1), so the two can be checked against each other.
-    # A ClassVar rather than a field, so the guard can't be disabled via env config.
     git_revision_determines_pipeline_version: ClassVar[bool] = False
 
     # Basic resources
