@@ -1050,13 +1050,11 @@ class Analysis(
     def pipeline_version_from_config(
         cls, pipeline_version: str
     ) -> "Analysis.PipelineVersions":
-        normalized = pipeline_version.strip().lower().rstrip(".0")
-        try:
-            return getattr(cls.PipelineVersions, normalized)
-        except AttributeError as exc:
-            raise ValueError(
-                f"Unsupported pipeline version {pipeline_version!r}"
-            ) from exc
+        # Expects the canonical spelling MGnifyPipelineConfig normalises pipeline_version to
+        # on load ("v6", "v6.1"; see normalise_mgnify_pipeline_version).
+        # Don't normalise with rstrip(".0") anywhere: it strips characters, not a suffix,
+        # so "v10" would become "v1".
+        return cls.PipelineVersions(pipeline_version.upper())
 
     class AnalysisStates(FutureStrEnum):
         # TODO: this is pipeline specific - I think we need to move elsewhere or refactor (mbc)

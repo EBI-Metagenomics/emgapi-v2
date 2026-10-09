@@ -1,8 +1,8 @@
 import re
 from datetime import timedelta
-from typing import List, Pattern
+from typing import ClassVar, List, Pattern
 
-from pydantic import AnyHttpUrl, BaseModel, Field
+from pydantic import AnyHttpUrl, BaseModel, Field, field_validator, model_validator
 from pydantic.networks import MongoDsn, MySQLDsn
 from pydantic_settings import (
     BaseSettings,
@@ -62,12 +62,56 @@ class SlurmConfig(BaseModel):
     # if a flow does suspend_flow_run(wait_for_input...), how long do we wait for it to be resumed before giving up?
 
 
+MGNIFY_VERSION_PATTERN = re.compile(
+    r"^v?(?P<major>\d+)(?:\.(?P<minor>\d+))?$", re.IGNORECASE
+)
+NEXTFLOW_RELEASE_TAG_PATTERN = re.compile(
+    r"^v?(?P<major>\d+)\.(?P<minor>\d+)\.(?P<patch>\d+)$", re.IGNORECASE
+)
+
+
+def normalise_mgnify_pipeline_version(pipeline_version: str) -> str:
+    """
+    Normalise an MGnify pipeline version string, dropping a ".0" minor version.
+    E.g. "V6.0" -> "v6", "v6.1" -> "v6.1".
+    """
+    match = MGNIFY_VERSION_PATTERN.match(pipeline_version.strip())
+    if not match:
+        raise ValueError(f"Unsupported pipeline version {pipeline_version!r}")
+    major, minor = match.group("major"), match.group("minor")
+    return f"v{major}" if minor in (None, "0") else f"v{major}.{minor}"
+
+
+def mgnify_pipeline_version_for_nextflow_revision(git_revision: str) -> str:
+    """
+    Map a Nextflow pipeline release tag to the MGnify pipeline version it produces.
+    Nextflow 6.0.x -> MGnify v6, 6.1.x -> MGnify v6.1, 6.2.x -> MGnify v6.2.
+    Raises ValueError if the revision is not a release tag (e.g. a branch name),
+    since then the MGnify version cannot be verified.
+    """
+    match = NEXTFLOW_RELEASE_TAG_PATTERN.match(git_revision.strip())
+    if not match:
+        raise ValueError(
+            f"Pipeline git revision {git_revision!r} is not a release tag (vX.Y.Z), "
+            f"so the MGnify pipeline version cannot be derived from it"
+        )
+    return normalise_mgnify_pipeline_version(
+        f"{match.group('major')}.{match.group('minor')}"
+    )
+
+
 class MGnifyPipelineConfig(BaseModel):
     """
     Base configuration for MGnify Nextflow pipelines.
 
     Provides common default values for pipeline repository, config file, and profile.
     Subclasses must override pipeline_repo and pipeline_git_revision.
+
+    git_revision_determines_pipeline_version: set True in subclasses whose Nextflow
+    release tags map onto MGnify versions (6.0.x -> v6, 6.1.x -> v6.1, 6.2.x -> v6.2).
+    The config is then rejected if pipeline_version (the MGnify version analyses are
+    recorded under) doesn't match pipeline_git_revision (the Nextflow version that runs).
+    Leave False for pipelines with their own versioning, e.g. miassembler v3.0.3.
     """
 
     pipeline_name: str = ...  # Required
@@ -78,10 +122,38 @@ class MGnifyPipelineConfig(BaseModel):
     pipeline_nf_profile: str = "codon"
     has_fire_access: bool = True  # Only available on-prem @ EBI
 
+    git_revision_determines_pipeline_version: ClassVar[bool] = False
+
     # Basic resources
     pipeline_time_limit_days: int = 1
     samplesheet_chunk_size: int = 50
     nextflow_master_job_memory_gb: int = 8
+
+    @field_validator("pipeline_version")
+    @classmethod
+    def normalise_pipeline_version(cls, pipeline_version: str) -> str:
+        # Store one canonical spelling ("v6", "v6.1") so consumers can compare it directly
+        return normalise_mgnify_pipeline_version(pipeline_version)
+
+    @model_validator(mode="after")
+    def check_pipeline_version(self) -> "MGnifyPipelineConfig":
+        """
+        Guard against recording analyses under the wrong MGnify pipeline version,
+        e.g. running Nextflow pipeline 6.1.x while labelling results as MGnify v6.
+        Called on config load and again before recording analyses (config is mutable at runtime).
+        """
+        if not self.git_revision_determines_pipeline_version:
+            return self
+        expected = mgnify_pipeline_version_for_nextflow_revision(
+            self.pipeline_git_revision
+        )
+        if self.pipeline_version != expected:
+            raise ValueError(
+                f"MGnify pipeline version {self.pipeline_version!r} does not match Nextflow "
+                f"pipeline revision {self.pipeline_git_revision!r} "
+                f"(which corresponds to MGnify {expected!r})"
+            )
+        return self
 
 
 class AssemblerConfig(MGnifyPipelineConfig):
@@ -106,6 +178,7 @@ class AmpliconPipelineConfig(MGnifyPipelineConfig):
     pipeline_version: str = "v6"
     pipeline_repo: str = "ebi-metagenomics/amplicon-analysis-pipeline"
     pipeline_git_revision: str = "v6.0.6"
+    git_revision_determines_pipeline_version: ClassVar[bool] = True
 
     # Resources
     pipeline_time_limit_days: int = 5
