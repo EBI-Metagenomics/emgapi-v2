@@ -269,9 +269,15 @@ def import_out_of_production_assembly_analysis_results(
     # =========================================================================
     logger.info("Step 7: Finalizing study and creating summaries...")
 
+    # No batch partials to merge here, so write the study-level summaries
+    # straight to where downloads and copying expect them
+    mgnify_study.set_results_dir_default()
+    pipeline_config = EMG_CONFIG.assembly_analysis_pipeline
     generate_assembly_analysis_pipeline_summary(
         study_accession=mgnify_study.accession,
         asa_workspace=results_path / AssemblyAnalysisPipeline.ASA.value,
+        output_dir=mgnify_study.results_dir_path
+        / f"{pipeline_config.pipeline_name}_{pipeline_config.pipeline_version}",
     )
 
     add_assembly_study_summaries_to_downloads(mgnify_study.accession)
