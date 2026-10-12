@@ -171,6 +171,8 @@ deployments:
   schedule: null
   work_pool:
     name: slurm
+    job_variables:
+      time_limit: 12
 
 - name: sync_assembly_batch_results_deployment
   description: |-
