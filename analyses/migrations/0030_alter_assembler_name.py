@@ -20,6 +20,7 @@ class Migration(migrations.Migration):
                     ("megahit", "MEGAHIT"),
                     ("spades", "SPAdes"),
                     ("flye", "Flye"),
+                    ("metamdbg", "MetaMDBG"),
                 ],
                 max_length=20,
                 null=True,
