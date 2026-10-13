@@ -5,12 +5,6 @@ fileignoreconfig:
 - filename: .github/workflows/release_k8s.yml
   checksum: 0e93196d244417801fd40ad6bfa01f53a6bf04257371378a1dc3e14cbc7a04d8
 
-- filename: .github/workflows/release_mgyp_accession.yml
-  allowed_patterns: ['password: \$\{\{ secrets\.QUAY_PASSWORD \}\}']
-
-- filename: .github/workflows/test.yml
-  allowed_patterns: ["POSTGRES_PASSWORD: postgres"]
-
 - filename: README.md
   checksum: d8137e9ccf9810642995fd8874cda51b33a1bd41c90f968919e91b6483014d3c
 
@@ -90,7 +84,7 @@ fileignoreconfig:
   checksum: eb92653ba1c132c2b9f7c4689e5003038b9963462e4b84f132d4d3b39b7e79da
 
 - filename: emgapiv2/settings.py
-  checksum: 7f5aefa6b21be596b4737875e348e3bff4246c29728f884a8d8cda4aec760eda
+  checksum: d258d3aa03cfd5ebf524983ed798ece725a9a28a5f3373a871013e6432914e60
 
 - filename: emgapiv2/settings_test.py
   checksum: ded898400b4eda7e3cf75694af1b66235975a85eb5b8f49f3a2c708163a7aad4
@@ -119,10 +113,22 @@ fileignoreconfig:
 - filename: kvstore/tests.py
   allowed_patterns: [key, test_key, update_key]
 
-- filename: proteins/sql/tier1.sql
+- filename: proteins/dataset/metadata.py
+  allowed_patterns: [key]
+
+- filename: proteins/ingestion/analyses.py
+  allowed_patterns: [key]
+
+- filename: proteins/models.py
+  allowed_patterns: [key]
+
+- filename: proteins/routers.py
+  allowed_patterns: [keys]
+
+- filename: proteins/sql/mgyp_schema.sql
   ignore_detectors: [filename]
 
-- filename: proteins/sql/roles.sql
+- filename: proteins/sql/mgyp_roles.sql
   ignore_detectors: [filename]
 
 - filename: pyproject.toml
@@ -354,4 +360,3 @@ allowed_patterns:
 - lineage_key
 - artifact_key
 - key="possible-tpa-studies"
-- protein_key

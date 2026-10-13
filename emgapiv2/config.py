@@ -377,17 +377,14 @@ class RequestTrackerConfig(BaseModel):
     token: str = Field(None)
 
 
-class ProteinDBConfig(BaseModel):
-    root: str = "/nfs/production/rdf/metagenomics/projects/protein_db"
-    tier2_concurrency_limit: str = "proteindb-tier2"
-    # The mgyp-accession tag the pipeline pins, as docker://quay.io/microbiome-informatics/mgyp-accession:<tag>
-    accession_image: str = ""
-    backfill_parallelism: int = 8
-    # Below the cluster's MaxArraySize, which bounds array indices
-    backfill_array_size: int = 1000
-    # DuckDB goes over its memory limit while sorting, so this is about half of the 64 GB
-    # that the load and the migration's Tier 2 build run with.
-    sort_memory_limit: str = "32GB"
+class ProteinsConfig(BaseModel):
+    dataset_dir: str = "/nfs/production/rdf/metagenomics/projects/protein_db/dataset"
+    # DuckDB goes over its memory limit while it sorts, so this is about half of the job memory.
+    duckdb_memory_limit: str = "32GB"
+    # Analyses in one chunk flow run of the protein ingestion. A first estimate.
+    ingestion_chunk_size: int = 50
+    # The Prefect global concurrency limit, with a limit of 1, that the dataset update and the merge share.
+    dataset_concurrency_limit: str = "protein-dataset"
 
 
 class EMGConfig(BaseSettings):
@@ -414,7 +411,7 @@ class EMGConfig(BaseSettings):
     sentry_dsn: str = ""
     distribution: DataDistributionConfig = DataDistributionConfig()
     ebi_search: EBISearchConfig = EBISearchConfig()
-    proteindb: ProteinDBConfig = ProteinDBConfig()
+    proteins: ProteinsConfig = ProteinsConfig()
 
     model_config = SettingsConfigDict(
         env_prefix="emg_",

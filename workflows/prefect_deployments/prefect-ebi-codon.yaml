@@ -465,12 +465,65 @@ deployments:
     job_variables:
       memory: 4
 
-- name: proteindb_load_deployment
+- name: ingest_assembly_proteins_deployment
   description: |-
-    Move everything staged in the protein DB's Tier 1 into a new day of Tier 2, and compact Tier 2 when due.
-    Each run takes ownership of Tier 2 through the proteindb-tier2 concurrency limit, so runs never overlap.
-  entrypoint: proteins/flows/load.py:proteindb_load
+    Find the assembly analyses with annotations imported whose proteins are not in the MGYP database yet,
+    and start one chunk flow for each chunk of up to EMG_PROTEINS__INGESTION_CHUNK_SIZE analyses of one study. It does not wait for the chunks.
+    The trigger starts it when the results sync of an assembly analysis batch completes. Run it by hand to ingest existing analyses, of all studies or of one.
+  entrypoint: workflows/flows/proteins/ingest_assembly_proteins.py:ingest_assembly_proteins
   parameters: {}
+  concurrency_limit: 1
+  work_pool:
+    name: slurm
+    job_variables:
+      cpu: 1
+      memory: 4
+      time_limit: 2
+  triggers:
+    # Starts the protein ingestion when the results sync of an assembly analysis batch completes.
+    # The flow finds the pending analyses itself, so it needs no parameters from the event.
+    # TODO: check the event and related resource fields against the Prefect server.
+    - type: event
+      enabled: true
+      expect: ["prefect.flow-run.Completed"]
+      match_related:
+        prefect.resource.role: deployment
+        prefect.resource.name: sync_assembly_batch_results_deployment
+
+- name: ingest_assembly_proteins_chunk_deployment
+  description: |-
+    Give MGYPs to the proteins of each analysis of a chunk, and stage their rows for the dataset update.
+    A failed analysis does not stop the others; the flow fails at the end if any analysis failed. Started by ingest_assembly_proteins_deployment.
+  entrypoint: workflows/flows/proteins/ingest_assembly_proteins.py:ingest_assembly_proteins_chunk
+  parameters: {}
+  concurrency_limit: 8
+  work_pool:
+    name: slurm
+    job_variables:
+      cpu: 4
+      memory: 16
+      time_limit: 24
+
+- name: ingest_analysis_proteins_deployment
+  description: |-
+    Give MGYPs to the proteins of one MGYA, or of every annotated analysis of one ERZ, and stage their rows.
+    Run by hand, to test or to repeat one analysis.
+  entrypoint: workflows/flows/proteins/ingest_assembly_proteins.py:ingest_analysis_proteins
+  parameters: {}
+  work_pool:
+    name: slurm
+    job_variables:
+      cpu: 4
+      memory: 16
+      time_limit: 4
+
+- name: update_protein_dataset_deployment
+  description: |-
+    Move the staged rows of the MGYP database into a new day of the protein dataset, with its metadata snapshot.
+    It holds the protein-dataset concurrency limit from start to end, so it never runs with the merge. It only adds files.
+  entrypoint: workflows/flows/proteins/update_protein_dataset.py:update_protein_dataset
+  parameters: {}
+  concurrency_limit: 1
   work_pool:
     name: slurm
     job_variables:
@@ -483,11 +536,29 @@ deployments:
       # Activated at cutover, once the cluster team confirms that the partition tracks processes with cgroups.
       active: false
 
-- name: proteindb_check_deployment
+- name: merge_protein_dataset_deployment
   description: |-
-    Log the protein DB's state, and fail if any of its checks fails: an overdue load, rows staged too long,
-    an owner of Tier 2 whose job is not running, an incomplete Tier 2 day before the last load, or protein ids near their limit.
-  entrypoint: proteins/flows/check.py:proteindb_check
+    For each hash prefix of the protein dataset, merge the base file and the day files into a new base file.
+    It holds the protein-dataset concurrency limit. Do not run it while a protein release reads the protein dataset.
+  entrypoint: workflows/flows/proteins/merge_protein_dataset.py:merge_protein_dataset
+  parameters: {}
+  concurrency_limit: 1
+  work_pool:
+    name: slurm
+    job_variables:
+      cpu: 8
+      memory: 64
+      time_limit: 24
+  schedules:
+    - cron: "0 4 1 * *"
+      timezone: UTC
+      active: false
+
+- name: check_proteins_status_deployment
+  description: |-
+    Log the state of the MGYP database and of the protein dataset, and fail if any of its checks fails: an overdue dataset update,
+    rows staged too long, an incomplete day before the last update, or protein ids near their limit.
+  entrypoint: workflows/flows/proteins/check_proteins_status.py:check_proteins_status
   parameters: {}
   work_pool:
     name: slurm
@@ -498,18 +569,18 @@ deployments:
   schedules:
     - cron: "0 8 * * *"
       timezone: UTC
-      # Activated at cutover, with the load's.
+      # Activated at cutover, with the dataset update's.
       active: false
 
-- name: proteindb_backfill_deployment
+- name: export_assembly_analyses_deployment
   description: |-
-    Submit mgyp-accession, as SLURM arrays, for every completed v6 assembly analysis the protein DB has not registered, or only those of one study.
-    Run by hand. It does not wait for the arrays: run it again once they have ended, and it submits only what is still unregistered.
-  entrypoint: proteins/flows/backfill.py:proteindb_backfill
+    Write every assembly analysis, by ERZ accession and pipeline version, with its MGYA, study, biome and flags, to a Parquet file.
+    Run by hand, for the legacy protein import.
+  entrypoint: workflows/flows/proteins/export_assembly_analyses.py:export_assembly_analyses
   parameters: {}
   work_pool:
     name: slurm
     job_variables:
       cpu: 1
-      memory: 4
+      memory: 8
       time_limit: 2
