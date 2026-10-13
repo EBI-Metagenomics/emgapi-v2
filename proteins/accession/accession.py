@@ -1,14 +1,17 @@
-"""Steps 3 and 4 of accessioning: looking up, and staging in one transaction."""
+"""Steps 3 and 4 of accessioning: looking up, and staging in one transaction. Then the FAA with MGYPs, for the gene calling path."""
 
+import gzip
 import logging
+import os
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
-from typing import Callable, ContextManager
+from pathlib import Path
+from typing import Callable, ContextManager, Iterable
 
 import psycopg
 from psycopg import sql
 
-from .inputs import Input
+from .inputs import Input, Occurrence
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +28,7 @@ class IncompleteRerun(Exception):
 def accession(
     connect: Connect,
     assembly: str,
+    source: str,
     pipeline_version: str,
     input: Input,
     analysis_accession: str,
@@ -32,11 +36,15 @@ def accession(
 ) -> dict[bytes, int]:
     """Each protein's id, giving new ids to the proteins that have none and staging them.
 
+    Safe to run again: when the assembly proteins record exists, it stages nothing and returns
+    the id of every protein.
+
     :param connect: Gives a connection to the MGYP database, for example proteins.routers.mgyp_connection.
     :param assembly: The ENA assembly accession.
-    :param pipeline_version: The pipeline's major.minor.
-    :param input: The analysis's proteins, contigs and occurrences, from read_input().
-    :param analysis_accession: The MGYA of the analysis that predicted the genes.
+    :param source: The pipeline that predicted the genes: "assembly_analysis" or "gene_calling".
+    :param pipeline_version: The source pipeline's major.minor.
+    :param input: The proteins, contigs and occurrences, from read_input().
+    :param analysis_accession: The MGYA of the assembly analysis.
     :param connections: How many connections the lookups use.
     """
     hashes = [hash for hash, _ in input.proteins]
@@ -46,7 +54,14 @@ def accession(
             conn, sorted({(o.caller_name, o.caller_version) for o in input.occurrences})
         )
         staged = stage(
-            conn, assembly, pipeline_version, input, ids, callers, analysis_accession
+            conn,
+            assembly,
+            source,
+            pipeline_version,
+            input,
+            ids,
+            callers,
+            analysis_accession,
         )
     if staged is not None:
         return ids | staged
@@ -56,12 +71,13 @@ def accession(
     missing = len(hashes) - len(ids)
     if missing:
         raise IncompleteRerun(
-            f"The assembly proteins record {assembly} {pipeline_version} already exists,"
+            f"The assembly proteins record {assembly} {source} {pipeline_version} already exists,"
             f" but {missing} of its proteins have no MGYP"
         )
     logger.warning(
-        "The assembly proteins record %s %s already exists; nothing was staged",
+        "The assembly proteins record %s %s %s already exists; nothing was staged",
         assembly,
+        source,
         pipeline_version,
     )
     return ids
@@ -160,6 +176,7 @@ def register_gene_callers(
 def stage(
     conn: psycopg.Connection,
     assembly: str,
+    source: str,
     pipeline_version: str,
     input: Input,
     found: dict[bytes, int],
@@ -170,18 +187,19 @@ def stage(
 
     :param conn: A connection to the MGYP database, in autocommit.
     :param assembly: The ENA assembly accession.
-    :param pipeline_version: The pipeline's major.minor.
-    :param input: The analysis's proteins, contigs and occurrences, from read_input().
+    :param source: The pipeline that predicted the genes: "assembly_analysis" or "gene_calling".
+    :param pipeline_version: The source pipeline's major.minor.
+    :param input: The proteins, contigs and occurrences, from read_input().
     :param found: The ids the lookup found.
     :param callers: Each gene caller's id, by (name, version).
-    :param analysis_accession: The MGYA of the analysis that predicted the genes.
+    :param analysis_accession: The MGYA of the assembly analysis.
     """
     staged = None
     with conn.transaction():
         row = conn.execute(
-            "INSERT INTO assembly_proteins (assembly_accession, pipeline_version, analysis_accession)"
-            " VALUES (%s, %s, %s) ON CONFLICT DO NOTHING RETURNING id",
-            [assembly, pipeline_version, analysis_accession],
+            "INSERT INTO assembly_proteins (assembly_accession, source, pipeline_version, analysis_accession)"
+            " VALUES (%s, %s, %s, %s) ON CONFLICT DO NOTHING RETURNING id",
+            [assembly, source, pipeline_version, analysis_accession],
         ).fetchone()
         if row is None:
             raise psycopg.Rollback
@@ -277,3 +295,51 @@ def mgyp(id: int) -> str:
     :param id: The protein's id.
     """
     return f"MGYP{id:012d}"
+
+
+def write_proteins_with_mgyps(
+    path: Path, occurrences: list[Occurrence], ids: dict[bytes, int]
+) -> None:
+    """The input FASTA with each gene's MGYP after its ID: >{gene_id} {MGYP} {description}.
+
+    The first word stays the gene ID, so the FASTA still matches the GFF.
+    PROTOTYPE: the header format is not agreed with the ASA team yet.
+
+    :param path: The output file, gzipped if the name ends in .gz.
+    :param occurrences: The input's occurrences, in input order.
+    :param ids: Each protein hash's id, from accession().
+    """
+    write_lines(
+        path,
+        (
+            ">{}\n{}\n".format(
+                " ".join(filter(None, (o.gene_id, mgyp(ids[o.hash]), o.description))),
+                o.sequence,
+            )
+            for o in occurrences
+        ),
+    )
+
+
+def write_lines(path: Path, lines: Iterable[str]) -> None:
+    """Writes under a temporary name and renames into place, so that the file is complete or absent.
+
+    :param path: The file to write, gzipped if the name ends in .gz.
+    :param lines: Text lines, each ending in a newline.
+    """
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(f".{path.name}.tmp")
+    with open(tmp, "wb") as raw:
+        out = (
+            gzip.GzipFile(filename="", fileobj=raw, mode="wb", compresslevel=6, mtime=0)
+            if path.suffix == ".gz"
+            else raw
+        )
+        for line in lines:
+            out.write(line.encode())
+        if out is not raw:
+            out.close()
+        raw.flush()
+        os.fsync(raw.fileno())
+    os.replace(tmp, path)

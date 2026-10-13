@@ -377,6 +377,27 @@ class RequestTrackerConfig(BaseModel):
     token: str = Field(None)
 
 
+class GeneCallingPipelineConfig(MGnifyPipelineConfig):
+    """The gene calling pipeline (github.com/EBI-Metagenomics/genecalling-pipeline): Pyrodigal, FragGeneScanRS and their merge.
+
+    It takes a samplesheet of sample,fasta. It does not rename contigs, filter them, or mask RNA genes.
+    """
+
+    pipeline_name: str = "genecalling"
+    # major.minor: the version of the assembly proteins records of source gene_calling in the MGYP database.
+    # The pipeline is 1.0.0dev, with no release yet.
+    pipeline_version: str = "1.0"
+    pipeline_repo: str = "ebi-metagenomics/genecalling-pipeline"
+    pipeline_git_revision: str = "main"
+    pipeline_time_limit_days: int = 1
+    nextflow_master_job_memory_gb: int = 1
+
+    # The folder of the merged outputs for each sample: <outdir>/<ERZ>/<folder>/<ERZ>.faa.gz, .ffn.gz, .gff.gz
+    combined_gene_caller_folder: str = "combined_gene_caller"
+    # The FAA with MGYPs that the accessioning step writes for ASA, next to the pipeline outputs
+    proteins_with_mgyps_folder: str = "mgyp"
+
+
 class ProteinsConfig(BaseModel):
     dataset_dir: str = "/nfs/production/rdf/metagenomics/projects/protein_db/dataset"
     # DuckDB goes over its memory limit while it sorts, so this is about half of the job memory.
@@ -385,6 +406,9 @@ class ProteinsConfig(BaseModel):
     ingestion_chunk_size: int = 50
     # The Prefect global concurrency limit, with a limit of 1, that the dataset update and the merge share.
     dataset_concurrency_limit: str = "protein-dataset"
+    # The Prefect global concurrency limit on the accessioning step of the gene calling flow.
+    # Each step uses up to 16 connections to the MGYP database.
+    accessioning_concurrency_limit: str = "protein-accessioning"
 
 
 class EMGConfig(BaseSettings):
@@ -396,6 +420,7 @@ class EMGConfig(BaseSettings):
     assembler: AssemblerConfig = AssemblerConfig()
     virify_pipeline: VirifyPipelineConfig = VirifyPipelineConfig()
     map_pipeline: MapPipelineConfig = MapPipelineConfig()
+    gene_calling_pipeline: GeneCallingPipelineConfig = GeneCallingPipelineConfig()
     ena: ENAConfig = ENAConfig()
     environment: str = "development"
     legacy_service: LegacyServiceConfig = LegacyServiceConfig()

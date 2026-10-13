@@ -13,7 +13,13 @@ from django.utils import timezone
 from django.utils.timezone import now
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from analyses.models import Analysis, Study, TimeStampedModel
+from analyses.models import (
+    Analysis,
+    Assembly,
+    PredictedGenesFiles,
+    Study,
+    TimeStampedModel,
+)
 from emgapiv2.model_utils import JSONFieldWithSchema
 
 from .prefect_utils.slurm_policies import _SlurmResubmitPolicy
@@ -470,6 +476,10 @@ class AssemblyAnalysisBatchManager(models.Manager):
 
         analyses_qs = analyses_qs.exclude(Exists(batched_analyses_subquery))
 
+        # Filter out analyses that take their proteins from a gene calling: the gene_call_assembly
+        # flow puts each one in a batch when its FAA with MGYPs is ready.
+        analyses_qs = analyses_qs.filter(gene_calling__isnull=True)
+
         # Filter out completed analyses
         if skip_completed:
             analyses_qs = analyses_qs.exclude_by_statuses(
@@ -881,3 +891,86 @@ class AssemblyAnalysisBatch(StudyAnalysisBatch):
             self.save()
 
         return self
+
+
+class AssemblyGeneCalling(TimeStampedModel):
+    """One run of the gene calling pipeline and the protein accessioning on one assembly, for one assembly analysis.
+
+    The gene_call_assembly flow fills it. The flow makes the analysis (MGYA) first, then calls the genes,
+    gives MGYPs to the proteins, and hands the FAA with MGYPs over to the assembly analysis.
+    In the MGYP database, its record is the assembly proteins record of source "gene_calling",
+    with the same ERZ, pipeline version and MGYA.
+    """
+
+    assembly = models.ForeignKey(
+        Assembly, on_delete=models.CASCADE, related_name="gene_callings"
+    )
+    # The assembly analysis that takes the FAA with MGYPs.
+    analysis = models.OneToOneField(
+        Analysis, on_delete=models.CASCADE, related_name="gene_calling"
+    )
+    pipeline_version = models.CharField(
+        max_length=20, help_text="major.minor of the gene calling pipeline"
+    )
+    workspace_dir = models.CharField(
+        max_length=500, help_text="The output directory of the gene calling pipeline"
+    )
+
+    gene_calling_status = models.CharField(
+        max_length=20,
+        choices=AssemblyAnalysisPipelineStatus,
+        default=AssemblyAnalysisPipelineStatus.PENDING,
+    )
+    accessioning_status = models.CharField(
+        max_length=20,
+        choices=AssemblyAnalysisPipelineStatus,
+        default=AssemblyAnalysisPipelineStatus.PENDING,
+        help_text="Completed only when the FAA with MGYPs is on disk",
+    )
+
+    # The id of the assembly proteins record in the MGYP database. No foreign key across databases.
+    assembly_proteins_id = models.IntegerField(null=True, blank=True)
+
+    prefect_flow_run_id = models.CharField(max_length=100, null=True, blank=True)
+    last_error = models.TextField(null=True, blank=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["assembly", "pipeline_version"],
+                name="assembly_gene_calling_version",
+            )
+        ]
+
+    def __str__(self):
+        return f"AssemblyGeneCalling {self.assembly.first_accession} {self.pipeline_version}"
+
+    def assembly_fasta(self) -> Path:
+        """The contigs of the assembly, downloaded from ENA: the input of the pipeline, and the contigs of the accessioning."""
+        erz = self.assembly.first_accession
+        return Path(self.workspace_dir) / "input" / f"{erz}.fasta.gz"
+
+    def outputs(self) -> PredictedGenesFiles:
+        """The outputs of the gene calling pipeline for this assembly.
+
+        The pipeline does not rename or filter contigs, so the contigs are the input FASTA, with no contig map.
+        """
+        config = settings.EMG_CONFIG.gene_calling_pipeline
+        erz = self.assembly.first_accession
+        results = Path(self.workspace_dir) / erz / config.combined_gene_caller_folder
+        return PredictedGenesFiles(
+            proteins=results / f"{erz}.faa.gz",
+            genes=results / f"{erz}.gff.gz",
+            contigs=self.assembly_fasta(),
+        )
+
+    def proteins_with_mgyps(self) -> Path:
+        """The FAA with MGYPs that the accessioning step writes, and ASA takes as input."""
+        config = settings.EMG_CONFIG.gene_calling_pipeline
+        erz = self.assembly.first_accession
+        return (
+            Path(self.workspace_dir)
+            / erz
+            / config.proteins_with_mgyps_folder
+            / f"{erz}_mgyp.faa.gz"
+        )

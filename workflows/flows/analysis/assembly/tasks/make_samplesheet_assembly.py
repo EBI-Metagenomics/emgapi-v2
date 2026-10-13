@@ -74,6 +74,10 @@ def make_samplesheet_assembly(
         "human_reference": "",
         "phix_reference": "",
     }
+    # TODO (ASA team): when ASA has an input mode for proteins, give it the outputs of the gene
+    # calling of each analysis that has one (analysis__gene_calling, workflows.AssemblyGeneCalling):
+    # the filtered contigs, the FAA with MGYPs (proteins_with_mgyps()) and the GFF. In that mode
+    # ASA does not rename contigs, run QC, detect RNA or call genes again.
 
     sample_sheet_csv = queryset_to_samplesheet(
         queryset=assembly_batch_jobs,

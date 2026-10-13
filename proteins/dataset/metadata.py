@@ -17,9 +17,9 @@ class MissingAnalyses(Exception):
 
 
 def build_snapshot(assembly_proteins: pa.Table) -> pa.Table:
-    """The metadata/assembly_proteins table for every assembly proteins record.
+    """The metadata/assembly_proteins table for every assembly proteins record, of either source.
 
-    :param assembly_proteins: The assembly_proteins rows: id, assembly_accession, pipeline_version, analysis_accession.
+    :param assembly_proteins: The assembly_proteins rows: id, assembly_accession, source, pipeline_version, analysis_accession.
     :return: The table in the metadata/assembly_proteins schema.
     :raises MissingAnalyses: When an MGYA is not in emgapi-v2.
     """
@@ -58,6 +58,7 @@ def build_snapshot(assembly_proteins: pa.Table) -> pa.Table:
             {
                 "assembly_proteins_id": record["id"],
                 "assembly_accession": record["assembly_accession"],
+                "source": record["source"],
                 "pipeline_version": record["pipeline_version"],
                 "analysis_accession": record["analysis_accession"],
                 "study_accession": analysis["study__accession"],

@@ -74,11 +74,19 @@ class Protein(MGnifyProteinsBase):
 
 
 class AssemblyProteins(MGnifyProteinsBase):
-    """The proteins of one assembly, predicted by one version of the MGnify analysis pipeline."""
+    """The proteins of one assembly analysis, predicted by one version of the source pipeline."""
+
+    class Source(models.TextChoices):
+        """The pipeline that predicted the genes."""
+
+        ASSEMBLY_ANALYSIS = "assembly_analysis", "Assembly analysis"
+        GENE_CALLING = "gene_calling", "Gene calling + assembly analysis"
 
     assembly_accession = models.TextField()  # ERZ
-    pipeline_version = models.TextField()  # major.minor, for example "6.0"
-    # The analysis that predicted the genes (MGYA).
+    source = models.TextField(choices=Source)
+    # major.minor of the source pipeline, for example "6.0" (ASA) or "1.0" (gene calling)
+    pipeline_version = models.TextField()
+    # The assembly analysis (MGYA). With source gene_calling, the analysis that took the proteins.
     analysis_accession = models.TextField(unique=True)
     ingested_at = models.DateTimeField()
 
@@ -87,24 +95,26 @@ class AssemblyProteins(MGnifyProteinsBase):
         verbose_name_plural = "assembly proteins"
         constraints = [
             models.UniqueConstraint(
-                fields=["assembly_accession", "pipeline_version"],
-                name="assembly_proteins_assembly_version",
+                fields=["assembly_accession", "source", "pipeline_version"],
+                name="assembly_proteins_assembly_source_version",
             )
         ]
 
     def __str__(self):
-        return f"{self.assembly_accession} {self.pipeline_version} ({self.analysis_accession})"
+        return f"{self.assembly_accession} {self.source} {self.pipeline_version} ({self.analysis_accession})"
 
 
 class GeneCaller(MGnifyProteinsBase):
     """A gene caller and its version, for example Pyrodigal 3.6.3."""
 
-    # Each gene caller of each pipeline version (major.minor), and whether its FASTA headers carry a partial= flag.
-    # TODO (team): older pipeline versions, for example "5.0".
-    BY_PIPELINE_VERSION: dict[str, GeneCallers] = {
-        "6.0": V6_GENE_CALLERS,
-        "6.1": V6_GENE_CALLERS,
-        "6.2": V6_GENE_CALLERS,
+    # Each gene caller of each source and pipeline version (major.minor), and whether its FASTA headers carry a partial= flag.
+    # TODO (team): older analysis pipeline versions, for example "5.0".
+    BY_PIPELINE_VERSION: dict[tuple[str, str], GeneCallers] = {
+        (AssemblyProteins.Source.ASSEMBLY_ANALYSIS, "6.0"): V6_GENE_CALLERS,
+        (AssemblyProteins.Source.ASSEMBLY_ANALYSIS, "6.1"): V6_GENE_CALLERS,
+        (AssemblyProteins.Source.ASSEMBLY_ANALYSIS, "6.2"): V6_GENE_CALLERS,
+        # genecalling-pipeline runs the same combined gene caller (Pyrodigal, FragGeneScanRS, merge) as ASA V6.
+        (AssemblyProteins.Source.GENE_CALLING, "1.0"): V6_GENE_CALLERS,
     }
 
     id = models.SmallAutoField(primary_key=True)
@@ -123,18 +133,23 @@ class GeneCaller(MGnifyProteinsBase):
         return f"{self.name} {self.version}"
 
     @classmethod
-    def of_pipeline_version(cls, pipeline_version: str) -> GeneCallers:
+    def of_pipeline_version(
+        cls,
+        pipeline_version: str,
+        source: AssemblyProteins.Source = AssemblyProteins.Source.ASSEMBLY_ANALYSIS,
+    ) -> GeneCallers:
         """The gene callers of a pipeline version.
 
         :param pipeline_version: major.minor, for example "6.1".
+        :param source: The pipeline that predicted the genes.
         :return: Each gene caller name, and whether its headers carry a partial= flag.
         :raises UnsupportedPipelineVersion: When the version is not known.
         """
         try:
-            return cls.BY_PIPELINE_VERSION[pipeline_version]
+            return cls.BY_PIPELINE_VERSION[source, pipeline_version]
         except KeyError:
             raise UnsupportedPipelineVersion(
-                f"The gene callers of pipeline version {pipeline_version} are not known"
+                f"The gene callers of {source} pipeline version {pipeline_version} are not known"
             ) from None
 
 

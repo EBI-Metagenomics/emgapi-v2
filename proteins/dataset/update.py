@@ -32,6 +32,7 @@ ASSEMBLY_PROTEINS = pa.schema(
     [
         pa.field("id", pa.int32(), False),
         pa.field("assembly_accession", pa.string(), False),
+        pa.field("source", pa.string(), False),
         pa.field("pipeline_version", pa.string(), False),
         pa.field("analysis_accession", pa.string(), False),
     ]
@@ -141,7 +142,7 @@ def read_staged_rows(scratch: Path) -> Staged:
             cursor.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY")
             assembly_proteins_ids = choose_assembly_proteins(cursor)
             cursor.execute(
-                "SELECT id, assembly_accession, pipeline_version, analysis_accession"
+                "SELECT id, assembly_accession, source, pipeline_version, analysis_accession"
                 " FROM assembly_proteins"
             )
             assembly_proteins = to_table(cursor.fetchall(), ASSEMBLY_PROTEINS)

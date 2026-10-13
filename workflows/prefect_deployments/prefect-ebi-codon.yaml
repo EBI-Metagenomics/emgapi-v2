@@ -517,6 +517,21 @@ deployments:
       memory: 16
       time_limit: 4
 
+- name: gene_call_assembly_deployment
+  description: |-
+    Gene calling + assembly analysis of one assembly (ERZ): make the V6 analysis (MGYA), download the assembly,
+    run genecalling-pipeline, give MGYPs to the proteins, write the FAA with MGYPs, and start run_assembly_batch_deployment for the analysis.
+    Each step is skipped when it is completed already, so run it again after a failure. The tracker is AssemblyGeneCalling.
+    The accessioning step holds a slot of the protein-accessioning concurrency limit.
+  entrypoint: workflows/flows/proteins/gene_call_assembly.py:gene_call_assembly
+  parameters: {}
+  work_pool:
+    name: slurm
+    job_variables:
+      cpu: 4
+      memory: 16
+      time_limit: 30
+
 - name: update_protein_dataset_deployment
   description: |-
     Move the staged rows of the MGYP database into a new day of the protein dataset, with its metadata snapshot.

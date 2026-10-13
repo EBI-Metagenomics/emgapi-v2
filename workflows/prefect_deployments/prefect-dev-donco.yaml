@@ -379,6 +379,17 @@ deployments:
       memory: 4
       time_limit: 1
 
+- name: gene_call_assembly_deployment
+  description: |-
+    Gene calling + assembly analysis of one assembly: make the MGYA, run genecalling-pipeline, give MGYPs to the proteins, and start the assembly analysis batch.
+  entrypoint: workflows/flows/proteins/gene_call_assembly.py:gene_call_assembly
+  parameters: {}
+  work_pool:
+    name: slurm
+    job_variables:
+      memory: 4
+      time_limit: 4
+
 - name: update_protein_dataset_deployment
   description: |-
     Move the staged rows of the MGYP database into a new day of the protein dataset.

@@ -54,6 +54,7 @@ SCHEMAS = {
     "metadata/assembly_proteins": _schema(
         ("assembly_proteins_id", pa.int32(), False),
         ("assembly_accession", pa.string(), False),
+        ("source", pa.string(), False),  # assembly_analysis or gene_calling
         ("pipeline_version", pa.string(), False),
         ("analysis_accession", pa.string(), False),
         ("study_accession", pa.string(), False),

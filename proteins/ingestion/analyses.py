@@ -24,12 +24,16 @@ class IngestionResult(NamedTuple):
 
 
 def annotated_assembly_analyses():
-    """Assembly analyses whose annotations emgapi-v2 has imported, of any pipeline version."""
+    """Assembly analyses whose annotations emgapi-v2 has imported, of any pipeline version.
+
+    Leaves out the analyses that took their proteins from a gene calling (workflows.AssemblyGeneCalling):
+    the gene_call_assembly flow has already given MGYPs to those proteins.
+    """
     return (
         Analysis.objects.filter_by_statuses(
             [Analysis.AnalysisStates.ANALYSIS_ANNOTATIONS_IMPORTED]
         )
-        .filter(assembly__isnull=False)
+        .filter(assembly__isnull=False, gene_calling__isnull=True)
         .select_related("assembly", "study")
     )
 
@@ -47,7 +51,9 @@ def find_pending_analyses(study_accession: str | None = None) -> list[Analysis]:
         analyses = analyses.filter(study__accession=study_accession)
     # Loads every assembly proteins key into memory. Good enough for the prototype.
     known = set(
-        AssemblyProteins.objects.values_list("assembly_accession", "pipeline_version")
+        AssemblyProteins.objects.filter(
+            source=AssemblyProteins.Source.ASSEMBLY_ANALYSIS
+        ).values_list("assembly_accession", "pipeline_version")
     )
     pending = []
     for analysis in analyses:
@@ -107,7 +113,9 @@ def ingest_analysis(analysis_accession: str) -> IngestionResult:
     erz = analysis.assembly.first_accession
     version = analysis.pipeline_major_minor
     if AssemblyProteins.objects.filter(
-        assembly_accession=erz, pipeline_version=version
+        assembly_accession=erz,
+        source=AssemblyProteins.Source.ASSEMBLY_ANALYSIS,
+        pipeline_version=version,
     ).exists():
         logger.info(
             f"The assembly proteins record {erz} {version} exists; skipping {analysis_accession}"
@@ -119,10 +127,16 @@ def ingest_analysis(analysis_accession: str) -> IngestionResult:
         files.proteins,
         files.genes,
         files.contigs,
+        files.contig_map,
         gene_callers=GeneCaller.of_pipeline_version(version),
     )
     ids = accession(
-        mgyp_connection, erz, version, input, analysis_accession=analysis_accession
+        mgyp_connection,
+        erz,
+        AssemblyProteins.Source.ASSEMBLY_ANALYSIS.value,
+        version,
+        input,
+        analysis_accession=analysis_accession,
     )
     logger.info(
         f"Ingested {analysis_accession} ({erz} {version}): {len(ids)} proteins,"

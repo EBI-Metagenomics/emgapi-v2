@@ -890,11 +890,13 @@ class PublicAnalysisManagerIncludingAnnotations(
 
 # PROTOTYPE: fabricated for the proteins app. The analyses app owns this type.
 class PredictedGenesFiles(NamedTuple):
-    """The gene prediction outputs of an assembly analysis."""
+    """The gene prediction outputs of an assembly analysis, or of a gene calling."""
 
     proteins: Path  # protein FASTA (FAA)
     genes: Path  # GFF of the predicted genes
     contigs: Path  # contig FASTA that the genes are on
+    # TSV of the contig renames (original, renamed), if known
+    contig_map: Path | None = None
 
 
 class Analysis(

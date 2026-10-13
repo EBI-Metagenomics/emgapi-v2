@@ -23,10 +23,12 @@ class ReadOnlyAdmin(ModelAdmin):
 class AssemblyProteinsAdmin(ReadOnlyAdmin):
     list_display = (
         "assembly_accession",
+        "source",
         "pipeline_version",
         "analysis_accession",
         "ingested_at",
     )
+    list_filter = ("source",)
     search_fields = ("assembly_accession", "analysis_accession")
     show_full_result_count = False
 
