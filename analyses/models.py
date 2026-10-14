@@ -1050,10 +1050,6 @@ class Analysis(
     def pipeline_version_from_config(
         cls, pipeline_version: str
     ) -> "Analysis.PipelineVersions":
-        # Expects the canonical spelling MGnifyPipelineConfig normalises pipeline_version to
-        # on load ("v6", "v6.1"; see normalise_mgnify_pipeline_version).
-        # Don't normalise with rstrip(".0") anywhere: it strips characters, not a suffix,
-        # so "v10" would become "v1".
         return cls.PipelineVersions(pipeline_version.upper())
 
     class AnalysisStates(FutureStrEnum):
