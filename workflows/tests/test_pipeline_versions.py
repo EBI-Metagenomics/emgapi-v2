@@ -12,15 +12,28 @@ AMPLICON_CONFIG = (
 )
 
 
-@patch(f"{AMPLICON_CONFIG}.pipeline_git_revision", "v6.1.4")
-@patch(f"{AMPLICON_CONFIG}.pipeline_version", "v6.1")
-def test_get_current_amplicon_pipeline_version_matching_revision():
-    assert (
-        get_current_pipeline_version_for_experiment_type(
-            Analysis.ExperimentTypes.AMPLICON
+@pytest.mark.parametrize(
+    "pipeline_version, git_revision, expected",
+    [
+        ("v6.1", "v6.1.4", Analysis.PipelineVersions.v6_1),
+        # Values set at runtime skip the config validator, so are not yet normalised
+        ("V6.1", "v6.1.4", Analysis.PipelineVersions.v6_1),
+        ("v6.0", "v6.0.6", Analysis.PipelineVersions.v6),
+    ],
+)
+def test_get_current_amplicon_pipeline_version_matching_revision(
+    pipeline_version, git_revision, expected
+):
+    with (
+        patch(f"{AMPLICON_CONFIG}.pipeline_version", pipeline_version),
+        patch(f"{AMPLICON_CONFIG}.pipeline_git_revision", git_revision),
+    ):
+        assert (
+            get_current_pipeline_version_for_experiment_type(
+                Analysis.ExperimentTypes.AMPLICON
+            )
+            == expected
         )
-        == Analysis.PipelineVersions.v6_1
-    )
 
 
 @patch(f"{AMPLICON_CONFIG}.pipeline_git_revision", "v6.2.0")
