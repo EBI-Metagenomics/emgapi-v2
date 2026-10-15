@@ -123,3 +123,19 @@ def read_assembly(directory: Path):
     return read_input(
         directory / "in.faa", directory / "in.gff", directory / "contigs.fasta"
     )
+
+
+@pytest.fixture
+def mgyp_as_accession(emptied_mgyp_db):
+    """Django's mgyp alias connects as proteindb_accession, as in production, and finds the schema at login.
+
+    Restored before emptied_mgyp_db's teardown, which needs the owner.
+    """
+    settings = connections[MGYP].settings_dict
+    saved, role = dict(settings), "proteindb_accession"
+    names = "USER", "PASSWORD"
+    settings.update(dict.fromkeys(names, role))
+    connections[MGYP].close()
+    yield
+    connections[MGYP].close()
+    settings.update(saved)

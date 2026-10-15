@@ -36,16 +36,26 @@ def annotated_assembly_analyses():
 
 
 def find_pending_analyses(study_accession: str | None = None) -> list[Analysis]:
-    """Assembly analyses with annotations imported whose assembly proteins record is not in the MGYP database.
+    """Assembly analyses with annotations imported, of a pipeline version with gene-caller rules, whose assembly proteins record is not in the MGYP database.
 
-    Of several analyses of one assembly with one pipeline version, the first is taken.
+    Of several analyses of one assembly with one pipeline version, the one with the lowest id is
+    taken, whatever its study, so that two chunks never accession the same record.
 
     :param study_accession: An MGYS accession, to list only its analyses.
     :return: The pending analyses, ordered by study and id.
     """
-    analyses = annotated_assembly_analyses().order_by("study_id", "id")
-    if study_accession:
-        analyses = analyses.filter(study__accession=study_accession)
+    with_rules = {
+        version
+        for source, version in GeneCaller.BY_PIPELINE_VERSION
+        if source == AssemblyProteins.Source.ASSEMBLY_ANALYSIS
+    }
+    analyses = annotated_assembly_analyses().filter(
+        pipeline_version__in=[
+            version
+            for version in Analysis.PipelineVersions
+            if version.label.removeprefix("v") in with_rules
+        ]
+    )
     # Loads every assembly proteins key into memory. Good enough for the prototype.
     known = set(
         AssemblyProteins.objects.filter(
@@ -53,12 +63,15 @@ def find_pending_analyses(study_accession: str | None = None) -> list[Analysis]:
         ).values_list("assembly_accession", "pipeline_version")
     )
     pending = []
-    for analysis in analyses:
+    for analysis in analyses.order_by("id"):
         record = (analysis.assembly.first_accession, analysis.pipeline_major_minor)
         if record not in known:
             known.add(record)
-            pending.append(analysis)
-    return pending
+            pending.append(analysis.id)
+    chosen = analyses.filter(id__in=pending).order_by("study_id", "id")
+    if study_accession:
+        chosen = chosen.filter(study__accession=study_accession)
+    return list(chosen)
 
 
 def chunk_by_study(analyses: list[Analysis], size: int) -> list[list[str]]:
