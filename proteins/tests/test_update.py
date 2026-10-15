@@ -9,6 +9,7 @@ import pytest
 from prefect.client.orchestration import get_client
 from prefect.client.schemas.actions import GlobalConcurrencyLimitCreate
 
+from analyses.models import Study
 from proteins.accession.accession import accession
 from proteins.accession.inputs import read_input
 from proteins.dataset import layout, update
@@ -29,7 +30,7 @@ pytestmark = [
     pytest.mark.usefixtures("mgyp_as_accession", "prefect_harness"),
 ]
 
-D0, D1, D2 = date(2026, 9, 30), date(2026, 10, 1), date(2026, 10, 2)
+D0, D1, D2, D3 = (date(2026, 9, 30), *(date(2026, 10, n) for n in (1, 2, 3)))
 TABLES = ("protein", "contig", "occurrence")
 
 
@@ -437,6 +438,17 @@ def test_a_record_whose_mgya_is_not_in_emgapi_is_withheld_and_the_rest_loaded(
         known.accession,
         unknown.accession,
     }
+
+
+def test_a_flag_changed_in_emgapi_is_in_the_next_snapshot_both_ways(root, stage, study):
+    stage("ERZ101")
+    privacy = []
+    for day, private in ((D1, False), (D2, True), (D3, False)):
+        Study.objects.filter(pk=study.pk).update(is_private=private)
+        run(day)
+        (path,) = layout.files(root, "metadata/assembly_proteins")
+        privacy += pq.read_table(path)["is_private"].to_pylist()
+    assert privacy == [False, True, False]
 
 
 @pytest.mark.parametrize(

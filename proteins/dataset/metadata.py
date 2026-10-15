@@ -38,6 +38,8 @@ def build_snapshot(assembly_proteins: pa.Table) -> pa.Table:
             "sample__biome_id",
             "assembly__is_private",
             "assembly__is_suppressed",
+            "study__is_private",
+            "study__is_suppressed",
         )
         known |= {row["accession"]: row for row in rows}
 
@@ -68,8 +70,11 @@ def build_snapshot(assembly_proteins: pa.Table) -> pa.Table:
                 "analysis_accession": record["analysis_accession"],
                 "study_accession": analysis["study__accession"],
                 "biome_lineage": lineages.get(analysis["sample__biome_id"]),
-                "is_private": analysis["assembly__is_private"],
-                "is_suppressed": analysis["assembly__is_suppressed"],
+                # Withheld when the assembly or its study is.
+                "is_private": analysis["assembly__is_private"]
+                or analysis["study__is_private"],
+                "is_suppressed": analysis["assembly__is_suppressed"]
+                or analysis["study__is_suppressed"],
             }
         )
     return pa.Table.from_pylist(rows, layout.SCHEMAS["metadata/assembly_proteins"])
@@ -114,8 +119,10 @@ def export_assembly_analyses() -> pa.Table:
                     "analysis_accession": analysis.accession,
                     "study_accession": analysis.study.accession,
                     "biome_lineage": biome.pretty_lineage if biome else None,
-                    "is_private": analysis.assembly.is_private,
-                    "is_suppressed": analysis.assembly.is_suppressed,
+                    "is_private": analysis.assembly.is_private
+                    or analysis.study.is_private,
+                    "is_suppressed": analysis.assembly.is_suppressed
+                    or analysis.study.is_suppressed,
                 },
             )
     return pa.Table.from_pylist(list(rows.values()), ASSEMBLY_ANALYSES)
