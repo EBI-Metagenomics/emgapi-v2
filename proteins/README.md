@@ -72,7 +72,10 @@ The schedules and the trigger are inactive until cutover.
 - the last dataset update finished more than 36 h ago, or there has been none;
 - a staged row is more than 48 h old;
 - the protein dataset has an incomplete day before the last dataset update;
-- protein ids are above 90 % of 10¹².
+- protein ids are above 90 % of 10¹²;
+- annotated assembly analyses have a pipeline version with no gene-caller rule, other than 4.1 and 5.0, whose records come from the migration. The listing skips them;
+- an assembly proteins record has an MGYA that is not in emgapi-v2, so releases publish none of its proteins;
+- the protein dataset has an owner whose SLURM job is not running.
 
 **During a release**, do not run the merge. The merge is the only flow that deletes the files of a complete day.
 
@@ -83,9 +86,9 @@ The schedules and the trigger are inactive until cutover.
 | An analysis fails in a chunk | Read its error in the chunk flow run. Fix the cause, then run `ingest_analysis_proteins` for that MGYA, or `ingest_assembly_proteins` again. |
 | `InvalidInput` | Investigate the gene caller output of that analysis. Nothing was written. |
 | `IncompleteRerun` | Find out why a second run of the same ERZ and `major.minor` predicted proteins that the first did not. Nothing was written. |
-| `UnsupportedPipelineVersion`, `NotImplementedError` | The pipeline version of the analysis has no rule yet (`GeneCaller.BY_PIPELINE_VERSION`, `Analysis.predicted_genes_files()`). |
+| `UnsupportedPipelineVersion`, `NotImplementedError`, or the check reports a pipeline version with no gene-caller rule | The pipeline version of the analysis has no rule yet. Add it to `GeneCaller.BY_PIPELINE_VERSION` and `Analysis.predicted_genes_files()`. |
 | A dataset update failed | Run it again, or wait for the next run. Its first step deletes what a failed update left, and marks a committed day complete. |
-| The dataset update logs "withholding the records of N MGYAs" | Those MGYAs of the MGYP database are not in emgapi-v2, so releases publish none of their proteins. Find out why the analyses were deleted, and restore them: the next update puts them back. |
+| The dataset update logs "withholding the records of N MGYAs", and the check reports MGYAs not in emgapi-v2 | Those MGYAs of the MGYP database are not in emgapi-v2, so releases publish none of their proteins. Find out why the analyses were deleted, and restore them: the next update puts them back. |
 | A file of the protein dataset is lost or corrupted | Restore it from the backup. Files are never changed after they are written. |
 | The MGYP database lost commits that the dataset update has not read | No file has those MGYPs. Run `ingest_assembly_proteins` again: it finds the records that were lost. |
 | The MGYP database is lost | Restore it from the PostgreSQL backups, then run `ingest_assembly_proteins` again. |
@@ -95,7 +98,7 @@ The schedules and the trigger are inactive until cutover.
 
 The dataset update and the merge share one Prefect global concurrency limit, `protein-dataset`, with a limit of 1. So they never write the protein dataset at the same time. Prefect frees the slot of a run it marks Crashed, whose SLURM job can still be alive, so the MGYP database also records the owner in `dataset_owner`: its flow, SLURM job and submit time. The next update or merge starts only when `sacct` shows that job has ended normally, and a flow run that lost ownership exits before it writes again.
 
-An update or merge that fails at start with "The protein dataset is owned by job N" found an owner whose job has not visibly ended. Run `sacct -j N`. If the job still runs and should not, `scancel N` and wait until `sacct` shows it ended: the next run then takes over by itself. If its node failed, make sure with the cluster team that none of its processes still run. Only then, with the schedules paused, clear the row as `proteindb_owner`: `UPDATE proteindb.dataset_owner SET flow = NULL, slurm_job_id = NULL, slurm_submit_at = NULL, execution_id = NULL, flow_run_id = NULL, acquired_at = NULL WHERE execution_id = '<the recorded one>'`. If the Prefect slot is still taken too, reset its active slots to 0 with `prefect gcl update protein-dataset --active-slots 0`. Resume the schedules. Never clear the row while the old job might still run.
+An update or merge that fails at start with "The protein dataset is owned by job N" found an owner whose job has not visibly ended. The check reports the owner whose job is not running too. Run `sacct -j N`. If the job still runs and should not, `scancel N` and wait until `sacct` shows it ended: the next run then takes over by itself. If its node failed, make sure with the cluster team that none of its processes still run. Only then, with the schedules paused, clear the row as `proteindb_owner`: `UPDATE proteindb.dataset_owner SET flow = NULL, slurm_job_id = NULL, slurm_submit_at = NULL, execution_id = NULL, flow_run_id = NULL, acquired_at = NULL WHERE execution_id = '<the recorded one>'`. If the Prefect slot is still taken too, reset its active slots to 0 with `prefect gcl update protein-dataset --active-slots 0`. Resume the schedules. Never clear the row while the old job might still run.
 
 ## Tests
 

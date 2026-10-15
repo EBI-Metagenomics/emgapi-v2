@@ -16,18 +16,11 @@ logger = logging.getLogger(__name__)
 CHUNK = 10_000
 
 
-def build_snapshot(assembly_proteins: pa.Table) -> pa.Table:
-    """The metadata/assembly_proteins table for every assembly proteins record, of either source, whose MGYA is in emgapi-v2.
+def find_analyses(mgyas: list[str]) -> dict[str, dict]:
+    """The metadata of each of these MGYAs that emgapi-v2 has, by MGYA.
 
-    A record whose MGYA is not in emgapi-v2 is withheld: releases publish nothing of a record
-    without metadata, and it is back in the snapshot of the day after its analysis is.
-
-    :param assembly_proteins: The assembly_proteins rows: id, assembly_accession, source, pipeline_version, analysis_accession.
-    :return: The table in the metadata/assembly_proteins schema.
+    :param mgyas: The MGYAs.
     """
-    records = assembly_proteins.to_pylist()
-    mgyas = sorted({record["analysis_accession"] for record in records})
-
     known = {}
     for start in range(0, len(mgyas), CHUNK):
         rows = Analysis.objects.filter(
@@ -42,6 +35,21 @@ def build_snapshot(assembly_proteins: pa.Table) -> pa.Table:
             "study__is_suppressed",
         )
         known |= {row["accession"]: row for row in rows}
+    return known
+
+
+def build_snapshot(assembly_proteins: pa.Table) -> pa.Table:
+    """The metadata/assembly_proteins table for every assembly proteins record, of either source, whose MGYA is in emgapi-v2.
+
+    A record whose MGYA is not in emgapi-v2 is withheld: releases publish nothing of a record
+    without metadata, and it is back in the snapshot of the day after its analysis is.
+
+    :param assembly_proteins: The assembly_proteins rows: id, assembly_accession, source, pipeline_version, analysis_accession.
+    :return: The table in the metadata/assembly_proteins schema.
+    """
+    records = assembly_proteins.to_pylist()
+    mgyas = sorted({record["analysis_accession"] for record in records})
+    known = find_analyses(mgyas)
 
     if missing := [mgya for mgya in mgyas if mgya not in known]:
         logger.warning(

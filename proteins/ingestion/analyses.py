@@ -35,6 +35,20 @@ def annotated_assembly_analyses():
     )
 
 
+def versions_with_rules() -> list[str]:
+    """The pipeline versions of emgapi-v2 whose gene callers are known, as in Analysis.pipeline_version."""
+    with_rules = {
+        version
+        for source, version in GeneCaller.BY_PIPELINE_VERSION
+        if source == AssemblyProteins.Source.ASSEMBLY_ANALYSIS
+    }
+    return [
+        version
+        for version in Analysis.PipelineVersions
+        if version.label.removeprefix("v") in with_rules
+    ]
+
+
 def find_pending_analyses(study_accession: str | None = None) -> list[Analysis]:
     """Assembly analyses with annotations imported, of a pipeline version with gene-caller rules, whose assembly proteins record is not in the MGYP database.
 
@@ -44,17 +58,8 @@ def find_pending_analyses(study_accession: str | None = None) -> list[Analysis]:
     :param study_accession: An MGYS accession, to list only its analyses.
     :return: The pending analyses, ordered by study and id.
     """
-    with_rules = {
-        version
-        for source, version in GeneCaller.BY_PIPELINE_VERSION
-        if source == AssemblyProteins.Source.ASSEMBLY_ANALYSIS
-    }
     analyses = annotated_assembly_analyses().filter(
-        pipeline_version__in=[
-            version
-            for version in Analysis.PipelineVersions
-            if version.label.removeprefix("v") in with_rules
-        ]
+        pipeline_version__in=versions_with_rules()
     )
     # Loads every assembly proteins key into memory. Good enough for the prototype.
     known = set(

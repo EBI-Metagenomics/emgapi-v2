@@ -7,8 +7,13 @@ from typing import NamedTuple
 from django.db import connections
 from django.db.models import Count, Min
 
-from proteins.dataset import layout
+from analyses.models import Analysis
+from proteins.dataset import layout, metadata
+from proteins.dataset.owner import states_of
+from proteins.ingestion.analyses import annotated_assembly_analyses, versions_with_rules
 from proteins.models import (
+    AssemblyProteins,
+    DatasetOwner,
     DatasetUpdate,
     StagedContig,
     StagedOccurrence,
@@ -22,6 +27,8 @@ STAGED_OVERDUE = timedelta(hours=48)
 MAX_PROTEIN_ID = 10**12 - 1
 HEADROOM_WARNING = 0.9
 STAGED_MODELS = (StagedProtein, StagedContig, StagedOccurrence)
+# Their records come from the migration of the current protein database, not from the listing.
+MIGRATED_VERSIONS = (Analysis.PipelineVersions.v4_1, Analysis.PipelineVersions.v5)
 
 
 class Status(NamedTuple):
@@ -33,6 +40,12 @@ class Status(NamedTuple):
     complete_day: date | None
     incomplete_days: list[date]
     last_protein_id: int
+    no_rule: dict[
+        str, int
+    ]  # annotated assembly analyses by pipeline version, of versions without gene-caller rules
+    withheld: list[str]  # MGYAs of assembly proteins records that are not in emgapi-v2
+    owner: DatasetOwner
+    owner_states: list[str]  # of the owner's SLURM job
 
     def report(self) -> str:
         return "\n".join(
@@ -52,6 +65,22 @@ class Status(NamedTuple):
                 f"Latest complete day of the protein dataset: {self.complete_day}",
                 f"Incomplete days of the protein dataset: {', '.join(map(str, self.incomplete_days)) or 'none'}",
                 f"Last protein id: {self.last_protein_id}, {self.last_protein_id / MAX_PROTEIN_ID:.4%} of the MGYP range",
+                "Annotated assembly analyses of pipeline versions with no gene-caller rule: "
+                + (", ".join(f"{v} {n}" for v, n in self.no_rule.items()) or "none"),
+                f"MGYAs of assembly proteins records not in emgapi-v2: {len(self.withheld)}"
+                + (
+                    f", for example {', '.join(self.withheld[:10])}"
+                    if self.withheld
+                    else ""
+                ),
+                "Owner of the protein dataset: "
+                + (
+                    f"{self.owner.flow}, execution {self.owner.execution_id}, flow run {self.owner.flow_run_id},"
+                    f" since {self.owner.acquired_at}, SLURM job {self.owner.slurm_job_id}"
+                    f" submitted at {self.owner.slurm_submit_at}, whose states are {', '.join(self.owner_states) or 'not found'}"
+                    if self.owner.slurm_job_id is not None
+                    else "none"
+                ),
             ]
         )
 
@@ -74,6 +103,23 @@ class Status(NamedTuple):
         if self.last_protein_id > HEADROOM_WARNING * MAX_PROTEIN_ID:
             found.append(
                 f"protein ids are at {self.last_protein_id}, above {HEADROOM_WARNING:.0%} of {MAX_PROTEIN_ID}"
+            )
+        if self.no_rule:
+            found.append(
+                "annotated assembly analyses of pipeline versions with no gene-caller rule, which the listing skips: "
+                + ", ".join(f"{v} {n}" for v, n in self.no_rule.items())
+            )
+        if self.withheld:
+            found.append(
+                f"{len(self.withheld)} MGYAs of assembly proteins records are not in emgapi-v2,"
+                " so releases publish none of their proteins"
+            )
+        # A requeued job has a record for each time it ran, the current one last.
+        running = self.owner_states[-1:] == ["RUNNING"]
+        if self.owner.slurm_job_id is not None and not running:
+            found.append(
+                f"the protein dataset is owned by job {self.owner.slurm_job_id}, whose states are"
+                f" {', '.join(self.owner_states) or 'not found'}"
             )
         return found
 
@@ -103,6 +149,28 @@ def status(root: Path) -> Status:
         cursor.execute("SELECT last_value FROM protein_id_seq")
         (last_protein_id,) = cursor.fetchone()
 
+    no_rule = dict(
+        annotated_assembly_analyses()
+        .exclude(pipeline_version__in=[*versions_with_rules(), *MIGRATED_VERSIONS])
+        .values_list("pipeline_version")
+        .annotate(Count("id"))
+        .order_by("pipeline_version")
+    )
+
+    mgyas = list(
+        AssemblyProteins.objects.order_by("analysis_accession").values_list(
+            "analysis_accession", flat=True
+        )
+    )
+    known = metadata.find_analyses(mgyas)
+
+    owner = DatasetOwner.objects.get()
+    owner_states = (
+        states_of(owner.slurm_job_id, owner.slurm_submit_at)
+        if owner.slurm_job_id is not None
+        else []
+    )
+
     complete = layout.complete_days(root)
     return Status(
         last.finished_at if last else None,
@@ -113,4 +181,8 @@ def status(root: Path) -> Status:
         complete[-1] if complete else None,
         sorted(layout.days_with_files(root) - set(complete)),
         last_protein_id,
+        no_rule,
+        [mgya for mgya in mgyas if mgya not in known],
+        owner,
+        owner_states,
     )

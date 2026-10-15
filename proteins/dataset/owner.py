@@ -148,10 +148,7 @@ def check_ended(job_id: int, submit_at: datetime) -> None:
     :param job_id: The SLURM job id.
     :param submit_at: When the job was submitted, which tells it from others with the same id.
     """
-    try:
-        states = job_states(job_id).get(submit_at, [])
-    except (OSError, subprocess.SubprocessError, ValueError) as e:
-        states = [f"unknown, as sacct failed: {e}"]
+    states = states_of(job_id, submit_at)
     # A requeued job has a record for each time it ran, and the first may have run on a failed node.
     if not states or not ENDED.issuperset(states):
         raise OwnershipError(
@@ -159,6 +156,18 @@ def check_ended(job_id: int, submit_at: datetime) -> None:
             f" whose states are {', '.join(states) or 'not found'}."
             " No update or merge can start until that job is known to have stopped."
         )
+
+
+def states_of(job_id: int, submit_at: datetime) -> list[str]:
+    """The states SLURM has recorded for one job, or why they are unknown.
+
+    :param job_id: The SLURM job id.
+    :param submit_at: When the job was submitted, which tells it from others with the same id.
+    """
+    try:
+        return job_states(job_id).get(submit_at, [])
+    except (OSError, subprocess.SubprocessError, ValueError) as e:
+        return [f"unknown, as sacct failed: {e}"]
 
 
 def job_states(job_id: int) -> dict[datetime, list[str]]:
