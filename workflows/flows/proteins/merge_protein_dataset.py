@@ -1,0 +1,46 @@
+from pathlib import Path
+
+from prefect import get_run_logger
+from prefect.concurrency.sync import concurrency
+
+from activate_django_first import EMG_CONFIG
+
+from proteins.dataset import merge
+from workflows.prefect_utils.flows_utils import django_db_flow as flow
+from workflows.prefect_utils.flows_utils import django_db_task as task
+
+
+@task(task_run_name="Clean up an interrupted merge")
+def clean_up_interrupted_merge(root: Path) -> None:
+    merge.clean_up_interrupted_merge(root)
+
+
+@task(task_run_name="Merge the protein files of each prefix")
+def merge_dataset(root: Path) -> int:
+    return merge.merge_dataset(root)
+
+
+@flow(flow_run_name="Merge the protein dataset")
+def merge_protein_dataset() -> int:
+    """For each hash prefix, merges the base file and the day files into a new base file.
+
+    It holds the protein dataset concurrency limit, so it never runs with the dataset update.
+    Do not run this flow while a protein release reads the protein dataset.
+
+    :return: The number of prefixes merged.
+    """
+    logger = get_run_logger()
+    root = Path(EMG_CONFIG.proteins.dataset_dir)
+    # One writer of the protein dataset at a time: the dataset update and the merge share this limit.
+    # strict: fail, rather than run without the limit, when the limit does not exist.
+    # KNOWN RISK: Prefect frees the slot when it marks a run Crashed (for example, when its heartbeats
+    # stop), but the SLURM job of that run can still be alive. If that process resumes, it can write
+    # to the protein dataset at the same time as the next run, and nothing stops it. After a crash,
+    # check with sacct that the old job has ended before you start the update or the merge again.
+    with concurrency(
+        EMG_CONFIG.proteins.dataset_concurrency_limit, occupy=1, strict=True
+    ):
+        clean_up_interrupted_merge(root)
+        merged = merge_dataset(root)
+    logger.info(f"Merged {merged} prefixes of the protein dataset")
+    return merged

@@ -1,165 +1,98 @@
-# proteins: the MGnify Protein DB
+# proteins: the MGnify proteins app
 
-Gives every protein predicted by the assembly analysis pipeline its MGYP accession, and keeps the proteins, their contigs and their occurrences for releases.
+Gives an MGYP accession to every protein of the assemblies, and keeps all proteins, contigs and occurrences for protein releases.
 
-- **Tier 1** is a PostgreSQL database, the `proteindb` alias. It holds the sha256 of each protein sequence with its id, in `protein_key`, the registries, and the rows staged since the last load.
-- **Tier 2** is Parquet under `$PROTEIN_DB/tier2/`, one directory per table, written one day at a time. It holds everything, and releases read it.
-- **`mgyp-accession`** (`accession/`, its own image) runs in the pipeline: it looks up each protein's MGYP, allocates the new ones and stages the analysis's rows, in one transaction, and writes the protein FASTA with MGYPs.
-- **The daily load** moves what is staged into a new day of Tier 2, and compacts Tier 2 when due.
+Proteins belong to an assembly analysis. The unit is an **assembly proteins** record: the proteins of one assembly (ERZ), for one assembly analysis (MGYA), predicted by one version (`major.minor`) of the source pipeline. Every record has an MGYA. Study, biome and privacy flags come through the MGYA.
 
-`$PROTEIN_DB` below is `EMG_CONFIG.proteindb.root` (`EMG_PROTEINDB__ROOT`).
+The source is the pipeline that called the genes. Today it is always `assembly_analysis`: ASA calls the genes, and protein ingestion reads the outputs of annotated analyses, new ones by trigger, old ones by hand. `gene_calling` is reserved for gene calling before ASA, which is not built yet. Each source has its own version numbers, so the source is part of the record's key.
+
+## Parts
+
+| Part | What it is |
+|---|---|
+| MGYP database | PostgreSQL, Django alias `mgyp`, schema `proteindb`. It holds the hash and id of each protein, the assembly proteins records, the gene callers and the staged rows. `sql/mgyp_schema.sql` creates it, not Django migrations. The models in `models.py` are unmanaged. |
+| Protein dataset | Parquet files in `EMG_CONFIG.proteins.dataset_dir`. All proteins, contigs and occurrences, and one metadata snapshot for each day. Protein releases read it. |
+| Accessioning core | `accession/`: the hash contract, the file reader, the MGYP lookup and the staging transaction. It does not import Django. |
 
 | Path | |
 |---|---|
-| `sql/tier1.sql`, `sql/roles.sql` | Tier 1's schema, and the runtime roles' settings |
-| `accession/` | `mgyp-accession` and the hash contract |
-| `tier2.py`, `load.py`, `dims.py`, `owner.py` | Tier 2's files, the load, the dimension snapshot, and ownership of Tier 2 |
-| `status.py` | The state and its checks |
-| `migrate.py`, `backfill.py`, `backfill_task.sh` | The migration from the current database, and the backfill |
-| `flows/` | `proteindb_load`, `proteindb_check`, `proteindb_backfill` |
-| `management/commands/` | `proteindb_status`, `proteindb_migrate` |
+| `sql/mgyp_schema.sql`, `sql/mgyp_roles.sql` | The schema and its grants, and the role settings |
+| `apps.py`, `models.py`, `admin.py`, `routers.py` | Django: the system check, unmanaged models, read-only admin, the router and the `mgyp` connection |
+| `accession/` | The accessioning core (no Django) |
+| `ingestion/analyses.py` | Pending analyses, chunks, and the ingestion of one analysis |
+| `dataset/layout.py`, `dataset/metadata.py` | The protein dataset layout, and the metadata snapshot |
+| `dataset/update.py`, `dataset/merge.py` | The steps of the dataset update and of the merge |
+| `dataset/status.py` | The state and its checks |
+| `workflows/flows/proteins/` | The Prefect flows. Prefect runs all the work: there are no management commands. |
 
-## Roles and configuration
+`Protein.objects.find_mgyps(["MKV…"])` gives the MGYP of each sequence that has one.
 
-| Role | Used by |
-|---|---|
-| `proteindb_owner` | Applying the schema, and `proteindb_migrate` |
-| `proteindb_accession` | `mgyp-accession`, in the pipeline and the backfill |
-| `proteindb_load` | The `proteindb` alias: the load, the check, `proteindb_status` |
-| `proteindb_read` | Ad-hoc reads of the DB by people |
+## Settings and roles
 
 | Setting | |
 |---|---|
-| `PROTEINDB_DATABASE_URL` | The `proteindb` alias, as `proteindb_load` (as `proteindb_owner` for `proteindb_migrate`). Without it the alias does not exist |
-| `PROTEINDB_DSN` | libpq URI as `proteindb_accession`, for `mgyp-accession`. The pipeline takes it as a Nextflow secret; the backfill's tasks inherit it from the flow run |
-| `EMG_PROTEINDB__ROOT` | `$PROTEIN_DB`. The `slurm` work pool's jobs must be able to create and delete files under `tier2/` |
-| `EMG_PROTEINDB__ACCESSION_IMAGE` | The `mgyp-accession` image the pipeline pins, as `docker://quay.io/microbiome-informatics/mgyp-accession:<tag>`, for the backfill. Move it with the pipeline's pin |
-| `EMG_PROTEINDB__TIER2_CONCURRENCY_LIMIT` | The Prefect limit that keeps loads apart, `proteindb-tier2` |
-| `EMG_PROTEINDB__SORT_MEMORY_LIMIT` | DuckDB's memory limit when it sorts Tier 2's rows, `32GB`. DuckDB goes over it by about 1 GB, so keep it about half of the job's memory |
+| `MGYP_DATABASE_URL` | The `mgyp` alias, as `proteindb_accession`. Without it, the alias does not exist, and `manage.py check` shows warning `proteins.W001`. |
+| `EMG_PROTEINS__DATASET_DIR` | The protein dataset. The jobs of the `slurm` work pool must be able to create and delete files in it. |
+| `EMG_PROTEINS__DUCKDB_MEMORY_LIMIT` | The memory limit of DuckDB when it sorts, `32GB`. DuckDB goes over it, so keep it about half of the job memory. |
+| `EMG_PROTEINS__INGESTION_CHUNK_SIZE` | Analyses in one chunk flow run, `50`. |
+| `EMG_PROTEINS__DATASET_CONCURRENCY_LIMIT` | The Prefect global concurrency limit that the dataset update and the merge share, `protein-dataset`. |
+
+| Role | Used by |
+|---|---|
+| `proteindb_owner` | `mgyp_schema.sql`, and the migration of the current protein database |
+| `proteindb_accession` | emgapi-v2's `mgyp` alias: protein ingestion, dataset update, merge, admin |
+| `proteindb_read` | People, for queries by hand |
+| `proteindb_load` | Unused. It has only `USAGE` on the schema |
 
 ## Setting up an environment
 
-1. Apply the schema as `proteindb_owner`: `psql "<owner URI>" -v ON_ERROR_STOP=1 --single-transaction -f proteins/sql/tier1.sql`, then `roles.sql` the same way, as a role that may alter the runtime roles. Neither should print a warning.
-2. Check the roles on fresh connections: as each runtime role, `SHOW search_path` gives `proteindb`.
-3. Create the concurrency limit against the environment's Prefect server: `prefect gcl create proteindb-tier2 --limit 1`. `prefect gcl inspect proteindb-tier2` must show it active with a limit of 1, or the load refuses to run.
-4. Set the configuration above in the `env` of the `slurm` work pool's base job template, and register the deployments with the rest of the environment's deployment file. In production the schedules of the load and the check are defined inactive until cutover.
+1. As `proteindb_owner`: `psql "<owner URI>" -v ON_ERROR_STOP=1 --single-transaction -f proteins/sql/mgyp_schema.sql`.
+2. As a role that can alter the roles: `mgyp_roles.sql`, in the same way. Until it is applied, add `?options=-c%20search_path%3Dproteindb` to the database URL.
+3. Create the concurrency limit on the Prefect server of the environment: `prefect gcl create protein-dataset --limit 1`. Without it, the dataset update and the merge fail at start.
+4. Set the settings above in the `env` of the base job template of the `slurm` work pool, and register the deployments.
 
-## Daily operation
+## Flows
 
-| Deployment | Schedule (UTC) | Does |
+| Deployment | Start | Does |
 |---|---|---|
-| `proteindb_load_deployment` | 02:00 | The load. One run at a time owns Tier 2; it has no Prefect retries |
-| `proteindb_check_deployment` | 08:00 | Logs the state, and fails if any check fails |
-| `proteindb_backfill_deployment` | by hand | See [Backfill](#backfill) |
+| `ingest_assembly_proteins_deployment` | Trigger on the completion of `sync_assembly_batch_results_deployment`, or by hand | Lists the pending analyses (state `ANALYSIS_ANNOTATIONS_IMPORTED`, no assembly proteins record yet), and starts one chunk flow for each chunk of one study. Does not wait. |
+| `ingest_assembly_proteins_chunk_deployment` | Started by the flow above | Ingests each analysis of the chunk. A failed analysis does not stop the others. |
+| `ingest_analysis_proteins_deployment` | By hand | Ingests one MGYA, or every annotated analysis of one ERZ. |
+| `update_protein_dataset_deployment` | 02:00 UTC | Moves the staged rows into a new day of the protein dataset. Holds the `protein-dataset` limit. Only adds files. |
+| `merge_protein_dataset_deployment` | 04:00 UTC on the 1st | Merges the base file and the day files of each hash prefix. Holds the `protein-dataset` limit. |
+| `check_proteins_status_deployment` | 08:00 UTC | Logs the state, and fails if any check fails. |
+| `export_assembly_analyses_deployment` | By hand | Writes every assembly analysis, by ERZ and pipeline version, with its MGYA and metadata, to a Parquet file. For the migration. |
 
-`python manage.py proteindb_status` prints the state, and each failed check. `--check` makes it exit non-zero if any fails. The checks fail when:
+The schedules and the trigger are inactive until cutover.
 
-- the last successful load finished more than 36 h ago, or there has been none;
+`check_proteins_status` logs the state, and each failed check. Run the deployment by hand to see the state now. The checks fail when:
+
+- the last dataset update finished more than 36 h ago, or there has been none;
 - a staged row is more than 48 h old;
-- Tier 2 has an owner whose SLURM job is not running;
-- Tier 2 has an incomplete day before the last load's;
+- the protein dataset has an incomplete day before the last dataset update;
 - protein ids are above 90 % of 10¹².
 
-A failed run of any deployment is seen in Prefect. Nothing else notifies anyone.
-
-**During a release**, pause the schedule of `proteindb_load_deployment` while the release reads Tier 2, and do not start a load by hand. Nothing is lost: accessioning keeps staging, and the next load takes everything. A schedule left paused shows as an overdue load after 36 h.
+**During a release**, do not run the merge. The merge is the only flow that deletes the files of a complete day.
 
 ## Failures
 
 | Failure | Do |
 |---|---|
-| `mgyp-accession` exits 1 (database unreachable, timeout, killed) | Nextflow retries it. A retry after a commit writes the same output. If every retry fails, resume the run with `-resume` once the cause is fixed |
-| `mgyp-accession` exits 2 (invalid input) | Investigate that assembly's gene-caller output. Nothing was written |
-| `mgyp-accession` exits 3 (registered analysis with proteins that have no MGYP) | Find out why a second run of the same assembly and `major.minor` predicted proteins the first did not. Nothing was written |
-| A load failed | Rerun it, or wait for the next scheduled run. Its first step cleans up what a failed load left, and publishes a day that was committed but not published |
-| A load fails at start with "Tier 2 is owned by job N" | [Clear ownership of Tier 2](#clearing-ownership-of-tier-2) |
-| An assembly is unresolved | `proteindb_status` lists it. Its occurrences are withheld from releases until emgapi-v2 knows it, which takes effect at the next load |
-| A Tier 2 file is lost or corrupted | Restore it from the `/nfs/production` backup. Files are never modified once written, so the restored one is correct |
-| Tier 1 restored by point-in-time recovery that lost, or may have lost, commits | [Restart allocation](#restarting-allocation-after-lost-commits) before accessioning resumes |
-| Tier 1 lost, with no recovery | [Restart allocation](#restarting-allocation-after-lost-commits), rebuilding Tier 1 from Tier 2 |
-| A load fails at start with "Tier 2 has days that load_log has not done" | Tier 1 was restored to before those loads. Their rows are staged again, and Tier 1's registries and id sequences are behind Tier 2. Treat Tier 1 as lost: [restart allocation](#restarting-allocation-after-lost-commits), rebuilding Tier 1 from Tier 2 |
+| An analysis fails in a chunk | Read its error in the chunk flow run. Fix the cause, then run `ingest_analysis_proteins` for that MGYA, or `ingest_assembly_proteins` again. |
+| `InvalidInput` | Investigate the gene caller output of that analysis. Nothing was written. |
+| `IncompleteRerun` | Find out why a second run of the same ERZ and `major.minor` predicted proteins that the first did not. Nothing was written. |
+| `UnsupportedPipelineVersion`, `NotImplementedError` | The pipeline version of the analysis has no rule yet (`GeneCaller.BY_PIPELINE_VERSION`, `Analysis.predicted_genes_files()`). |
+| A dataset update failed | Run it again, or wait for the next run. Its first step deletes what a failed update left, and marks a committed day complete. |
+| `MissingAnalyses` in the dataset update | An MGYA of the MGYP database is not in emgapi-v2. Find out why the analysis was deleted. |
+| A file of the protein dataset is lost or corrupted | Restore it from the backup. Files are never changed after they are written. |
+| The MGYP database lost commits that the dataset update has not read | No file has those MGYPs. Run `ingest_assembly_proteins` again: it finds the records that were lost. |
+| The MGYP database is lost | Restore it from the PostgreSQL backups, then run `ingest_assembly_proteins` again. |
+| A dataset update fails with "The protein dataset is ahead of the MGYP database" | The restored database is older than the last done dataset update, so it lost MGYPs that the protein dataset already has. Stop the protein ingestion, because it could give new MGYPs to those proteins. Restore to a later point if you can. If you cannot, the team decides what to do. |
 
-### Clearing ownership of Tier 2
+### Only one writer
 
-The recorded owner's job has not visibly ended normally. No load may start until that job is known to have stopped, because a stalled process that resumes could overwrite a day another load has committed.
-
-1. `sacct -j N`. If the job is running and should not be, `scancel N` and wait until `sacct` shows it ended. If it ended `COMPLETED`, `FAILED`, `CANCELLED`, `TIMEOUT` or `OUT_OF_MEMORY`, the next load takes over by itself.
-2. If the state is `NODE_FAIL` or unclear, ask the cluster team to confirm that the node is down or that the job's processes are gone.
-3. Only then, with the load's schedule paused: `UPDATE proteindb.tier2_owner SET flow = NULL, slurm_job_id = NULL, slurm_submit_at = NULL, execution_id = NULL, flow_run_id = NULL, acquired_at = NULL WHERE execution_id = '<the recorded one>'`. If the Prefect slot is still taken, `prefect gcl update proteindb-tier2 --active-slots 0`. Resume the schedule.
-4. Note what was checked in the team's log.
-
-Never clear the row while the old job might still be running.
-
-### Restarting allocation after lost commits
-
-Pipeline outputs may carry MGYPs that Tier 1 no longer knows. `protein_id_seq` must restart above every one of them, or they would be issued again to other proteins. The sequence's position cannot tell how far: inserts that conflicted or rolled back took values that are never used. `mgyp-accession` writes an MGYP only after its commit, and only into its output FASTA, so the restart point is read from the outputs.
-
-The **checkpoint** is the restore point after a point-in-time recovery, or 00:00 UTC of the latest complete Tier 2 day for a rebuild.
-
-1. **Stop accessioning, and wait for it to stop.** Pause pipeline and backfill submissions. `accession_proteins = false` affects only runs started afterwards, so stop the running ones that could still start an `MGYP_ACCESSION` task. Check the SLURM queue and the Nextflow run history until no `MGYP_ACCESSION` or backfill task is pending or running: a task writes its FASTA after closing its connection, so `pg_stat_activity` is not enough.
-2. **List every output FASTA written by a task running at or after the checkpoint** into `outputs.txt`, one path a line:
-   - pipeline runs, from their Nextflow history, including runs that started before the checkpoint, and runs that failed after `MGYP_ACCESSION` succeeded, whose output is in the task's work directory;
-   - backfill tasks, from the `tasks.tsv` files under `$PROTEIN_DB/backfill/runs/`;
-   - earlier recoveries, under `$PROTEIN_DB/recovery/`.
-3. **Read the highest MGYP:**
-
-   ```
-   set -o pipefail; xargs -a outputs.txt zcat -f | grep -o '^>[^ ]* MGYP[0-9]\{12\}' | grep -o 'MGYP[0-9]*' | sort | tail -n 1
-   ```
-
-   If it fails, a file is missing or unreadable, and the result is not used.
-4. **Restart the sequence** after the greatest of that MGYP's number and the highest id the surviving database knows.
-   - After a restore: also never below the sequence's restored position. `SELECT setval('proteindb.protein_id_seq', N)`, as `proteindb_owner`.
-   - For a rebuild: drop the schema, apply `tier1.sql` and `roles.sql` again, and `python manage.py proteindb_migrate tier1 --rebuild --protein-id-start N+1` as `proteindb_owner`. It refuses a start at or below Tier 2's highest id.
-5. **If the list cannot be shown to be complete**, for example because an output was deleted or replaced by a rerun with a different input, accessioning stays stopped. The team decides how far to move the sequence, and records the decision.
-6. **Re-accession** the analyses registered after the checkpoint, as the backfill does, with `--out $PROTEIN_DB/recovery/<date>/<accession>/<major.minor>/<accession>_predicted_cds.faa.gz`. `recovery/<date>/` must not exist yet. Never overwrite the earlier outputs: they are the evidence for step 2 next time. Republish the results from `recovery/`.
-7. Resume submissions.
-
-## Backfill
-
-`proteindb_backfill_deployment`, run by hand, optionally with `study`, accessions the completed v6 assembly analyses that Tier 1 has not registered, from their published outputs. It needs `PROTEINDB_DSN` and `EMG_PROTEINDB__ACCESSION_IMAGE`.
-
-It writes `$PROTEIN_DB/backfill/runs/<UTC time>/` with `tasks.tsv`, `missing.tsv` (analyses missing an input, left out, to be handled separately) and the tasks' logs under `logs/`. It submits the tasks as SLURM arrays, at most 8 running at once, and ends without waiting. Follow them with `sacct -j <job id>`, with the ids from its log. Once they have ended, run it again with the same parameters: it submits only what is still unregistered. Repeat until it lists none, or only analyses whose tasks fail every time, which are investigated from their logs.
-
-Outputs go to `$PROTEIN_DB/backfill/<accession>/<major.minor>/` and are never deleted: a recovery reads them.
-
-## Migration
-
-From the frozen current database (`mgnprotein_ingestion`), once. Run in emgapi-v2's environment on the cluster, as `proteindb_owner`, with `SRC` the current database's URI, `OUT` the migration directory on `/hps/nobackup`, `M` the date of the freeze, and `TMPDIR` on `/hps/nobackup` for DuckDB to spill to. The resources are first estimates.
-
-1. **Export**, the reference tables and then one array per table, each after the previous one, so that at most 8 tasks read at once:
-
-   ```
-   python manage.py proteindb_migrate export --table dims --source "$SRC" --out "$OUT"
-   J=$(sbatch --parsable --array=0-63%8 --mem=4G --cpus-per-task=2 --time=4:00:00 [--dependency=afterany:$J] \
-       -J export-$T --wrap "python manage.py proteindb_migrate export --table $T --child \$SLURM_ARRAY_TASK_ID --source $SRC --out $OUT")
-   ```
-
-   for `T` in `protein`, `occurrence`, `contig`. A child already exported is refused. Rerun any task that failed.
-2. **Build Tier 2's first day.** If it ends early, submit it again: it carries on where it stopped.
-
-   ```
-   sbatch --mem=64G --cpus-per-task=16 --time=24:00:00 -J tier2 --wrap "python manage.py proteindb_migrate tier2 --date M --export $OUT"
-   ```
-
-3. **Build Tier 1**, into a schema just created by `tier1.sql`. It streams the hashes and ids, so it needs little memory, but it takes hours, and an interrupted build is started over: drop the schema and apply `tier1.sql` and `roles.sql` again. Its time limit is therefore generous.
-
-   ```
-   sbatch --mem=8G --cpus-per-task=2 --time=72:00:00 -J tier1 --wrap "python manage.py proteindb_migrate tier1"
-   ```
-4. **Verify**: Tier 2 against the frozen tables, Tier 1 against Tier 2, and a sample of the hash contract. It prints each check that fails.
-
-   ```
-   sbatch --mem=64G --cpus-per-task=16 --time=24:00:00 -J verify --wrap "python manage.py proteindb_migrate verify --source $SRC"
-   ```
-
-   Delete `$OUT` once verified.
-5. **Resolve** the assemblies, in emgapi-v2's production environment, any time before cutover. It lists, by pipeline version and accession, every assembly of the current database that emgapi-v2 does not know, or knows with another study accession or biome lineage, with both values. The first load after cutover takes the dimensions from emgapi-v2, so an unknown assembly would be left out of every release, and a changed one released with emgapi-v2's study and biome. The team reviews the list before cutover.
-
-   ```
-   python manage.py proteindb_migrate resolve --source "$SRC"
-   ```
+The dataset update and the merge share one Prefect global concurrency limit, `protein-dataset`, with a limit of 1. So they never write the protein dataset at the same time. There is no guard against a process that Prefect marks Crashed while its SLURM job still runs: check with `sacct` before you start a flow again after a crash.
 
 ## Tests
 
-`pytest proteins/` in the app's container. They build the Tier 1 schema from `sql/tier1.sql` in the `proteindb` test database, so that file must stay equal to the deployed schema.
+`pytest proteins`. The tests cover the hash contract, the file readers, and that the accessioning core does not import Django.
