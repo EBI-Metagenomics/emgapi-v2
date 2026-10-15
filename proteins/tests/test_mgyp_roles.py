@@ -117,6 +117,8 @@ def test_accession_role_can_update_the_protein_dataset(connect_as):
         "UPDATE dataset_update SET status = 'done', finished_at = now() WHERE id = %s",
         [update_id],
     )
+    conn.execute("SELECT * FROM dataset_owner FOR UPDATE")
+    conn.execute("UPDATE dataset_owner SET execution_id = NULL")
 
 
 @pytest.fixture
@@ -133,7 +135,7 @@ def test_accession_role_can_find_mgyps():
 
 
 @pytest.mark.usefixtures("as_accession_role")
-@pytest.mark.parametrize("model", ["assemblyproteins", "datasetupdate"])
+@pytest.mark.parametrize("model", ["assemblyproteins", "datasetupdate", "datasetowner"])
 def test_accession_role_can_show_the_admin(admin_client, model):
     response = admin_client.get(reverse(f"admin:proteins_{model}_changelist"))
     assert response.status_code == 200
@@ -166,14 +168,18 @@ def test_read_role_can_read_everything(connect_as):
         ("proteindb_accession", "DELETE FROM assembly_proteins"),
         ("proteindb_accession", "DELETE FROM gene_caller"),
         ("proteindb_accession", "DELETE FROM dataset_update"),
+        ("proteindb_accession", "DELETE FROM dataset_owner"),
+        ("proteindb_accession", "INSERT INTO dataset_owner DEFAULT VALUES"),
         ("proteindb_load", "SELECT * FROM protein"),
         ("proteindb_load", "SELECT * FROM proteindb.protein_2a"),
         ("proteindb_load", "SELECT * FROM staged_protein"),
         ("proteindb_load", "SELECT * FROM dataset_update"),
+        ("proteindb_load", "SELECT * FROM dataset_owner"),
         ("proteindb_load", "SELECT nextval('protein_id_seq')"),
         ("proteindb_read", f"INSERT INTO protein VALUES ({HASH}, 1)"),
         ("proteindb_read", "DELETE FROM staged_protein"),
         ("proteindb_read", "UPDATE dataset_update SET message = NULL"),
+        ("proteindb_read", "UPDATE dataset_owner SET flow = NULL"),
         ("proteindb_read", "SELECT nextval('protein_id_seq')"),
     ],
 )

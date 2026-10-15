@@ -6,17 +6,18 @@ from uuid import uuid4
 
 import pyarrow.parquet as pq
 import pytest
-from prefect.client.orchestration import get_client
-from prefect.client.schemas.actions import GlobalConcurrencyLimitCreate
 
 from analyses.models import Study
 from proteins.accession.accession import accession
 from proteins.accession.inputs import read_input
-from proteins.dataset import layout, update
-from proteins.dataset.owner import OwnershipError
+from proteins.dataset import layout, merge, update
+from proteins.dataset.owner import OwnershipError, take
 from proteins.routers import MGYP
 from proteins.tests.conftest import (
     FIXTURES,
+    SUBMITTED,
+    Killed,
+    create_limit,
     make_analysis,
     make_study,
     query,
@@ -27,15 +28,11 @@ from workflows.flows.proteins import update_protein_dataset as flows
 
 pytestmark = [
     pytest.mark.django_db(databases=["default", MGYP], transaction=True),
-    pytest.mark.usefixtures("mgyp_as_accession", "prefect_harness"),
+    pytest.mark.usefixtures("mgyp_as_accession", "prefect_harness", "slurm"),
 ]
 
 D0, D1, D2, D3 = (date(2026, 9, 30), *(date(2026, 10, n) for n in (1, 2, 3)))
 TABLES = ("protein", "contig", "occurrence")
-
-
-class Killed(BaseException):
-    """The process is killed: no handler runs."""
 
 
 @cache
@@ -77,16 +74,6 @@ def stage(connect_accession, study):
         return analysis
 
     return stage
-
-
-def create_limit(slots=1, active=True):
-    """A limit with a name of its own, as the Prefect server outlives the test."""
-    name = f"protein-dataset-{uuid4()}"
-    with get_client(sync_client=True) as client:
-        client.create_global_concurrency_limit(
-            GlobalConcurrencyLimitCreate(name=name, limit=slots, active=active)
-        )
-    return name
 
 
 @pytest.fixture
@@ -466,6 +453,88 @@ def test_a_limit_that_is_not_one_active_slot_stops_the_flow_first(
     monkeypatch.setattr(flows.EMG_CONFIG.proteins, "dataset_concurrency_limit", name)
 
     with pytest.raises(OwnershipError, match=error):
+        run(D1) if flow == "update" else merge_flow.merge_protein_dataset()
+    assert statuses() == []
+    assert staged() == waiting
+    assert listing(root) == {}
+
+
+def lose_ownership_after(module, step, root, lost):
+    """Patches a step to give ownership to another execution once it has run, and records the files then."""
+    original = getattr(module, step)
+
+    def then_lose_ownership(*args):
+        result = original(*args)
+        query("UPDATE proteindb.dataset_owner SET execution_id = gen_random_uuid()")
+        lost.update(listing(root))
+        return result
+
+    return patch.object(module, step, then_lose_ownership)
+
+
+@pytest.mark.parametrize(
+    "step, error, status",
+    [
+        ("read_staged_rows", Killed, "running"),
+        ("write_day_files", Killed, "running"),
+        ("write_metadata_snapshot", OwnershipError, "failed"),
+        ("finish_update", Killed, "done"),
+    ],
+)
+def test_an_update_that_loses_ownership_writes_nothing_more(
+    root, stage, slurm, exits, step, error, status
+):
+    sacct, as_job = slurm
+    stage("ERZ101")
+    expected = staged()
+    as_job(1)
+    lost = {}
+    with lose_ownership_after(update, step, root, lost), pytest.raises(error):
+        run(D1)
+
+    assert listing(root) == lost
+    assert statuses() == [(D1, status)]
+    if status != "done":
+        assert staged() == expected
+    # The other execution was job 1's too, and its job has ended.
+    sacct[1] = f"COMPLETED|{SUBMITTED[1]}\n"
+    as_job(2)
+    run(D1)
+    assert in_dataset(root) == expected
+
+
+def test_a_merge_that_loses_ownership_writes_nothing_more(root, stage, slurm, exits):
+    sacct, as_job = slurm
+    stage("ERZ101")
+    run(D1)
+    stage("ERZ29562087")
+    run(D2)
+    expected = in_dataset(root)
+    as_job(1)
+    lost = {}
+    with lose_ownership_after(merge, "merge_prefix", root, lost), pytest.raises(Killed):
+        merge_flow.merge_protein_dataset()
+
+    assert listing(root) == lost
+    assert in_dataset(root) == expected
+    sacct[1] = f"COMPLETED|{SUBMITTED[1]}\n"
+    as_job(2)
+    merge_flow.merge_protein_dataset()
+    assert in_dataset(root) == expected
+    assert not list(root.glob("protein/*/day-*"))
+
+
+@pytest.mark.parametrize("flow", ["update", "merge"])
+def test_a_flow_whose_previous_owner_may_run_touches_nothing(root, stage, slurm, flow):
+    sacct, as_job = slurm
+    stage("ERZ101")
+    waiting = staged()
+    as_job(1)
+    take("update")  # and killed: nothing releases it
+    sacct[1] = f"RUNNING|{SUBMITTED[1]}\n"
+    as_job(2)
+
+    with pytest.raises(OwnershipError, match="owned by job 1,"):
         run(D1) if flow == "update" else merge_flow.merge_protein_dataset()
     assert statuses() == []
     assert staged() == waiting

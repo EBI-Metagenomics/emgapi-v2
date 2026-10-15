@@ -11,6 +11,7 @@ from pathlib import Path
 from django.conf import settings
 
 from proteins.dataset import layout
+from proteins.dataset.owner import Owner
 
 logger = logging.getLogger(__name__)
 
@@ -33,10 +34,11 @@ def clean_up_interrupted_merge(root: Path) -> None:
                     path.unlink()
 
 
-def merge_dataset(root: Path) -> int:
+def merge_dataset(root: Path, owner: Owner) -> int:
     """Merges the base file and the day files of each hash prefix into a new base file, dated with the latest complete day.
 
     :param root: The protein dataset's directory.
+    :param owner: This run's ownership of the protein dataset, checked before each prefix.
     :return: The number of prefixes merged.
     """
     day = layout.complete_days(root)[-1]
@@ -47,6 +49,7 @@ def merge_dataset(root: Path) -> int:
     for prefix, files in sorted(by_prefix.items()):
         if not any(f.name.startswith("day-") for f in files):
             continue
+        owner.check()
         merge_prefix(prefix, files, day)
         merged += 1
     return merged

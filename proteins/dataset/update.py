@@ -18,6 +18,7 @@ from django.db import connections, transaction
 from django.utils import timezone
 
 from proteins.dataset import layout, metadata
+from proteins.dataset.owner import Owner
 from proteins.models import DatasetUpdate
 from proteins.routers import MGYP
 
@@ -264,14 +265,17 @@ def finish_update(
     update_id: int,
     assembly_proteins_ids: list[int],
     counts: dict[str, int],
+    owner: Owner,
 ) -> None:
     """Deletes the staged rows that the day's files hold, and marks the update done. From here on, these rows exist only in the protein dataset.
 
     :param update_id: The id of the DatasetUpdate row.
     :param assembly_proteins_ids: The records whose staged rows were written.
     :param counts: The rows written to each table.
+    :param owner: This run's ownership of the protein dataset, confirmed in the transaction.
     """
     with transaction.atomic(using=MGYP):
+        owner.confirm()
         # Raw SQL: QuerySet.delete() would load the rows first.
         with connections[MGYP].cursor() as cursor:
             for table in ("occurrence", "contig", "protein"):

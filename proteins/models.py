@@ -235,3 +235,25 @@ class DatasetUpdate(MGnifyProteinsBase):
 
     def __str__(self):
         return f"Dataset update {self.day} ({self.status})"
+
+
+class DatasetOwner(MGnifyProteinsBase):
+    """The flow run that may write the protein dataset. One row, whose columns are NULL when no flow run owns it."""
+
+    class Flow(models.TextChoices):
+        UPDATE = "update"
+        MERGE = "merge"
+
+    id = models.BooleanField(primary_key=True, default=True)
+    flow = models.TextField(choices=Flow, null=True)
+    slurm_job_id = models.BigIntegerField(null=True)
+    slurm_submit_at = models.DateTimeField(null=True)
+    execution_id = models.UUIDField(null=True)
+    flow_run_id = models.UUIDField(null=True)
+    acquired_at = models.DateTimeField(null=True)
+
+    class Meta(MGnifyProteinsBase.Meta):
+        db_table = "dataset_owner"
+
+    def __str__(self):
+        return f"Protein dataset owner: {self.flow or 'none'}"

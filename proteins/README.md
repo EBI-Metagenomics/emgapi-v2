@@ -10,7 +10,7 @@ The source is the pipeline that called the genes. Today it is always `assembly_a
 
 | Part | What it is |
 |---|---|
-| MGYP database | PostgreSQL, Django alias `mgyp`, schema `proteindb`. It holds the hash and id of each protein, the assembly proteins records, the gene callers and the staged rows. `sql/mgyp_schema.sql` creates it, not Django migrations. The models in `models.py` are unmanaged. |
+| MGYP database | PostgreSQL, Django alias `mgyp`, schema `proteindb`. It holds the hash and id of each protein, the assembly proteins records, the gene callers, the staged rows, the dataset updates and the owner of the protein dataset. `sql/mgyp_schema.sql` creates it, not Django migrations. The models in `models.py` are unmanaged. |
 | Protein dataset | Parquet files in `EMG_CONFIG.proteins.dataset_dir`. All proteins, contigs and occurrences, and one metadata snapshot for each day. Protein releases read it. |
 | Accessioning core | `accession/`: the hash contract, the file reader, the MGYP lookup and the staging transaction. It does not import Django. |
 
@@ -22,6 +22,7 @@ The source is the pipeline that called the genes. Today it is always `assembly_a
 | `ingestion/analyses.py` | Pending analyses, chunks, and the ingestion of one analysis |
 | `dataset/layout.py`, `dataset/metadata.py` | The protein dataset layout, and the metadata snapshot |
 | `dataset/update.py`, `dataset/merge.py` | The steps of the dataset update and of the merge |
+| `dataset/owner.py` | Ownership of the protein dataset: the limit, the slot and the owner record |
 | `dataset/status.py` | The state and its checks |
 | `workflows/flows/proteins/` | The Prefect flows. Prefect runs all the work: there are no management commands. |
 
@@ -92,7 +93,9 @@ The schedules and the trigger are inactive until cutover.
 
 ### Only one writer
 
-The dataset update and the merge share one Prefect global concurrency limit, `protein-dataset`, with a limit of 1. So they never write the protein dataset at the same time. There is no guard against a process that Prefect marks Crashed while its SLURM job still runs: check with `sacct` before you start a flow again after a crash.
+The dataset update and the merge share one Prefect global concurrency limit, `protein-dataset`, with a limit of 1. So they never write the protein dataset at the same time. Prefect frees the slot of a run it marks Crashed, whose SLURM job can still be alive, so the MGYP database also records the owner in `dataset_owner`: its flow, SLURM job and submit time. The next update or merge starts only when `sacct` shows that job has ended normally, and a flow run that lost ownership exits before it writes again.
+
+An update or merge that fails at start with "The protein dataset is owned by job N" found an owner whose job has not visibly ended. Run `sacct -j N`. If the job still runs and should not, `scancel N` and wait until `sacct` shows it ended: the next run then takes over by itself. If its node failed, make sure with the cluster team that none of its processes still run. Only then, with the schedules paused, clear the row as `proteindb_owner`: `UPDATE proteindb.dataset_owner SET flow = NULL, slurm_job_id = NULL, slurm_submit_at = NULL, execution_id = NULL, flow_run_id = NULL, acquired_at = NULL WHERE execution_id = '<the recorded one>'`. If the Prefect slot is still taken too, reset its active slots to 0 with `prefect gcl update protein-dataset --active-slots 0`. Resume the schedules. Never clear the row while the old job might still run.
 
 ## Tests
 

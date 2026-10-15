@@ -1,7 +1,7 @@
 from django.contrib import admin
 from unfold.admin import ModelAdmin
 
-from proteins.models import AssemblyProteins, DatasetUpdate
+from proteins.models import AssemblyProteins, DatasetOwner, DatasetUpdate
 
 # There is no admin for Protein: the admin counts all rows of a table, and it has billions.
 
@@ -45,3 +45,8 @@ class DatasetUpdateAdmin(ReadOnlyAdmin):
     )
     list_filter = ("status",)
     ordering = ("-id",)
+
+
+@admin.register(DatasetOwner)
+class DatasetOwnerAdmin(ReadOnlyAdmin):
+    list_display = ("flow", "slurm_job_id", "slurm_submit_at", "acquired_at")

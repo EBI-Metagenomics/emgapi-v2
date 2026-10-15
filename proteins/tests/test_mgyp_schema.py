@@ -28,6 +28,7 @@ def test_creates_every_table_and_sequence():
         "staged_contig",
         "staged_occurrence",
         "dataset_update",
+        "dataset_owner",
     }
     sequences = {
         name
@@ -159,6 +160,21 @@ def record(erz="ERZ1", source="assembly_analysis", version="6.1", mgya="MGYA1"):
             "INSERT INTO proteindb.dataset_update (day, status) VALUES ('2026-10-01', 'done')",
             "INSERT INTO proteindb.dataset_update (day, status) VALUES ('2026-10-01', 'done')",
             "dataset_update_one_done_per_day",
+        ),
+        (
+            None,
+            "INSERT INTO proteindb.dataset_owner DEFAULT VALUES",
+            "dataset_owner_pkey",
+        ),
+        (
+            None,
+            "INSERT INTO proteindb.dataset_owner (id) VALUES (false)",
+            "dataset_owner_id_check",
+        ),
+        (
+            None,
+            "UPDATE proteindb.dataset_owner SET flow = 'other'",
+            "dataset_owner_flow_check",
         ),
     ],
 )

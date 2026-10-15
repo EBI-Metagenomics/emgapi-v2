@@ -111,6 +111,19 @@ CREATE TABLE dataset_update (
 -- Keeps a rerun from overwriting a day already written to the protein dataset.
 CREATE UNIQUE INDEX dataset_update_one_done_per_day ON dataset_update (day) WHERE status = 'done';
 
+-- The current writer of the protein dataset: a dataset update or a merge. One row; the columns are NULL
+-- when no one owns it.
+CREATE TABLE dataset_owner (
+    id              boolean PRIMARY KEY DEFAULT true CHECK (id),
+    flow            text CHECK (flow IN ('update', 'merge')),
+    slurm_job_id    bigint,
+    slurm_submit_at timestamptz,     -- with the job id, names the job even if SLURM reuses the id
+    execution_id    uuid,            -- new for every process that takes ownership
+    flow_run_id     uuid,
+    acquired_at     timestamptz
+);
+INSERT INTO dataset_owner DEFAULT VALUES;
+
 -- Roles belong to the cluster, so they are created outside this file, which only grants to them.
 -- proteindb_owner owns the schema by applying this file, which needs only CREATE on the database.
 -- The roles' database-level settings, which need more, are in mgyp_roles.sql.
@@ -120,6 +133,7 @@ GRANT USAGE ON SCHEMA proteindb TO proteindb_accession, proteindb_load, proteind
 GRANT SELECT, INSERT ON protein, assembly_proteins, gene_caller TO proteindb_accession;
 GRANT SELECT, INSERT, DELETE ON staged_protein, staged_contig, staged_occurrence TO proteindb_accession;
 GRANT SELECT, INSERT, UPDATE ON dataset_update TO proteindb_accession;
+GRANT SELECT, UPDATE ON dataset_owner TO proteindb_accession;
 GRANT USAGE, SELECT ON SEQUENCE protein_id_seq, contig_id_seq, occurrence_id_seq TO proteindb_accession;
 
 GRANT SELECT ON ALL TABLES IN SCHEMA proteindb TO proteindb_read;

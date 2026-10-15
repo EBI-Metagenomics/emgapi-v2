@@ -1,5 +1,6 @@
 from datetime import date
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import pyarrow as pa
@@ -9,6 +10,8 @@ import pytest
 from proteins.dataset import layout, merge
 
 DAY1, DAY2, DAY3, DAY4 = (date(2026, 9, n) for n in range(1, 5))
+# Ownership is tested through the flows, in test_update and test_owner.
+OWNED = SimpleNamespace(check=lambda: None)
 
 
 def write_proteins(root, prefix, name, ids):
@@ -105,7 +108,7 @@ def test_files_refuse_an_incomplete_day_an_unknown_table_and_no_complete_day(
 
 
 def test_files_refuse_a_day_older_than_the_oldest_base(dataset):
-    merge.merge_dataset(dataset)
+    merge.merge_dataset(dataset, OWNED)
     assert ids(dataset, DAY3) == [1, 2, 3, 4, 6, 7]
     with pytest.raises(layout.DatasetError, match="older than the oldest base"):
         layout.files(dataset, "protein", DAY2)
@@ -113,7 +116,7 @@ def test_files_refuse_a_day_older_than_the_oldest_base(dataset):
 
 def test_merge_writes_one_base_per_prefix_and_keeps_incomplete_days(dataset):
     before = ids(dataset)
-    assert merge.merge_dataset(dataset) == 2
+    assert merge.merge_dataset(dataset, OWNED) == 2
     assert sorted(state(dataset)) == [
         f"protein/prefix=00/base-{DAY3}.parquet",
         f"protein/prefix=00/day-{DAY4}.parquet",
@@ -130,10 +133,10 @@ def test_merge_writes_one_base_per_prefix_and_keeps_incomplete_days(dataset):
 
 
 def test_a_second_merge_changes_nothing(dataset):
-    merge.merge_dataset(dataset)
+    merge.merge_dataset(dataset, OWNED)
     merged = state(dataset)
     merge.clean_up_interrupted_merge(dataset)
-    assert merge.merge_dataset(dataset) == 0
+    assert merge.merge_dataset(dataset, OWNED) == 0
     assert state(dataset) == merged
 
 
@@ -146,7 +149,7 @@ def test_a_crash_at_each_step_of_the_merge(tmp_path):
     the crash and after the clean-up, and the rerun ends as an uninterrupted merge."""
     root = build(tmp_path / "uninterrupted")
     before = ids(root)
-    merge.merge_dataset(root)
+    merge.merge_dataset(root, OWNED)
     uninterrupted = state(root)
 
     rename, unlink = Path.rename, Path.unlink
@@ -169,7 +172,7 @@ def test_a_crash_at_each_step_of_the_merge(tmp_path):
                 patch.object(Path, "rename", crash_at_step(rename)),
                 patch.object(Path, "unlink", crash_at_step(unlink)),
             ):
-                merge.merge_dataset(root)
+                merge.merge_dataset(root, OWNED)
         except Crash:
             pass
         else:
@@ -177,7 +180,7 @@ def test_a_crash_at_each_step_of_the_merge(tmp_path):
         assert ids(root) == before, step
         merge.clean_up_interrupted_merge(root)
         assert ids(root) == before, step
-        merge.merge_dataset(root)
+        merge.merge_dataset(root, OWNED)
         assert state(root) == uninterrupted, step
     # Each prefix: the base's rename, then deleting what it merged.
     assert step == (1 + 3) + (1 + 1)

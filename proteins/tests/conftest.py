@@ -1,9 +1,15 @@
+import os
+import subprocess
 from contextlib import contextmanager
+from datetime import datetime
 from pathlib import Path
+from uuid import uuid4
 
 import psycopg
 import pytest
 from django.db import connections, transaction
+from prefect.client.orchestration import get_client
+from prefect.client.schemas.actions import GlobalConcurrencyLimitCreate
 from psycopg.conninfo import make_conninfo
 
 import ena.models as ena_models
@@ -94,6 +100,10 @@ def emptied_mgyp_db(mgyp_db):
         " proteindb.staged_protein, proteindb.staged_contig, proteindb.staged_occurrence,"
         " proteindb.dataset_update RESTART IDENTITY"
     )
+    query(
+        "UPDATE proteindb.dataset_owner SET flow = NULL, slurm_job_id = NULL,"
+        " slurm_submit_at = NULL, execution_id = NULL, flow_run_id = NULL, acquired_at = NULL"
+    )
 
 
 @pytest.fixture
@@ -175,3 +185,64 @@ def make_analysis(study, erz, version="V6", results_dir=None, state=IMPORTED):
     )
     analysis.mark_status(state)
     return analysis
+
+
+class Killed(BaseException):
+    """Ends a process as a kill would: no handler of its own runs."""
+
+
+@pytest.fixture
+def exits(monkeypatch):
+    """Makes os._exit raise Killed, so that a test sees the process exit."""
+
+    def exit(code):
+        raise Killed(code)
+
+    monkeypatch.setattr(os, "_exit", exit)
+
+
+SUBMITTED = {1: "2026-10-01T02:00:00", 2: "2026-10-02T02:00:00"}
+
+
+def submitted(job):
+    return datetime.fromisoformat(SUBMITTED[job]).astimezone()
+
+
+@pytest.fixture
+def slurm(monkeypatch):
+    """A mocked SLURM, where this process is job 2. `as_job(n)` makes it job n, and `sacct[n]` is
+    every record of job n.
+
+    Like sacct, it prints only the most recent record without -D.
+    """
+    sacct = {}
+
+    def run(argv, **kwargs):
+        if argv[0] == "scontrol":
+            job = int(argv[-1])
+            out = f"JobId={job} JobName=x SubmitTime={SUBMITTED[job]} EligibleTime=x\n"
+        else:
+            out = sacct[int(argv[2])]
+            if isinstance(out, Exception):
+                raise out
+            if "-D" not in argv:
+                out = "".join(out.splitlines(keepends=True)[-1:])
+        return subprocess.CompletedProcess(argv, 0, out, "")
+
+    monkeypatch.setattr(subprocess, "run", run)
+
+    def as_job(job):
+        monkeypatch.setenv("SLURM_JOB_ID", str(job))
+
+    as_job(2)
+    return sacct, as_job
+
+
+def create_limit(slots=1, active=True):
+    """A Prefect global concurrency limit with a name of its own, as the Prefect server outlives the test."""
+    name = f"protein-dataset-{uuid4()}"
+    with get_client(sync_client=True) as client:
+        client.create_global_concurrency_limit(
+            GlobalConcurrencyLimitCreate(name=name, limit=slots, active=active)
+        )
+    return name
