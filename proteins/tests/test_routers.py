@@ -44,5 +44,7 @@ def test_mgyp_test_database_is_created_without_django_tables():
 
 def test_warns_only_without_the_mgyp_alias(monkeypatch):
     assert check_mgyp_database(None) == []
-    monkeypatch.delitem(settings.DATABASES, MGYP)
+    # A copy: Django's connections share the settings' dict.
+    without = {alias: db for alias, db in settings.DATABASES.items() if alias != MGYP}
+    monkeypatch.setattr(settings, "DATABASES", without)
     assert [message.id for message in check_mgyp_database(None)] == ["proteins.W001"]

@@ -1,3 +1,4 @@
+from contextlib import contextmanager
 from pathlib import Path
 
 import psycopg
@@ -5,11 +6,25 @@ import pytest
 from django.db import connections, transaction
 from psycopg.conninfo import make_conninfo
 
+from proteins.accession.inputs import read_input
 from proteins.routers import MGYP
 
+FIXTURES = Path(__file__).parent.parent / "fixtures"
 SQL = Path(__file__).parent.parent / "sql"
 SCHEMA_SQL, ROLES_SQL = SQL / "mgyp_schema.sql", SQL / "mgyp_roles.sql"
 ROLES = ("proteindb_accession", "proteindb_load", "proteindb_read")
+
+# Whole short contigs, with every gene on them, cut from the published V6 analyses
+# MGYA01028322, MGYA01030666 and MGYA01032591, chosen to cover each gene caller on
+# both strands and every partial= value.
+PUBLISHED_V6 = ("ERZ29562087", "ERZ25069264", "ERZ29895170")
+
+
+def read_published(assembly):
+    return read_input(
+        *(FIXTURES / f"{assembly}.{suffix}.gz" for suffix in ("faa", "gff", "fasta"))
+    )
+
 
 # Roles belong to the cluster, which every xdist worker's database shares, and concurrent
 # changes to one role fail. This lock conflicts with itself but not with ALTER ROLE's, so a
@@ -66,3 +81,45 @@ def query(sql, params=None):
     with connections[MGYP].cursor() as cursor:
         cursor.execute(sql, params)
         return cursor.fetchall() if cursor.description else None
+
+
+@pytest.fixture
+def emptied_mgyp_db(mgyp_db):
+    """For transactional tests, whose role connections commit outside the test's transaction."""
+    yield
+    query(
+        "TRUNCATE proteindb.protein, proteindb.assembly_proteins, proteindb.gene_caller,"
+        " proteindb.staged_protein, proteindb.staged_contig, proteindb.staged_occurrence,"
+        " proteindb.dataset_update RESTART IDENTITY"
+    )
+
+
+@pytest.fixture
+def connect_accession(emptied_mgyp_db):
+    """The accessioning core's connect: autocommit connections as proteindb_accession."""
+
+    @contextmanager
+    def connect():
+        with psycopg.connect(role_dsn("proteindb_accession"), autocommit=True) as conn:
+            yield conn
+
+    return connect
+
+
+def write_assembly(directory: Path, sequences: list[str], caller="Pyrodigal_v3.6.3"):
+    """An assembly's input: one gene per sequence, all on one contig."""
+    directory.mkdir(parents=True)
+    with open(directory / "in.faa", "w") as faa, open(directory / "in.gff", "w") as gff:
+        for n, sequence in enumerate(sequences, 1):
+            faa.write(
+                f">c1_{n} # {n} # {n + 8} # 1 # ID=1_{n};partial=00\n{sequence}\n"
+            )
+            gff.write(f"c1\t{caller}\tCDS\t{n}\t{n + 8}\t.\t+\t0\tID=c1_{n}\n")
+    (directory / "contigs.fasta").write_text(">c1\n" + "ACGT" * 250 + "\n")
+    return directory
+
+
+def read_assembly(directory: Path):
+    return read_input(
+        directory / "in.faa", directory / "in.gff", directory / "contigs.fasta"
+    )

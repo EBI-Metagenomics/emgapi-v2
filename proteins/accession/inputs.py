@@ -12,6 +12,7 @@ from .gff import read_gff
 SPADES_COVERAGE = re.compile(r"_cov_([0-9]+(?:\.[0-9]+)?)")
 PARTIAL = re.compile(r"(?<![^;\s])partial=([^;\s]*)")
 TRUNCATIONS = {"00", "01", "10", "11"}
+PIPELINE_VERSION = re.compile(r"([0-9]\.[0-9])(\..*)?")
 
 # Each gene caller of a pipeline version, and whether its FASTA headers carry a partial= flag.
 GeneCallers = dict[str, bool]
@@ -50,6 +51,21 @@ class Input(NamedTuple):
     occurrences: list[Occurrence]  # in the FASTA's order
     proteins: list[tuple[bytes, str]]  # distinct (hash, sequence), sorted by hash
     contigs: list[Contig]  # only those carrying a gene
+
+
+def major_minor(pipeline_version: str) -> str:
+    """6.0.5 -> 6.0. The release's version is decimal(2,1), so one digit each.
+
+    :param pipeline_version: The pipeline's version, e.g. 6.0.5.
+    """
+    match = PIPELINE_VERSION.fullmatch(pipeline_version)
+    if not match:
+        raise InvalidInput(
+            [
+                f"pipeline version {pipeline_version!r} is not major.minor, one digit each"
+            ]
+        )
+    return match[1]
 
 
 def read_input(

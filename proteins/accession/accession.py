@@ -8,7 +8,7 @@ from typing import Callable, ContextManager
 import psycopg
 from psycopg import sql
 
-from .inputs import Input
+from .inputs import Input, major_minor
 
 logger = logging.getLogger(__name__)
 
@@ -39,11 +39,13 @@ def accession(
     :param connect: Gives a connection to the MGYP database, for example proteins.routers.mgyp_connection.
     :param assembly: The ENA assembly accession.
     :param source: The pipeline that predicted the genes: "assembly_analysis" or "gene_calling".
-    :param pipeline_version: The source pipeline's major.minor.
+    :param pipeline_version: The source pipeline's version, reduced to major.minor.
     :param input: The proteins, contigs and occurrences, from read_input().
     :param analysis_accession: The MGYA of the assembly analysis.
     :param connections: How many connections the lookups use.
+    :raises InvalidInput: When the version is not major.minor with one digit each, before any connection.
     """
+    pipeline_version = major_minor(pipeline_version)
     hashes = [hash for hash, _ in input.proteins]
     ids = lookup(connect, hashes, connections)
     with connect() as conn:

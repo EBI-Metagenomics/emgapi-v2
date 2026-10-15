@@ -385,6 +385,8 @@ class ProteinsConfig(BaseModel):
     ingestion_chunk_size: int = 50
     # The Prefect global concurrency limit, with a limit of 1, that the dataset update and the merge share.
     dataset_concurrency_limit: str = "protein-dataset"
+    # How long a connection to the MGYP database waits for a free slot. Lookups hold theirs for minutes at most.
+    connection_wait_seconds: float = 600
 
 
 class EMGConfig(BaseSettings):
