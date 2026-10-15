@@ -84,7 +84,7 @@ The schedules and the trigger are inactive until cutover.
 | `IncompleteRerun` | Find out why a second run of the same ERZ and `major.minor` predicted proteins that the first did not. Nothing was written. |
 | `UnsupportedPipelineVersion`, `NotImplementedError` | The pipeline version of the analysis has no rule yet (`GeneCaller.BY_PIPELINE_VERSION`, `Analysis.predicted_genes_files()`). |
 | A dataset update failed | Run it again, or wait for the next run. Its first step deletes what a failed update left, and marks a committed day complete. |
-| `MissingAnalyses` in the dataset update | An MGYA of the MGYP database is not in emgapi-v2. Find out why the analysis was deleted. |
+| The dataset update logs "withholding the records of N MGYAs" | Those MGYAs of the MGYP database are not in emgapi-v2, so releases publish none of their proteins. Find out why the analyses were deleted, and restore them: the next update puts them back. |
 | A file of the protein dataset is lost or corrupted | Restore it from the backup. Files are never changed after they are written. |
 | The MGYP database lost commits that the dataset update has not read | No file has those MGYPs. Run `ingest_assembly_proteins` again: it finds the records that were lost. |
 | The MGYP database is lost | Restore it from the PostgreSQL backups, then run `ingest_assembly_proteins` again. |

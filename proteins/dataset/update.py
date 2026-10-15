@@ -246,7 +246,6 @@ def write_metadata_snapshot(root: Path, day: date, staged: Staged) -> None:
     :param root: The protein dataset's directory.
     :param day: The day.
     :param staged: What read_staged_rows() read.
-    :raises MissingAnalyses: When an MGYA of the MGYP database is not in emgapi-v2.
     """
     directory = root / "metadata" / f".tmp-day={day}"
     layout.write(

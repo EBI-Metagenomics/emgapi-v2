@@ -6,6 +6,8 @@ import pytest
 from django.db import connections, transaction
 from psycopg.conninfo import make_conninfo
 
+import ena.models as ena_models
+from analyses.models import Analysis, Assembly, Sample, Study
 from proteins.accession.inputs import read_input
 from proteins.routers import MGYP
 
@@ -139,3 +141,37 @@ def mgyp_as_accession(emptied_mgyp_db):
     yield
     connections[MGYP].close()
     settings.update(saved)
+
+
+IMPORTED = Analysis.AnalysisStates.ANALYSIS_ANNOTATIONS_IMPORTED
+
+
+def make_study(accession):
+    ena_study = ena_models.Study.objects.create(accession=accession, title=accession)
+    return Study.objects.create(ena_study=ena_study, title=accession)
+
+
+def make_analysis(study, erz, version="V6", results_dir=None, state=IMPORTED):
+    assembly = Assembly.objects.filter(ena_accessions__contains=[erz]).first()
+    if assembly is None:
+        ena_sample = ena_models.Sample.objects.create(
+            study=study.ena_study, accession=f"SAM{erz}"
+        )
+        sample = Sample.objects.create(ena_sample=ena_sample, ena_study=study.ena_study)
+        assembly = Assembly.objects.create(
+            reads_study=study,
+            ena_study=study.ena_study,
+            sample=sample,
+            ena_accessions=[erz],
+        )
+    analysis = Analysis.objects.create(
+        study=study,
+        ena_study=study.ena_study,
+        sample=assembly.sample,
+        assembly=assembly,
+        experiment_type=Analysis.ExperimentTypes.ASSEMBLY,
+        pipeline_version=version,
+        results_dir=results_dir and str(results_dir),
+    )
+    analysis.mark_status(state)
+    return analysis

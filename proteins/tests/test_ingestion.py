@@ -4,8 +4,7 @@ from unittest.mock import patch
 
 import pytest
 
-import ena.models as ena_models
-from analyses.models import Analysis, Assembly, Sample, Study
+from analyses.models import Analysis
 from proteins.accession.inputs import InvalidInput
 from proteins.ingestion import analyses
 from proteins.models import (
@@ -15,46 +14,13 @@ from proteins.models import (
     UnsupportedPipelineVersion,
 )
 from proteins.routers import MGYP
-from proteins.tests.conftest import FIXTURES, query
+from proteins.tests.conftest import FIXTURES, make_analysis, make_study, query
 from workflows.flows.proteins import ingest_assembly_proteins as flows
 
 pytestmark = [
     pytest.mark.django_db(databases=["default", MGYP], transaction=True),
     pytest.mark.usefixtures("mgyp_as_accession"),
 ]
-
-IMPORTED = Analysis.AnalysisStates.ANALYSIS_ANNOTATIONS_IMPORTED
-
-
-def make_study(accession):
-    ena_study = ena_models.Study.objects.create(accession=accession, title=accession)
-    return Study.objects.create(ena_study=ena_study, title=accession)
-
-
-def make_analysis(study, erz, version="V6", results_dir=None, state=IMPORTED):
-    assembly = Assembly.objects.filter(ena_accessions__contains=[erz]).first()
-    if assembly is None:
-        ena_sample = ena_models.Sample.objects.create(
-            study=study.ena_study, accession=f"SAM{erz}"
-        )
-        sample = Sample.objects.create(ena_sample=ena_sample, ena_study=study.ena_study)
-        assembly = Assembly.objects.create(
-            reads_study=study,
-            ena_study=study.ena_study,
-            sample=sample,
-            ena_accessions=[erz],
-        )
-    analysis = Analysis.objects.create(
-        study=study,
-        ena_study=study.ena_study,
-        sample=assembly.sample,
-        assembly=assembly,
-        experiment_type=Analysis.ExperimentTypes.ASSEMBLY,
-        pipeline_version=version,
-        results_dir=results_dir and str(results_dir),
-    )
-    analysis.mark_status(state)
-    return analysis
 
 
 @pytest.fixture

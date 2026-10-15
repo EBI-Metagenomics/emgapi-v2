@@ -1,11 +1,11 @@
 from pathlib import Path
 
 from prefect import get_run_logger
-from prefect.concurrency.sync import concurrency
 
 from activate_django_first import EMG_CONFIG
 
 from proteins.dataset import merge
+from proteins.dataset.owner import owner
 from workflows.prefect_utils.flows_utils import django_db_flow as flow
 from workflows.prefect_utils.flows_utils import django_db_task as task
 
@@ -31,15 +31,7 @@ def merge_protein_dataset() -> int:
     """
     logger = get_run_logger()
     root = Path(EMG_CONFIG.proteins.dataset_dir)
-    # One writer of the protein dataset at a time: the dataset update and the merge share this limit.
-    # strict: fail, rather than run without the limit, when the limit does not exist.
-    # KNOWN RISK: Prefect frees the slot when it marks a run Crashed (for example, when its heartbeats
-    # stop), but the SLURM job of that run can still be alive. If that process resumes, it can write
-    # to the protein dataset at the same time as the next run, and nothing stops it. After a crash,
-    # check with sacct that the old job has ended before you start the update or the merge again.
-    with concurrency(
-        EMG_CONFIG.proteins.dataset_concurrency_limit, occupy=1, strict=True
-    ):
+    with owner(EMG_CONFIG.proteins.dataset_concurrency_limit):
         clean_up_interrupted_merge(root)
         merged = merge_dataset(root)
     logger.info(f"Merged {merged} prefixes of the protein dataset")
