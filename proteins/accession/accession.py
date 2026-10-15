@@ -1,41 +1,47 @@
-"""Steps 3 to 5 of accessioning: looking up, staging, and writing the output."""
+"""Steps 3 and 4 of accessioning: looking up, and staging in one transaction."""
 
-import gzip
 import logging
-import os
-import time
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
-from pathlib import Path
-from typing import Callable
+from typing import Callable, ContextManager
 
 import psycopg
 from psycopg import sql
 
-from .inputs import Input, Occurrence
+from .inputs import Input
 
 logger = logging.getLogger(__name__)
 
-Connect = Callable[[], psycopg.Connection]  # a new connection, in autocommit
+# Gives a connection to the MGYP database, in autocommit, for the current thread, and takes it back
+# at the end of the with block. The caller decides where the connection comes from: in emgapi-v2,
+# proteins.routers.mgyp_connection() gives the connection of the Django mgyp alias.
+Connect = Callable[[], ContextManager[psycopg.Connection]]
 
 
 class IncompleteRerun(Exception):
-    """The analysis is already registered, but some of its proteins have no MGYP."""
+    """The assembly proteins record already exists, but some of its proteins have no MGYP."""
 
 
 def accession(
     connect: Connect,
     assembly: str,
+    source: str,
     pipeline_version: str,
     input: Input,
+    analysis_accession: str,
     connections: int = 16,
 ) -> dict[bytes, int]:
-    """Each protein's id, allocating and staging those that have none.
+    """Each protein's id, giving new ids to the proteins that have none and staging them.
 
-    :param connect: Opens a connection to Tier 1, as made by connector().
+    Safe to run again: when the assembly proteins record exists, it stages nothing and returns
+    the id of every protein.
+
+    :param connect: Gives a connection to the MGYP database, for example proteins.routers.mgyp_connection.
     :param assembly: The ENA assembly accession.
-    :param pipeline_version: The pipeline's major.minor.
-    :param input: The analysis's proteins, contigs and occurrences, from read_input().
+    :param source: The pipeline that predicted the genes: "assembly_analysis" or "gene_calling".
+    :param pipeline_version: The source pipeline's major.minor.
+    :param input: The proteins, contigs and occurrences, from read_input().
+    :param analysis_accession: The MGYA of the assembly analysis.
     :param connections: How many connections the lookups use.
     """
     hashes = [hash for hash, _ in input.proteins]
@@ -44,7 +50,16 @@ def accession(
         callers = register_gene_callers(
             conn, sorted({(o.caller_name, o.caller_version) for o in input.occurrences})
         )
-        staged = stage(conn, assembly, pipeline_version, input, ids, callers)
+        staged = stage(
+            conn,
+            assembly,
+            source,
+            pipeline_version,
+            input,
+            ids,
+            callers,
+            analysis_accession,
+        )
     if staged is not None:
         return ids | staged
 
@@ -53,11 +68,14 @@ def accession(
     missing = len(hashes) - len(ids)
     if missing:
         raise IncompleteRerun(
-            f"{assembly} {pipeline_version} is already registered,"
+            f"The assembly proteins record {assembly} {source} {pipeline_version} already exists,"
             f" but {missing} of its proteins have no MGYP"
         )
     logger.warning(
-        "%s %s was already accessioned; nothing was staged", assembly, pipeline_version
+        "The assembly proteins record %s %s %s already exists; nothing was staged",
+        assembly,
+        source,
+        pipeline_version,
     )
     return ids
 
@@ -65,7 +83,7 @@ def accession(
 def lookup(connect: Connect, hashes: list[bytes], connections: int) -> dict[bytes, int]:
     """The ids of the hashes that have one, looked up partition by partition.
 
-    :param connect: Opens a connection to Tier 1, as made by connector().
+    :param connect: Gives a connection to the MGYP database, in each thread of the lookups.
     :param hashes: The distinct protein hashes.
     :param connections: How many connections look up partitions at once.
     """
@@ -96,7 +114,7 @@ def lookup_partitions(
 ) -> dict[bytes, int]:
     """The ids of the hashes that have one, one partition after another, on one connection.
 
-    :param conn: A connection to Tier 1, in autocommit.
+    :param conn: A connection to the MGYP database, in autocommit.
     :param groups: Each partition with its hashes.
     """
     conn.execute("CREATE TEMP TABLE IF NOT EXISTS q (hash bytea)")
@@ -111,7 +129,7 @@ def lookup_partitions(
         found |= dict(
             conn.execute(
                 sql.SQL("SELECT q.hash, k.id FROM q JOIN {} k USING (hash)").format(
-                    sql.Identifier("proteindb", f"protein_key_{partition:02x}")
+                    sql.Identifier("proteindb", f"protein_{partition:02x}")
                 )
             ).fetchall()
         )
@@ -126,7 +144,7 @@ def register_gene_callers(
     Done before the transaction so that a new caller is committed at once, and
     other jobs meeting it do not wait for this job's transaction.
 
-    :param conn: A connection to Tier 1, in autocommit.
+    :param conn: A connection to the MGYP database, in autocommit.
     :param callers: The (name, version) of each gene caller, sorted.
     """
     names, versions = [name for name, _ in callers], [v for _, v in callers]
@@ -155,30 +173,34 @@ def register_gene_callers(
 def stage(
     conn: psycopg.Connection,
     assembly: str,
+    source: str,
     pipeline_version: str,
     input: Input,
     found: dict[bytes, int],
     callers: dict[tuple[str, str], int],
+    analysis_accession: str,
 ) -> dict[bytes, int] | None:
-    """The transaction: the ids of the proteins step 3 did not find, or None if the analysis is already registered.
+    """The transaction: the ids of the proteins step 3 did not find, or None if the assembly proteins record exists.
 
-    :param conn: A connection to Tier 1, in autocommit.
+    :param conn: A connection to the MGYP database, in autocommit.
     :param assembly: The ENA assembly accession.
-    :param pipeline_version: The pipeline's major.minor.
-    :param input: The analysis's proteins, contigs and occurrences, from read_input().
+    :param source: The pipeline that predicted the genes: "assembly_analysis" or "gene_calling".
+    :param pipeline_version: The source pipeline's major.minor.
+    :param input: The proteins, contigs and occurrences, from read_input().
     :param found: The ids the lookup found.
     :param callers: Each gene caller's id, by (name, version).
+    :param analysis_accession: The MGYA of the assembly analysis.
     """
     staged = None
     with conn.transaction():
         row = conn.execute(
-            "INSERT INTO assembly (accession, pipeline_version) VALUES (%s, %s)"
-            " ON CONFLICT DO NOTHING RETURNING id",
-            [assembly, pipeline_version],
+            "INSERT INTO assembly_proteins (assembly_accession, source, pipeline_version, analysis_accession)"
+            " VALUES (%s, %s, %s, %s) ON CONFLICT DO NOTHING RETURNING id",
+            [assembly, source, pipeline_version, analysis_accession],
         ).fetchone()
         if row is None:
             raise psycopg.Rollback
-        (assembly_id,) = row
+        (assembly_proteins_id,) = row
 
         conn.execute(
             "CREATE TEMP TABLE new_protein (sequence text, hash bytea PRIMARY KEY) ON COMMIT DROP"
@@ -197,44 +219,44 @@ def stage(
         conn.execute(
             """
             WITH ins AS (
-                INSERT INTO protein_key (hash, id)
+                INSERT INTO protein (hash, id)
                 SELECT hash, nextval('protein_id_seq') FROM new_protein ORDER BY hash
                 ON CONFLICT (hash) DO NOTHING
                 RETURNING hash, id
             )
-            INSERT INTO staging_protein (id, hash, sequence, assembly_id)
+            INSERT INTO staged_protein (id, hash, sequence, assembly_proteins_id)
             SELECT ins.id, ins.hash, n.sequence, %s FROM ins JOIN new_protein n USING (hash)
             """,
-            [assembly_id],
+            [assembly_proteins_id],
         )
         # Including the ones another job committed since step 3.
         staged = dict(
             conn.execute(
-                "SELECT n.hash, k.id FROM new_protein n JOIN protein_key k USING (hash)"
+                "SELECT n.hash, k.id FROM new_protein n JOIN protein k USING (hash)"
             ).fetchall()
         )
 
         copy_rows(
             conn,
-            "staging_contig (assembly_id, name, original_name, length, hash, kmer_coverage)",
+            "staged_contig (assembly_proteins_id, name, original_name, length, hash, kmer_coverage)",
             ["int4", "text", "text", "int4", "bytea", "float8"],
-            [(assembly_id, *contig) for contig in input.contigs],
+            [(assembly_proteins_id, *contig) for contig in input.contigs],
         )
         contig_ids = dict(
             conn.execute(
-                "SELECT name, id FROM staging_contig WHERE assembly_id = %s",
-                [assembly_id],
+                "SELECT name, id FROM staged_contig WHERE assembly_proteins_id = %s",
+                [assembly_proteins_id],
             ).fetchall()
         )
         ids = found | staged
         copy_rows(
             conn,
-            "staging_occurrence (assembly_id, gene_id, protein_id, contig_id, gene_caller_id,"
+            "staged_occurrence (assembly_proteins_id, gene_id, protein_id, contig_id, gene_caller_id,"
             " start_position, end_position, strand, truncation)",
             ["int4", "text", "int8", "int8", "int2", "int4", "int4", "int2", "text"],
             [
                 (
-                    assembly_id,
+                    assembly_proteins_id,
                     o.gene_id,
                     ids[o.hash],
                     contig_ids[o.contig],
@@ -253,7 +275,7 @@ def stage(
 def copy_rows(conn: psycopg.Connection, table: str, types: list[str], rows) -> None:
     """Writes rows to a table with a binary COPY.
 
-    :param conn: A connection to Tier 1.
+    :param conn: A connection to the MGYP database.
     :param table: The table, with its column list.
     :param types: The PostgreSQL type of each column.
     :param rows: Tuples in column order.
@@ -270,104 +292,3 @@ def mgyp(id: int) -> str:
     :param id: The protein's id.
     """
     return f"MGYP{id:012d}"
-
-
-def write_output(path, occurrences: list[Occurrence], ids: dict[bytes, int]) -> None:
-    """The input FASTA with each gene's MGYP after its ID.
-
-    :param path: The output file.
-    :param occurrences: The input's occurrences, in input order.
-    :param ids: Each protein hash's id.
-    """
-    write_lines(
-        path,
-        (
-            ">{}\n{}\n".format(
-                " ".join(filter(None, (o.gene_id, mgyp(ids[o.hash]), o.description))),
-                o.sequence,
-            )
-            for o in occurrences
-        ),
-    )
-
-
-def write_lookup(path, genes: list[tuple[str, bytes]], ids: dict[bytes, int]) -> None:
-    """Each gene's MGYP, empty when its protein has none.
-
-    :param path: The output file.
-    :param genes: Each gene's id and protein hash, in input order.
-    :param ids: The ids the lookup found.
-    """
-    write_lines(
-        path,
-        (f"{gene}\t{mgyp(ids[hash]) if hash in ids else ''}\n" for gene, hash in genes),
-    )
-
-
-def write_lines(path, lines) -> None:
-    """Written under a temporary name and renamed into place, gzipped if the name ends in .gz.
-
-    :param path: The file to write.
-    :param lines: Text lines, each ending in a newline.
-    """
-    path = Path(path)
-    tmp = path.with_name(f".{path.name}.tmp")
-    with open(tmp, "wb") as raw:
-        out = (
-            gzip.GzipFile(filename="", fileobj=raw, mode="wb", compresslevel=6, mtime=0)
-            if path.suffix == ".gz"
-            else raw
-        )
-        for line in lines:
-            out.write(line.encode())
-        if out is not raw:
-            out.close()
-        raw.flush()
-        os.fsync(raw.fileno())
-    os.replace(tmp, path)
-
-
-class CannotConnect(Exception):
-    """A connection could not be opened: the connection limit, the network, a restarting server, or the DSN."""
-
-
-def connector(dsn: str, application_name: str) -> Connect:
-    """A function that opens an autocommit connection to Tier 1, and raises CannotConnect when it cannot.
-
-    :param dsn: libpq connection string of Tier 1.
-    :param application_name: The name its connections show in pg_stat_activity.
-    """
-
-    def connect():
-        try:
-            return psycopg.connect(
-                dsn, autocommit=True, application_name=application_name
-            )
-        except psycopg.OperationalError as e:
-            raise CannotConnect(str(e).strip()) from e
-
-    return connect
-
-
-def retry_on_connect_failure(run: Callable, max_wait=1800.0, first_delay=1.0):
-    """Runs run() again, with backoff, while it fails to open a connection.
-
-    Errors after a connection is open are not retried. run() must close its
-    connections when it fails, so that waiting frees them for others.
-
-    :param run: The function to run.
-    :param max_wait: Seconds of waiting after which a failure to connect is raised.
-    :param first_delay: Seconds before the first retry. Each delay doubles, up to a minute.
-    :return: What run() returns.
-    """
-    waited, delay = 0.0, first_delay
-    while True:
-        try:
-            return run()
-        except CannotConnect as e:
-            if waited >= max_wait:
-                raise
-            logger.warning("cannot connect (%s); trying again in %.1f s", e, delay)
-        time.sleep(delay)
-        waited += delay
-        delay = min(2 * delay, 60.0)

@@ -185,14 +185,14 @@ DATABASES = {
     ),
 }
 
-if os.getenv("PROTEINDB_DATABASE_URL"):
-    DATABASES["proteindb"] = dj_database_url.config(
-        env="PROTEINDB_DATABASE_URL",
+if os.getenv("MGYP_DATABASE_URL"):
+    DATABASES["mgyp"] = dj_database_url.config(
+        env="MGYP_DATABASE_URL",
         conn_max_age=600,
         conn_health_checks=True,
     )
 
-DATABASE_ROUTERS = ["proteins.routers.ProteinDBRouter"]
+DATABASE_ROUTERS = ["proteins.routers.MGYPRouter"]
 
 TASKS = {
     "default": {

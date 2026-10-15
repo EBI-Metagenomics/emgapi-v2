@@ -5,7 +5,7 @@ import os
 import re
 from collections.abc import Iterable, Mapping
 from pathlib import Path
-from typing import ClassVar, Literal, Optional, Union
+from typing import ClassVar, Literal, NamedTuple, Optional, Union
 
 from aenum import extend_enum
 from db_file_storage.model_utils import delete_file, delete_file_if_needed
@@ -888,6 +888,17 @@ class PublicAnalysisManagerIncludingAnnotations(
     pass
 
 
+# PROTOTYPE: fabricated for the proteins app. The analyses app owns this type.
+class PredictedGenesFiles(NamedTuple):
+    """The gene prediction outputs of an assembly analysis, or of a gene calling."""
+
+    proteins: Path  # protein FASTA (FAA)
+    genes: Path  # GFF of the predicted genes
+    contigs: Path  # contig FASTA that the genes are on
+    # TSV of the contig renames (original, renamed), if known
+    contig_map: Path | None = None
+
+
 class Analysis(
     InferredMetadataMixin,
     TimeStampedModel,
@@ -1107,6 +1118,39 @@ class Analysis(
     @property
     def raw_runs(self) -> Iterable[Run]:  # potentially >1, because of co-assemblies
         return self.assembly.runs if self.assembly else [self.run]
+
+    # PROTOTYPE: fabricated for the proteins app. The analyses app owns these methods.
+    # The analyses app team must review them, and can change their names and behaviour.
+
+    @property
+    def pipeline_major_minor(self) -> str:
+        """major.minor of the pipeline version: "V6.1" -> "6.1", "V5" -> "5.0"."""
+        return self.PipelineVersions(self.pipeline_version).label.removeprefix("v")
+
+    def predicted_genes_files(self) -> PredictedGenesFiles:
+        """The protein FASTA, the GFF and the contigs of this assembly analysis.
+
+        :return: The paths of the files.
+        :raises NotImplementedError: When the pipeline version has no rule yet.
+        """
+        if self.pipeline_version in {
+            self.PipelineVersions.v6,
+            self.PipelineVersions.v6_1,
+            self.PipelineVersions.v6_2,
+        }:
+            config = settings.EMG_CONFIG.assembly_analysis_pipeline
+            erz = self.assembly.first_accession
+            results = Path(self.results_dir)
+            return PredictedGenesFiles(
+                proteins=results / config.cds_folder / f"{erz}_predicted_cds.faa.gz",
+                genes=results / config.cds_folder / f"{erz}_predicted_cds.gff.gz",
+                contigs=results / config.qc_folder / f"{erz}_filtered_contigs.fasta.gz",
+            )
+        # TODO (analyses app): older pipeline versions. Find the files in self.downloads_as_objects
+        # (by alias), relative to where the legacy results are.
+        raise NotImplementedError(
+            f"No predicted genes files for pipeline version {self.pipeline_version}"
+        )
 
     def inherit_experiment_type(self):
         prev_experiment_type = f"{self.experiment_type}"

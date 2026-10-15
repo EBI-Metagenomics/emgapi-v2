@@ -9,10 +9,13 @@ from .contract import InvalidSequence, protein_hash, validate_sequence
 from .fasta import open_text, read_fasta
 from .gff import read_gff
 
-PIPELINE_VERSION = re.compile(r"([0-9]\.[0-9])(\..*)?")
 SPADES_COVERAGE = re.compile(r"_cov_([0-9]+(?:\.[0-9]+)?)")
 PARTIAL = re.compile(r"(?<![^;\s])partial=([^;\s]*)")
 TRUNCATIONS = {"00", "01", "10", "11"}
+
+# Each gene caller of a pipeline version, and whether its FASTA headers carry a partial= flag.
+GeneCallers = dict[str, bool]
+V6_GENE_CALLERS: GeneCallers = {"Pyrodigal": True, "FragGeneScanRS": False}
 
 
 class InvalidInput(ValueError):
@@ -49,48 +52,20 @@ class Input(NamedTuple):
     contigs: list[Contig]  # only those carrying a gene
 
 
-def major_minor(pipeline_version: str) -> str:
-    """6.0.5 -> 6.0. The registry's version is decimal(2,1) in the release, so one digit each.
-
-    :param pipeline_version: The pipeline's version, e.g. 6.0.5.
-    """
-    match = PIPELINE_VERSION.fullmatch(pipeline_version)
-    if not match:
-        raise InvalidInput(
-            [
-                f"pipeline version {pipeline_version!r} is not major.minor, one digit each"
-            ]
-        )
-    return match[1]
-
-
-def read_genes(faa) -> list[tuple[str, bytes]]:
-    """Each gene's id and protein hash, in the FASTA's order. Raises InvalidInput naming every problem found.
-
-    :param faa: A protein FASTA.
-    """
-    genes, seen, problems = [], set(), []
-    for record in read_fasta(faa):
-        if record.id in seen:
-            problems.append(f"{record.id}: more than one FASTA record")
-            continue
-        seen.add(record.id)
-        try:
-            genes.append((record.id, protein_hash(record.sequence)))
-        except InvalidSequence as e:
-            problems.append(f"{record.id}: {e}")
-    if problems:
-        raise InvalidInput(problems)
-    return genes
-
-
-def read_input(faa, gff, contigs, contig_map=None) -> Input:
+def read_input(
+    faa,
+    gff,
+    contigs,
+    contig_map=None,
+    gene_callers: GeneCallers = V6_GENE_CALLERS,
+) -> Input:
     """Raises InvalidInput naming every problem found, or ValueError for a malformed file.
 
     :param faa: The combined gene caller's protein FASTA.
     :param gff: Its merged GFF.
     :param contigs: The contigs the genes were called on.
     :param contig_map: The RENAME_CONTIGS mapping, if any.
+    :param gene_callers: The gene callers of the pipeline version, and whether each one writes a partial= flag.
     :return: The analysis's proteins, contigs and occurrences.
     """
     problems = []
@@ -116,18 +91,18 @@ def read_input(faa, gff, contigs, contig_map=None) -> Input:
         except InvalidSequence as e:
             problems.append(f"{record.id}: {e}")
             continue
+        if gene.caller_name not in gene_callers:
+            problems.append(
+                f"{record.id}: gene caller {gene.caller_name!r} is not one of {sorted(gene_callers)}"
+            )
+            continue
         truncation = None
-        if gene.caller_name == "Pyrodigal":
+        if gene_callers[gene.caller_name]:
             flags = PARTIAL.findall(record.description)
             if len(flags) != 1 or flags[0] not in TRUNCATIONS:
                 problems.append(f"{record.id}: no single valid partial= flag")
                 continue
             truncation = flags[0]
-        elif gene.caller_name != "FragGeneScanRS":
-            problems.append(
-                f"{record.id}: gene caller {gene.caller_name!r} is neither Pyrodigal nor FragGeneScanRS"
-            )
-            continue
         hash = protein_hash(sequence)
         proteins[hash] = sequence
         occurrences.append(

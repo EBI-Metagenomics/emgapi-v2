@@ -1,5 +1,5 @@
-"""mgyp-accession: assigns MGYPs to an assembly's proteins.
+"""The accessioning core: the hash contract, the file reader, the MGYP lookup and the staging transaction.
 
-This package must not import Django or anything else from emgapi-v2, because it is
-shipped on its own in the pipeline's container image.
+This package does not import Django. The caller gives it the connections (see accession.Connect):
+in emgapi-v2, proteins.routers.mgyp_connection() gives the psycopg connection of the Django mgyp alias.
 """

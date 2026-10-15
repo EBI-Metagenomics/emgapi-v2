@@ -1,7 +1,7 @@
--- The runtime roles' settings for the database, applied after tier1.sql.
--- Unlike tier1.sql, this needs ownership of the database, and CREATEROLE with the ADMIN option on the three roles.
+-- The runtime roles' settings for the database, applied after mgyp_schema.sql.
+-- Unlike mgyp_schema.sql, this needs ownership of the database, and CREATEROLE with the ADMIN option on the three roles.
 
--- tier1.sql's SET search_path applies only to its own session, so each role gets the schema at login.
+-- mgyp_schema.sql's SET search_path applies only to its own session, so each role gets the schema at login.
 -- The database is named at run time, since it differs between production, dev and the tests.
 DO $$
 DECLARE
