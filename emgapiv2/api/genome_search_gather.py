@@ -237,7 +237,7 @@ def _get_sourmash_job_status(
             if item.get("raw_csv_path") and Path(item["raw_csv_path"]).exists():
                 signature["results_url"] = (
                     f"{EMG_CONFIG.service_urls.app_root.rstrip('/')}/"
-                    f"{settings.BASE_URL}genomes-search/results/{job_id}/"
+                    f"{settings.BASE_URL}genomes/genome-search/results/{job_id}/"
                 )
                 has_results = True
             signatures.append(SourmashGatherSignatureStatus(**signature))
@@ -260,7 +260,7 @@ def _get_sourmash_job_status(
         signatures=signatures,
         results_url=(
             f"{EMG_CONFIG.service_urls.app_root.rstrip('/')}/"
-            f"{settings.BASE_URL}genomes-search/results/{job_id}/"
+            f"{settings.BASE_URL}genomes/genome-search/results/{job_id}/"
             if has_results
             else None
         ),
@@ -324,10 +324,10 @@ def _get_result_file(job_id: str) -> tuple[Optional[Path], Optional[str]]:
     return None, None
 
 
-@api_controller("genomes-search", tags=[ApiSections.GENOMES])
+@api_controller("genomes/genome-search", tags=[ApiSections.GENOMES])
 class GenomeSearchGatherController:
     @http_post(
-        "/gather/",
+        "/",
         response=SourmashGatherSubmissionOut,
         summary="Submit one or more sourmash gather jobs for uploaded signatures",
         operation_id="genome_search_gather_submit",
@@ -423,7 +423,7 @@ class GenomeSearchGatherController:
                 requested_catalogues=requested_catalogues,
                 status_url=(
                     f"{EMG_CONFIG.service_urls.app_root.rstrip('/')}/"
-                    f"{settings.BASE_URL}genomes-search/status/{task_result.id}/"
+                    f"{settings.BASE_URL}genomes/genome-search/status/{task_result.id}/"
                 ),
             )
         )
