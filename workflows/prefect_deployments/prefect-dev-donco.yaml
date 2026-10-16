@@ -413,14 +413,3 @@ deployments:
     job_variables:
       memory: 4
       time_limit: 1
-
-- name: export_assembly_analyses_deployment
-  description: |-
-    Write every assembly analysis, by ERZ accession and pipeline version, with its MGYA and metadata, to a Parquet file.
-  entrypoint: workflows/flows/proteins/export_assembly_analyses.py:export_assembly_analyses
-  parameters: {}
-  work_pool:
-    name: slurm
-    job_variables:
-      memory: 4
-      time_limit: 1

@@ -2,7 +2,7 @@ CREATE SCHEMA proteindb;
 SET search_path = proteindb;
 
 -- Ids have gaps: a sequence never hands a number back.
--- The migration sets each START to max(id) + 1 of the migrated data.
+-- Building the MGYP database from the protein dataset sets each START to max(id) + 1 of its data.
 CREATE SEQUENCE protein_id_seq    AS bigint;
 CREATE SEQUENCE contig_id_seq     AS bigint;
 CREATE SEQUENCE occurrence_id_seq AS bigint;

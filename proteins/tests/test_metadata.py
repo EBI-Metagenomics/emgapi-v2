@@ -1,14 +1,12 @@
 from unittest.mock import patch
 
 import pyarrow as pa
-import pyarrow.parquet as pq
 import pytest
 
 from analyses.models import Analysis, Biome
 from proteins.dataset import layout, metadata
 from proteins.dataset.update import ASSEMBLY_PROTEINS
 from proteins.tests.conftest import make_analysis, make_study
-from workflows.flows.proteins import export_assembly_analyses as export_flow
 
 pytestmark = pytest.mark.django_db
 
@@ -108,60 +106,8 @@ def test_a_flag_is_set_when_the_assembly_or_its_study_has_it(
     analysis = make_analysis(study, "ERZ1")
     for model, value in ((analysis.assembly, on_assembly), (study, on_study)):
         type(model).objects.filter(pk=model.pk).update(**{flag: value})
-    expected = on_assembly or on_study
 
     (row,) = metadata.build_snapshot(
         registry((1, analysis, "assembly_analysis"))
     ).to_pylist()
-    assert row[flag] is expected
-    (row,) = metadata.export_assembly_analyses().to_pylist()
-    assert row[flag] is expected
-
-
-@pytest.mark.usefixtures("prefect_harness")
-def test_the_export_has_the_lowest_mgya_of_each_erz_and_version(engineered, tmp_path):
-    a, b = make_study("PRJ1"), make_study("PRJ2")
-    v5 = make_analysis(a, "ERZ1", "V5")
-    make_analysis(b, "ERZ1", "V5")
-    v4_1 = make_analysis(a, "ERZ1", "V4.1")
-    v6 = make_analysis(b, "ERZ2", state=Analysis.AnalysisStates.ANALYSIS_STARTED)
-    v6.assembly.ena_accessions = ["ERZ2", "ERZ3"]
-    v6.assembly.save()
-    v6.sample.biome = engineered
-    v6.sample.save()
-
-    out = tmp_path / "export" / "assembly_analyses.parquet"
-    assert export_flow.export_assembly_analyses(str(out)) == 4
-    assert list(out.parent.iterdir()) == [out]
-    table = pq.read_table(out)
-    assert table.schema == metadata.ASSEMBLY_ANALYSES
-    row = dict(is_private=False, is_suppressed=False)
-    assert table.to_pylist() == [
-        dict(
-            assembly_accession="ERZ1",
-            pipeline_version="5.0",
-            analysis_accession=v5.accession,
-            study_accession=a.accession,
-            biome_lineage=None,
-            **row,
-        ),
-        dict(
-            assembly_accession="ERZ1",
-            pipeline_version="4.1",
-            analysis_accession=v4_1.accession,
-            study_accession=a.accession,
-            biome_lineage=None,
-            **row,
-        ),
-        *(
-            dict(
-                assembly_accession=erz,
-                pipeline_version="6.0",
-                analysis_accession=v6.accession,
-                study_accession=b.accession,
-                biome_lineage="root:Engineered",
-                **row,
-            )
-            for erz in ("ERZ2", "ERZ3")
-        ),
-    ]
+    assert row[flag] is (on_assembly or on_study)

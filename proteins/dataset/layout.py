@@ -1,7 +1,8 @@
 """The protein dataset: the Parquet layout, the rule for which files make up a day, and atomic writes.
 
 This module is the contract of the protein dataset files. It does not import Django, so that code
-outside emgapi-v2 (a protein release, the legacy import) can read and write the same layout.
+outside emgapi-v2 (a protein release, the migration from the current protein database) can read and
+write the same layout.
 """
 
 import os

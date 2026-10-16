@@ -41,7 +41,7 @@ The source is the pipeline that called the genes. Today it is always `assembly_a
 
 | Role | Used by |
 |---|---|
-| `proteindb_owner` | `mgyp_schema.sql`, and the migration of the current protein database |
+| `proteindb_owner` | `mgyp_schema.sql` |
 | `proteindb_accession` | emgapi-v2's `mgyp` alias: protein ingestion, dataset update, merge, admin |
 | `proteindb_read` | People, for queries by hand |
 | `proteindb_load` | Unused. It has only `USAGE` on the schema |
@@ -63,7 +63,6 @@ The source is the pipeline that called the genes. Today it is always `assembly_a
 | `update_protein_dataset_deployment` | 02:00 UTC | Moves the staged rows into a new day of the protein dataset. Holds the `protein-dataset` limit. Only adds files. |
 | `merge_protein_dataset_deployment` | 04:00 UTC on the 1st | Merges the base file and the day files of each hash prefix. Holds the `protein-dataset` limit. |
 | `check_proteins_status_deployment` | 08:00 UTC | Logs the state, and fails if any check fails. |
-| `export_assembly_analyses_deployment` | By hand | Writes every assembly analysis, by ERZ and pipeline version, with its MGYA and metadata, to a Parquet file. For the migration. |
 
 The schedules and the trigger are inactive until cutover.
 

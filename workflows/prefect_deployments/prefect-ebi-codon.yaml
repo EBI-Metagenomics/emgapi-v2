@@ -573,16 +573,3 @@ deployments:
       timezone: UTC
       # Activated at cutover, with the dataset update's.
       active: false
-
-- name: export_assembly_analyses_deployment
-  description: |-
-    Write every assembly analysis, by ERZ accession and pipeline version, with its MGYA, study, biome and flags, to a Parquet file.
-    Run by hand, for the legacy protein import.
-  entrypoint: workflows/flows/proteins/export_assembly_analyses.py:export_assembly_analyses
-  parameters: {}
-  work_pool:
-    name: slurm
-    job_variables:
-      cpu: 1
-      memory: 8
-      time_limit: 2
