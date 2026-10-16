@@ -70,6 +70,15 @@ def role_dsn(role, dbname=None) -> str:
     )
 
 
+def owner_dsn() -> str:
+    """A libpq connection string for the mgyp test database, as the role that applied its schema."""
+    owner = connections["default"].settings_dict
+    names = "USER", "PASSWORD"
+    return make_conninfo(
+        role_dsn(None), **{name.lower(): owner[name] for name in names}
+    )
+
+
 @pytest.fixture
 def connect_as(mgyp_db):
     """Opens connections as a role. Closing them at teardown discards what they did not commit."""

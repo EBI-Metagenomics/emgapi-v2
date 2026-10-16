@@ -4,6 +4,7 @@ from functools import cache
 from unittest.mock import patch
 from uuid import uuid4
 
+import psycopg
 import pyarrow.parquet as pq
 import pytest
 
@@ -11,15 +12,18 @@ from analyses.models import Study
 from proteins.accession.accession import accession
 from proteins.accession.inputs import read_input
 from proteins.dataset import layout, merge, update
+from proteins.dataset.build import build_mgyp_database
 from proteins.dataset.owner import OwnershipError, take
 from proteins.routers import MGYP
 from proteins.tests.conftest import (
     FIXTURES,
+    SCHEMA_SQL,
     SUBMITTED,
     Killed,
     create_limit,
     make_analysis,
     make_study,
+    owner_dsn,
     query,
     read_published,
 )
@@ -403,6 +407,54 @@ def test_an_analysis_committed_while_an_update_reads_waits_for_the_next(
     assert {mgya for _, _, mgya in snapshot(root)} == {
         first.accession,
         committed[0].accession,
+    }
+    assert staged() == NOTHING_STAGED
+
+
+@pytest.mark.parametrize(
+    "late",
+    [("ERZ101", "V6.1"), ("ERZ29562087", "V6")],
+    ids=["known-proteins", "new-protein"],
+)
+def test_a_rebuild_after_an_analysis_committed_while_an_update_read_stages_it_once(
+    root, stage, late, connect_accession
+):
+    stage("ERZ101")
+    choose = update.choose_assembly_proteins
+    committed = []
+
+    def choose_then_commit_another(cursor):
+        chosen = choose(cursor)
+        committed.append(stage(*late))
+        return chosen
+
+    with patch.object(update, "choose_assembly_proteins", choose_then_commit_another):
+        run(D1)
+    expected, waiting = in_dataset(root), staged()
+    ((last,),) = query("SELECT last_value FROM proteindb.protein_id_seq")
+
+    # The MGYP database is lost, with the late analysis's record, and rebuilt from day D1.
+    with psycopg.connect(owner_dsn(), autocommit=True) as conn:
+        conn.execute("DROP SCHEMA proteindb CASCADE")
+        conn.execute(SCHEMA_SQL.read_text())
+    build_mgyp_database(owner_dsn(), root, protein_id_start=last + 1)
+    analysis = committed[0]
+    accession(
+        connect_accession,
+        late[0],
+        "assembly_analysis",
+        analysis.pipeline_major_minor,
+        read(late[0]),
+        analysis.accession,
+        connections=4,
+    )
+    assert {table: len(rows) for table, rows in staged().items()} == {
+        table: len(rows) for table, rows in waiting.items()
+    }
+
+    run(D2)
+    assert {table: len(rows) for table, rows in in_dataset(root).items()} == {
+        table: len(expected[table]) + len(waiting[table]) for table in TABLES
     }
     assert staged() == NOTHING_STAGED
 

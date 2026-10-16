@@ -24,7 +24,8 @@ The source is the pipeline that called the genes. Today it is always `assembly_a
 | `dataset/update.py`, `dataset/merge.py` | The steps of the dataset update and of the merge |
 | `dataset/owner.py` | Ownership of the protein dataset: the limit, the slot and the owner record |
 | `dataset/status.py` | The state and its checks |
-| `workflows/flows/proteins/` | The Prefect flows. Prefect runs all the work: there are no management commands. |
+| `dataset/build.py`, `management/commands/build_mgyp_database.py` | Building the MGYP database from the protein dataset, after the migration and to recover a lost database. A command, because it runs as `proteindb_owner` |
+| `workflows/flows/proteins/` | The Prefect flows, which run the rest of the work |
 
 `Protein.objects.find_mgyps(["MKV…"])` gives the MGYP of each sequence that has one.
 
@@ -41,7 +42,7 @@ The source is the pipeline that called the genes. Today it is always `assembly_a
 
 | Role | Used by |
 |---|---|
-| `proteindb_owner` | `mgyp_schema.sql` |
+| `proteindb_owner` | `mgyp_schema.sql`, `build_mgyp_database` |
 | `proteindb_accession` | emgapi-v2's `mgyp` alias: protein ingestion, dataset update, merge, admin |
 | `proteindb_read` | People, for queries by hand |
 | `proteindb_load` | Unused. It has only `USAGE` on the schema |
@@ -50,8 +51,9 @@ The source is the pipeline that called the genes. Today it is always `assembly_a
 
 1. As `proteindb_owner`: `psql "<owner URI>" -v ON_ERROR_STOP=1 --single-transaction -f proteins/sql/mgyp_schema.sql`.
 2. As a role that can alter the roles: `mgyp_roles.sql`, in the same way. Until it is applied, add `?options=-c%20search_path%3Dproteindb` to the database URL.
-3. Create the concurrency limit on the Prefect server of the environment: `prefect gcl create protein-dataset --limit 1`. Without it, the dataset update and the merge fail at start.
-4. Set the settings above in the `env` of the base job template of the `slurm` work pool, and register the deployments.
+3. In production, once the migration has written the protein dataset's first day, as `proteindb_owner`: `python manage.py build_mgyp_database --dsn "host=H dbname=D user=proteindb_owner"`. It fills the MGYP database from the protein dataset, and refuses a schema that is not empty, so an interrupted build starts again from step 1, after `DROP SCHEMA proteindb CASCADE`.
+4. Create the concurrency limit on the Prefect server of the environment: `prefect gcl create protein-dataset --limit 1`. Without it, the dataset update and the merge fail at start.
+5. Set the settings above in the `env` of the base job template of the `slurm` work pool, and register the deployments.
 
 ## Flows
 
@@ -91,7 +93,8 @@ The schedules and the trigger are inactive until cutover.
 | A file of the protein dataset is lost or corrupted | Restore it from the backup. Files are never changed after they are written. |
 | The MGYP database lost commits that the dataset update has not read | No file has those MGYPs. Run `ingest_assembly_proteins` again: it finds the records that were lost. |
 | The MGYP database is lost | Restore it from the PostgreSQL backups, then run `ingest_assembly_proteins` again. |
-| A dataset update fails with "The protein dataset is ahead of the MGYP database" | The restored database is older than the last done dataset update, so it lost MGYPs that the protein dataset already has. Stop the protein ingestion, because it could give new MGYPs to those proteins. Restore to a later point if you can. If you cannot, the team decides what to do. |
+| A dataset update fails with "The protein dataset is ahead of the MGYP database" | The restored database is older than the last done dataset update, so it lost MGYPs that the protein dataset already has. Stop the protein ingestion, because it could give new MGYPs to those proteins. Restore to a later point if you can. If you cannot, rebuild it from the protein dataset, as below. |
+| The MGYP database is lost, and cannot be restored | Rebuild it from the protein dataset. Disable the trigger of `ingest_assembly_proteins_deployment`, and wait until no ingestion run is pending or running. As `proteindb_owner`, drop the schema (`DROP SCHEMA proteindb CASCADE`), apply `mgyp_schema.sql` again, and run `python manage.py build_mgyp_database --dsn "host=H dbname=D user=proteindb_owner" --protein-id-start N`. N must be above every MGYP the lost database could have given: above the `protein_id_seq` of the restored database, if there is one. The command refuses an N at or below the protein dataset's highest id. Enable the trigger again and run `ingest_assembly_proteins_deployment` once: the analyses whose records were lost are pending again, and get new MGYPs. |
 
 ### Only one writer
 
