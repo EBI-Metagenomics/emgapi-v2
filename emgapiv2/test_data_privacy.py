@@ -5,6 +5,7 @@ from ninja_jwt.tokens import SlidingToken
 from analyses.models import Analysis, Assembly, Run, Study
 from emgapiv2.api.auth import WebinJWTAuth
 from ena.models import Study as ENAStudy
+from genomes.models import AdditionalContainedGenomes, Genome, GenomeAssemblyLink
 
 
 def create_analysis(is_private=False, is_ready=True):
@@ -210,6 +211,164 @@ def auth_token_evil(webin_private_study):
     token = SlidingToken()
     token["username"] = webin_private_study.webin_submitter + "-evil"
     return str(token)
+
+
+ASSEMBLY_ENDPOINT_SUFFIXES = [
+    "",
+    "/genome-links",
+    "/additional-contained-genomes",
+    "/analyses",
+]
+
+
+@pytest.fixture
+def private_assembly(private_analysis_with_download):
+    analysis = private_analysis_with_download
+    assembly = Assembly.objects.create(
+        ena_accessions=["ERZ28561858"],
+        ena_study=analysis.ena_study,
+        reads_study=analysis.study,
+        sample=analysis.sample,
+        is_private=True,
+        webin_submitter=analysis.webin_submitter,
+    )
+    assembly.runs.add(analysis.run)
+    analysis.assembly = assembly
+    analysis.save()
+    genome = Genome.objects.create(accession="MGYG000000001")
+    GenomeAssemblyLink.objects.create(assembly=assembly, genome=genome)
+    AdditionalContainedGenomes.objects.create(
+        assembly=assembly, genome=genome, run=analysis.run, containment=0.9
+    )
+    return assembly
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("suffix", ASSEMBLY_ENDPOINT_SUFFIXES)
+@pytest.mark.parametrize(
+    ("actor", "expected_status"),
+    [("anonymous", 404), ("other", 404), ("owner", 200), ("admin", 200)],
+)
+def test_private_assembly_endpoint_access(
+    ninja_api_client,
+    private_assembly,
+    private_analysis_with_download,
+    webin_private_auth_token,
+    auth_token_evil,
+    admin_user,
+    suffix,
+    actor,
+    expected_status,
+):
+    kwargs = {}
+    if actor in {"owner", "other"}:
+        token = webin_private_auth_token if actor == "owner" else auth_token_evil
+        kwargs["headers"] = {"Authorization": f"Bearer {token}"}
+    elif actor == "admin":
+        kwargs["user"] = admin_user
+
+    response = ninja_api_client.get(
+        f"/assemblies/{private_assembly.first_accession}{suffix}", **kwargs
+    )
+    assert response.status_code == expected_status
+    if expected_status != 200:
+        return
+    data = response.json()
+    if not suffix:
+        assert data["accession"] == private_assembly.first_accession
+    else:
+        assert data["count"] == 1
+        if suffix == "/analyses":
+            assert (
+                data["items"][0]["accession"]
+                == private_analysis_with_download.accession
+            )
+        else:
+            assert data["items"][0]["genome"]["accession"] == "MGYG000000001"
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("suffix", ASSEMBLY_ENDPOINT_SUFFIXES)
+def test_public_assembly_endpoint_access(ninja_api_client, private_assembly, suffix):
+    private_assembly.is_private = False
+    private_assembly.save()
+    # Publish the attached analysis along with its assembly.
+    private_assembly.analyses.update(is_private=False)
+    response = ninja_api_client.get(
+        f"/assemblies/{private_assembly.first_accession}{suffix}"
+    )
+    assert response.status_code == 200
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("suffix", ASSEMBLY_ENDPOINT_SUFFIXES)
+@pytest.mark.parametrize("actor", ["owner", "admin"])
+def test_suppressed_private_assembly_is_hidden(
+    ninja_api_client,
+    private_assembly,
+    webin_private_auth_token,
+    admin_user,
+    suffix,
+    actor,
+):
+    private_assembly.is_suppressed = True
+    private_assembly.save()
+    kwargs = (
+        {"headers": {"Authorization": f"Bearer {webin_private_auth_token}"}}
+        if actor == "owner"
+        else {"user": admin_user}
+    )
+    response = ninja_api_client.get(
+        f"/assemblies/{private_assembly.first_accession}{suffix}", **kwargs
+    )
+    assert response.status_code == 404
+
+
+@pytest.mark.django_db
+def test_private_assembly_analyses_only_include_ready_unsuppressed_results(
+    ninja_api_client,
+    private_assembly,
+    private_analysis_with_download,
+    webin_private_auth_token,
+):
+    analysis = private_analysis_with_download
+    for accession, is_suppressed in [("MGYA00000889", False), ("MGYA00000890", True)]:
+        Analysis.objects.create(
+            accession=accession,
+            assembly=private_assembly,
+            study=analysis.study,
+            sample=analysis.sample,
+            ena_study=analysis.ena_study,
+            is_private=True,
+            webin_submitter=analysis.webin_submitter,
+            is_suppressed=is_suppressed,
+            status={
+                Analysis.AnalysisStates.ANALYSIS_ANNOTATIONS_IMPORTED: is_suppressed
+            },
+        )
+    response = ninja_api_client.get(
+        f"/assemblies/{private_assembly.first_accession}/analyses",
+        headers={"Authorization": f"Bearer {webin_private_auth_token}"},
+    )
+    assert response.status_code == 200
+    assert [item["accession"] for item in response.json()["items"]] == [
+        analysis.accession
+    ]
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("actor", ["anonymous", "owner", "admin"])
+def test_assemblies_list_excludes_private_assemblies(
+    ninja_api_client, private_assembly, webin_private_auth_token, admin_user, actor
+):
+    kwargs = {}
+    if actor == "owner":
+        kwargs["headers"] = {"Authorization": f"Bearer {webin_private_auth_token}"}
+    elif actor == "admin":
+        kwargs["user"] = admin_user
+    response = ninja_api_client.get("/assemblies/", **kwargs)
+    assert response.status_code == 200
+    assert response.json()["count"] == 0
 
 
 @pytest.mark.django_db
