@@ -469,6 +469,18 @@ class RequestTrackerConfig(BaseModel):
     token: str = Field(None)
 
 
+class ProteinsConfig(BaseModel):
+    dataset_dir: str = "/nfs/production/rdf/metagenomics/projects/protein_db/dataset"
+    # DuckDB goes over its memory limit while it sorts, so this is about half of the job memory.
+    duckdb_memory_limit: str = "32GB"
+    # Analyses in one chunk flow run of the protein ingestion. A first estimate.
+    ingestion_chunk_size: int = 50
+    # The Prefect global concurrency limit, with a limit of 1, that the dataset update and the merge share.
+    dataset_concurrency_limit: str = "protein-dataset"
+    # How long a connection to the MGYP database waits for a free slot. Lookups hold theirs for minutes at most.
+    connection_wait_seconds: float = 600
+
+
 class EMGConfig(BaseSettings):
     amplicon_pipeline: AmpliconPipelineConfig = AmpliconPipelineConfig()
     rawreads_pipeline: RawReadsPipelineConfig = RawReadsPipelineConfig()
@@ -493,6 +505,7 @@ class EMGConfig(BaseSettings):
     sentry_dsn: str = ""
     distribution: DataDistributionConfig = DataDistributionConfig()
     ebi_search: EBISearchConfig = EBISearchConfig()
+    proteins: ProteinsConfig = ProteinsConfig()
 
     model_config = SettingsConfigDict(
         env_prefix="emg_",

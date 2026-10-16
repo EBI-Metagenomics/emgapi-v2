@@ -466,3 +466,112 @@ deployments:
     name: slurm
     job_variables:
       memory: 4
+
+- name: ingest_assembly_proteins_deployment
+  description: |-
+    Find the assembly analyses with annotations imported whose proteins are not in the MGYP database yet,
+    and start one chunk flow for each chunk of up to EMG_PROTEINS__INGESTION_CHUNK_SIZE analyses of one study. It does not wait for the chunks.
+    The trigger starts it when the results sync of an assembly analysis batch completes. Run it by hand to ingest existing analyses, of all studies or of one.
+  entrypoint: workflows/flows/proteins/ingest_assembly_proteins.py:ingest_assembly_proteins
+  parameters: {}
+  concurrency_limit: 1
+  work_pool:
+    name: slurm
+    job_variables:
+      cpu: 1
+      memory: 4
+      time_limit: 2
+  triggers:
+    # Starts the protein ingestion when the results sync of an assembly analysis batch completes.
+    # The flow finds the pending analyses itself, so it needs no parameters from the event.
+    # TODO: check the event and related resource fields against the Prefect server.
+    # Enabled at cutover, with the schedules below.
+    - type: event
+      enabled: false
+      expect: ["prefect.flow-run.Completed"]
+      match_related:
+        prefect.resource.role: deployment
+        prefect.resource.name: sync_assembly_batch_results_deployment
+
+- name: ingest_assembly_proteins_chunk_deployment
+  description: |-
+    Give MGYPs to the proteins of each analysis of a chunk, and stage their rows for the dataset update.
+    A failed analysis does not stop the others; the flow fails at the end if any analysis failed. Started by ingest_assembly_proteins_deployment.
+  entrypoint: workflows/flows/proteins/ingest_assembly_proteins.py:ingest_assembly_proteins_chunk
+  parameters: {}
+  concurrency_limit: 8
+  work_pool:
+    name: slurm
+    job_variables:
+      cpu: 4
+      memory: 16
+      time_limit: 24
+
+- name: ingest_analysis_proteins_deployment
+  description: |-
+    Give MGYPs to the proteins of one MGYA, or of every annotated analysis of one ERZ, and stage their rows.
+    Run by hand, to test or to repeat one analysis.
+  entrypoint: workflows/flows/proteins/ingest_assembly_proteins.py:ingest_analysis_proteins
+  parameters: {}
+  work_pool:
+    name: slurm
+    job_variables:
+      cpu: 4
+      memory: 16
+      time_limit: 4
+
+- name: update_protein_dataset_deployment
+  description: |-
+    Move the staged rows of the MGYP database into a new day of the protein dataset, with its metadata snapshot.
+    It holds the protein-dataset concurrency limit from start to end, so it never runs with the merge. It only adds files.
+  entrypoint: workflows/flows/proteins/update_protein_dataset.py:update_protein_dataset
+  parameters: {}
+  concurrency_limit: 1
+  work_pool:
+    name: slurm
+    job_variables:
+      cpu: 8
+      memory: 64
+      time_limit: 12
+  schedules:
+    - cron: "0 2 * * *"
+      timezone: UTC
+      # Activated at cutover, once the cluster team confirms that the partition tracks processes with cgroups.
+      active: false
+
+- name: merge_protein_dataset_deployment
+  description: |-
+    For each hash prefix of the protein dataset, merge the base file and the day files into a new base file.
+    It holds the protein-dataset concurrency limit. Do not run it while a protein release reads the protein dataset.
+  entrypoint: workflows/flows/proteins/merge_protein_dataset.py:merge_protein_dataset
+  parameters: {}
+  concurrency_limit: 1
+  work_pool:
+    name: slurm
+    job_variables:
+      cpu: 8
+      memory: 64
+      time_limit: 24
+  schedules:
+    - cron: "0 4 1 * *"
+      timezone: UTC
+      active: false
+
+- name: check_proteins_status_deployment
+  description: |-
+    Log the state of the MGYP database and of the protein dataset, and fail if any of its checks fails: an overdue dataset update,
+    rows staged too long, an incomplete day before the last update, protein ids near their limit, annotated analyses of a pipeline
+    version with no gene-caller rule, records whose MGYA is not in emgapi-v2, or an owner of the protein dataset whose job is not running.
+  entrypoint: workflows/flows/proteins/check_proteins_status.py:check_proteins_status
+  parameters: {}
+  work_pool:
+    name: slurm
+    job_variables:
+      cpu: 1
+      memory: 2
+      time_limit: 1
+  schedules:
+    - cron: "0 8 * * *"
+      timezone: UTC
+      # Activated at cutover, with the dataset update's.
+      active: false
