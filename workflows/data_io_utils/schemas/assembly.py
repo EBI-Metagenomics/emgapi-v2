@@ -505,7 +505,7 @@ class AssemblyResultSchema(PipelineResultSchema):
                     validation_rules=[DirectoryExistsRule],
                     files=[
                         PipelineFileSchema(
-                            filename_template="{identifier}_sanntis_concatenated.gff.gz",
+                            filename_template="{identifier}_sanntis.gff.gz",
                             validation_rules=[FileIfExistsIsNotEmptyRule],
                             download_metadata=DownloadFileMetadata(
                                 file_type=DownloadFileType.GFF,
@@ -516,7 +516,7 @@ class AssemblyResultSchema(PipelineResultSchema):
                             ),
                         ),
                         PipelineFileSchema(
-                            filename_template="{identifier}_sanntis_summary.tsv.gz",
+                            filename_template="{identifier}_sanntis_concatenated_summary.tsv.gz",
                             validation_rules=[FileIfExistsIsNotEmptyRule],
                             download_metadata=DownloadFileMetadata(
                                 file_type=DownloadFileType.TSV,
@@ -526,6 +526,9 @@ class AssemblyResultSchema(PipelineResultSchema):
                                 long_description="Table with counts for each BGC found",
                             ),
                             content_validator=SanntisSummarySchema,
+                            index_files=[
+                                DownloadFileIndexFileMetadata(index_type="gzi"),
+                            ],
                         ),
                     ],
                 ),
