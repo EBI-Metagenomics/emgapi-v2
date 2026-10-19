@@ -107,8 +107,13 @@ def write_day(root, day, proteins, kind, records=RECORDS):
         }
         for record in records
     ]
+    registry = [
+        {**record, "id": record["assembly_proteins_id"], "source": "assembly_analysis"}
+        for record in records
+    ]
     for table, rows in [
         ("metadata/assembly_proteins", snapshot),
+        ("metadata/assembly_proteins_registry", registry),
         ("metadata/gene_callers", GENE_CALLERS),
     ]:
         layout.write(

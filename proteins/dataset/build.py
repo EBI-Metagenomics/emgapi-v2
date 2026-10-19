@@ -28,9 +28,9 @@ TABLES = (
 )
 REGISTRIES = {
     "assembly_proteins": (
-        "metadata/assembly_proteins",
+        "metadata/assembly_proteins_registry",
         {
-            "id": "assembly_proteins_id",
+            "id": "id",
             "assembly_accession": "assembly_accession",
             "source": "source",
             "pipeline_version": "pipeline_version",

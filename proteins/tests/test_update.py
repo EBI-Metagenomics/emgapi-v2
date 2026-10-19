@@ -153,6 +153,7 @@ def day_layout(day, proteins):
         f"occurrence/day={day}/part-000.parquet",
         f"contig/day={day}/part-000.parquet",
         f"metadata/day={day}/assembly_proteins.parquet",
+        f"metadata/day={day}/assembly_proteins_registry.parquet",
         f"metadata/day={day}/gene_callers.parquet",
     }
 
@@ -477,6 +478,48 @@ def test_a_record_whose_mgya_is_not_in_emgapi_is_withheld_and_the_rest_loaded(
         known.accession,
         unknown.accession,
     }
+
+
+def test_a_rebuild_restores_a_withheld_record_and_never_gives_its_id_to_another(
+    root, stage, connect_accession
+):
+    stage("ERZ101")
+    withheld = stage("ERZ29562087", known=False)
+    run(D1)
+    before = in_dataset(root)
+    ((last,),) = query("SELECT last_value FROM proteindb.protein_id_seq")
+    ((withheld_id,),) = query(
+        "SELECT id FROM proteindb.assembly_proteins WHERE analysis_accession = %s",
+        [withheld.accession],
+    )
+
+    # The MGYP database is lost and rebuilt from day D1, whose snapshot withholds the record.
+    with psycopg.connect(owner_dsn(), autocommit=True) as conn:
+        conn.execute("DROP SCHEMA proteindb CASCADE")
+        conn.execute(SCHEMA_SQL.read_text())
+    build_mgyp_database(owner_dsn(), root, protein_id_start=last + 1)
+    unrelated = stage("ERZ25069264")
+    withheld.save(force_insert=True)
+    accession(
+        connect_accession,
+        "ERZ29562087",
+        "assembly_analysis",
+        withheld.pipeline_major_minor,
+        read("ERZ29562087"),
+        withheld.accession,
+        connections=4,
+    )
+    added = staged()
+
+    run(D2)
+    ids = dict(query("SELECT analysis_accession, id FROM proteindb.assembly_proteins"))
+    assert ids[withheld.accession] == withheld_id != ids[unrelated.accession]
+    (path,) = layout.files(root, "metadata/assembly_proteins")
+    assert (withheld_id, withheld.accession) in {
+        (row["assembly_proteins_id"], row["analysis_accession"])
+        for row in pq.read_table(path).to_pylist()
+    }
+    assert in_dataset(root) == joined(before, added)
 
 
 def test_a_flag_changed_in_emgapi_is_in_the_next_snapshot_both_ways(root, stage, study):

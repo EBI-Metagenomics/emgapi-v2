@@ -5,7 +5,6 @@ import pytest
 
 from analyses.models import Analysis, Biome
 from proteins.dataset import layout, metadata
-from proteins.dataset.update import ASSEMBLY_PROTEINS
 from proteins.tests.conftest import make_analysis, make_study
 
 pytestmark = pytest.mark.django_db
@@ -24,7 +23,7 @@ def registry(*records):
             }
             for id, analysis, source in records
         ],
-        ASSEMBLY_PROTEINS,
+        layout.SCHEMAS["metadata/assembly_proteins_registry"],
     )
 
 

@@ -28,16 +28,6 @@ logger = logging.getLogger(__name__)
 STAGED_TABLES = ("protein", "contig", "occurrence")
 # The rows that a server-side cursor sends at a time.
 BATCH_ROWS = 100_000
-# The assembly_proteins rows, as metadata.build_snapshot() takes them.
-ASSEMBLY_PROTEINS = pa.schema(
-    [
-        pa.field("id", pa.int32(), False),
-        pa.field("assembly_accession", pa.string(), False),
-        pa.field("source", pa.string(), False),
-        pa.field("pipeline_version", pa.string(), False),
-        pa.field("analysis_accession", pa.string(), False),
-    ]
-)
 
 
 class DatasetUpdateError(Exception):
@@ -146,7 +136,9 @@ def read_staged_rows(scratch: Path) -> Staged:
                 "SELECT id, assembly_accession, source, pipeline_version, analysis_accession"
                 " FROM assembly_proteins"
             )
-            assembly_proteins = to_table(cursor.fetchall(), ASSEMBLY_PROTEINS)
+            assembly_proteins = to_table(
+                cursor.fetchall(), layout.SCHEMAS["metadata/assembly_proteins_registry"]
+            )
             cursor.execute("SELECT id, name, version FROM gene_caller")
             gene_callers = to_table(
                 cursor.fetchall(), layout.SCHEMAS["metadata/gene_callers"]
@@ -242,7 +234,7 @@ def by_prefix(
 
 
 def write_metadata_snapshot(root: Path, day: date, staged: Staged) -> None:
-    """Writes the metadata snapshot of the day, not yet complete.
+    """Writes the metadata snapshot and the registries of the day, not yet complete.
 
     :param root: The protein dataset's directory.
     :param day: The day.
@@ -253,6 +245,11 @@ def write_metadata_snapshot(root: Path, day: date, staged: Staged) -> None:
         directory / "assembly_proteins.parquet",
         "metadata/assembly_proteins",
         metadata.build_snapshot(staged.assembly_proteins),
+    )
+    layout.write(
+        directory / "assembly_proteins_registry.parquet",
+        "metadata/assembly_proteins_registry",
+        staged.assembly_proteins,
     )
     layout.write(
         directory / "gene_callers.parquet",

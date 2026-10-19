@@ -63,6 +63,14 @@ SCHEMAS = {
         ("is_private", pa.bool_(), False),
         ("is_suppressed", pa.bool_(), False),
     ),
+    # Every assembly proteins record, withheld or not: what a rebuild restores.
+    "metadata/assembly_proteins_registry": _schema(
+        ("id", pa.int32(), False),
+        ("assembly_accession", pa.string(), False),
+        ("source", pa.string(), False),
+        ("pipeline_version", pa.string(), False),
+        ("analysis_accession", pa.string(), False),
+    ),
     "metadata/gene_callers": _schema(
         ("id", pa.int16(), False),
         ("name", pa.string(), False),
@@ -75,6 +83,7 @@ SORT_ORDER = {
     "occurrence": ["assembly_proteins_id", "contig_id", "start_position"],
     "contig": ["assembly_proteins_id", "id"],
     "metadata/assembly_proteins": ["assembly_proteins_id"],
+    "metadata/assembly_proteins_registry": ["id"],
     "metadata/gene_callers": ["id"],
 }
 
