@@ -95,19 +95,22 @@ def test_one_row_per_record_with_the_study_and_biome_of_its_mgya(engineered):
 
 
 @pytest.mark.parametrize("flag", ["is_private", "is_suppressed"])
-@pytest.mark.parametrize(
-    "on_assembly, on_study",
-    [(False, False), (True, False), (False, True), (True, True)],
-)
-def test_a_flag_is_set_when_the_assembly_or_its_study_has_it(
-    flag, on_assembly, on_study
+@pytest.mark.parametrize("on_analysis", [False, True])
+@pytest.mark.parametrize("on_assembly", [False, True])
+@pytest.mark.parametrize("on_study", [False, True])
+def test_a_flag_is_set_when_the_analysis_its_assembly_or_its_study_has_it(
+    flag, on_analysis, on_assembly, on_study
 ):
     study = make_study("PRJ1")
     analysis = make_analysis(study, "ERZ1")
-    for model, value in ((analysis.assembly, on_assembly), (study, on_study)):
+    for model, value in (
+        (analysis, on_analysis),
+        (analysis.assembly, on_assembly),
+        (study, on_study),
+    ):
         type(model).objects.filter(pk=model.pk).update(**{flag: value})
 
     (row,) = metadata.build_snapshot(
         registry((1, analysis, "assembly_analysis"))
     ).to_pylist()
-    assert row[flag] is (on_assembly or on_study)
+    assert row[flag] is (on_analysis or on_assembly or on_study)
