@@ -1,9 +1,10 @@
 """Ownership of the protein dataset: the dataset update and the merge write it one at a time, and a
 flow run that lost ownership never writes again.
 
-The Prefect slot makes a second writer wait. It is not enough on its own: Prefect frees the slot of
-a run it marks Crashed, whose SLURM job can still be alive. So the MGYP database also records the
-owner's job, and the next writer starts only when SLURM shows that job has ended.
+The Prefect slot makes a second writer wait. It is not enough on its own: Prefect frees the slot when
+its lease is not renewed, as when the process cannot reach the Prefect server, while the SLURM job
+can still be alive. So the MGYP database also records the owner's job, and the next writer starts
+only when SLURM shows that job has ended.
 """
 
 import logging
