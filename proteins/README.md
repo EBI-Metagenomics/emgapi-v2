@@ -101,6 +101,12 @@ The schedules and the trigger are inactive until cutover.
 
 The dataset update and the merge share one Prefect global concurrency limit, `protein-dataset`, with a limit of 1. So they never write the protein dataset at the same time. Prefect frees the slot of a run it marks Crashed, whose SLURM job can still be alive, so the MGYP database also records the owner in `dataset_owner`: its flow, SLURM job and submit time. The next update or merge starts only when `sacct` shows that job has ended normally, and a flow run that lost ownership exits before it writes again.
 
+The `slurm` work pool's worker, prefect-slurm, already counts a crashed run whose SLURM job still runs against its deployment's `concurrency_limit: 1`, so a second update is not even submitted. That does not replace the owner record:
+
+- it does not keep the update and the merge apart;
+- it takes `NODE_FAIL` as ended;
+- it does not stop a stalled process from writing when it resumes.
+
 An update or merge that fails at start with "The protein dataset is owned by job N" found an owner whose job has not visibly ended. The check reports the owner whose job is not running too. Run `sacct -j N`. If the job still runs and should not, `scancel N` and wait until `sacct` shows it ended: the next run then takes over by itself. If its node failed, make sure with the cluster team that none of its processes still run. Only then, with the schedules paused, clear the row as `proteindb_owner`: `UPDATE proteindb.dataset_owner SET flow = NULL, slurm_job_id = NULL, slurm_submit_at = NULL, execution_id = NULL, flow_run_id = NULL, acquired_at = NULL WHERE execution_id = '<the recorded one>'`. If the Prefect slot is still taken too, reset its active slots to 0 with `prefect gcl update protein-dataset --active-slots 0`. Resume the schedules. Never clear the row while the old job might still run.
 
 ## Tests
