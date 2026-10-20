@@ -7,10 +7,6 @@ import pyarrow as pa
 from analyses.models import Analysis, Biome
 from proteins.dataset import layout
 
-# TODO (this feature): a protein is suppressed only when every assembly that has
-# it is suppressed. The metadata snapshot has is_suppressed for each assembly
-# proteins record; apply the rule here or in the release.
-
 logger = logging.getLogger(__name__)
 
 CHUNK = 10_000
