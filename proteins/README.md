@@ -79,7 +79,7 @@ The schedules and the trigger are inactive until cutover.
 - an assembly proteins record has an MGYA that is not in emgapi-v2, so releases publish none of its proteins;
 - the protein dataset has an owner whose SLURM job is not running.
 
-**During a release**, do not run the merge. The merge is the only flow that deletes the files of a complete day.
+**During a release**, pause the schedules of `update_protein_dataset_deployment` and `merge_protein_dataset_deployment`, check that neither is running, and resume both once the release no longer reads the protein dataset. The merge is the only flow that deletes the files of a complete day.
 
 ## Failures
 
