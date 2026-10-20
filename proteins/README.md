@@ -35,6 +35,7 @@ The source is the pipeline that called the genes. Today it is always `assembly_a
 |---|---|
 | `MGYP_DATABASE_URL` | The `mgyp` alias, as `proteindb_accession`. Without it, the alias does not exist, and `manage.py check` shows warning `proteins.W001`. |
 | `EMG_PROTEINS__DATASET_DIR` | The protein dataset. The jobs of the `slurm` work pool must be able to create and delete files in it. |
+| `EMG_PROTEINS__TMP_DIR` | The dataset update's scratch, and where DuckDB spills while it sorts, on `/hps/nobackup`: up to ~22 GB for one prefix of the merge. It must exist, and the jobs of the `slurm` work pool must be able to create and delete files in it. |
 | `EMG_PROTEINS__DUCKDB_MEMORY_LIMIT` | The memory limit of DuckDB when it sorts, `32GB`. DuckDB goes over it, so keep it about half of the job memory. |
 | `EMG_PROTEINS__INGESTION_CHUNK_SIZE` | Analyses in one chunk flow run, `50`. |
 | `EMG_PROTEINS__CONNECTION_WAIT_SECONDS` | How long a connection to the MGYP database waits while all connections are taken, `600`. |

@@ -7,7 +7,6 @@ write the same layout.
 
 import os
 import re
-import tempfile
 from datetime import date
 from pathlib import Path
 from typing import Iterable, Iterator
@@ -231,19 +230,22 @@ def write_sorted(path: Path, table: str, batches: Iterable[pa.RecordBatch]) -> N
     tmp.rename(path)
 
 
-def merge(path: Path, table: str, files: list[Path], memory_limit: str) -> None:
+def merge(
+    path: Path, table: str, files: list[Path], memory_limit: str, tmp_dir: str
+) -> None:
     """Writes the rows of `files` to `path` in the table's sort order, spilling to disk, all or nothing.
 
     :param path: The file to write.
     :param table: The table whose schema and sort order the file has.
     :param files: The files to merge.
     :param memory_limit: The memory limit of DuckDB, for example "32GB".
+    :param tmp_dir: Where DuckDB spills.
     """
-    write_sorted(path, table, sorted_batches(table, files, memory_limit))
+    write_sorted(path, table, sorted_batches(table, files, memory_limit, tmp_dir))
 
 
 def sorted_batches(
-    table: str, files: list[Path], memory_limit: str
+    table: str, files: list[Path], memory_limit: str, tmp_dir: str
 ) -> Iterator[pa.RecordBatch]:
     """The rows of `files` in the table's sort order, sorted by DuckDB, which spills to disk.
 
@@ -251,8 +253,9 @@ def sorted_batches(
     :param files: The files to read.
     :param memory_limit: The memory limit of DuckDB, for example "32GB". DuckDB goes over it
         while it sorts, so use about half of the job memory.
+    :param tmp_dir: Where DuckDB spills.
     """
-    spill = Path(tempfile.gettempdir()) / "protein-dataset-sort"
+    spill = Path(tmp_dir) / "protein-dataset-sort"
     config = {"temp_directory": str(spill), "memory_limit": memory_limit}
     with duckdb.connect(config=config) as con:
         yield from con.execute(

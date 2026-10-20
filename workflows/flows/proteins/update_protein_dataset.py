@@ -78,7 +78,7 @@ def update_protein_dataset():
         update_id = start_update(day)
         try:
             with tempfile.TemporaryDirectory(
-                prefix="protein-dataset-update-"
+                prefix="protein-dataset-update-", dir=EMG_CONFIG.proteins.tmp_dir
             ) as scratch:
                 staged = read_staged_rows(Path(scratch))
                 owned.check()

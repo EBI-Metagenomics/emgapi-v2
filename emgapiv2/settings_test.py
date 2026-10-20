@@ -4,6 +4,7 @@ from .settings import *
 from workflows.ena_utils.abstract import ENAPortalDataPortal
 
 EMG_CONFIG.slurm.default_workdir = tempfile.gettempdir()
+EMG_CONFIG.proteins.tmp_dir = tempfile.gettempdir()
 EMG_CONFIG.webin.emg_webin_account = "webin-fake"
 EMG_CONFIG.webin.emg_webin_password = "not-a-pw"
 EMG_CONFIG.webin.dcc_account = "dcc_fake"

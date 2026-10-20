@@ -379,6 +379,8 @@ class RequestTrackerConfig(BaseModel):
 
 class ProteinsConfig(BaseModel):
     dataset_dir: str = "/nfs/production/rdf/metagenomics/projects/protein_db/dataset"
+    # The dataset update's scratch, and where DuckDB spills while it sorts: ~22 GB for one prefix of the merge.
+    tmp_dir: str = "/hps/nobackup/rdf/metagenomics/projects/protein_db/tmp"
     # DuckDB goes over its memory limit while it sorts, so this is about half of the job memory.
     duckdb_memory_limit: str = "32GB"
     # Analyses in one chunk flow run of the protein ingestion. A first estimate.

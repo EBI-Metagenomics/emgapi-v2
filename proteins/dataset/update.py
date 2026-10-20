@@ -197,7 +197,10 @@ def write_day_files(root: Path, day: date, staged: Staged) -> dict[str, int]:
     # A backlog can outgrow the job's memory, so the rows are sorted by DuckDB, which spills to disk.
     # Sorted by hash, the rows are also grouped by prefix, the hash's top bits.
     memory_limit = settings.EMG_CONFIG.proteins.duckdb_memory_limit
-    batches = layout.sorted_batches("protein", [staged.files["protein"]], memory_limit)
+    tmp_dir = settings.EMG_CONFIG.proteins.tmp_dir
+    batches = layout.sorted_batches(
+        "protein", [staged.files["protein"]], memory_limit, tmp_dir
+    )
     for prefix, slices in groupby(by_prefix(batches), itemgetter(0)):
         layout.write_sorted(
             root / "protein" / f"prefix={prefix}" / f"day-{day}.parquet",
@@ -213,6 +216,7 @@ def write_day_files(root: Path, day: date, staged: Staged) -> dict[str, int]:
             table,
             [staged.files[table]],
             memory_limit,
+            tmp_dir,
         )
     return counts
 

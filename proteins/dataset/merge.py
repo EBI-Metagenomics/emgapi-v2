@@ -65,7 +65,11 @@ def merge_prefix(prefix: Path, files: list[Path], day: date) -> None:
     logger.info("merging %s: %d files", prefix.name, len(files))
     base = prefix / f"base-{day}.parquet"
     layout.merge(
-        base, "protein", files, settings.EMG_CONFIG.proteins.duckdb_memory_limit
+        base,
+        "protein",
+        files,
+        settings.EMG_CONFIG.proteins.duckdb_memory_limit,
+        settings.EMG_CONFIG.proteins.tmp_dir,
     )
     for path in files:
         if path != base:
