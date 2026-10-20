@@ -534,7 +534,6 @@ deployments:
   schedules:
     - cron: "0 2 * * *"
       timezone: UTC
-      # Activated at cutover, once the cluster team confirms that the partition tracks processes with cgroups.
       active: false
 
 - name: merge_protein_dataset_deployment
