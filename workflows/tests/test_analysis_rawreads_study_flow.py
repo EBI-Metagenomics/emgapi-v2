@@ -1526,13 +1526,20 @@ def test_prefect_analyse_rawreads_flow_no_functional(
 
 @pytest.mark.httpx_mock(should_mock=should_not_mock_httpx_requests_to_prefect_server)
 @pytest.mark.django_db(transaction=True)
+@pytest.mark.parametrize(
+    "mock_suspend_flow_run", ["workflows.flows.analysis_rawreads_study"], indirect=True
+)
 def test_prefect_analyse_rawreads_flow_fails_when_no_read_runs(
     prefect_harness,
     httpx_mock,
+    mock_suspend_flow_run,
+    admin_user,
+    top_level_biomes,
 ):
     """
     An empty read-run response from ENA should fail the flow with an error in the
     Prefect log, rather than silently continuing with zero runs.
+    The failure happens after the input form, so that policies can be overridden first.
     """
     study_accession = "ERP136389"
 
@@ -1576,10 +1583,31 @@ def test_prefect_analyse_rawreads_flow_fails_when_no_read_runs(
         is_reusable=True,
     )
 
+    BiomeChoices = Enum("BiomeChoices", {"root.engineered": "Root:Engineered"})
+    UserChoices = get_users_as_choices()
+
+    class AnalyseStudyInput(BaseModel):
+        biome: BiomeChoices
+        watchers: List[UserChoices]
+        library_strategy_policy: Optional[ENALibraryStrategyPolicy]
+        library_source_policy: Optional[ENALibrarySourcePolicy]
+        functional_analysis: bool
+        webin_owner: Optional[str]
+
+    mock_suspend_flow_run.return_value = AnalyseStudyInput(
+        biome=BiomeChoices["root.engineered"],
+        watchers=[UserChoices[admin_user.username]],
+        library_strategy_policy=ENALibraryStrategyPolicy.ONLY_IF_CORRECT_IN_ENA,
+        library_source_policy=ENALibrarySourcePolicy.OVERRIDE_GENOMIC_IF_METAGENOMIC_SCIENTIFIC_NAME,
+        functional_analysis=False,
+        webin_owner=None,
+    )
+
     state = analysis_rawreads_study(study_accession, return_state=True)
     time.sleep(0.5)  # wait for log flushing
     logs = get_logs_for_flow_run(state.state_details.flow_run_id)
 
+    mock_suspend_flow_run.assert_called_once()
     assert state.is_failed()
     assert "No read-runs with library strategy" in logs
     assert study_accession in logs
