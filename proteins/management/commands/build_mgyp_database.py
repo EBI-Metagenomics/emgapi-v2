@@ -20,15 +20,21 @@ class Command(BaseCommand):
             " such as 'host=H dbname=D user=proteindb_owner'",
         )
         parser.add_argument(
+            "--rebuild",
+            action="store_true",
+            help="To rebuild a lost MGYP database from the protein dataset",
+        )
+        parser.add_argument(
             "--protein-id-start",
             type=int,
-            help="To rebuild a lost MGYP database: the first protein id to allocate, above every MGYP issued",
+            help="The first protein id to allocate, above every MGYP issued. By default the protein"
+            " dataset's highest + 1, or for a rebuild + 10^8, for MGYPs the lost database could have given",
         )
 
-    def handle(self, *args, dsn, protein_id_start, **options):
+    def handle(self, *args, dsn, rebuild, protein_id_start, **options):
         root = Path(settings.EMG_CONFIG.proteins.dataset_dir)
         try:
-            day = build_mgyp_database(dsn, root, protein_id_start)
+            day = build_mgyp_database(dsn, root, rebuild, protein_id_start)
         except BuildError as e:
             raise CommandError(e)
         self.stdout.write(

@@ -47,6 +47,9 @@ SEQUENCES = {
     "contig": "contig_id_seq",
     "occurrence": "occurrence_id_seq",
 }
+# MGYPs that a lost MGYP database gave are in no file, but could have been seen. By default a rebuild
+# skips this many ids past the protein dataset's highest: about 6 days at the heaviest projected rate.
+LOST_MGYP_MARGIN = 10**8
 # PostgreSQL's binary COPY format, big-endian: a row is its field count, then each field's length and value.
 COPY_HEADER = b"PGCOPY\n\xff\r\n\x00" + bytes(8)
 COPY_TRAILER = b"\xff\xff"
@@ -66,29 +69,34 @@ class BuildError(Exception):
 
 
 def build_mgyp_database(
-    dsn: str, root: Path, protein_id_start: int | None = None
+    dsn: str, root: Path, rebuild: bool = False, protein_id_start: int | None = None
 ) -> date:
     """Builds the MGYP database from the latest complete day of the protein dataset, into a schema just created by mgyp_schema.sql.
 
-    Without `protein_id_start`, this follows the migration, and the protein dataset must hold its
-    day only. With it, it is a rebuild, and protein ids start there. Returns the day built from.
+    Without `rebuild`, this follows the migration, and the protein dataset must hold its day only.
+    Returns the day built from.
 
     :param dsn: libpq connection string of the MGYP database, as proteindb_owner.
     :param root: The protein dataset's directory.
-    :param protein_id_start: For a rebuild, the first protein id to allocate.
+    :param rebuild: To recover a lost MGYP database.
+    :param protein_id_start: The first protein id to allocate. By default, the protein dataset's
+        highest + 1, or for a rebuild + LOST_MGYP_MARGIN.
     """
     days = layout.complete_days(root)
-    if protein_id_start is None and len(days) > 1:
+    if not rebuild and len(days) > 1:
         raise BuildError(
-            f"The protein dataset has {len(days)} complete days, so this is a rebuild, which needs --protein-id-start"
+            f"The protein dataset has {len(days)} complete days, so this is a rebuild, which needs --rebuild"
         )
     day = days[-1]
     files = {table: layout.files(root, table, day) for table in SEQUENCES}
     top = {table: max_id(files[table]) for table in SEQUENCES}
-    if protein_id_start is not None and protein_id_start <= top["protein"]:
+    if protein_id_start is None:
+        protein_id_start = top["protein"] + (LOST_MGYP_MARGIN if rebuild else 1)
+    elif protein_id_start <= top["protein"]:
         raise BuildError(
             f"--protein-id-start {protein_id_start} is not above the protein dataset's highest protein id, {top['protein']}"
         )
+    logger.info(f"protein ids start at {protein_id_start}")
 
     with psycopg.connect(dsn, autocommit=True) as conn:
         conn.execute("SET search_path = proteindb")
@@ -114,9 +122,7 @@ def build_mgyp_database(
             ).fetchone()
             conn.execute(f"ALTER TABLE {name} ALTER COLUMN id RESTART WITH {start}")
         for table, sequence in SEQUENCES.items():
-            start = top[table] + 1
-            if table == "protein" and protein_id_start is not None:
-                start = protein_id_start
+            start = protein_id_start if table == "protein" else top[table] + 1
             conn.execute("SELECT setval(%s, %s, false)", [sequence, start])
 
         logger.info("vacuuming protein")

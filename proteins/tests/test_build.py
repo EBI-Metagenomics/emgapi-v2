@@ -6,7 +6,7 @@ import pytest
 from django.core.management import call_command
 
 from proteins.dataset import layout, update
-from proteins.dataset.build import BuildError, build_mgyp_database
+from proteins.dataset.build import LOST_MGYP_MARGIN, BuildError, build_mgyp_database
 from proteins.routers import MGYP
 from proteins.tests.conftest import owner_dsn, query
 
@@ -220,7 +220,7 @@ def test_a_duplicate_in_a_registry_stops_the_build_before_the_partitions(migrate
 
 def test_a_build_after_the_migration_refuses_days_after_it(migrated):
     write_day(migrated, D, {hash_of(0x80, 1): 50}, "day")
-    with pytest.raises(BuildError, match="needs --protein-id-start"):
+    with pytest.raises(BuildError, match="needs --rebuild"):
         build_mgyp_database(owner_dsn(), migrated)
     assert loaded() == {}
 
@@ -232,22 +232,28 @@ def test_a_rebuild_refuses_a_protein_id_start_at_or_below_the_highest_protein_id
     with pytest.raises(
         BuildError, match="not above the protein dataset's highest protein id, 50"
     ):
-        build_mgyp_database(owner_dsn(), migrated, protein_id_start=50)
+        build_mgyp_database(owner_dsn(), migrated, rebuild=True, protein_id_start=50)
     assert loaded() == {}
 
 
+def test_a_rebuild_starts_protein_ids_at_the_value_given(migrated):
+    write_day(migrated, D, {hash_of(0x80, 1): 50}, "day")
+    build_mgyp_database(owner_dsn(), migrated, rebuild=True, protein_id_start=51)
+    assert next_ids() == (51, 9, 14)
+
+
 @pytest.mark.usefixtures("mgyp_as_accession")
-def test_a_rebuild_builds_the_latest_day_and_starts_protein_ids_at_the_value_given(
+def test_a_rebuild_builds_the_latest_day_and_skips_the_margin_of_protein_ids(
     migrated,
 ):
     write_day(migrated, D, {hash_of(0x80, 1): 50}, "day")
-    assert build_mgyp_database(owner_dsn(), migrated, protein_id_start=1000) == D
+    assert build_mgyp_database(owner_dsn(), migrated, rebuild=True) == D
 
     assert loaded() == {
         hash: (id, f"protein_{hash[0] >> 2:02x}")
         for hash, id in {**MIGRATED, hash_of(0x80, 1): 50}.items()
     }
-    assert next_ids() == (1000, 9, 14)
+    assert next_ids() == (50 + LOST_MGYP_MARGIN, 9, 14)
     assert query("SELECT day, status FROM proteindb.dataset_update ORDER BY day") == [
         (M, "done"),
         (D, "done"),

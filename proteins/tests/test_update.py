@@ -438,7 +438,7 @@ def test_a_rebuild_after_an_analysis_committed_while_an_update_read_stages_it_on
     with psycopg.connect(owner_dsn(), autocommit=True) as conn:
         conn.execute("DROP SCHEMA proteindb CASCADE")
         conn.execute(SCHEMA_SQL.read_text())
-    build_mgyp_database(owner_dsn(), root, protein_id_start=last + 1)
+    build_mgyp_database(owner_dsn(), root, rebuild=True, protein_id_start=last + 1)
     analysis = committed[0]
     accession(
         connect_accession,
@@ -497,7 +497,7 @@ def test_a_rebuild_restores_a_withheld_record_and_never_gives_its_id_to_another(
     with psycopg.connect(owner_dsn(), autocommit=True) as conn:
         conn.execute("DROP SCHEMA proteindb CASCADE")
         conn.execute(SCHEMA_SQL.read_text())
-    build_mgyp_database(owner_dsn(), root, protein_id_start=last + 1)
+    build_mgyp_database(owner_dsn(), root, rebuild=True, protein_id_start=last + 1)
     unrelated = stage("ERZ25069264")
     withheld.save(force_insert=True)
     accession(
