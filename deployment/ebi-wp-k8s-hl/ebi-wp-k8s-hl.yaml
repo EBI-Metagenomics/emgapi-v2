@@ -694,6 +694,10 @@ items:
                         end
                     }
 
+            		# The signed URL is the credential (no cookies), so any origin may read it,
+            		# e.g. web apps fetching a user's private results. `always` covers 403/410 too.
+            		add_header Access-Control-Allow-Origin * always;
+
             		alias /var/www/private-data/private-data/mgnify_results/;
             	}
 
