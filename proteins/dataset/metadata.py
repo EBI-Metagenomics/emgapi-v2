@@ -25,6 +25,7 @@ def find_analyses(mgyas: list[str]) -> dict[str, dict]:
             "accession",
             "study__accession",
             "sample__biome_id",
+            "study__biome_id",
             "is_private",
             "is_suppressed",
             "assembly__is_private",
@@ -57,11 +58,13 @@ def build_snapshot(assembly_proteins: pa.Table) -> pa.Table:
             ", ".join(missing[:10]),
         )
 
+    biomes = {
+        mgya: row["sample__biome_id"] or row["study__biome_id"]
+        for mgya, row in known.items()
+    }
     lineages = {
         biome.id: biome.pretty_lineage
-        for biome in Biome.objects.filter(
-            id__in={row["sample__biome_id"] for row in known.values()}
-        )
+        for biome in Biome.objects.filter(id__in=set(biomes.values()))
     }
     rows = []
     for record in records:
@@ -75,7 +78,7 @@ def build_snapshot(assembly_proteins: pa.Table) -> pa.Table:
                 "pipeline_version": record["pipeline_version"],
                 "analysis_accession": record["analysis_accession"],
                 "study_accession": analysis["study__accession"],
-                "biome_lineage": lineages.get(analysis["sample__biome_id"]),
+                "biome_lineage": lineages.get(biomes[record["analysis_accession"]]),
                 # Withheld when the analysis, its assembly or its study is.
                 "is_private": analysis["is_private"]
                 or analysis["assembly__is_private"]

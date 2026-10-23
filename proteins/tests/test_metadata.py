@@ -34,7 +34,12 @@ def engineered():
 
 
 def test_one_row_per_record_with_the_study_and_biome_of_its_mgya(engineered):
+    host = Biome.objects.create(biome_name="Host-associated", path="root.host")
     a, b = make_study("PRJ1"), make_study("PRJ2")
+    # The sample's biome wins over the study's, which is taken when the sample has none.
+    for study in a, b:
+        study.biome = host
+        study.save()
     v6 = make_analysis(a, "ERZ1")
     v6.sample.biome = engineered
     v6.sample.save()
@@ -64,7 +69,7 @@ def test_one_row_per_record_with_the_study_and_biome_of_its_mgya(engineered):
             "pipeline_version": "6.0",
             "analysis_accession": other.accession,
             "study_accession": b.accession,
-            "biome_lineage": None,
+            "biome_lineage": "root:Host-associated",
             "is_private": False,
             "is_suppressed": False,
         },
