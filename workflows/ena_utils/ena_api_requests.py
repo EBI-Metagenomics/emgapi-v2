@@ -289,7 +289,11 @@ def _make_run(
     #       have missing metadata, for example when trying to run the assembly analysis of ERP117856
     # An existing run keeps the experiment type MGnify has for it, so that curation is not undone
     # by a flow re-reading the study, unless the caller explicitly asked to override it.
-    if created or library_strategy_policy == ENALibraryStrategyPolicy.OVERRIDE_ALL:
+    if (
+        created
+        or library_strategy_policy == ENALibraryStrategyPolicy.OVERRIDE_ALL
+        or library_source_policy == ENALibrarySourcePolicy.OVERRIDE_ALL_TO_METAGENOMIC
+    ):
         run.set_experiment_type_by_metadata(
             run_response.get(_.LIBRARY_STRATEGY, ""),
             run_response.get(_.LIBRARY_SOURCE, ""),
