@@ -12,6 +12,7 @@ class GenomeSearchIndex(TimeStampedModel):
     class Backend(models.TextChoices):
         SOURMASH = "sourmash", "Sourmash"
         BRANCHWATER = "branchwater", "Branchwater"
+        LEXICMAP = "lexicmap", "LexicMap"
 
     class Status(models.TextChoices):
         BUILDING = "BUILDING", "Building"

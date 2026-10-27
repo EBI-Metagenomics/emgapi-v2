@@ -1,186 +1,116 @@
-import io
-from unittest.mock import Mock
+from types import SimpleNamespace
+from unittest.mock import Mock, patch
+from uuid import uuid4
 
 import pytest
+from django.core.files.uploadedfile import SimpleUploadedFile
+from django.test import RequestFactory
+from django_tasks.exceptions import TaskResultDoesNotExist
+
+from emgapiv2.api.genome_search import _parse_request
+from genomes.models import CatalogueGenome, GenomeSearchIndex
+from genomes.tasks import run_lexicmap_search
+
+SEQUENCE = "ACGT" * 25
+pytestmark = pytest.mark.django_db
 
 
-@pytest.mark.django_db
-def test_genome_search_json_success(ninja_api_client, genomes, monkeypatch):
-    # Backend returns two hits, only one matches our DB genome accessions
-    backend_payload = {
-        "results": [
-            {"genome": "MGYG000000001", "percent_kmers_found": 12.3},
-            {"genome": "MGYG999999999", "percent_kmers_found": 99.9},
-        ]
-    }
-
-    mock_resp = Mock(status_code=200)
-    mock_resp.json.return_value = backend_payload
-    monkeypatch.setattr(
-        "emgapiv2.api.genome_search.httpx.post", lambda *a, **k: mock_resp
+@pytest.fixture
+def search_index(genomes):
+    return GenomeSearchIndex.objects.create(
+        catalogue=CatalogueGenome.public_objects.first().catalogue,
+        backend="lexicmap",
+        status="ACTIVE",
+        is_active=True,
+        artifact_path="catalogue/index.lmi",
     )
 
-    resp = ninja_api_client.post(
-        "/genome-search/",
-        json={
-            "sequence": ">seq1\nACGTACGTACGT",
-            "kmer_size": 31,
-            "max_results": 50,
-            "threshold": 0.2,
-            "catalogues_filter": ["human-gut-prokaryotes"],
-        },
+
+def test_submit_and_poll(ninja_api_client, search_index, monkeypatch):
+    hit = dict(
+        genome=search_index.catalogue.genomes.first().accession,
+        catalogue=search_index.catalogue_id,
+        query_coverage=100,
+        identity=100,
+        bitscore=200,
+        evalue=1e-20,
+        sequence_id="contig",
+        query_start=1,
+        query_end=100,
+        subject_start=10,
+        subject_end=109,
+        strand="+",
+    )
+    task = Mock()
+    job = SimpleNamespace(id=str(uuid4()), status="READY")
+    task.enqueue.return_value = task.get_result.return_value = job
+    monkeypatch.setattr("emgapiv2.api.genome_search.run_lexicmap_search", task)
+    response = ninja_api_client.post(
+        "/genomes/gene-search/", json={"sequence": SEQUENCE}
+    )
+    assert response.status_code == 202
+    assert response.json()["data"]["job_id"] == job.id
+    payload = task.enqueue.call_args.kwargs["request_payload"]
+    assert payload["indexes"] == [
+        {"catalogue": search_index.catalogue_id, "path": search_index.artifact_path}
+    ]
+    status_path = f"/genomes/gene-search/status/{job.id}/"
+    assert ninja_api_client.get(status_path).json()["data"]["status"] == "READY"
+
+    with patch(
+        "genomes.lexicmap.search",
+        return_value=[hit, {**hit, "catalogue": "wrong-release"}],
+    ):
+        job.return_value = run_lexicmap_search.call(payload)
+    job.status = "SUCCESSFUL"
+    results = ninja_api_client.get(status_path).json()["data"]["results"]
+    assert len(results) == 1
+    assert results[0]["mgnify"]["accession"] == hit["genome"]
+
+    search_index.catalogue.status = "retired"
+    search_index.catalogue.save()
+    assert ninja_api_client.get(status_path).json()["data"]["results"] == []
+    ninja_api_client.post("/genomes/gene-search/", json={"sequence": SEQUENCE})
+    assert task.enqueue.call_args.kwargs["request_payload"]["indexes"] == []
+
+
+def test_failed_and_missing_job(ninja_api_client, monkeypatch):
+    task = Mock()
+    job_id = str(uuid4())
+    task.get_result.return_value = SimpleNamespace(id=job_id, status="FAILED")
+    monkeypatch.setattr("emgapiv2.api.genome_search.run_lexicmap_search", task)
+    response = ninja_api_client.get(f"/genomes/gene-search/status/{job_id}/")
+    assert response.json()["data"]["status"] == "FAILED"
+    assert response.json()["data"]["results"] is None
+    task.get_result.side_effect = TaskResultDoesNotExist
+    assert (
+        ninja_api_client.get(f"/genomes/gene-search/status/{job_id}/").status_code
+        == 404
     )
 
-    assert resp.status_code == 200, resp.text
-    body = resp.json()
-    assert "data" in body
-    data = body["data"]
-    assert data["query"] == ">seq1\nACGTACGTACGT"
-    assert data["threshold"] == 0.2
-    assert "results" in data
-    # Only one annotated result should be present (the one matching MGYG000000001)
-    assert len(data["results"]) == 1
-    item = data["results"][0]
-    assert "mgnify" in item and "cobs" in item
-    assert item["cobs"]["genome"] == "MGYG000000001"
-    assert item["mgnify"]["accession"] == "MGYG000000001"
 
-
-@pytest.mark.django_db
-def test_genome_search_multipart_success(ninja_api_client, genomes, monkeypatch):
-    from django.http import QueryDict
-
-    backend_payload = {
-        "results": [
-            {"genome": "MGYG000000001", "percent_kmers_found": 5.0},
-            {"genome": "MGYG000000002", "percent_kmers_found": 10.0},
-        ]
-    }
-    mock_resp = Mock(status_code=200)
-    mock_resp.json.return_value = backend_payload
-    monkeypatch.setattr(
-        "emgapiv2.api.genome_search.httpx.post", lambda *a, **k: mock_resp
+def test_multipart():
+    query = _parse_request(
+        RequestFactory().post(
+            "/genomes/gene-search/",
+            {
+                "sequence_file": SimpleUploadedFile(
+                    "query.fa", f">q\n{SEQUENCE}".encode()
+                ),
+                "catalogues_filter": ["gut"],
+                "min_identity": "80",
+            },
+        )
     )
-
-    # Build a tiny FASTA file upload
-    fasta_content = b">q\nACGTACGT\n"
-    files = {"sequence_file": ("query.fa", io.BytesIO(fasta_content), "text/plain")}
-
-    # Use QueryDict to support repeated fields in form data
-    qd = QueryDict(mutable=True)
-    qd["kmer_size"] = "31"
-    qd.setlist("catalogues_filter", ["gut", "marine"])
-
-    resp = ninja_api_client.post("/genome-search/", files=files, data=qd)
-
-    assert resp.status_code == 200, resp.text
-    body = resp.json()
-    assert "data" in body
-    results = body["data"]["results"]
-    assert len(results) == 2
-    # Sorted by percent_kmers_found descending: first should be MGYG000000002 (10.0)
-    assert results[0]["cobs"]["genome"] == "MGYG000000002"
-    assert results[1]["cobs"]["genome"] == "MGYG000000001"
+    assert query.sequence == SEQUENCE
+    assert query.catalogues_filter == ["gut"]
+    assert query.min_identity == 80
 
 
-@pytest.mark.django_db
-def test_genome_search_backend_error(ninja_api_client, genomes, monkeypatch):
-    import httpx as hx
-
-    request = hx.Request("POST", "https://backend")
-    mock_resp = hx.Response(500, request=request, text="boom")
-    monkeypatch.setattr(
-        "emgapiv2.api.genome_search.httpx.post", lambda *a, **k: mock_resp
+def test_invalid_sequence(ninja_api_client):
+    assert (
+        ninja_api_client.post(
+            "/genomes/gene-search/", json={"sequence": "ACGT"}
+        ).status_code
+        == 400
     )
-
-    resp = ninja_api_client.post("/genome-search/", json={"sequence": "ACGT"})
-    assert resp.status_code == 502  # Bad Gateway: upstream returned 5xx
-
-
-@pytest.mark.django_db
-def test_genome_search_backend_4xx_error(ninja_api_client, genomes, monkeypatch):
-    import httpx as hx
-
-    request = hx.Request("POST", "https://backend")
-    mock_resp = hx.Response(400, request=request, text="bad seq")
-    monkeypatch.setattr(
-        "emgapiv2.api.genome_search.httpx.post", lambda *a, **k: mock_resp
-    )
-
-    resp = ninja_api_client.post("/genome-search/", json={"sequence": "ACGT"})
-    assert resp.status_code == 400  # Bad Request: client input rejected by backend
-
-
-@pytest.mark.django_db
-def test_genome_search_network_error(ninja_api_client, genomes, monkeypatch):
-    import httpx as hx
-
-    class Boom(hx.ConnectError):
-        pass
-
-    monkeypatch.setattr(
-        "emgapiv2.api.genome_search.httpx.post",
-        Mock(
-            side_effect=Boom(
-                "unreachable", request=hx.Request("POST", "https://backend")
-            )
-        ),
-    )
-
-    resp = ninja_api_client.post("/genome-search/", json={"sequence": "ACGT"})
-    assert resp.status_code == 503  # Service Unavailable: couldn't reach backend
-
-
-@pytest.mark.django_db
-def test_genome_search_forwards_seq_key_to_backend(
-    ninja_api_client, genomes, monkeypatch
-):
-    """The COBS backend expects 'seq', not 'sequence'. Verify the translation happens."""
-    import io
-
-    from django.http import QueryDict
-
-    captured = {}
-
-    def fake_post(url, **kwargs):
-        captured["json"] = kwargs.get("json")
-        captured["data"] = kwargs.get("data")
-        mock = Mock(status_code=200)
-        mock.json.return_value = {"results": []}
-        return mock
-
-    monkeypatch.setattr("emgapiv2.api.genome_search.httpx.post", fake_post)
-
-    # JSON path: client sends 'sequence', backend must receive 'seq'
-    ninja_api_client.post("/genome-search/", json={"sequence": "ACGT"})
-    assert "seq" in (
-        captured.get("json") or {}
-    ), "JSON path must forward 'seq' not 'sequence'"
-    assert "sequence" not in (captured.get("json") or {})
-
-    # Multipart path: client sends 'seq' field (as browsers do), backend must receive 'seq'
-    qd = QueryDict(mutable=True)
-    qd["seq"] = "ACGT"
-    files = {"sequence_file": ("q.fa", io.BytesIO(b">q\nACGT\n"), "text/plain")}
-    ninja_api_client.post("/genome-search/", files=files, data=qd)
-    assert "seq" in (captured.get("data") or {}), "Multipart path must forward 'seq'"
-    assert "sequence" not in (captured.get("data") or {})
-
-
-@pytest.mark.django_db
-def test_genome_search_backend_invalid_json(ninja_api_client, genomes, monkeypatch):
-    class BadResp:
-        status_code = 200
-
-        def raise_for_status(self):
-            pass
-
-        def json(self):
-            raise ValueError("bad json")
-
-    monkeypatch.setattr(
-        "emgapiv2.api.genome_search.httpx.post", lambda *a, **k: BadResp()
-    )
-
-    resp = ninja_api_client.post("/genome-search/", json={"sequence": "ACGT"})
-    assert resp.status_code == 502  # Bad Gateway: backend returned unparseable response
