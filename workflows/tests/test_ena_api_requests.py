@@ -1104,14 +1104,6 @@ def test_get_study_assemblies_from_ena_links_coassembly_runs(
     monkeypatch, raw_reads_mgnify_study, raw_reads_mgnify_sample, httpx_mock
 ):
     run_accessions = ["ERR12945506", "ERR12954000"]
-    # runs were made by the read-run fetcher of the study before the assemblies are fetched
-    for run_accession in run_accessions:
-        analyses.models.Run.objects.create(
-            ena_accessions=[run_accession],
-            ena_study=raw_reads_mgnify_study.ena_study,
-            study=raw_reads_mgnify_study,
-            sample=raw_reads_mgnify_sample[0],
-        )
     assembly_data = {
         "sample_accession": "SAMEA999999",
         "sample_title": "Co-assembly sample",
@@ -1122,10 +1114,21 @@ def test_get_study_assemblies_from_ena_links_coassembly_runs(
         "generated_ftp": "ftp.example.org/ERZ999999.fa.gz",
     }
 
+    def fake_get_study_readruns_from_ena(accession, **kwargs):
+        # like the real fetcher, make the runs of the study and return their accessions
+        for run_accession in run_accessions:
+            analyses.models.Run.objects.create(
+                ena_accessions=[run_accession],
+                ena_study=raw_reads_mgnify_study.ena_study,
+                study=raw_reads_mgnify_study,
+                sample=raw_reads_mgnify_sample[0],
+            )
+        return run_accessions
+
     httpx_mock.add_response(json=[assembly_data])
     monkeypatch.setattr(
         "workflows.ena_utils.ena_api_requests.get_study_readruns_from_ena",
-        lambda **kwargs: [],
+        fake_get_study_readruns_from_ena,
     )
     monkeypatch.setattr(
         "workflows.ena_utils.ena_api_requests.sync_sample_metadata_from_ena",
