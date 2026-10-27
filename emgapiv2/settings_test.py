@@ -27,7 +27,7 @@ STORAGES["staticfiles"] = {
 TASKS = {
     "default": {
         "BACKEND": "django_tasks.backends.immediate.ImmediateBackend",
-        "QUEUES": ["default"],
+        "QUEUES": ["default", "branchwater"],
     }
 }
 

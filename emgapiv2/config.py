@@ -303,6 +303,9 @@ class BranchwaterConfig(BaseModel):
     index_server: str = "http://index-service"
     metadata_duckdb: str = "/data/metadata.duckdb"
     signatures_root: str = "/signatures"
+    queries_path: str = "/tmp/branchwater/queries"
+    results_path: str = "/tmp/branchwater/results"
+    search_timeout_seconds: float = Field(default=300, gt=0)
     threshold: float = 0.1
     ksize: int = 21
 

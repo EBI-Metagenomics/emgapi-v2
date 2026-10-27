@@ -1,38 +1,31 @@
-import csv
-import gzip
-import io
 import json
 import logging
+import re
+import uuid
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Literal, Optional
 
-import httpx
 from django.conf import settings
+from django_tasks.exceptions import TaskResultDoesNotExist
 from ninja import Query, Schema
 from ninja.errors import HttpError
 from ninja_extra import api_controller, http_get, http_post
 
-from analyses.models import Run
 from emgapiv2.api.schema_utils import ApiSections
+from emgapiv2.tasking import default_task_backend
+from genomes.branchwater import (
+    BranchwaterError,
+    _check_branchwater_health,
+    _load_branchwater_mag_signature,
+    _parse_branchwater_csv_results,  # noqa: F401 - retained for existing callers
+    validate_branchwater_signature,
+    write_branchwater_json,
+)
+from genomes.tasks import run_branchwater_search
 
 logger = logging.getLogger(__name__)
 EMG_CONFIG = settings.EMG_CONFIG
-
-BRANCHWATER_METADATA_FIELDS = (
-    "bioproject",
-    "assay_type",
-    "collection_date_sam",
-    "geo_loc_name_country_calc",
-    "organism",
-    "lat_lon",
-)
-
-
-class BranchwaterError(Exception):
-    def __init__(self, status_code: int, message: str):
-        super().__init__(message)
-        self.status_code = status_code
-        self.message = message
+JobStatus = Literal["QUEUED", "RUNNING", "SUCCESS", "NO_RESULTS", "FAILED"]
 
 
 class BranchwaterSearchIn(Schema):
@@ -43,248 +36,185 @@ class BranchwaterHealthOut(Schema):
     status: str
 
 
-def _branchwater_base_url() -> str:
-    return EMG_CONFIG.branchwater.index_server.rstrip("/")
+class BranchwaterSubmissionData(Schema):
+    job_id: str
+    status: Literal["QUEUED"] = "QUEUED"
+    status_url: str
+    results_url: str
 
 
-def _compress_branchwater_query_payload(
-    signatures: Any, *, use_precomputed_sketches: bool = False
-) -> bytes:
-    if use_precomputed_sketches:
-        json_bytes = json.dumps(signatures).encode("utf-8")
-    else:
-        sig_str = str(signatures).translate({ord(c): None for c in "\t\n\r "})
-        json_bytes = f"[{sig_str}]".encode("utf-8")
-
-    buffer = io.BytesIO()
-    with gzip.open(buffer, "wb") as compressed:
-        compressed.write(json_bytes)
-    return buffer.getvalue()
+class BranchwaterSubmissionOut(Schema):
+    data: BranchwaterSubmissionData
 
 
-def _parse_branchwater_csv_results(csv_text: str) -> List[Dict[str, Any]]:
-    threshold = EMG_CONFIG.branchwater.threshold
-    ksize = EMG_CONFIG.branchwater.ksize
-    results: List[Dict[str, Any]] = []
-
-    for row in csv.DictReader(io.StringIO(csv_text)):
-        accession = row.get("SRA_accession") or row.get("acc")
-        containment_raw = row.get("containment")
-        if not accession or containment_raw in (None, ""):
-            continue
-
-        containment = float(containment_raw)
-        if containment < threshold:
-            continue
-
-        results.append(
-            {
-                "acc": accession,
-                "containment": containment,
-                "cANI": containment ** (1.0 / ksize),
-            }
-        )
-
-    return results
+class BranchwaterStatusData(Schema):
+    job_id: str
+    status: JobStatus
+    results_url: Optional[str] = None
+    reason: Optional[str] = None
 
 
-def _search_branchwater(
-    signatures: Any, *, use_precomputed_sketches: bool = False
-) -> List[Dict[str, Any]]:
-    url = f"{_branchwater_base_url()}/search"
-    compressed_payload = _compress_branchwater_query_payload(
-        signatures, use_precomputed_sketches=use_precomputed_sketches
+class BranchwaterStatusOut(Schema):
+    data: BranchwaterStatusData
+
+
+def _job_url(request, kind: str, job_id: str) -> str:
+    # Preserve the mounted API prefix and current host in both production and dev.
+    base = request.path.split("/services/branchwater", 1)[0]
+    return request.build_absolute_uri(f"{base}/services/branchwater/{kind}/{job_id}/")
+
+
+def _submit_branchwater(request, signatures: Any) -> BranchwaterSubmissionOut:
+    try:
+        validated = validate_branchwater_signature(signatures)
+    except BranchwaterError as exc:
+        raise HttpError(exc.status_code, exc.message) from exc
+    request_id = uuid.uuid4().hex
+    query_path = Path(EMG_CONFIG.branchwater.queries_path) / request_id / "query.sig"
+    result_path = (
+        Path(EMG_CONFIG.branchwater.results_path) / request_id / "results.json"
     )
-
     try:
-        response = httpx.post(
-            url,
-            content=compressed_payload,
-            headers={"Content-Type": "application/json"},
-            timeout=30,
+        write_branchwater_json(query_path, validated)
+        task_result = run_branchwater_search.enqueue(
+            query_path=str(query_path), result_path=str(result_path)
         )
-        response.raise_for_status()
-    except httpx.HTTPStatusError as exc:
-        status = exc.response.status_code
-        logger.error(
-            "Branchwater backend returned %s: %s", status, exc.response.text[:500]
-        )
-        if status >= 500:
-            raise BranchwaterError(
-                502, "Branchwater backend is unavailable. Please try later."
-            ) from exc
-        raise BranchwaterError(
-            400, "Branchwater request was rejected by the backend."
-        ) from exc
-    except httpx.RequestError as exc:
-        logger.exception("Failed to reach Branchwater backend at %s", url)
-        raise BranchwaterError(
-            503, "Branchwater is temporarily unavailable. Please try later."
-        ) from exc
-
-    return _parse_branchwater_csv_results(response.text)
-
-
-def _join_branchwater_metadata(results: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    if not results:
-        return []
-
-    import duckdb
-    import pandas as pd
-
-    metadata_path = Path(EMG_CONFIG.branchwater.metadata_duckdb)
-    if not metadata_path.exists():
-        logger.error("Branchwater metadata DuckDB does not exist: %s", metadata_path)
-        raise BranchwaterError(
-            503, "Branchwater metadata database is unavailable. Please try later."
-        )
-
-    result_df = pd.DataFrame(results)
-    metadata_columns = ", ".join(["acc", *BRANCHWATER_METADATA_FIELDS])
-    query = f"""
-        SELECT
-            hits.acc,
-            hits.containment,
-            hits.cANI,
-            metadata_subset.* EXCLUDE (acc)
-        FROM hits
-        LEFT JOIN (
-            SELECT {metadata_columns}
-            FROM metadata
-        ) metadata_subset
-        ON hits.acc = metadata_subset.acc
-        ORDER BY hits.containment DESC
-    """
-
-    try:
-        with duckdb.connect(database=str(metadata_path), read_only=True) as connection:
-            connection.register("hits", result_df)
-            joined = connection.execute(query).fetchdf()
     except Exception as exc:
-        logger.exception("Failed to query Branchwater metadata DuckDB")
-        raise BranchwaterError(
-            503, "Branchwater metadata database is unavailable. Please try later."
-        ) from exc
-
-    rows = joined.to_dict(orient="records")
-    for row in rows:
-        for field in BRANCHWATER_METADATA_FIELDS:
-            if row.get(field) is None:
-                row[field] = "NP"
-    return rows
-
-
-def _add_mgnify_run_flags(results: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    accessions = {row.get("acc") for row in results if row.get("acc")}
-    if not accessions:
-        return results
-
-    accession_to_visibility: Dict[str, bool] = {}
-    matching_runs = (
-        Run.objects.select_related(None)
-        .filter(ena_accessions__overlap=list(accessions))
-        .only("ena_accessions", "is_private")
-    )
-    for run in matching_runs:
-        for accession in run.ena_accessions:
-            if accession in accessions and accession not in accession_to_visibility:
-                accession_to_visibility[accession] = run.is_private
-
-    for row in results:
-        accession = row.get("acc")
-        if accession in accession_to_visibility:
-            row["exists_on_mgnify"] = True
-            row["is_private"] = accession_to_visibility[accession]
-        else:
-            row["exists_on_mgnify"] = False
-            row["is_private"] = None
-    return results
-
-
-def _load_branchwater_mag_signature(accession: str, catalogue: str) -> Any:
-    signature_path = (
-        Path(EMG_CONFIG.branchwater.signatures_root)
-        / catalogue
-        / f"{accession}.fna.sig"
-    )
-    if not signature_path.exists():
+        logger.exception("Unable to stage or enqueue Branchwater search")
         raise HttpError(
-            404,
-            f"No .sig file found for accession {accession} in catalogue {catalogue}.",
-        )
-
-    try:
-        with signature_path.open("r", encoding="utf-8") as handle:
-            return json.load(handle)
-    except (OSError, json.JSONDecodeError) as exc:
-        logger.exception(
-            "Failed to load Branchwater MAG signature from %s", signature_path
-        )
-        raise HttpError(400, "Could not read or parse the signature file.") from exc
-
-
-def _check_branchwater_health() -> None:
-    url = f"{_branchwater_base_url()}/health"
-    try:
-        response = httpx.get(
-            url,
-            headers={"Content-Type": "application/json"},
-            timeout=10,
-        )
-        response.raise_for_status()
-    except httpx.RequestError as exc:
-        logger.exception("Failed to reach Branchwater health endpoint at %s", url)
-        raise BranchwaterError(
-            503, "Branchwater healthcheck is temporarily unavailable."
+            503,
+            "Branchwater task service is temporarily unavailable. Please try later.",
         ) from exc
-    except httpx.HTTPStatusError as exc:
-        logger.error(
-            "Branchwater health endpoint returned %s: %s",
-            exc.response.status_code,
-            exc.response.text[:500],
+    return BranchwaterSubmissionOut(
+        data=BranchwaterSubmissionData(
+            job_id=task_result.id,
+            status_url=_job_url(request, "status", task_result.id),
+            results_url=_job_url(request, "results", task_result.id),
         )
-        raise BranchwaterError(
-            503, "Branchwater healthcheck is temporarily unavailable."
+    )
+
+
+def _branchwater_task_result(job_id: str):
+    # The dummy backend uses compact alphanumeric IDs, while django-tasks-db
+    # uses canonical UUIDs. Only accept those two backend-generated formats.
+    is_compact_id = re.fullmatch(r"[A-Za-z0-9]{32,64}", job_id) is not None
+    try:
+        is_canonical_uuid = str(uuid.UUID(job_id)) == job_id.lower()
+    except (AttributeError, TypeError, ValueError):
+        is_canonical_uuid = False
+    if not (is_compact_id or is_canonical_uuid):
+        raise HttpError(404, "Branchwater job not found.")
+    try:
+        result = default_task_backend.get_result(job_id)
+    except TaskResultDoesNotExist as exc:
+        raise HttpError(404, "Branchwater job not found.") from exc
+    except Exception as exc:
+        logger.exception("Unable to retrieve Branchwater task status")
+        raise HttpError(
+            503,
+            "Branchwater task service is temporarily unavailable. Please try later.",
         ) from exc
+    if (
+        result.task.module_path != run_branchwater_search.module_path
+        or result.task.queue_name != "branchwater"
+    ):
+        raise HttpError(404, "Branchwater job not found.")
+    return result
+
+
+def _branchwater_task_state(task_result) -> tuple[str, dict[str, Any]]:
+    status = getattr(task_result.status, "name", str(task_result.status)).upper()
+    if status == "RUNNING":
+        return "RUNNING", {}
+    if status == "FAILED":
+        return "FAILED", {"reason": "Branchwater search failed. Please try again."}
+    if status == "SUCCESSFUL":
+        try:
+            payload = task_result.return_value
+        except ValueError:
+            # The database backend can expose SUCCESSFUL immediately before the
+            # serialized return value is readable. Treat that short window as
+            # still running so clients can safely poll again.
+            return "RUNNING", {}
+        if isinstance(payload, dict) and payload.get("status") in {
+            "SUCCESS",
+            "NO_RESULTS",
+            "FAILED",
+        }:
+            return payload["status"], payload
+        return "FAILED", {
+            "reason": "Branchwater search did not produce a valid result."
+        }
+    return "QUEUED", {}
 
 
 @api_controller("services/branchwater", tags=[ApiSections.GENOMES])
 class BranchwaterController:
     @http_post(
         "/",
-        response=List[Dict[str, Any]],
-        summary="Search public metagenomes with Branchwater using a precomputed signature",
+        response={202: BranchwaterSubmissionOut},
+        summary="Queue a Branchwater search using a precomputed signature",
         operation_id="branchwater_search",
     )
-    def search(self, payload: BranchwaterSearchIn):
-        try:
-            results = _search_branchwater(payload.signatures)
-            results = _join_branchwater_metadata(results)
-            results = _add_mgnify_run_flags(results)
-        except BranchwaterError as exc:
-            raise HttpError(exc.status_code, exc.message) from exc
-        return results
+    def search(self, request, payload: BranchwaterSearchIn):
+        return 202, _submit_branchwater(request, payload.signatures)
 
     @http_post(
         "/mags",
-        response=List[Dict[str, Any]],
-        summary="Search public metagenomes using a precomputed MAG signature",
+        response={202: BranchwaterSubmissionOut},
+        summary="Queue a Branchwater search using a precomputed MAG signature",
         operation_id="branchwater_search_mags",
     )
-    def mags(
-        self,
-        accession: str = Query(...),
-        catalogue: str = Query(...),
-    ):
-        signature_payload = _load_branchwater_mag_signature(accession, catalogue)
+    def mags(self, request, accession: str = Query(...), catalogue: str = Query(...)):
         try:
-            results = _search_branchwater(
-                signature_payload, use_precomputed_sketches=True
-            )
-            results = _join_branchwater_metadata(results)
-            results = _add_mgnify_run_flags(results)
+            signatures = _load_branchwater_mag_signature(accession, catalogue)
         except BranchwaterError as exc:
             raise HttpError(exc.status_code, exc.message) from exc
+        return 202, _submit_branchwater(request, signatures)
+
+    @http_get(
+        "/status/{job_id}/",
+        response=BranchwaterStatusOut,
+        summary="Check a Branchwater search job",
+        operation_id="branchwater_status",
+    )
+    def status(self, request, job_id: str):
+        status, payload = _branchwater_task_state(_branchwater_task_result(job_id))
+        return BranchwaterStatusOut(
+            data=BranchwaterStatusData(
+                job_id=job_id,
+                status=status,
+                results_url=(
+                    _job_url(request, "results", job_id)
+                    if status in {"SUCCESS", "NO_RESULTS"}
+                    else None
+                ),
+                reason=payload.get("reason") if status == "FAILED" else None,
+            )
+        )
+
+    @http_get(
+        "/results/{job_id}/",
+        response=List[Dict[str, Any]],
+        summary="Fetch the enriched results of a completed Branchwater search",
+        operation_id="branchwater_results",
+    )
+    def results(self, job_id: str):
+        status, payload = _branchwater_task_state(_branchwater_task_result(job_id))
+        if status not in {"SUCCESS", "NO_RESULTS"}:
+            raise HttpError(409, "Branchwater results are not available for this job.")
+        try:
+            path = Path(payload["result_path"]).resolve()
+            path.relative_to(Path(EMG_CONFIG.branchwater.results_path).resolve())
+            with path.open(encoding="utf-8") as handle:
+                results = json.load(handle)
+            if not isinstance(results, list):
+                raise ValueError("Invalid result file")
+        except (KeyError, OSError, ValueError, TypeError) as exc:
+            logger.exception("Unable to read results for Branchwater job %s", job_id)
+            raise HttpError(
+                503, "Branchwater results are temporarily unavailable."
+            ) from exc
         return results
 
     @http_get(
