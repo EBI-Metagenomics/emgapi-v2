@@ -127,7 +127,7 @@ services:
       - EMG_BRANCHWATER__QUERIES_PATH=/var/lib/branchwater/queries
       - EMG_BRANCHWATER__RESULTS_PATH=/var/lib/branchwater/results
       - EMG_WEBIN__JWT_SECRET_KEY=dummy-key
-      - EMG_WEBIN__EMG_WEBIN_ACCOUNT="Webin-999999"
+      - EMG_WEBIN__EMG_WEBIN_ACCOUNT=Webin-999999
       - EMG_WEBIN__AUTH_ENDPOINT=http://httpbin/status/200
       - EMG_WEBIN__TOKEN_ENDPOINT=http://httpbin/status/200
       - EMG_WEBIN__ACCOUNT_DETAILS_ENDPOINT=http://httpbin/status/200

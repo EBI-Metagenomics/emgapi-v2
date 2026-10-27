@@ -96,6 +96,7 @@ def generate_assembly_analysis_pipeline_summary(
     study_accession: str,
     asa_workspace: Path,
     output_prefix: Union[str, None] = None,
+    output_dir: Union[Path, None] = None,
 ) -> Union[List[Path], None]:
     """
     Generate a study summary file for assembly analysis results.
@@ -109,6 +110,9 @@ def generate_assembly_analysis_pipeline_summary(
         Defaults to the study's first accession. Batch summary runs
         override this with their own identifier, because each batch
         only produces a partial summary that is merged with others later.
+    :param output_dir: Directory to write the summaries to. Defaults to
+        ``<results_dir>/<pipeline>_<version>/summaries``, where batch partials
+        are kept until they are merged.
     :return: List of paths to the study summary files generated
     """
 
@@ -126,7 +130,8 @@ def generate_assembly_analysis_pipeline_summary(
 
     pipeline_config = EMG_CONFIG.assembly_analysis_pipeline
     summary_dir = Directory(
-        path=(
+        path=output_dir
+        or (
             study.results_dir_path
             / f"{pipeline_config.pipeline_name}_{pipeline_config.pipeline_version}"
             / "summaries"

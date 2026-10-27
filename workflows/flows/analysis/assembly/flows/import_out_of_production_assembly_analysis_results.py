@@ -11,7 +11,6 @@ from pydantic import Field
 from activate_django_first import EMG_CONFIG
 
 import analyses.models
-import ena.models
 from workflows.data_io_utils.schemas import (
     AssemblyResultSchema,
     MapResultSchema,
@@ -149,7 +148,7 @@ def import_out_of_production_assembly_analysis_results(
     logger.info(f"Processing study accession: {study_accession}")
     mgnify_study_id = get_or_create_mgnify_study(study_accession)
     mgnify_study = analyses.models.Study.objects.get(id=mgnify_study_id)
-    ena_study = ena.models.Study.objects.get_ena_study(study_accession)
+    ena_study = mgnify_study.ena_study
 
     if mgnify_study.is_private:
         logger.info(f"{mgnify_study} is a private study.")
@@ -157,7 +156,7 @@ def import_out_of_production_assembly_analysis_results(
     # Run this function to fetch related runs/samples for this study and save them in the DB
     # TODO: this hardcoded limit is duplicated in other places in the codebase. We should
     #  either adjust it or refactor these limits to use a shared, better structure.
-    get_study_assemblies_from_ena(study_accession, limit=10000)
+    get_study_assemblies_from_ena(mgnify_study.ena_study.accession, limit=10000)
 
     # Suspend if biome is needed, or if the study is private and has no webin submitter set yet
     needs_biome = not mgnify_study.biome
@@ -270,9 +269,15 @@ def import_out_of_production_assembly_analysis_results(
     # =========================================================================
     logger.info("Step 7: Finalizing study and creating summaries...")
 
+    # No batch partials to merge here, so write the study-level summaries
+    # straight to where downloads and copying expect them
+    mgnify_study.set_results_dir_default()
+    pipeline_config = EMG_CONFIG.assembly_analysis_pipeline
     generate_assembly_analysis_pipeline_summary(
         study_accession=mgnify_study.accession,
         asa_workspace=results_path / AssemblyAnalysisPipeline.ASA.value,
+        output_dir=mgnify_study.results_dir_path
+        / f"{pipeline_config.pipeline_name}_{pipeline_config.pipeline_version}",
     )
 
     add_assembly_study_summaries_to_downloads(mgnify_study.accession)

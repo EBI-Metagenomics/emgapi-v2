@@ -1,0 +1,16 @@
+{
+  "children": [
+    {
+      "countgen": 1,
+      "name": "d__Bacteria",
+      "type": "d",
+      "children": [
+        {
+          "countgen": 1,
+          "name": "MGYG000235960",
+          "type": "genome"
+        }
+      ]
+    }
+  ]
+}

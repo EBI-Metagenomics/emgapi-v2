@@ -1,5 +1,11 @@
 import math
+from pathlib import Path
+from typing import Iterable
 
+from workflows.data_io_utils.csv.csv_comment_handler import (
+    CommentAwareDictReader,
+    CSVDelimiter,
+)
 from workflows.data_io_utils.file_rules.base_rules import (
     DirectoryRule,
     FileRule,
@@ -28,6 +34,28 @@ GlobHasFilesRule = GlobRule(
     rule_name="Dir should have at least one file",
     glob_pattern="*",
     test=lambda matches: len(list(matches)) > 0,
+)
+
+
+def tsv_has_data(f: Path, required_fieldnames: Iterable[str] = ()) -> bool:
+    with f.open("r") as fh:
+        reader = CommentAwareDictReader(fh, delimiter=CSVDelimiter.TAB)
+        if not reader.fieldnames:
+            raise ValueError("TSV has no header row")
+
+        missing_fieldnames = set(required_fieldnames) - set(reader.fieldnames)
+        if missing_fieldnames:
+            raise ValueError(
+                "TSV header is missing required fields: "
+                f"{', '.join(sorted(missing_fieldnames))}"
+            )
+
+        return next(reader, None) is not None
+
+
+TSVHasDataRule = FileRule(
+    rule_name="TSV should have data rows",
+    test=tsv_has_data,
 )
 
 

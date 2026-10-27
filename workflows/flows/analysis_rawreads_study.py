@@ -97,14 +97,14 @@ def analysis_rawreads_study(study_accession: str):
         ),
         expected_experiment_type=analyses.models.Run.ExperimentTypes.METAGENOMIC,
     )
-    if not read_runs:
-        error_message = (
-            f"No read-runs with library strategy {[_METAGENOMIC] + _OTHER_ALLOWED_LIBRARY_STRATEGIES} "
-            f"found for study {ena_study.accession}."
-        )
-        logger.error(error_message)
-        raise ENAAvailabilityException(error_message)
     logger.info(f"Returned {len(read_runs)} runs from ENA portal API")
+    if not read_runs:
+        logger.warning(
+            f"No read-runs matched the default library strategy {[_METAGENOMIC] + _OTHER_ALLOWED_LIBRARY_STRATEGIES} "
+            f"and library source policy {ENALibrarySourcePolicy.OVERRIDE_GENOMIC_IF_METAGENOMIC_SCIENTIFIC_NAME} "
+            f"for study {ena_study.accession}. "
+            f"Policies can be overridden in the flow input form."
+        )
 
     BiomeChoices = get_biomes_as_choices()
     UserChoices = get_users_as_choices()
@@ -140,7 +140,9 @@ def analysis_rawreads_study(study_accession: str):
 
                 **Read-run filtering**
                 If you expected more than {len(read_runs)} read-runs, you can add other (incorrect) \
-                library strategies to the read-runs filter by changing the Library Strategy Policy.
+                library strategies to the read-runs filter by changing the Library Strategy Policy, \
+                and/or accept runs with non-metagenomic library sources (e.g. GENOMIC, TRANSCRIPTOMIC) \
+                by changing the Library Source Policy.
 
                 **Biome tagger**
                 Please select a Biome for the entire study \
@@ -185,6 +187,16 @@ def analysis_rawreads_study(study_accession: str):
             f"Using policies strategy:{analyse_study_input.library_strategy_policy} source:{analyse_study_input.library_source_policy}, "
             f"now returned {len(read_runs)} run from ENA portal API."
         )
+
+    if not read_runs:
+        error_message = (
+            f"No read-runs with library strategy {[_METAGENOMIC] + _OTHER_ALLOWED_LIBRARY_STRATEGIES} "
+            f"found for study {ena_study.accession} "
+            f"(policies strategy:{analyse_study_input.library_strategy_policy} "
+            f"source:{analyse_study_input.library_source_policy})."
+        )
+        logger.error(error_message)
+        raise ENAAvailabilityException(error_message)
 
     biome = analyses.models.Biome.objects.get(path=analyse_study_input.biome.name)
     mgnify_study.biome = biome

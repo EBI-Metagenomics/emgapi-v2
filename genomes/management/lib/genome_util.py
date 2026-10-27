@@ -1,14 +1,91 @@
 import csv
 import glob
+import gzip
 import json
 import logging
 import os
 
-from analyses.base_models.with_downloads_models import DownloadFileIndexFile
+from analyses.base_models.with_downloads_models import (
+    DownloadFileIndexFile,
+    DownloadType,
+)
 
 logger = logging.getLogger(__name__)
 
 EXPECTED_CATALOGUE_FILES = {"phylo_tree.json"}
+
+GENOME_DOWNLOAD_DESCRIPTIONS = {
+    "EggNOG annotation": "Result of orthology annotation at the protein level in TSV format",
+    "Genome AMRFinderPlus Annotation": "Result for antimicrobial resistance annotation of genes and proteins in TSV format",
+    "Genome Annotation": "Integrated genome annotation, including mobilome annotation, in GFF format",
+    "Genome CRISPRCasFinder Additional Records": "Result of CRISPR array detection in TSV format",
+    "Genome DefenseFinder Annotation": "Result of defense system annotation in GFF format",
+    "Genome GECCO Annotation": "Result of biosynthetic gene cluster detection in GFF format",
+    "Genome Mobilome Annotation": "Result of mobilome annotation in GFF format",
+    "Genome SanntiS annotation": "Result of biosynthetic gene cluster detection in GFF format",
+    "Genome AntiSMASH Annotation": "Result of biosynthetic gene cluster detection in GFF format",
+    "Genome dbCAN Annotation": "Results of Carbohydrate-Active Enzyme and putative Polysaccharide Utilisation Loci annotation in GFF format",
+    "InterProScan Annotation": "Protein annotation results in TSV format",
+    "KEGG Pathway Completeness": "Completeness of KEGG pathway modules inferred from KEGG Orthologues (KOs) in TSV format",
+    "Nucleic Acid Sequence": "Genome assembly in FASTA format",
+    "Nucleic Acid Sequence index": "Genome assembly index",
+    "Predicted CDS (aa)": "Predicted CDS translated into amino acid sequences in FASTA format",
+    "PathoFact 2 style report": "Pathogenicity-related annotations at protein level in TSV format",
+    "Corrected gene prevalence": "Pan-genome gene frequencies (core/middle/rare) after completeness correction",
+}
+
+
+GENOME_ANALYSIS_DOWNLOAD_GROUPS = {
+    "_antismash.gff": "bgcs",
+    "_sanntis.gff": "bgcs",
+    "_gecco.gff": "bgcs",
+    "_crisprcasfinder.gff": "crispr",
+    "_crisprcasfinder.tsv": "crispr",
+    "_amrfinderplus.tsv": "amr",
+    "_defense_finder.gff": "defense_systems",
+    "_mobilome.gff": "mobilome",
+    "_virify.gff": "virify",
+    "_virify_metadata.tsv": "virify",
+    "_dbcan.gff": "dbcan",
+    "_cazy_summary.tsv": "dbcan",
+    "_eggNOG.tsv": "eggnog",
+    "_cog_summary.tsv": "eggnog",
+    "_InterProScan.tsv": "interpro",
+    "_kegg_classes.tsv": "kegg",
+    "_kegg_modules.tsv": "kegg",
+    "_kegg_pathways.tsv": "kegg",
+    "_pathofact2_combined_report.tsv": "pathogenicity",
+    "_annotation_coverage.tsv": "annotation",
+    ".gff": "annotation",
+}
+
+
+def get_genome_download_labels(path):
+    """Classify imported genome files, including legacy uncompressed downloads."""
+    filename = os.path.basename(path)
+    for suffix in (".fai", ".gzi", ".csi", ".gz"):
+        filename = filename.removesuffix(suffix)
+    if filename == "pan-genome.fna":
+        return "genome_sequence.pangenome", DownloadType.GENOME_SEQUENCE
+    if filename.endswith(".faa"):
+        return "genome_sequence.proteins", DownloadType.GENOME_SEQUENCE
+    if filename.endswith("_rRNAs.fasta"):
+        return "genome_sequence.rrna", DownloadType.GENOME_SEQUENCE
+    if filename.endswith(".fna"):
+        return "genome_sequence.assembly", DownloadType.GENOME_SEQUENCE
+    if "pan-genome" in path.split("/") or filename in {
+        "core_genes.txt",
+        "gene_presence_absence.Rtab",
+        "genes_presence-absence.Rtab",
+        "gene_presence_absence.csv",
+        "gene_prevalence_corrected.txt",
+        "mashtree.nwk",
+    }:
+        return "genome_analysis.pangenome", DownloadType.GENOME_ANALYSIS
+    for suffix, group in GENOME_ANALYSIS_DOWNLOAD_GROUPS.items():
+        if filename.endswith(suffix):
+            return f"genome_analysis.{group}", DownloadType.GENOME_ANALYSIS
+    return "genome_analysis", DownloadType.GENOME_ANALYSIS
 
 
 def get_expected_genome_files(accession):
@@ -24,6 +101,14 @@ def get_expected_genome_files(accession):
         accession + ".gff",
         prefix + "eggNOG.tsv",
         prefix + "InterProScan.tsv",
+    }
+
+
+def get_expected_genome_files_v4(accession):
+    return {filename + ".gz" for filename in get_expected_genome_files(accession)} | {
+        accession + ".fna.gz.fai",
+        accession + ".fna.gz.gzi",
+        accession + ".gff.gz.csi",
     }
 
 
@@ -216,6 +301,24 @@ def sanity_check_genome_output_euks(d):
     sanity_check_genome_dir(json_data["accession"], genome_dir)
 
 
+def sanity_check_genome_output_proks_v4(d):
+    accession = sanity_check_genome_output_any(d)
+    data = read_json(os.path.join(d, f"{accession}.json"))
+    sanity_check_genome_json_proks(data)
+    sanity_check_genome_dir(
+        accession, os.path.join(d, "genome"), get_expected_genome_files_v4
+    )
+
+
+def sanity_check_genome_output_euks_v4(d):
+    accession = sanity_check_genome_output_any(d)
+    data = read_json(os.path.join(d, f"{accession}.json"))
+    sanity_check_genome_json_euks(data)
+    sanity_check_genome_dir(
+        accession, os.path.join(d, "genome"), get_expected_genome_files_v4
+    )
+
+
 def read_json(fs):
     with open(fs) as f:
         return json.load(f)
@@ -230,7 +333,8 @@ def read_tsv_w_headers(fs):
 
 
 def read_sep_f(fs, sep=None):
-    with open(fs) as f:
+    opener = gzip.open if str(fs).endswith(".gz") else open
+    with opener(fs, "rt") as f:
         reader = csv.reader(f, skipinitialspace=True, delimiter=sep)
         header = next(reader)
         data = [dict(zip(header, row)) for row in reader]
@@ -451,7 +555,53 @@ def upload_antismash_geneclusters(genome, directory, database="default"):
     logger.info(f"Loaded Genome AntiSMASH geneclusters for {genome.accession}")
 
 
+def upload_cog_results_v4(genome, directory, database="default"):
+    _upload_annotation_file(
+        genome,
+        directory,
+        "{accession}_cog_summary.tsv.gz",
+        "genome",
+        _parse_cog_row,
+        "cog_categories",
+        database,
+    )
+
+
+def upload_kegg_class_results_v4(genome, directory, database="default"):
+    _upload_annotation_file(
+        genome,
+        directory,
+        "{accession}_kegg_classes.tsv.gz",
+        "genome",
+        _parse_kegg_class_row,
+        "kegg_classes",
+        database,
+    )
+
+
+def upload_kegg_module_results_v4(genome, directory, database="default"):
+    _upload_annotation_file(
+        genome,
+        directory,
+        "{accession}_kegg_modules.tsv.gz",
+        "genome",
+        _parse_kegg_module_row,
+        "kegg_modules",
+        database,
+    )
+
+
 def upload_genome_files(genome, directory, has_pangenome, database="default"):
+    return _upload_genome_files(genome, directory, has_pangenome, database)
+
+
+def upload_genome_files_v4(genome, directory, has_pangenome, database="default"):
+    return _upload_genome_files(genome, directory, has_pangenome, database, v4=True)
+
+
+def _upload_genome_files(
+    genome, directory, has_pangenome, database="default", *, v4=False
+):
     """
     Upload genome files to a genome.
 
@@ -497,7 +647,7 @@ def upload_genome_files(genome, directory, has_pangenome, database="default"):
             True,
         ),
         (
-            "Genome antiSMASH Annotation",
+            "Genome AntiSMASH Annotation",
             "gff",
             f"{genome.accession}_antismash.gff",
             "Genome analysis",
@@ -521,7 +671,7 @@ def upload_genome_files(genome, directory, has_pangenome, database="default"):
             False,
         ),
         (
-            "Genome SanntiS Annotation",
+            "Genome SanntiS annotation",
             "gff",
             f"{genome.accession}_sanntis.gff",
             "Genome analysis",
@@ -529,7 +679,7 @@ def upload_genome_files(genome, directory, has_pangenome, database="default"):
             False,
         ),
         (
-            "EggNog annotation",
+            "EggNOG annotation",
             "tsv",
             f"{genome.accession}_eggNOG.tsv",
             "Genome analysis",
@@ -537,7 +687,7 @@ def upload_genome_files(genome, directory, has_pangenome, database="default"):
             False,
         ),
         (
-            "InterProScan annotation",
+            "InterProScan Annotation",
             "tsv",
             f"{genome.accession}_InterProScan.tsv",
             "Genome analysis",
@@ -593,7 +743,7 @@ def upload_genome_files(genome, directory, has_pangenome, database="default"):
             False,
         ),
         (
-            "Genome Defense Finder Annotation",
+            "Genome DefenseFinder Annotation",
             "gff",
             f"{genome.accession}_defense_finder.gff",
             "Genome analysis",
@@ -612,6 +762,14 @@ def upload_genome_files(genome, directory, has_pangenome, database="default"):
             "KEGG Pathway Completeness",
             "tsv",
             f"{genome.accession}_kegg_pathways.tsv",
+            "Genome analysis",
+            "genome",
+            False,
+        ),
+        (
+            "PathoFact 2 style report",
+            "tsv",
+            f"{genome.accession}_pathofact2_combined_report.tsv",
             "Genome analysis",
             "genome",
             False,
@@ -662,6 +820,31 @@ def upload_genome_files(genome, directory, has_pangenome, database="default"):
             ),
         ]
 
+    if v4:
+        files_to_upload = [
+            (
+                label,
+                fmt,
+                filename + ".gz",
+                group,
+                subdir,
+                required,
+            )
+            for label, fmt, filename, group, subdir, required in files_to_upload
+            if fmt != "fai" and filename != "core_genes.txt"
+        ]
+        if has_pangenome:
+            files_to_upload.append(
+                (
+                    "Corrected gene prevalence",
+                    "tab",
+                    "gene_prevalence_corrected.txt.gz",
+                    "Pan-Genome analysis",
+                    "pan-genome",
+                    False,
+                )
+            )
+
     for (
         desc_label,
         file_format,
@@ -680,6 +863,9 @@ def upload_genome_files(genome, directory, has_pangenome, database="default"):
             directory=directory,
             require_existent_and_non_empty=require,
             database=database,
+            download_factory=(
+                prepare_downloadable_file_v4 if v4 else prepare_downloadable_file
+            ),
         )
 
 
@@ -710,7 +896,7 @@ def prepare_downloadable_file(
         "fasta": DownloadFileType.FASTA,
         "fna": DownloadFileType.FASTA,
         "fai": DownloadFileType.OTHER,
-        "gff": DownloadFileType.OTHER,
+        "gff": DownloadFileType.GFF,
         "tsv": DownloadFileType.TSV,
         "csv": DownloadFileType.CSV,
         "json": DownloadFileType.JSON,
@@ -736,7 +922,7 @@ def prepare_downloadable_file(
         alias=alias,
         download_type=download_type,
         file_type=file_type,
-        long_description=desc_label,
+        long_description=GENOME_DOWNLOAD_DESCRIPTIONS.get(desc_label, desc_label),
         short_description=desc_label,
         download_group=group_type or "catalogue",
     )
@@ -769,6 +955,31 @@ def prepare_downloadable_file(
     # )
 
 
+def prepare_downloadable_file_v4(
+    desc_label, file_format, file_name, group_type=None, subdir=None
+):
+    # Use the underlying format for metadata, while preserving compressed paths.
+    download = prepare_downloadable_file(
+        desc_label, file_format, file_name.removesuffix(".gz"), group_type, subdir
+    )
+    download.path = os.path.join(subdir or "", file_name)
+    download.alias = file_name
+    download.index_file = None
+    if file_name.endswith(".fna.gz") and subdir == "genome":
+        download.index_file = [
+            DownloadFileIndexFile(index_type=kind, path=f"{download.path}.{kind}")
+            for kind in ("fai", "gzi")
+        ]
+    elif file_name.endswith(".gff.gz") and "_" not in file_name:
+        download.index_file = DownloadFileIndexFile(
+            index_type="csi", path=f"{download.path}.csi"
+        )
+    download.download_group, download.download_type = get_genome_download_labels(
+        download.path
+    )
+    return download
+
+
 def upload_file(
     model_instance,
     desc_label,
@@ -780,6 +991,7 @@ def upload_file(
     directory=None,
     require_existent_and_non_empty=False,
     database="default",
+    download_factory=prepare_downloadable_file,
 ):
     """
     Upload a file to a model instance.
@@ -810,7 +1022,7 @@ def upload_file(
         )
         return
 
-    download_file = prepare_downloadable_file(
+    download_file = download_factory(
         desc_label, file_format, file_name, group_type, subdir
     )
     try:

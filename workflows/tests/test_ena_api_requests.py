@@ -22,6 +22,7 @@ from workflows.ena_utils.ena_accession_matching import (
 from workflows.ena_utils.ena_api_requests import (
     ENALibraryStrategyPolicy,
     _make_run,
+    _make_samples,
     get_available_study_assembly_accessions,
     get_available_study_run_accessions,
     get_available_study_sample_accessions,
@@ -1364,3 +1365,34 @@ def test_make_run_overrides_the_experiment_type_of_an_existing_run_when_asked(
 
     run.refresh_from_db()
     assert run.experiment_type == analyses.models.Run.ExperimentTypes.AMPLICON
+
+
+@pytest.mark.httpx_mock(should_mock=should_not_mock_httpx_requests_to_prefect_server)
+@pytest.mark.django_db
+def test_make_samples_tolerates_a_sample_missing_from_the_ena_portal(
+    monkeypatch, raw_reads_mgnify_study, httpx_mock
+):
+    """
+    ENA's portal sample index lags registration, so a run can be searchable while its sample is
+    not. That must not fail the whole study import: the sample is still created, without
+    metadata, for the sync_samples_with_ena housekeeping flow to backfill later.
+    """
+    monkeypatch.setattr(
+        "workflows.ena_utils.ena_api_requests.get_run_logger",
+        lambda: logging.getLogger(__name__),
+    )
+    # Empty on every data portal, which is what makes the metadata sync raise.
+    httpx_mock.add_response(json=[], is_reusable=True)
+
+    ena_sample, mgnify_sample = _make_samples(
+        {
+            "sample_accession": "SAMEA123362615",
+            "secondary_sample_accession": "ERS31143251",
+            "sample_title": "MIMICC_Nov2025_A_0",
+        },
+        raw_reads_mgnify_study,
+    )
+
+    assert ena_sample.accession == "SAMEA123362615"
+    assert ena_sample.metadata == {}
+    assert mgnify_sample.ena_sample == ena_sample

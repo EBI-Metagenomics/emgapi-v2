@@ -97,7 +97,7 @@ class CatalogueGenome(WithDownloadsModel, TimeStampedModel):
     )
 
     annotations = models.JSONField(default=default_annotations)
-    result_directory = models.CharField(max_length=100, blank=True, null=True)
+    result_directory = models.CharField(max_length=240, blank=True, null=True)
 
     num_genomes_total = models.IntegerField(null=True, blank=True)
     pangenome_size = models.IntegerField(null=True, blank=True)

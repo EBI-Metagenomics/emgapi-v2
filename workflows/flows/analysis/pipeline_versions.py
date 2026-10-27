@@ -28,6 +28,7 @@ def get_current_pipeline_version_for_experiment_type(
     experiment_type: Analysis.ExperimentTypes | str,
 ) -> Analysis.PipelineVersions:
     pipeline_config = get_pipeline_config_for_experiment_type(experiment_type)
+    pipeline_config.check_pipeline_version()
     return Analysis.pipeline_version_from_config(pipeline_config.pipeline_version)
 
 

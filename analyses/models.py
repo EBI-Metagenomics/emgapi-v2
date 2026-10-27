@@ -36,6 +36,7 @@ from analyses.base_models.with_downloads_models import WithDownloadsModel
 from analyses.base_models.with_experiment_type_models import WithExperimentTypeModel
 from analyses.base_models.with_status_models import SelectByStatusManagerMixin
 from analyses.base_models.with_watchers_models import WithWatchersModel
+from emgapiv2.config import normalise_mgnify_pipeline_version
 from emgapiv2.enum_utils import DjangoChoicesCompatibleStrEnum, FutureStrEnum
 from emgapiv2.model_manager_mixins import SuppressionFilterManagerMixin
 from emgapiv2.model_utils import (
@@ -1050,13 +1051,9 @@ class Analysis(
     def pipeline_version_from_config(
         cls, pipeline_version: str
     ) -> "Analysis.PipelineVersions":
-        normalized = pipeline_version.strip().lower().rstrip(".0")
-        try:
-            return getattr(cls.PipelineVersions, normalized)
-        except AttributeError as exc:
-            raise ValueError(
-                f"Unsupported pipeline version {pipeline_version!r}"
-            ) from exc
+        return cls.PipelineVersions(
+            normalise_mgnify_pipeline_version(pipeline_version).upper()
+        )
 
     class AnalysisStates(FutureStrEnum):
         # TODO: this is pipeline specific - I think we need to move elsewhere or refactor (mbc)
