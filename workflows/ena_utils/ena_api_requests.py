@@ -810,20 +810,15 @@ def get_study_assemblies_from_ena(
         found_accessions = {
             run_accession for run in runs for run_accession in run.ena_accessions
         }
-        for run_accession in set(run_accessions) - found_accessions:
-            run_data = {**assembly_data, _.RUN_ACCESSION: run_accession}
-            runs.append(
-                _make_run(
-                    run_data,
-                    study,
-                    mgnify_sample,
-                    library_strategy_policy,
-                    library_source_policy,
-                    expected_experiment_type,
-                )
+        assembly_accession = assembly_data[_.ANALYSIS_ACCESSION]
+
+        if missing_accessions := set(run_accessions) - found_accessions:
+            logger.warning(
+                f"Not linking runs {sorted(missing_accessions)} to assembly {assembly_accession}: "
+                f"they are not in study {accession} or its reads study, "
+                f"or they were skipped by the library source policy ({library_source_policy})"
             )
 
-        assembly_accession = assembly_data[_.ANALYSIS_ACCESSION]
         assembly, __ = analyses.models.Assembly.objects.update_or_create_by_accession(
             known_accessions=[assembly_accession],
             defaults={
@@ -838,6 +833,8 @@ def get_study_assemblies_from_ena(
             include_update_defaults_in_create_defaults=True,
         )
         assembly.metadata[_.GENERATED_FTP] = assembly_data[_.GENERATED_FTP]
+        # Store the ENA run accessions in the metadata even when the runs themselves are not linked
+        assembly.metadata[_.RUN_ACCESSION] = assembly_data.get(_.RUN_ACCESSION, "")
 
         # It is possible that some assemblies are not linked to any runs, the ENA data model allows for this.
         assembly.runs.set(runs)

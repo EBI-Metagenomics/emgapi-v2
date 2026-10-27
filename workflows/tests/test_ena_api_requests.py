@@ -1101,9 +1101,17 @@ def test_ena_accession_parsing():
 @pytest.mark.httpx_mock(should_mock=should_not_mock_httpx_requests_to_prefect_server)
 @pytest.mark.django_db
 def test_get_study_assemblies_from_ena_links_coassembly_runs(
-    monkeypatch, raw_reads_mgnify_study, httpx_mock
+    monkeypatch, raw_reads_mgnify_study, raw_reads_mgnify_sample, httpx_mock
 ):
     run_accessions = ["ERR12945506", "ERR12954000"]
+    # runs were made by the read-run fetcher of the study before the assemblies are fetched
+    for run_accession in run_accessions:
+        analyses.models.Run.objects.create(
+            ena_accessions=[run_accession],
+            ena_study=raw_reads_mgnify_study.ena_study,
+            study=raw_reads_mgnify_study,
+            sample=raw_reads_mgnify_sample[0],
+        )
     assembly_data = {
         "sample_accession": "SAMEA999999",
         "sample_title": "Co-assembly sample",
@@ -1134,6 +1142,48 @@ def test_get_study_assemblies_from_ena_links_coassembly_runs(
     assert {run.first_accession for run in assembly.runs.all()} == set(run_accessions)
     assert not analyses.models.Run.objects.filter(
         ena_accessions__icontains=";"
+    ).exists()
+    assert assembly.metadata["run_accession"] == ";".join(run_accessions)
+
+
+@pytest.mark.httpx_mock(should_mock=should_not_mock_httpx_requests_to_prefect_server)
+@pytest.mark.django_db
+def test_get_study_assemblies_from_ena_does_not_make_runs_from_other_studies(
+    monkeypatch, raw_reads_mgnify_study, httpx_mock
+):
+    # e.g. an assembly whose runs are in a different reads study, which is not detectable as TPA
+    run_accessions = ["ERR11029654", "ERR11040157"]
+    assembly_data = {
+        "sample_accession": "SAMEA112884540",
+        "sample_title": "Sponge sample",
+        "secondary_sample_accession": "ERS14890990",
+        "run_accession": ";".join(run_accessions),
+        "analysis_accession": "ERZ19489075",
+        "scientific_name": "sponge metagenome",
+        "generated_ftp": "ftp.example.org/ERZ19489075.fa.gz",
+    }
+
+    httpx_mock.add_response(json=[assembly_data])
+    monkeypatch.setattr(
+        "workflows.ena_utils.ena_api_requests.get_study_readruns_from_ena",
+        lambda **kwargs: [],
+    )
+    monkeypatch.setattr(
+        "workflows.ena_utils.ena_api_requests.sync_sample_metadata_from_ena",
+        lambda sample: None,
+    )
+    monkeypatch.setattr(
+        "workflows.ena_utils.ena_api_requests.get_run_logger",
+        lambda: logging.getLogger(__name__),
+    )
+
+    get_study_assemblies_from_ena.fn(raw_reads_mgnify_study.ena_study.accession)
+
+    assembly = analyses.models.Assembly.objects.get_by_accession("ERZ19489075")
+    assert not assembly.runs.exists()
+    assert assembly.metadata["run_accession"] == ";".join(run_accessions)
+    assert not analyses.models.Run.objects.filter(
+        ena_accessions__overlap=run_accessions
     ).exists()
 
 
