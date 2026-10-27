@@ -70,7 +70,7 @@ def test_submission_is_nonblocking_and_preserves_large_integers(
     ninja_api_client, signature
 ):
     with patch(
-        "genomes.branchwater.httpx.post",
+        "genomes.branchwater.client.httpx.post",
         side_effect=AssertionError("must run in worker"),
     ) as network:
         data = submit(ninja_api_client, signature)
@@ -113,7 +113,7 @@ def test_database_backend_submission_does_not_execute_search(
         }
     }
     with patch(
-        "genomes.branchwater.httpx.post",
+        "genomes.branchwater.client.httpx.post",
         side_effect=AssertionError("must run in worker"),
     ) as network:
         data = submit(ninja_api_client, signature)
@@ -166,7 +166,9 @@ def test_worker_processes_search_metadata_and_run_flags(
         request=request,
         text=f"SRA accession,containment\n{accession},0.42\nSRR9999999,0.31\nSRRLOW,0.09\n",
     )
-    with patch("genomes.branchwater.httpx.post", return_value=upstream) as network:
+    with patch(
+        "genomes.branchwater.client.httpx.post", return_value=upstream
+    ) as network:
         payload = run_branchwater_search.call(
             context=SimpleNamespace(task_result=result), **result.kwargs
         )
@@ -201,7 +203,7 @@ def test_worker_processes_search_metadata_and_run_flags(
 def test_no_results_job(ninja_api_client, signature):
     data = submit(ninja_api_client, signature)
     result = default_task_backend.get_result(data["job_id"])
-    with patch("genomes.branchwater._search_branchwater", return_value=[]):
+    with patch("genomes.branchwater.service._search_branchwater", return_value=[]):
         payload = run_branchwater_search.call(
             context=SimpleNamespace(task_result=result), **result.kwargs
         )
@@ -237,7 +239,7 @@ def test_failed_job_has_safe_reason(ninja_api_client, signature, backend_failure
         )
     else:
         with patch(
-            "genomes.branchwater._search_branchwater",
+            "genomes.branchwater.service._search_branchwater",
             side_effect=RuntimeError("SECRET traceback and database URL"),
         ):
             payload = run_branchwater_search.call(
@@ -334,7 +336,7 @@ def test_branchwater_mags_stages_signature(
     directory = Path(settings.EMG_CONFIG.branchwater.signatures_root) / catalogue
     directory.mkdir(parents=True)
     (directory / f"{accession}.fna.sig").write_text(json.dumps([signature]))
-    with patch("genomes.branchwater.httpx.post") as network:
+    with patch("genomes.branchwater.client.httpx.post") as network:
         response = ninja_api_client.post(
             f"/services/branchwater/mags?accession={accession}&catalogue={catalogue}"
         )

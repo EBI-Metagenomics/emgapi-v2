@@ -60,14 +60,14 @@ def test_branchwater_search_returns_enriched_results(
 
     with (
         patch(
-            "genomes.branchwater._search_branchwater",
+            "genomes.branchwater.service._search_branchwater",
             return_value=[
                 {"acc": mgnify_run_accession, "containment": 0.42, "cANI": 0.96},
                 {"acc": "SRR9999999", "containment": 0.31, "cANI": 0.95},
             ],
         ),
         patch(
-            "genomes.branchwater._join_branchwater_metadata",
+            "genomes.branchwater.service._join_branchwater_metadata",
             return_value=[
                 {
                     "acc": mgnify_run_accession,
@@ -146,13 +146,13 @@ def test_branchwater_mags_search_reads_signature_and_returns_results(
 
     with (
         patch(
-            "genomes.branchwater._search_branchwater",
+            "genomes.branchwater.service._search_branchwater",
             return_value=[
                 {"acc": "SRR6180434", "containment": 0.55, "cANI": 0.97},
             ],
         ) as search_mock,
         patch(
-            "genomes.branchwater._join_branchwater_metadata",
+            "genomes.branchwater.service._join_branchwater_metadata",
             return_value=[
                 {
                     "acc": "SRR6180434",
