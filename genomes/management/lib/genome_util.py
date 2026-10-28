@@ -655,6 +655,22 @@ def _upload_genome_files(
             True,
         ),
         (
+            "Genome BRAKER3 Annotation",
+            "gff",
+            f"{genome.accession}_braker.gff",
+            "Genome analysis",
+            "genome",
+            False,
+        ),
+        (
+            "Genome MetaEuk Annotation",
+            "gff",
+            f"{genome.accession}_metaeuk.gff",
+            "Genome analysis",
+            "genome",
+            False,
+        ),
+        (
             "Genome AntiSMASH Annotation",
             "gff",
             f"{genome.accession}_antismash.gff",
