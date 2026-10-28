@@ -117,9 +117,13 @@ def test_ocean_eukaryotes_fixture(prefect_harness):
     entry = catalogue.genomes.get(genome__accession="MGYG000000010")
     assert entry.num_contigs == 10
     assert entry.taxon_lineage.endswith("s__Micromonas commoda")
-    assert "genome/MGYG000000010.fna" in {
-        download["path"] for download in entry.downloads
-    }
+    downloads = {download["path"]: download for download in entry.downloads}
+    assert downloads["genome/MGYG000000010.fna"]["long_description"] == (
+        "Genome assembly with repeats soft-masked (when applicable) in FASTA format"
+    )
+    assert downloads["genome/MGYG000000010_eggNOG.tsv"]["long_description"] == (
+        "Result of orthology annotation at the protein level in TSV format"
+    )
 
 
 @pytest.mark.django_db(transaction=True)
