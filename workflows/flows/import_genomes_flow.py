@@ -1,6 +1,7 @@
 import os
 import re
 import shlex
+import sys
 from datetime import timedelta
 from pathlib import Path
 
@@ -256,14 +257,13 @@ def _make_sourmash_sketches(options: dict, fasta_glob: str):
         Path(genome_config.genome_search_project_dir) / "catalogues" / catalogue_slug
     )
     sketch_dir = catalogue_dir / "sourmash_sketches"
+    sourmash = cli_command([sys.executable, "-m", "sourmash"])
     command = shell_join(
         [
-            "mitload miniconda",
             f"mkdir -p {shell_quote(sketch_dir)}",
             f"cd {shell_quote(catalogue_dir)}",
-            f"conda activate {shell_quote(genome_config.sourmash_conda_environment)}",
             f"find {shell_quote(Path(options['results_directory']) / 'website')} -path {shell_quote(fasta_glob)} > sourmash_sketches/all_fasta.txt",
-            "sourmash sketch dna --from-file sourmash_sketches/all_fasta.txt --outdir sourmash_sketches --name-from-first",
+            f"{sourmash} sketch dna --from-file sourmash_sketches/all_fasta.txt --outdir sourmash_sketches --name-from-first",
         ]
     )
     return run_cluster_job(
@@ -284,13 +284,12 @@ def make_sourmash_index(options: dict):
     catalogue_dir = (
         Path(genome_config.genome_search_project_dir) / "catalogues" / catalogue_slug
     )
+    sourmash = cli_command([sys.executable, "-m", "sourmash"])
     command = shell_join(
         [
-            "mitload miniconda",
             f"cd {shell_quote(catalogue_dir)}",
-            f"conda activate {shell_quote(genome_config.sourmash_conda_environment)}",
             "cd sourmash_sketches",
-            "sourmash index -k 31 --scaled 1000 --dna genome_index *.sig",
+            f"{sourmash} index -k 31 --scaled 1000 --dna genome_index *.sig",
         ]
     )
     return run_cluster_job(

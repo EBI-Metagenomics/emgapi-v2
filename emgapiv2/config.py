@@ -450,7 +450,6 @@ class GenomeConfig(BaseModel):
     cobs_remote_config_path: str = "cobs/cobs.yaml"
     cobs_remote_service: str = "cobs"
 
-    sourmash_conda_environment: str = "sourmash"
     sourmash_public_signatures_dir: str = "/path/to/sourmash-signatures"
 
     rnacentral_ftp_dir: str = "/path/to/rnacentral-ftp"

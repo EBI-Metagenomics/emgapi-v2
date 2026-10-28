@@ -70,7 +70,7 @@ COPY slurm-dev-environment/configs/slurm_epilog.sh /usr/local/bin/slurm_epilog.s
 COPY requirements*.txt .
 RUN python -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
-RUN pip install --use-pep517 --upgrade -r requirements.txt
+RUN pip install --use-pep517 --upgrade -r requirements-workflows.txt
 COPY slurm-dev-environment/configs/prefect-flow-environment.sh /usr/local/bin/prefect-flow-environment.sh
 RUN chmod 0555 /usr/local/bin/prefect-flow-environment.sh
 

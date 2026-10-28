@@ -1,0 +1,2 @@
+# Shared by genome catalogue workflows and the Sourmash search worker
+sourmash==4.9.4

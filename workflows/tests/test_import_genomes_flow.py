@@ -1,6 +1,9 @@
+import gzip
 import json
 import os
+import random
 import shutil
+import subprocess
 import tempfile
 from pathlib import Path
 from unittest.mock import Mock, patch
@@ -98,6 +101,9 @@ from workflows.flows.import_genomes_flow import (
     gather_genome_dirs,
     get_catalogue,
     import_genomes_flow,
+    make_sourmash_index,
+    make_sourmash_sketches,
+    make_sourmash_sketches_v4,
     move_catalogue_files_to_web_results,
     parse_options,
     register_sourmash_search_index,
@@ -174,6 +180,70 @@ def test_move_catalogue_files_to_web_results_uses_slurm_ftp_results_dir():
     logger.return_value.info.assert_called_once_with(
         "Web results mover flowrun is flow-run"
     )
+
+
+@pytest.mark.parametrize(
+    "sketch_task, suffix",
+    [(make_sourmash_sketches, ".fna"), (make_sourmash_sketches_v4, ".fna.gz")],
+    ids=["uncompressed", "compressed"],
+)
+def test_make_sourmash_sketches_and_index_with_empty_environment(
+    tmp_path, sketch_task, suffix
+):
+    sourmash = pytest.importorskip(
+        "sourmash", reason="Requires requirements-workflows.txt (installed in CI)"
+    )
+
+    project_dir = tmp_path / "search project"
+    options = {
+        "catalogue_slug": "test-catalogue-v1-0",
+        "results_directory": str(tmp_path / "catalogue's results"),
+    }
+    catalogue_dir = project_dir / "catalogues" / options["catalogue_slug"]
+    catalogue_dir.mkdir(parents=True)
+    accessions = ["MGYG000000001", "MGYG000000002"]
+    rng = random.Random(42)
+    for accession in accessions:
+        genome_dir = (
+            Path(options["results_directory"]) / "website" / accession / "genome"
+        )
+        genome_dir.mkdir(parents=True)
+        sequence = "".join(rng.choices("ACGT", k=20_000))
+        fasta_path = genome_dir / f"{accession}{suffix}"
+        opener = gzip.open if suffix.endswith(".gz") else open
+        with opener(fasta_path, "wt") as fasta:
+            fasta.write(f">{accession}\n{sequence}\n")
+
+    def run_locally(*, command, working_dir, environment, **kwargs):
+        return subprocess.run(
+            ["/bin/bash", "-e", "-u", "-o", "pipefail", "-c", command],
+            cwd=working_dir,
+            env=environment,
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+
+    with (
+        patch.object(genome_config, "genome_search_project_dir", str(project_dir)),
+        patch(
+            "workflows.flows.import_genomes_flow.run_cluster_job",
+            side_effect=run_locally,
+        ),
+    ):
+        sketch_task.fn(options)
+        make_sourmash_index.fn(options)
+
+    sketch_dir = catalogue_dir / "sourmash_sketches"
+    assert len(list(sketch_dir.glob("*.sig"))) == len(accessions)
+    index = sourmash.load_file_as_index(str(sketch_dir / "genome_index.sbt.zip"))
+    signatures = list(index.signatures())
+    assert {signature.name for signature in signatures} == set(accessions)
+    for signature in signatures:
+        assert signature.minhash.ksize == 31
+        assert signature.minhash.scaled == 1000
+        assert signature.minhash.moltype == "DNA"
 
 
 @patch("workflows.flows.import_genomes_flow.move_catalogue_files_to_web_results")
