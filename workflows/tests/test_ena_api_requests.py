@@ -1146,7 +1146,7 @@ def test_get_study_assemblies_from_ena_links_coassembly_runs(
     assert not analyses.models.Run.objects.filter(
         ena_accessions__icontains=";"
     ).exists()
-    assert assembly.metadata["run_accession"] == ";".join(run_accessions)
+    assert assembly.metadata["run_accession"] == run_accessions
 
 
 @pytest.mark.httpx_mock(should_mock=should_not_mock_httpx_requests_to_prefect_server)
@@ -1184,7 +1184,7 @@ def test_get_study_assemblies_from_ena_does_not_make_runs_from_other_studies(
 
     assembly = analyses.models.Assembly.objects.get_by_accession("ERZ19489075")
     assert not assembly.runs.exists()
-    assert assembly.metadata["run_accession"] == ";".join(run_accessions)
+    assert assembly.metadata["run_accession"] == run_accessions
     assert not analyses.models.Run.objects.filter(
         ena_accessions__overlap=run_accessions
     ).exists()

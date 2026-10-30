@@ -834,7 +834,7 @@ def get_study_assemblies_from_ena(
         )
         assembly.metadata[_.GENERATED_FTP] = assembly_data[_.GENERATED_FTP]
         # Store the ENA run accessions in the metadata even when the runs themselves are not linked
-        assembly.metadata[_.RUN_ACCESSION] = assembly_data.get(_.RUN_ACCESSION, "")
+        assembly.metadata[_.RUN_ACCESSION] = run_accessions
 
         # It is possible that some assemblies are not linked to any runs, the ENA data model allows for this.
         assembly.runs.set(runs)
