@@ -33,6 +33,7 @@ django-tasks-db~=0.12.0
 
 # DB
 psycopg-pool==3.3.0
+duckdb~=1.4.0
 
 # Pydantic
 pydantic<2.12.0  # TODO upgrade once https://github.com/eadwinCode/django-ninja-jwt/pull/151 is released

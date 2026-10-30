@@ -124,6 +124,8 @@ services:
       - EMG_SOURMASH__QUERIES_PATH=/app/sourmash-local/data/queries
       - EMG_SOURMASH__RESULTS_PATH=/app/sourmash-local/data/results
       - EMG_SOURMASH__INDEX_ROOT=/app/sourmash-local/data/signatures
+      - EMG_BRANCHWATER__QUERIES_PATH=/var/lib/branchwater/queries
+      - EMG_BRANCHWATER__RESULTS_PATH=/var/lib/branchwater/results
       - EMG_WEBIN__JWT_SECRET_KEY=dummy-key
       - EMG_WEBIN__EMG_WEBIN_ACCOUNT=Webin-999999
       - EMG_WEBIN__AUTH_ENDPOINT=http://httpbin/status/200
@@ -135,6 +137,7 @@ services:
       - ".:/app"
       - "./slurm-dev-environment/fs/nfs/public:/app/data"  # similar to the k8s volume mount in production
       - "./slurm-dev-environment/fs/nfs/production/catalogs:/nfs/donco/results:ro"  # dissimilar to production - just used for some tests/local dev data
+      - branchwaterjobs:/var/lib/branchwater
     depends_on:
       httpbin:
         condition: service_started
@@ -151,7 +154,7 @@ services:
       target: sourmash_worker
     container_name: app-worker
     profiles: ["all"]
-    command: "python manage.py db_worker --skip-checks"
+    command: "python manage.py db_worker --queue-name default --no-reload --skip-checks"
     env_file:
       - path: ./secrets-local.env
         required: false
@@ -167,6 +170,33 @@ services:
     volumes:
       - ".:/app"
       - "./slurm-dev-environment/fs/nfs/public:/app/data"
+    depends_on:
+      app-database:
+        condition: service_healthy
+    networks: [emg]
+
+  branchwater-worker:
+    # Django Tasks worker for remote Branchwater searches. The shared volume
+    # keeps staged queries and completed results visible to both worker and API.
+    build:
+      context: .
+      target: django
+    container_name: branchwater-worker
+    profiles: ["app", "all"]
+    command: "python manage.py db_worker --queue-name branchwater --no-reload --skip-checks"
+    env_file:
+      - path: ./secrets-local.env
+        required: false
+    environment:
+      - DATABASE_URL=postgres://postgres:postgres@app-database:5432/emg
+      - EMG_BRANCHWATER__QUERIES_PATH=/var/lib/branchwater/queries
+      - EMG_BRANCHWATER__RESULTS_PATH=/var/lib/branchwater/results
+      - PRIVATE_DATA_SECURE_LINK_SECRET_KEY=dummy-key
+      - DJANGO_DEBUG=1
+    volumes:
+      - ".:/app"
+      - "./slurm-dev-environment/fs/nfs/public:/app/data"
+      - branchwaterjobs:/var/lib/branchwater
     depends_on:
       app-database:
         condition: service_healthy
@@ -302,6 +332,7 @@ volumes:
   munge:
   logs:
   jobdir:
+  branchwaterjobs:
 
 networks:
   emg:
