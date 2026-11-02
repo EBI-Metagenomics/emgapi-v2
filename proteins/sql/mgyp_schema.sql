@@ -62,10 +62,11 @@ CREATE TABLE staged_protein (
 );
 CREATE INDEX ON staged_protein (assembly_proteins_id);
 
+-- The MGYC is 'MGYC' || lpad(id::text, 12, '0').
 CREATE TABLE staged_contig (
     id                   bigint  PRIMARY KEY DEFAULT nextval('contig_id_seq'),
-    assembly_proteins_id integer NOT NULL REFERENCES assembly_proteins,
-    name                 text    NOT NULL,                 -- the pipeline's name, e.g. ERZ101_17
+    assembly_proteins_id integer NOT NULL REFERENCES assembly_proteins,  -- the record that introduced it
+    name                text    NOT NULL,                 -- the pipeline's name, e.g. ERZ101_17
     original_name        text,                             -- the submitted name; NULL when unknown
     length               integer NOT NULL,
     hash                 bytea   NOT NULL,                 -- sha256 of the upper-cased contig sequence
