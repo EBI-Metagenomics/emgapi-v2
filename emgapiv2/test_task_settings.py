@@ -9,7 +9,7 @@ def test_base_settings_use_database_task_backend():
     assert base_settings.TASKS == {
         "default": {
             "BACKEND": "django_tasks_db.DatabaseBackend",
-            "QUEUES": ["default"],
+            "QUEUES": ["default", "branchwater"],
         }
     }
 
@@ -18,6 +18,6 @@ def test_test_settings_use_immediate_task_backend():
     assert settings.TASKS == {
         "default": {
             "BACKEND": "django_tasks.backends.immediate.ImmediateBackend",
-            "QUEUES": ["default"],
+            "QUEUES": ["default", "branchwater"],
         }
     }

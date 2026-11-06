@@ -39,7 +39,7 @@ RUN apt-get update && \
         tzdata && \
     rm -rf /var/lib/apt/lists/*
 WORKDIR /app
-COPY requirements-common.txt requirements-sourmash-worker.txt ./
+COPY requirements-common.txt requirements-sourmash.txt requirements-sourmash-worker.txt ./
 RUN python -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 RUN pip install --upgrade pip setuptools wheel
@@ -63,6 +63,8 @@ FROM sourmash_base AS sourmash_worker
 COPY . .
 
 FROM django AS agent
+
+RUN pip install --use-pep517 -r requirements-sourmash.txt
 
 RUN groupadd -r slurm
 RUN useradd -rm -d /home/slurm -s /bin/bash -g slurm -G sudo -u 999 slurm
@@ -114,7 +116,8 @@ ENTRYPOINT ["/usr/local/bin/submitter-entrypoint.sh", "python", "manage.py"]
 FROM python:3.12 AS ci
 WORKDIR /app
 COPY requirements* .
-RUN pip install --ignore-installed --use-pep517 -r requirements.txt
+RUN pip install --ignore-installed --use-pep517 -r requirements-workflows.txt
+RUN python -c "from importlib.metadata import version; print(version('sourmash'))"
 RUN pip install --ignore-installed --use-pep517 -r requirements-dev.txt
 RUN pip install --ignore-installed --use-pep517 -r requirements-tools.txt
 RUN pip --no-input uninstall pydantic; pip --no-input install pydantic==2.10.6

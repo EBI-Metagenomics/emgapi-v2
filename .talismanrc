@@ -65,6 +65,12 @@ fileignoreconfig:
 - filename: emgapiv2/api/auth.py
   checksum: 5d028587b866b9dd2ac7aa0c4279441cc0d495e4df9338729db30ac583e49299
 
+- filename: emgapiv2/api/branchwater.py
+  checksum: 2331bfb7c0ce1e477f67518b5d1ec2adbfbbea84b7fbda2a13a349bd6ed45627
+
+- filename: emgapiv2/api/tests/test_branchwater_jobs.py
+  checksum: a8111088f8558bfb0417ea6a5a0d79db650c605e8e5e791122ff95e3febb2168
+
 - filename: emgapiv2/api/storage.py
   checksum: be76261cc58f5ccea9a0b0d9179894ff3260cb5672aa69a4cfc66732200fed0d
 
@@ -84,7 +90,7 @@ fileignoreconfig:
   checksum: 08e2680598ee0719f717dc73019948001ebfcbaf700a3ee2dfb0e442acaebd26
 
 - filename: emgapiv2/settings.py
-  checksum: 69508c261f047f8c9bdc40926a7a87b54cef942ca264baeef530095d5346b05d
+  checksum: c2733b3d7d83ed030eda5cd6b431e1e2b96812c07c56e8b62a714539a09aa65b
 
 - filename: emgapiv2/settings_test.py
   checksum: ded898400b4eda7e3cf75694af1b66235975a85eb5b8f49f3a2c708163a7aad4

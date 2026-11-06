@@ -391,6 +391,17 @@ class SourmashConfig(BaseModel):
     name_map_path: str = ""
 
 
+class BranchwaterConfig(BaseModel):
+    index_server: str = "http://index-service"
+    metadata_duckdb: str = "/data/metadata.duckdb"
+    signatures_root: str = "/signatures"
+    queries_path: str = "/tmp/branchwater/queries"
+    results_path: str = "/tmp/branchwater/results"
+    search_timeout_seconds: float = Field(default=300, gt=0)
+    threshold: float = 0.1
+    ksize: int = 21
+
+
 class DataDistributionConfig(BaseModel):
     studies_url_root_for_permalinks: str = Field(
         "https://www.ebi.ac.uk/metagenomics/studies/"
@@ -439,7 +450,6 @@ class GenomeConfig(BaseModel):
     cobs_remote_config_path: str = "cobs/cobs.yaml"
     cobs_remote_service: str = "cobs"
 
-    sourmash_conda_environment: str = "sourmash"
     sourmash_public_signatures_dir: str = "/path/to/sourmash-signatures"
 
     rnacentral_ftp_dir: str = "/path/to/rnacentral-ftp"
@@ -483,6 +493,7 @@ class EMGConfig(BaseSettings):
     legacy_service: LegacyServiceConfig = LegacyServiceConfig()
     service_urls: ServiceURLsConfig = ServiceURLsConfig()
     sourmash: SourmashConfig = SourmashConfig()
+    branchwater: BranchwaterConfig = BranchwaterConfig()
     slurm: SlurmConfig = SlurmConfig()
     webin: WebinConfig = WebinConfig()
     log_masking: LogMaskingConfig = LogMaskingConfig()
