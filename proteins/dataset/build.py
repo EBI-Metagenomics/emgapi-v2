@@ -19,6 +19,7 @@ logger = logging.getLogger(__name__)
 # Every table but dataset_owner, which always has its one row.
 TABLES = (
     "protein",
+    "assembly",
     "assembly_proteins",
     "gene_caller",
     "staged_protein",
@@ -26,12 +27,14 @@ TABLES = (
     "staged_occurrence",
     "dataset_update",
 )
+# In the order of their foreign keys.
 REGISTRIES = {
+    "assembly": ("metadata/assemblies", {"id": "id", "accession": "accession"}),
     "assembly_proteins": (
         "metadata/assembly_proteins_registry",
         {
             "id": "id",
-            "assembly_accession": "assembly_accession",
+            "assembly_id": "assembly_id",
             "source": "source",
             "pipeline_version": "pipeline_version",
             "analysis_accession": "analysis_accession",

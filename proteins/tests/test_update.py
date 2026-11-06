@@ -154,6 +154,7 @@ def day_layout(day, proteins):
         f"contig/day={day}/part-000.parquet",
         f"metadata/day={day}/assembly_proteins.parquet",
         f"metadata/day={day}/assembly_proteins_registry.parquet",
+        f"metadata/day={day}/assemblies.parquet",
         f"metadata/day={day}/gene_callers.parquet",
     }
 
@@ -197,6 +198,16 @@ def test_two_days_of_updates_hold_every_staged_row_once(root, stage):
     )
     assert snapshot(root) == records(first + second)
     assert snapshot(root, D1) == records(first)
+    # ERZ101's two records share one assembly.
+    (snapshot_path,) = layout.files(root, "metadata/assembly_proteins")
+    (assemblies_path,) = layout.files(root, "metadata/assemblies")
+    assert {
+        (row["assembly_id"], row["assembly_accession"])
+        for row in pq.read_table(snapshot_path).to_pylist()
+    } == {
+        (row["id"], row["accession"])
+        for row in pq.read_table(assemblies_path).to_pylist()
+    }
     assert query(
         "SELECT day, status, assembly_proteins, proteins, contigs, occurrences"
         " FROM proteindb.dataset_update ORDER BY id"

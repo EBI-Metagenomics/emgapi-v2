@@ -11,12 +11,13 @@ pytestmark = pytest.mark.django_db
 
 
 def registry(*records):
-    """assembly_proteins rows, each (id, analysis, source)."""
+    """The assembly_proteins and assembly rows, from records (id, analysis, source). An ERZn's assembly id is n."""
+    erzs = {analysis.assembly.first_accession for _, analysis, _ in records}
     return pa.Table.from_pylist(
         [
             {
                 "id": id,
-                "assembly_accession": analysis.assembly.first_accession,
+                "assembly_id": int(analysis.assembly.first_accession[3:]),
                 "source": source,
                 "pipeline_version": analysis.pipeline_major_minor,
                 "analysis_accession": analysis.accession,
@@ -24,6 +25,9 @@ def registry(*records):
             for id, analysis, source in records
         ],
         layout.SCHEMAS["metadata/assembly_proteins_registry"],
+    ), pa.Table.from_pylist(
+        [{"id": int(erz[3:]), "accession": erz} for erz in erzs],
+        layout.SCHEMAS["metadata/assemblies"],
     )
 
 
@@ -53,7 +57,7 @@ def test_one_row_per_record_with_the_study_and_biome_of_its_mgya(engineered):
         ) as chunks,
     ):
         snapshot = metadata.build_snapshot(
-            registry(
+            *registry(
                 (3, other, "assembly_analysis"),
                 (1, v6, "assembly_analysis"),
                 (2, v6_1, "gene_calling"),
@@ -64,6 +68,7 @@ def test_one_row_per_record_with_the_study_and_biome_of_its_mgya(engineered):
     assert snapshot.to_pylist() == [
         {
             "assembly_proteins_id": 3,
+            "assembly_id": 2,
             "assembly_accession": "ERZ2",
             "source": "assembly_analysis",
             "pipeline_version": "6.0",
@@ -75,6 +80,7 @@ def test_one_row_per_record_with_the_study_and_biome_of_its_mgya(engineered):
         },
         {
             "assembly_proteins_id": 1,
+            "assembly_id": 1,
             "assembly_accession": "ERZ1",
             "source": "assembly_analysis",
             "pipeline_version": "6.0",
@@ -86,6 +92,7 @@ def test_one_row_per_record_with_the_study_and_biome_of_its_mgya(engineered):
         },
         {
             "assembly_proteins_id": 2,
+            "assembly_id": 1,
             "assembly_accession": "ERZ1",
             "source": "gene_calling",
             "pipeline_version": "6.1",
@@ -115,6 +122,6 @@ def test_a_flag_is_set_when_the_analysis_its_assembly_or_its_study_has_it(
         type(model).objects.filter(pk=model.pk).update(**{flag: value})
 
     (row,) = metadata.build_snapshot(
-        registry((1, analysis, "assembly_analysis"))
+        *registry((1, analysis, "assembly_analysis"))
     ).to_pylist()
     assert row[flag] is (on_analysis or on_assembly or on_study)

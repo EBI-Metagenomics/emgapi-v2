@@ -49,12 +49,13 @@ def accession(
     hashes = [hash for hash, _ in input.proteins]
     ids = lookup(connect, hashes, connections)
     with connect() as conn:
+        assembly_id = register_assembly(conn, assembly)
         callers = register_gene_callers(
             conn, sorted({(o.caller_name, o.caller_version) for o in input.occurrences})
         )
         staged = stage(
             conn,
-            assembly,
+            assembly_id,
             source,
             pipeline_version,
             input,
@@ -138,6 +139,27 @@ def lookup_partitions(
     return found
 
 
+def register_assembly(conn: psycopg.Connection, accession: str) -> int:
+    """The assembly's id, registering it if it is new.
+
+    Done before the transaction, as register_gene_callers() is, and filtered in the same way, so that
+    every analysis of a registered assembly does not take an identity value.
+
+    :param conn: A connection to the MGYP database, in autocommit.
+    :param accession: The ENA assembly accession.
+    """
+    conn.execute(
+        "INSERT INTO assembly (accession) SELECT %(erz)s"
+        " WHERE NOT EXISTS (SELECT 1 FROM assembly WHERE accession = %(erz)s)"
+        " ON CONFLICT DO NOTHING",
+        {"erz": accession},
+    )
+    (id,) = conn.execute(
+        "SELECT id FROM assembly WHERE accession = %s", [accession]
+    ).fetchone()
+    return id
+
+
 def register_gene_callers(
     conn: psycopg.Connection, callers: list[tuple[str, str]]
 ) -> dict[tuple[str, str], int]:
@@ -174,7 +196,7 @@ def register_gene_callers(
 
 def stage(
     conn: psycopg.Connection,
-    assembly: str,
+    assembly_id: int,
     source: str,
     pipeline_version: str,
     input: Input,
@@ -185,7 +207,7 @@ def stage(
     """The transaction: the ids of the proteins step 3 did not find, or None if the assembly proteins record exists.
 
     :param conn: A connection to the MGYP database, in autocommit.
-    :param assembly: The ENA assembly accession.
+    :param assembly_id: The assembly's id, from register_assembly().
     :param source: The pipeline that predicted the genes: "assembly_analysis" or "gene_calling".
     :param pipeline_version: The source pipeline's major.minor.
     :param input: The proteins, contigs and occurrences, from read_input().
@@ -196,9 +218,9 @@ def stage(
     staged = None
     with conn.transaction():
         row = conn.execute(
-            "INSERT INTO assembly_proteins (assembly_accession, source, pipeline_version, analysis_accession)"
+            "INSERT INTO assembly_proteins (assembly_id, source, pipeline_version, analysis_accession)"
             " VALUES (%s, %s, %s, %s) ON CONFLICT DO NOTHING RETURNING id",
-            [assembly, source, pipeline_version, analysis_accession],
+            [assembly_id, source, pipeline_version, analysis_accession],
         ).fetchone()
         if row is None:
             raise psycopg.Rollback

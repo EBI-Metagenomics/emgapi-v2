@@ -7,6 +7,7 @@ from proteins.accession.accession import (
     accession,
     lookup,
     lookup_partitions,
+    register_assembly,
     register_gene_callers,
 )
 from proteins.accession.contract import protein_hash
@@ -58,8 +59,8 @@ def test_new_assembly_is_staged_exactly(connect_accession, erz101, assembly):
     assert len(set(ids.values())) == len(ids)
     assert dict(query("SELECT hash, id FROM proteindb.protein")) == ids
     ((record_id, *record),) = query(
-        "SELECT id, assembly_accession, source, pipeline_version, analysis_accession"
-        " FROM proteindb.assembly_proteins"
+        "SELECT p.id, a.accession, source, pipeline_version, analysis_accession"
+        " FROM proteindb.assembly_proteins p JOIN proteindb.assembly a ON a.id = p.assembly_id"
     )
     assert record == [assembly, SOURCE, "6.0", "MGYA1"]
     assert set(
@@ -235,6 +236,24 @@ def test_registering_known_gene_callers_takes_no_identity_value(connect_accessio
             assert register_gene_callers(conn, callers) == ids
     assert len(set(ids.values())) == 2
     assert gene_caller_last_value() == last_value
+
+
+def test_registering_a_known_assembly_takes_no_identity_value(connect_accession):
+    with connect_accession() as conn:
+        id = register_assembly(conn, "ERZ1")
+        last_value = query("SELECT last_value FROM proteindb.assembly_id_seq")[0][0]
+        for _ in range(1000):
+            assert register_assembly(conn, "ERZ1") == id
+    assert query("SELECT last_value FROM proteindb.assembly_id_seq")[0][0] == last_value
+
+
+def test_two_versions_of_an_assembly_share_its_id(connect_accession, erz101):
+    accession(connect_accession, "ERZ101", SOURCE, "6.0", erz101, "MGYA1")
+    accession(connect_accession, "ERZ101", SOURCE, "6.1", erz101, "MGYA2")
+    assert query(
+        "SELECT a.accession, count(*) FROM proteindb.assembly_proteins p"
+        " JOIN proteindb.assembly a ON a.id = p.assembly_id GROUP BY a.accession"
+    ) == [("ERZ101", 2)]
 
 
 def test_known_gene_callers_need_no_identity_value(connect_accession, erz101):

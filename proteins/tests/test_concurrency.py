@@ -141,8 +141,9 @@ def test_concurrent_analyses_of_overlapping_assemblies(tmp_path, connect_accessi
         ) == [(1,)]
         assert query(
             "SELECT count(DISTINCT gene_caller_id) FROM proteindb.staged_occurrence o"
-            " JOIN proteindb.assembly_proteins a ON a.id = o.assembly_proteins_id"
-            " WHERE a.assembly_accession LIKE %s",
+            " JOIN proteindb.assembly_proteins p ON p.id = o.assembly_proteins_id"
+            " JOIN proteindb.assembly a ON a.id = p.assembly_id"
+            " WHERE a.accession LIKE %s",
             [f"ERZ{round:02d}_"],
         ) == [(1,)]
     assert count("staged_protein") == count("protein")

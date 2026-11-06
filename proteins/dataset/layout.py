@@ -53,6 +53,7 @@ SCHEMAS = {
     # What emgapi-v2 knows of each assembly proteins record, through its MGYA.
     "metadata/assembly_proteins": _schema(
         ("assembly_proteins_id", pa.int32(), False),
+        ("assembly_id", pa.int32(), False),
         ("assembly_accession", pa.string(), False),
         ("source", pa.string(), False),  # assembly_analysis or gene_calling
         ("pipeline_version", pa.string(), False),
@@ -65,10 +66,15 @@ SCHEMAS = {
     # Every assembly proteins record, withheld or not: what a rebuild restores.
     "metadata/assembly_proteins_registry": _schema(
         ("id", pa.int32(), False),
-        ("assembly_accession", pa.string(), False),
+        ("assembly_id", pa.int32(), False),
         ("source", pa.string(), False),
         ("pipeline_version", pa.string(), False),
         ("analysis_accession", pa.string(), False),
+    ),
+    # Every assembly, as the registry above.
+    "metadata/assemblies": _schema(
+        ("id", pa.int32(), False),
+        ("accession", pa.string(), False),
     ),
     "metadata/gene_callers": _schema(
         ("id", pa.int16(), False),
@@ -83,6 +89,7 @@ SORT_ORDER = {
     "contig": ["assembly_proteins_id", "id"],
     "metadata/assembly_proteins": ["assembly_proteins_id"],
     "metadata/assembly_proteins_registry": ["id"],
+    "metadata/assemblies": ["id"],
     "metadata/gene_callers": ["id"],
 }
 

@@ -30,17 +30,20 @@ MIGRATED = {
 RECORDS = [
     {
         "assembly_proteins_id": 1,
+        "assembly_id": 1,
         "assembly_accession": "ERZ1",
         "pipeline_version": "5.0",
         "analysis_accession": "MGYA1",
     },
     {
         "assembly_proteins_id": 5,
+        "assembly_id": 4,
         "assembly_accession": "ERZ2",
         "pipeline_version": "6.1",
         "analysis_accession": "MGYA2",
     },
 ]
+ASSEMBLIES = [{"id": 1, "accession": "ERZ1"}, {"id": 4, "accession": "ERZ2"}]
 GENE_CALLERS = [
     {"id": 1, "name": "Pyrodigal", "version": "3.6.3"},
     {"id": 2, "name": "FragGeneScanRS", "version": "1.1.0"},
@@ -114,6 +117,7 @@ def write_day(root, day, proteins, kind, records=RECORDS):
     for table, rows in [
         ("metadata/assembly_proteins", snapshot),
         ("metadata/assembly_proteins_registry", registry),
+        ("metadata/assemblies", ASSEMBLIES),
         ("metadata/gene_callers", GENE_CALLERS),
     ]:
         layout.write(
@@ -176,12 +180,16 @@ def test_builds_the_mgyp_database_from_the_migrated_day(migrated):
         hash: (id, f"protein_{hash[0] >> 2:02x}") for hash, id in MIGRATED.items()
     }
     assert query(
-        "SELECT id, assembly_accession, source, pipeline_version, analysis_accession"
-        " FROM proteindb.assembly_proteins ORDER BY id"
+        "SELECT p.id, a.id, a.accession, source, pipeline_version, analysis_accession"
+        " FROM proteindb.assembly_proteins p JOIN proteindb.assembly a ON a.id = p.assembly_id"
+        " ORDER BY p.id"
     ) == [
-        (1, "ERZ1", "assembly_analysis", "5.0", "MGYA1"),
-        (5, "ERZ2", "assembly_analysis", "6.1", "MGYA2"),
+        (1, 1, "ERZ1", "assembly_analysis", "5.0", "MGYA1"),
+        (5, 4, "ERZ2", "assembly_analysis", "6.1", "MGYA2"),
     ]
+    assert query(
+        "INSERT INTO proteindb.assembly (accession) VALUES ('ERZ3') RETURNING id"
+    ) == [(5,)]
     assert query("SELECT id, name, version FROM proteindb.gene_caller ORDER BY id") == [
         (1, "Pyrodigal", "3.6.3"),
         (2, "FragGeneScanRS", "1.1.0"),
@@ -197,7 +205,7 @@ def test_refuses_a_schema_that_is_not_empty(migrated):
     build_mgyp_database(owner_dsn(), migrated)
     with pytest.raises(
         BuildError,
-        match="protein, assembly_proteins, gene_caller, dataset_update not empty",
+        match="protein, assembly, assembly_proteins, gene_caller, dataset_update not empty",
     ):
         build_mgyp_database(owner_dsn(), migrated)
 

@@ -37,18 +37,22 @@ def find_analyses(mgyas: list[str]) -> dict[str, dict]:
     return known
 
 
-def build_snapshot(assembly_proteins: pa.Table) -> pa.Table:
+def build_snapshot(assembly_proteins: pa.Table, assemblies: pa.Table) -> pa.Table:
     """The metadata/assembly_proteins table for every assembly proteins record, of either source, whose MGYA is in emgapi-v2.
 
     A record whose MGYA is not in emgapi-v2 is withheld: releases publish nothing of a record
     without metadata, and it is back in the snapshot of the day after its analysis is.
 
-    :param assembly_proteins: The assembly_proteins rows: id, assembly_accession, source, pipeline_version, analysis_accession.
+    :param assembly_proteins: The assembly_proteins rows: id, assembly_id, source, pipeline_version, analysis_accession.
+    :param assemblies: The assembly rows: id, accession.
     :return: The table in the metadata/assembly_proteins schema.
     """
     records = assembly_proteins.to_pylist()
     mgyas = sorted({record["analysis_accession"] for record in records})
     known = find_analyses(mgyas)
+    accessions = dict(
+        zip(assemblies["id"].to_pylist(), assemblies["accession"].to_pylist())
+    )
 
     if missing := [mgya for mgya in mgyas if mgya not in known]:
         logger.warning(
@@ -73,7 +77,8 @@ def build_snapshot(assembly_proteins: pa.Table) -> pa.Table:
         rows.append(
             {
                 "assembly_proteins_id": record["id"],
-                "assembly_accession": record["assembly_accession"],
+                "assembly_id": record["assembly_id"],
+                "assembly_accession": accessions[record["assembly_id"]],
                 "source": record["source"],
                 "pipeline_version": record["pipeline_version"],
                 "analysis_accession": record["analysis_accession"],

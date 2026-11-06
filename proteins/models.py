@@ -73,6 +73,18 @@ class Protein(MGnifyProteinsBase):
         return protein_hash(sequence)
 
 
+class Assembly(MGnifyProteinsBase):
+    """An assembly, by its ERZ. Its contigs and occurrences belong to it in the protein dataset."""
+
+    accession = models.TextField(unique=True)  # ERZ
+
+    class Meta(MGnifyProteinsBase.Meta):
+        db_table = "assembly"
+
+    def __str__(self):
+        return self.accession
+
+
 class AssemblyProteins(MGnifyProteinsBase):
     """The proteins of one assembly analysis, predicted by one version of the source pipeline."""
 
@@ -82,7 +94,7 @@ class AssemblyProteins(MGnifyProteinsBase):
         ASSEMBLY_ANALYSIS = "assembly_analysis", "Assembly analysis"
         GENE_CALLING = "gene_calling", "Gene calling + assembly analysis"
 
-    assembly_accession = models.TextField()  # ERZ
+    assembly = models.ForeignKey(Assembly, on_delete=models.DO_NOTHING)
     source = models.TextField(choices=Source)
     # major.minor of the source pipeline, for example "6.0" (ASA) or "1.0" (gene calling)
     pipeline_version = models.TextField()
@@ -95,13 +107,13 @@ class AssemblyProteins(MGnifyProteinsBase):
         verbose_name_plural = "assembly proteins"
         constraints = [
             models.UniqueConstraint(
-                fields=["assembly_accession", "source", "pipeline_version"],
+                fields=["assembly", "source", "pipeline_version"],
                 name="assembly_proteins_assembly_source_version",
             )
         ]
 
     def __str__(self):
-        return f"{self.assembly_accession} {self.source} {self.pipeline_version} ({self.analysis_accession})"
+        return f"{self.assembly} {self.source} {self.pipeline_version} ({self.analysis_accession})"
 
 
 class GeneCaller(MGnifyProteinsBase):

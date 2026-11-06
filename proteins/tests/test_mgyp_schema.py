@@ -22,6 +22,7 @@ def test_creates_every_table_and_sequence():
     assert tables == {
         "protein",
         *(f"protein_{p:02x}" for p in range(64)),
+        "assembly",
         "assembly_proteins",
         "gene_caller",
         "staged_protein",
@@ -93,9 +94,10 @@ HASH = "'\\x" + "ab" * 32 + "'::bytea"
 
 def record(erz="ERZ1", source="assembly_analysis", version="6.1", mgya="MGYA1"):
     return (
-        "INSERT INTO proteindb.assembly_proteins"
-        " (assembly_accession, source, pipeline_version, analysis_accession)"
-        f" VALUES ('{erz}', '{source}', '{version}', '{mgya}')"
+        f"INSERT INTO proteindb.assembly (accession) VALUES ('{erz}') ON CONFLICT DO NOTHING;"
+        " INSERT INTO proteindb.assembly_proteins"
+        " (assembly_id, source, pipeline_version, analysis_accession)"
+        f" SELECT id, '{source}', '{version}', '{mgya}' FROM proteindb.assembly WHERE accession = '{erz}'"
     )
 
 
@@ -130,7 +132,19 @@ def record(erz="ERZ1", source="assembly_analysis", version="6.1", mgya="MGYA1"):
         (
             record(),
             record(mgya="MGYA2"),
-            "assembly_proteins_assembly_accession_source_pipeline_versio_key",
+            "assembly_proteins_assembly_id_source_pipeline_version_key",
+        ),
+        (
+            None,
+            "INSERT INTO proteindb.assembly_proteins"
+            " (assembly_id, source, pipeline_version, analysis_accession)"
+            " VALUES (1, 'assembly_analysis', '6.1', 'MGYA1')",
+            "assembly_proteins_assembly_id_fkey",
+        ),
+        (
+            "INSERT INTO proteindb.assembly (accession) VALUES ('ERZ1')",
+            "INSERT INTO proteindb.assembly (accession) VALUES ('ERZ1')",
+            "assembly_accession_key",
         ),
         (
             record(),

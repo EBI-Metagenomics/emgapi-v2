@@ -38,6 +38,7 @@ class Staged(NamedTuple):
     assembly_proteins_ids: list[int]
     files: dict[str, Path]  # each staged table's rows, in the scratch directory
     assembly_proteins: pa.Table  # the registries, read in the same snapshot as the rows
+    assemblies: pa.Table
     gene_callers: pa.Table
 
 
@@ -133,11 +134,15 @@ def read_staged_rows(scratch: Path) -> Staged:
             cursor.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY")
             assembly_proteins_ids = choose_assembly_proteins(cursor)
             cursor.execute(
-                "SELECT id, assembly_accession, source, pipeline_version, analysis_accession"
+                "SELECT id, assembly_id, source, pipeline_version, analysis_accession"
                 " FROM assembly_proteins"
             )
             assembly_proteins = to_table(
                 cursor.fetchall(), layout.SCHEMAS["metadata/assembly_proteins_registry"]
+            )
+            cursor.execute("SELECT id, accession FROM assembly")
+            assemblies = to_table(
+                cursor.fetchall(), layout.SCHEMAS["metadata/assemblies"]
             )
             cursor.execute("SELECT id, name, version FROM gene_caller")
             gene_callers = to_table(
@@ -157,7 +162,9 @@ def read_staged_rows(scratch: Path) -> Staged:
                 with pq.ParquetWriter(files[table], schema) as writer:
                     while batch := rows.fetchmany(BATCH_ROWS):
                         writer.write_table(to_table(batch, schema))
-    return Staged(assembly_proteins_ids, files, assembly_proteins, gene_callers)
+    return Staged(
+        assembly_proteins_ids, files, assembly_proteins, assemblies, gene_callers
+    )
 
 
 def to_table(rows: list[tuple], schema: pa.Schema) -> pa.Table:
@@ -248,12 +255,17 @@ def write_metadata_snapshot(root: Path, day: date, staged: Staged) -> None:
     layout.write(
         directory / "assembly_proteins.parquet",
         "metadata/assembly_proteins",
-        metadata.build_snapshot(staged.assembly_proteins),
+        metadata.build_snapshot(staged.assembly_proteins, staged.assemblies),
     )
     layout.write(
         directory / "assembly_proteins_registry.parquet",
         "metadata/assembly_proteins_registry",
         staged.assembly_proteins,
+    )
+    layout.write(
+        directory / "assemblies.parquet",
+        "metadata/assemblies",
+        staged.assemblies,
     )
     layout.write(
         directory / "gene_callers.parquet",

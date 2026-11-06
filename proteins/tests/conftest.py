@@ -105,7 +105,7 @@ def emptied_mgyp_db(mgyp_db):
     """For transactional tests, whose role connections commit outside the test's transaction."""
     yield
     query(
-        "TRUNCATE proteindb.protein, proteindb.assembly_proteins, proteindb.gene_caller,"
+        "TRUNCATE proteindb.protein, proteindb.assembly, proteindb.assembly_proteins, proteindb.gene_caller,"
         " proteindb.staged_protein, proteindb.staged_contig, proteindb.staged_occurrence,"
         " proteindb.dataset_update RESTART IDENTITY"
     )

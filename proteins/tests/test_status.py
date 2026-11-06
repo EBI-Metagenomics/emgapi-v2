@@ -28,9 +28,10 @@ def root(tmp_path, monkeypatch):
 def record(mgya, staged_ago):
     """An assembly proteins record with one protein staged that long ago."""
     ((id,),) = query(
-        "INSERT INTO proteindb.assembly_proteins"
-        " (assembly_accession, source, pipeline_version, analysis_accession)"
-        " VALUES (%s, 'assembly_analysis', '6.0', %s) RETURNING id",
+        "WITH a AS (INSERT INTO proteindb.assembly (accession) VALUES (%s) RETURNING id)"
+        " INSERT INTO proteindb.assembly_proteins"
+        " (assembly_id, source, pipeline_version, analysis_accession)"
+        " SELECT id, 'assembly_analysis', '6.0', %s FROM a RETURNING id",
         [f"ERZ-{mgya}", mgya],
     )
     query(

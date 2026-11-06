@@ -45,7 +45,7 @@ def results(tmp_path):
 def records():
     return sorted(
         AssemblyProteins.objects.values_list(
-            "assembly_accession", "pipeline_version", "analysis_accession"
+            "assembly__accession", "pipeline_version", "analysis_accession"
         )
     )
 

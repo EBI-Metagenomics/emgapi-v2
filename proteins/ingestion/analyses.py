@@ -65,7 +65,7 @@ def find_pending_analyses(study_accession: str | None = None) -> list[Analysis]:
     known = set(
         AssemblyProteins.objects.filter(
             source=AssemblyProteins.Source.ASSEMBLY_ANALYSIS
-        ).values_list("assembly_accession", "pipeline_version")
+        ).values_list("assembly__accession", "pipeline_version")
     )
     pending = []
     for analysis in analyses.order_by("id"):
@@ -128,7 +128,7 @@ def ingest_analysis(analysis_accession: str) -> IngestionResult:
     erz = analysis.assembly.first_accession
     version = analysis.pipeline_major_minor
     if AssemblyProteins.objects.filter(
-        assembly_accession=erz,
+        assembly__accession=erz,
         source=AssemblyProteins.Source.ASSEMBLY_ANALYSIS,
         pipeline_version=version,
     ).exists():

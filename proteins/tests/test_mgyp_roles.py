@@ -53,10 +53,15 @@ def test_accession_role_can_accession_a_new_analysis(connect_as):
         "INSERT INTO gene_caller (name, version) VALUES ('Pyrodigal', '3.6.3')"
         " ON CONFLICT DO NOTHING RETURNING id"
     ).fetchone()
-    (assembly_proteins_id,) = conn.execute(
-        "INSERT INTO assembly_proteins (assembly_accession, source, pipeline_version, analysis_accession)"
-        " VALUES ('ERZ101', 'assembly_analysis', '6.0', 'MGYA101')"
+    (assembly_id,) = conn.execute(
+        "INSERT INTO assembly (accession) VALUES ('ERZ101')"
         " ON CONFLICT DO NOTHING RETURNING id"
+    ).fetchone()
+    (assembly_proteins_id,) = conn.execute(
+        "INSERT INTO assembly_proteins (assembly_id, source, pipeline_version, analysis_accession)"
+        " VALUES (%s, 'assembly_analysis', '6.0', 'MGYA101')"
+        " ON CONFLICT DO NOTHING RETURNING id",
+        [assembly_id],
     ).fetchone()
     conn.execute(
         "CREATE TEMP TABLE new_hash (hash bytea, sequence text) ON COMMIT DROP"
@@ -166,6 +171,8 @@ def test_read_role_can_read_everything(connect_as):
         ("proteindb_accession", "UPDATE staged_contig SET name = name"),
         ("proteindb_accession", "UPDATE assembly_proteins SET source = source"),
         ("proteindb_accession", "DELETE FROM assembly_proteins"),
+        ("proteindb_accession", "UPDATE assembly SET accession = accession"),
+        ("proteindb_accession", "DELETE FROM assembly"),
         ("proteindb_accession", "DELETE FROM gene_caller"),
         ("proteindb_accession", "DELETE FROM dataset_update"),
         ("proteindb_accession", "DELETE FROM dataset_owner"),
