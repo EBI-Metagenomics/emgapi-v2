@@ -3,13 +3,14 @@ import logging
 import re
 import uuid
 from pathlib import Path
-from typing import Any, Dict, List, Literal, Optional
+from typing import Any, Dict, List, Literal, Optional, Union
 
 from django.conf import settings
 from django_tasks.exceptions import TaskResultDoesNotExist
 from ninja import Query, Schema
 from ninja.errors import HttpError
 from ninja_extra import api_controller, http_get, http_post
+from pydantic import Json, field_validator
 
 from emgapiv2.api.schema_utils import ApiSections
 from emgapiv2.tasking import default_task_backend
@@ -29,7 +30,15 @@ JobStatus = Literal["QUEUED", "RUNNING", "SUCCESS", "NO_RESULTS", "FAILED"]
 
 
 class BranchwaterSearchIn(Schema):
-    signatures: str
+    signatures: Json[Union[Dict[str, Any], List[Dict[str, Any]]]]
+
+    @field_validator("signatures")
+    @classmethod
+    def validate_signatures(cls, value: Any) -> List[Dict[str, Any]]:
+        try:
+            return validate_branchwater_signature(value)
+        except BranchwaterError as exc:
+            raise ValueError(exc.message) from exc
 
 
 class BranchwaterHealthOut(Schema):
@@ -64,18 +73,16 @@ def _job_url(request, kind: str, job_id: str) -> str:
     return request.build_absolute_uri(f"{base}/services/branchwater/{kind}/{job_id}/")
 
 
-def _submit_branchwater(request, signatures: Any) -> BranchwaterSubmissionOut:
-    try:
-        validated = validate_branchwater_signature(signatures)
-    except BranchwaterError as exc:
-        raise HttpError(exc.status_code, exc.message) from exc
+def _submit_branchwater(
+    request, validated_signatures: List[Dict[str, Any]]
+) -> BranchwaterSubmissionOut:
     request_id = uuid.uuid4().hex
     query_path = Path(EMG_CONFIG.branchwater.queries_path) / request_id / "query.sig"
     result_path = (
         Path(EMG_CONFIG.branchwater.results_path) / request_id / "results.json"
     )
     try:
-        write_branchwater_json(query_path, validated)
+        write_branchwater_json(query_path, validated_signatures)
         task_result = run_branchwater_search.enqueue(
             query_path=str(query_path), result_path=str(result_path)
         )
@@ -168,6 +175,7 @@ class BranchwaterController:
     def mags(self, request, accession: str = Query(...), catalogue: str = Query(...)):
         try:
             signatures = _load_branchwater_mag_signature(accession, catalogue)
+            signatures = validate_branchwater_signature(signatures)
         except BranchwaterError as exc:
             raise HttpError(exc.status_code, exc.message) from exc
         return 202, _submit_branchwater(request, signatures)

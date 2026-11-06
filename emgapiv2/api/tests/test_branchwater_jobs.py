@@ -45,6 +45,24 @@ def signature():
     }
 
 
+@pytest.fixture
+def branchwater_metadata(settings, tmp_path, raw_read_run):
+    import duckdb
+
+    accession = raw_read_run[0].first_accession
+    metadata = tmp_path / "metadata.duckdb"
+    with duckdb.connect(str(metadata)) as connection:
+        connection.execute(
+            "CREATE TABLE metadata (acc VARCHAR, bioproject VARCHAR, assay_type VARCHAR, collection_date_sam VARCHAR, geo_loc_name_country_calc VARCHAR, organism VARCHAR, lat_lon VARCHAR)"
+        )
+        connection.execute(
+            "INSERT INTO metadata VALUES (?, 'PRJEB12345', 'METAGENOMIC', '2024-01-01', 'United Kingdom', 'metagenome', '51.50 -0.12')",
+            [accession],
+        )
+    settings.EMG_CONFIG.branchwater.metadata_duckdb = str(metadata)
+    return accession
+
+
 def submit(client, signature):
     response = client.post(
         "/services/branchwater/", json={"signatures": json.dumps(signature)}
@@ -136,21 +154,9 @@ def test_database_backend_submission_does_not_execute_search(
 
 @pytest.mark.django_db
 def test_worker_processes_search_metadata_and_run_flags(
-    ninja_api_client, signature, settings, tmp_path, raw_read_run
+    ninja_api_client, signature, branchwater_metadata
 ):
-    import duckdb
-
-    accession = raw_read_run[0].first_accession
-    metadata = tmp_path / "metadata.duckdb"
-    with duckdb.connect(str(metadata)) as connection:
-        connection.execute(
-            "CREATE TABLE metadata (acc VARCHAR, bioproject VARCHAR, assay_type VARCHAR, collection_date_sam VARCHAR, geo_loc_name_country_calc VARCHAR, organism VARCHAR, lat_lon VARCHAR)"
-        )
-        connection.execute(
-            "INSERT INTO metadata VALUES (?, 'PRJEB12345', 'METAGENOMIC', '2024-01-01', 'United Kingdom', 'metagenome', '51.50 -0.12')",
-            [accession],
-        )
-    settings.EMG_CONFIG.branchwater.metadata_duckdb = str(metadata)
+    accession = branchwater_metadata
     data = submit(ninja_api_client, signature)
     result = default_task_backend.get_result(data["job_id"])
     finish(result, None, TaskResultStatus.RUNNING)
@@ -323,7 +329,7 @@ def test_invalid_signature_rejected_before_enqueue(ninja_api_client, payload):
     response = ninja_api_client.post(
         "/services/branchwater/", json={"signatures": payload}
     )
-    assert response.status_code == 400
+    assert response.status_code == 422
     assert not default_task_backend.results
 
 
