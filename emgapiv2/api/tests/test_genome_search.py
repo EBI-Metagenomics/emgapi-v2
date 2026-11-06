@@ -66,6 +66,7 @@ def test_submit_and_poll(ninja_api_client, search_index, monkeypatch):
     results = ninja_api_client.get(status_path).json()["data"]["results"]
     assert len(results) == 1
     assert results[0]["mgnify"]["accession"] == hit["genome"]
+    assert results[0]["lexicmap"]["locus"] == "contig:10-109"
 
     search_index.catalogue.status = "retired"
     search_index.catalogue.save()

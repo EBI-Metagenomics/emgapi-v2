@@ -1,6 +1,6 @@
 import re
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, computed_field, field_validator
 
 
 class SearchQuery(BaseModel):
@@ -44,3 +44,11 @@ class LexicMapMatch(BaseModel):
     subject_start: int
     subject_end: int
     strand: str
+
+    @computed_field
+    @property
+    def locus(self) -> str:
+        """Return the browser location with 1-based, inclusive coordinates."""
+        start = min(self.subject_start, self.subject_end)
+        end = max(self.subject_start, self.subject_end)
+        return f"{self.sequence_id}:{start}-{end}"
