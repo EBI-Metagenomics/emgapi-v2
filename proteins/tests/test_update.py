@@ -36,7 +36,19 @@ pytestmark = [
 ]
 
 D0, D1, D2, D3 = (date(2026, 9, 30), *(date(2026, 10, n) for n in (1, 2, 3)))
-TABLES = ("protein", "contig", "occurrence")
+# The rows the staged rows give each table of the protein dataset.
+FROM_STAGED = {
+    "protein": "SELECT id, hash, sequence FROM proteindb.staged_protein",
+    "contig": "SELECT c.id, p.assembly_id, c.name, c.original_name, c.length, c.hash, c.kmer_coverage"
+    " FROM proteindb.staged_contig c"
+    " JOIN proteindb.assembly_proteins p ON p.id = c.assembly_proteins_id",
+    "occurrence": "SELECT o.id, o.protein_id, o.contig_id, p.assembly_id, o.start_position,"
+    " o.end_position, o.strand FROM proteindb.staged_occurrence o"
+    " JOIN proteindb.assembly_proteins p ON p.id = o.assembly_proteins_id",
+    "occurrence_analysis": "SELECT id, assembly_proteins_id, gene_caller_id, truncation"
+    " FROM proteindb.staged_occurrence",
+}
+TABLES = tuple(FROM_STAGED)
 
 
 @cache
@@ -100,13 +112,10 @@ def run(day):
 def staged():
     return {
         table: sorted(
-            query(
-                f"SELECT {', '.join(layout.SCHEMAS[table].names)}"
-                f" FROM proteindb.staged_{table}"
-            ),
+            query(sql),
             key=repr,
         )
-        for table in TABLES
+        for table, sql in FROM_STAGED.items()
     }
 
 
@@ -151,6 +160,7 @@ def day_layout(day, proteins):
             for _, hash, _ in proteins
         ),
         f"occurrence/day={day}/part-000.parquet",
+        f"occurrence_analysis/day={day}/part-000.parquet",
         f"contig/day={day}/part-000.parquet",
         f"metadata/day={day}/assembly_proteins.parquet",
         f"metadata/day={day}/assembly_proteins_registry.parquet",
@@ -212,8 +222,8 @@ def test_two_days_of_updates_hold_every_staged_row_once(root, stage):
         "SELECT day, status, assembly_proteins, proteins, contigs, occurrences"
         " FROM proteindb.dataset_update ORDER BY id"
     ) == [
-        (D1, "done", 2, *(len(day1[t]) for t in TABLES)),
-        (D2, "done", 3, *(len(day2[t]) for t in TABLES)),
+        (D1, "done", 2, *(len(day1[t]) for t in TABLES[:3])),
+        (D2, "done", 3, *(len(day2[t]) for t in TABLES[:3])),
     ]
 
 
@@ -377,6 +387,7 @@ def test_leftovers_of_failed_updates_are_deleted(root, stage):
         f"protein/prefix=00/day-{D2}.parquet",
         f"protein/prefix=00/.day-{D2}.parquet.tmp",
         f"occurrence/day={D2}/part-000.parquet",
+        f"occurrence_analysis/day={D2}/part-000.parquet",
         f"contig/day={D2}/.part-000.parquet.tmp",
         f"metadata/.tmp-day={D2}/assembly_proteins.parquet",
         f"occurrence/day={D1}/.part-000.parquet.tmp",

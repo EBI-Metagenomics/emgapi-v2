@@ -30,20 +30,26 @@ SCHEMAS = {
         ("hash", HASH, False),
         ("sequence", pa.string(), False),
     ),
+    # One gene of an assembly, however many of its analyses predicted it.
     "occurrence": _schema(
         ("id", pa.int64(), False),
         ("protein_id", pa.int64(), False),
         ("contig_id", pa.int64(), False),
-        ("assembly_proteins_id", pa.int32(), False),
-        ("gene_caller_id", pa.int16(), False),
+        ("assembly_id", pa.int32(), False),
         ("start_position", pa.int32(), False),
         ("end_position", pa.int32(), False),
         ("strand", pa.int8(), False),
+    ),
+    # Each assembly proteins record that predicted an occurrence, with its call.
+    "occurrence_analysis": _schema(
+        ("occurrence_id", pa.int64(), False),
+        ("assembly_proteins_id", pa.int32(), False),
+        ("gene_caller_id", pa.int16(), False),
         ("truncation", pa.string(), True),
     ),
     "contig": _schema(
         ("id", pa.int64(), False),
-        ("assembly_proteins_id", pa.int32(), False),
+        ("assembly_id", pa.int32(), False),
         ("name", pa.string(), False),
         ("original_name", pa.string(), True),
         ("length", pa.int32(), False),
@@ -85,8 +91,9 @@ SCHEMAS = {
 
 SORT_ORDER = {
     "protein": ["hash"],
-    "occurrence": ["assembly_proteins_id", "contig_id", "start_position"],
-    "contig": ["assembly_proteins_id", "id"],
+    "occurrence": ["assembly_id", "contig_id", "start_position"],
+    "occurrence_analysis": ["assembly_proteins_id", "occurrence_id"],
+    "contig": ["assembly_id", "id"],
     "metadata/assembly_proteins": ["assembly_proteins_id"],
     "metadata/assembly_proteins_registry": ["id"],
     "metadata/assemblies": ["id"],
@@ -251,6 +258,19 @@ def merge(
     write_sorted(path, table, sorted_batches(table, files, memory_limit, tmp_dir))
 
 
+def connect(memory_limit: str, tmp_dir: str) -> duckdb.DuckDBPyConnection:
+    """A DuckDB connection that spills to disk.
+
+    :param memory_limit: The memory limit of DuckDB, for example "32GB". DuckDB goes over it
+        while it sorts, so use about half of the job memory.
+    :param tmp_dir: Where DuckDB spills.
+    """
+    spill = Path(tmp_dir) / "protein-dataset-sort"
+    return duckdb.connect(
+        config={"temp_directory": str(spill), "memory_limit": memory_limit}
+    )
+
+
 def sorted_batches(
     table: str, files: list[Path], memory_limit: str, tmp_dir: str
 ) -> Iterator[pa.RecordBatch]:
@@ -262,9 +282,7 @@ def sorted_batches(
         while it sorts, so use about half of the job memory.
     :param tmp_dir: Where DuckDB spills.
     """
-    spill = Path(tmp_dir) / "protein-dataset-sort"
-    config = {"temp_directory": str(spill), "memory_limit": memory_limit}
-    with duckdb.connect(config=config) as con:
+    with connect(memory_limit, tmp_dir) as con:
         yield from con.execute(
             f"SELECT {', '.join(SCHEMAS[table].names)}"
             " FROM read_parquet($files, hive_partitioning = false)"

@@ -24,8 +24,43 @@ from proteins.routers import MGYP
 
 logger = logging.getLogger(__name__)
 
-# The staged tables. Their columns are those of the same tables in the protein dataset.
-STAGED_TABLES = ("protein", "contig", "occurrence")
+# The staged tables, with the columns read from each.
+STAGED_SCHEMAS = {
+    "protein": layout.SCHEMAS["protein"],
+    "contig": pa.schema(
+        [
+            ("id", pa.int64()),
+            ("assembly_proteins_id", pa.int32()),
+            ("name", pa.string()),
+            ("original_name", pa.string()),
+            ("length", pa.int32()),
+            ("hash", layout.HASH),
+            ("kmer_coverage", pa.float64()),
+        ]
+    ),
+    "occurrence": pa.schema(
+        [
+            ("id", pa.int64()),
+            ("protein_id", pa.int64()),
+            ("contig_id", pa.int64()),
+            ("assembly_proteins_id", pa.int32()),
+            ("gene_caller_id", pa.int16()),
+            ("start_position", pa.int32()),
+            ("end_position", pa.int32()),
+            ("strand", pa.int8()),
+            ("truncation", pa.string()),
+        ]
+    ),
+}
+# Each file of the day but the proteins', from the staged rows and the assembly proteins registry.
+DAY_FILES = {
+    "contig": "SELECT c.*, r.assembly_id FROM staged_contig c"
+    " JOIN registry r ON r.id = c.assembly_proteins_id",
+    "occurrence": "SELECT o.*, r.assembly_id FROM staged_occurrence o"
+    " JOIN registry r ON r.id = o.assembly_proteins_id",
+    "occurrence_analysis": "SELECT id AS occurrence_id, assembly_proteins_id, gene_caller_id, truncation"
+    " FROM staged_occurrence",
+}
 # The rows that a server-side cursor sends at a time.
 BATCH_ROWS = 100_000
 
@@ -86,6 +121,7 @@ def delete_day(root: Path, day: date) -> None:
         path.unlink()
     for directory in (
         root / "occurrence" / f"day={day}",
+        root / "occurrence_analysis" / f"day={day}",
         root / "contig" / f"day={day}",
         root / "metadata" / f".tmp-day={day}",
     ):
@@ -149,9 +185,8 @@ def read_staged_rows(scratch: Path) -> Staged:
                 cursor.fetchall(), layout.SCHEMAS["metadata/gene_callers"]
             )
         files = {}
-        for table in STAGED_TABLES:
+        for table, schema in STAGED_SCHEMAS.items():
             files[table] = scratch / f"{table}.parquet"
-            schema = layout.SCHEMAS[table]
             # A named cursor is a server-side cursor: it sends the rows in batches.
             with conn.connection.cursor(name=f"read_staged_{table}") as rows:
                 rows.execute(
@@ -194,7 +229,7 @@ def choose_assembly_proteins(cursor) -> list[int]:
 
 
 def write_day_files(root: Path, day: date, staged: Staged) -> dict[str, int]:
-    """Writes the protein, contig and occurrence files of the day.
+    """Writes the protein, contig, occurrence and occurrence_analysis files of the day.
 
     :param root: The protein dataset's directory.
     :param day: The day.
@@ -215,16 +250,21 @@ def write_day_files(root: Path, day: date, staged: Staged) -> dict[str, int]:
             (batch for _, batch in slices),
         )
     counts = {}
-    for table in ("protein", "occurrence", "contig"):
+    for table in STAGED_SCHEMAS:
         counts[f"{table}s"] = pq.ParquetFile(staged.files[table]).metadata.num_rows
-    for table in ("occurrence", "contig"):
-        layout.merge(
-            root / table / f"day={day}" / "part-000.parquet",
-            table,
-            [staged.files[table]],
-            memory_limit,
-            tmp_dir,
-        )
+    with layout.connect(memory_limit, tmp_dir) as con:
+        con.register("registry", staged.assembly_proteins)
+        for table in ("contig", "occurrence"):
+            con.read_parquet(str(staged.files[table])).create_view(f"staged_{table}")
+        for table, sql in DAY_FILES.items():
+            layout.write_sorted(
+                root / table / f"day={day}" / "part-000.parquet",
+                table,
+                con.execute(
+                    f"SELECT {', '.join(layout.SCHEMAS[table].names)} FROM ({sql})"
+                    f" ORDER BY {', '.join(layout.SORT_ORDER[table])}"
+                ).to_arrow_reader(layout.ROW_GROUP_SIZE),
+            )
     return counts
 
 

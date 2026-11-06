@@ -32,7 +32,9 @@ def read_staged_rows(scratch: Path) -> update.Staged:
     return update.read_staged_rows(scratch)
 
 
-@task(task_run_name="Write the protein, contig and occurrence files of {day}")
+@task(
+    task_run_name="Write the protein, contig, occurrence and occurrence_analysis files of {day}"
+)
 def write_day_files(root: Path, day: date, staged: update.Staged) -> dict[str, int]:
     return update.write_day_files(root, day, staged)
 

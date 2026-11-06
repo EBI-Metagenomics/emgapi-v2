@@ -73,7 +73,7 @@ def write_day(root, day, proteins, kind, records=RECORDS):
         pa.table(
             {
                 "id": [contig_id],
-                "assembly_proteins_id": [1],
+                "assembly_id": [1],
                 "name": ["ERZ1_1"],
                 "original_name": [None],
                 "length": [100],
@@ -90,11 +90,21 @@ def write_day(root, day, proteins, kind, records=RECORDS):
                 "id": [occurrence_id],
                 "protein_id": [3],
                 "contig_id": [contig_id],
-                "assembly_proteins_id": [1],
-                "gene_caller_id": [1],
+                "assembly_id": [1],
                 "start_position": [1],
                 "end_position": [99],
                 "strand": [1],
+            }
+        ),
+    )
+    layout.write(
+        root / "occurrence_analysis" / f"day={day}" / "part-000.parquet",
+        "occurrence_analysis",
+        pa.table(
+            {
+                "occurrence_id": [occurrence_id],
+                "assembly_proteins_id": [1],
+                "gene_caller_id": [1],
                 "truncation": ["00"],
             }
         ),
