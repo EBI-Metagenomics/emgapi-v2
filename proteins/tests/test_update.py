@@ -5,6 +5,7 @@ from unittest.mock import patch
 from uuid import uuid4
 
 import psycopg
+import pyarrow as pa
 import pyarrow.parquet as pq
 import pytest
 
@@ -53,7 +54,8 @@ TABLES = tuple(FROM_STAGED)
 
 @cache
 def read(assembly):
-    if assembly == "ERZ101":
+    # ERZ102 is a copy of ERZ101: the same contigs in another assembly.
+    if assembly in ("ERZ101", "ERZ102"):
         return read_input(
             *(FIXTURES / f"ERZ101.{suffix}" for suffix in ("faa.gz", "gff.gz")),
             FIXTURES / "ERZ101.fasta.gz",
@@ -71,7 +73,7 @@ def study():
 def stage(connect_accession, study):
     """Accessions an assembly for a new analysis of it, by default one emgapi-v2 knows."""
 
-    def stage(assembly, version="V6", known=True):
+    def stage(assembly, version="V6", known=True, input=None):
         analysis = make_analysis(study, assembly, version)
         # Few connections, so that 8 xdist workers stay within the server's limit.
         accession(
@@ -79,7 +81,7 @@ def stage(connect_accession, study):
             assembly,
             "assembly_analysis",
             analysis.pipeline_major_minor,
-            read(assembly),
+            input or read(assembly),
             analysis.accession,
             connections=4,
         )
@@ -192,10 +194,11 @@ def test_two_days_of_updates_hold_every_staged_row_once(root, stage):
     first = [stage("ERZ101"), stage("ERZ29562087")]
     day1 = staged()
     run(D1)
-    second = [stage("ERZ25069264"), stage("ERZ29895170"), stage("ERZ101", "V6.1")]
+    second = [stage("ERZ25069264"), stage("ERZ29895170"), stage("ERZ102")]
     day2 = staged()
     run(D2)
 
+    # ERZ102 has ERZ101's contigs, and keeps its own: contigs are unique within an assembly only.
     assert in_dataset(root) == joined(day1, day2)
     assert in_dataset(root, D1) == day1
     assert staged() == NOTHING_STAGED
@@ -208,7 +211,7 @@ def test_two_days_of_updates_hold_every_staged_row_once(root, stage):
     )
     assert snapshot(root) == records(first + second)
     assert snapshot(root, D1) == records(first)
-    # ERZ101's two records share one assembly.
+    # Each record's assembly is in metadata/assemblies.
     (snapshot_path,) = layout.files(root, "metadata/assembly_proteins")
     (assemblies_path,) = layout.files(root, "metadata/assemblies")
     assert {
@@ -225,6 +228,148 @@ def test_two_days_of_updates_hold_every_staged_row_once(root, stage):
         (D1, "done", 2, *(len(day1[t]) for t in TABLES[:3])),
         (D2, "done", 3, *(len(day2[t]) for t in TABLES[:3])),
     ]
+
+
+def day_rows(root, table, day):
+    return sorted(
+        tuple(row.values())
+        for row in pq.read_table(
+            root / table / f"day={day}" / "part-000.parquet"
+        ).to_pylist()
+    )
+
+
+@pytest.mark.parametrize("days", ["same-day", "two-days", "two-days-crash"])
+def test_records_of_one_assembly_share_its_contigs_and_occurrences(root, stage, days):
+    stage("ERZ101")
+    first = staged()
+    if days != "same-day":
+        run(D1)
+    stage("ERZ101", "V6.1")
+    if days == "two-days-crash":
+        original = update.write_day_files
+
+        def crashing(*args):
+            original(*args)
+            raise Killed()
+
+        with patch.object(update, "write_day_files", crashing), pytest.raises(Killed):
+            run(D2)
+    run(D2)
+
+    ((v61,),) = query(
+        "SELECT id FROM proteindb.assembly_proteins WHERE pipeline_version = '6.1'"
+    )
+    # The second record adds only its links, to the first record's occurrences.
+    links = [(id, v61, *call) for id, _, *call in first["occurrence_analysis"]]
+    assert in_dataset(root) == joined(
+        first, {**NOTHING_STAGED, "occurrence_analysis": links}
+    )
+    # The rows written: none on the second day, whose record's are all the first's.
+    assert query(
+        "SELECT contigs, occurrences FROM proteindb.dataset_update"
+        " WHERE day = %s AND status = 'done'",
+        [D2],
+    ) == [
+        (
+            (len(first["contig"]), len(first["occurrence"]))
+            if days == "same-day"
+            else (0, 0)
+        )
+    ]
+    assert staged() == NOTHING_STAGED
+
+
+def test_a_gene_called_by_two_callers_is_one_occurrence_with_a_link_for_each(
+    root, stage
+):
+    stage("ERZ101")
+    first = staged()
+    erz101 = read("ERZ101")
+    stage(
+        "ERZ101",
+        "V6.1",
+        input=erz101._replace(
+            occurrences=[
+                o._replace(
+                    caller_name="Prodigal", caller_version="2.6.3", truncation="10"
+                )
+                for o in erz101.occurrences
+            ]
+        ),
+    )
+    run(D1)
+
+    ((v61,),) = query(
+        "SELECT id FROM proteindb.assembly_proteins WHERE pipeline_version = '6.1'"
+    )
+    ((prodigal,),) = query(
+        "SELECT id FROM proteindb.gene_caller WHERE name = 'Prodigal'"
+    )
+    links = [(id, v61, prodigal, "10") for id, *_ in first["occurrence_analysis"]]
+    assert in_dataset(root) == joined(
+        first, {**NOTHING_STAGED, "occurrence_analysis": links}
+    )
+
+
+def test_copies_of_a_contig_in_one_record_are_one_contig_with_their_genes_merged(
+    root, stage
+):
+    erz101 = read("ERZ101")
+    copied = erz101.contigs[0]
+    copy = copied._replace(name=f"{copied.name}_copy")
+    stage(
+        "ERZ101",
+        input=erz101._replace(
+            contigs=[*erz101.contigs, copy],
+            occurrences=[
+                *erz101.occurrences,
+                *(
+                    o._replace(gene_id=f"{o.gene_id}_copy", contig=copy.name)
+                    for o in erz101.occurrences
+                    if o.contig == copied.name
+                ),
+            ],
+        ),
+    )
+    lowest = query("SELECT min(id) FROM proteindb.staged_contig GROUP BY hash")
+    links = query(
+        "SELECT min(o.id) FROM proteindb.staged_occurrence o"
+        " JOIN proteindb.staged_contig c ON c.id = o.contig_id"
+        " GROUP BY c.hash, o.start_position, o.end_position, o.strand, o.protein_id"
+    )
+    run(D1)
+
+    dataset = in_dataset(root)
+    assert sorted((id,) for id, *_ in dataset["contig"]) == sorted(lowest)
+    assert {contig_id for _, _, contig_id, *_ in dataset["occurrence"]} <= {
+        id for id, *_ in dataset["contig"]
+    }
+    assert sorted((id,) for id, *_ in dataset["occurrence"]) == sorted(links)
+    assert sorted((id,) for id, *_ in dataset["occurrence_analysis"]) == sorted(links)
+
+
+def test_an_assembly_holding_a_contig_and_an_occurrence_twice_matches_their_lowest_ids(
+    root, stage
+):
+    stage("ERZ101")
+    run(D1)
+    # As migrated data may have: each contig and occurrence again, with a higher id.
+    for table in ("contig", "occurrence"):
+        path = root / table / f"day={D1}" / "part-000.parquet"
+        rows = pq.read_table(path).to_pylist()
+        copies = [{**row, "id": row["id"] + 10**9} for row in rows]
+        layout.write(path, table, pa.Table.from_pylist(rows + copies))
+    originals = {id for id, *_ in day_rows(root, "occurrence", D1) if id < 10**9}
+
+    stage("ERZ101", "V6.1")
+    run(D2)
+
+    assert day_rows(root, "contig", D2) == []
+    assert day_rows(root, "occurrence", D2) == []
+    assert sorted(id for id, *_ in day_rows(root, "occurrence_analysis", D2)) == sorted(
+        originals
+    )
 
 
 def test_a_day_with_nothing_staged_is_complete(root):
@@ -401,7 +546,7 @@ def test_leftovers_of_failed_updates_are_deleted(root, stage):
 
 @pytest.mark.parametrize(
     "late",
-    [("ERZ101", "V6.1"), ("ERZ29562087", "V6")],
+    [("ERZ102", "V6"), ("ERZ29562087", "V6")],
     ids=["known-proteins", "new-protein"],
 )
 def test_an_analysis_committed_while_an_update_reads_waits_for_the_next(
@@ -436,7 +581,7 @@ def test_an_analysis_committed_while_an_update_reads_waits_for_the_next(
 
 @pytest.mark.parametrize(
     "late",
-    [("ERZ101", "V6.1"), ("ERZ29562087", "V6")],
+    [("ERZ102", "V6"), ("ERZ29562087", "V6")],
     ids=["known-proteins", "new-protein"],
 )
 def test_a_rebuild_after_an_analysis_committed_while_an_update_read_stages_it_once(

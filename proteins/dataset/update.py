@@ -52,14 +52,48 @@ STAGED_SCHEMAS = {
         ]
     ),
 }
-# Each file of the day but the proteins', from the staged rows and the assembly proteins registry.
+# The assemblies of the records in A that have a record outside A, whose rows are in the protein dataset.
+HELD = (
+    "CREATE TEMP TABLE held AS SELECT r.assembly_id FROM registry r"
+    " LEFT JOIN loading l ON l.id = r.id"
+    " GROUP BY r.assembly_id HAVING count(l.id) BETWEEN 1 AND count(*) - 1"
+)
+# The lowest id of each contig hash, and of each occurrence's contig, start, end, strand and
+# protein, in the held assemblies' rows.
+EXISTING = {
+    "contig": "SELECT assembly_id, hash, min(id) AS id FROM {}"
+    " WHERE assembly_id IN (SELECT assembly_id FROM held) GROUP BY ALL",
+    "occurrence": "SELECT contig_id, start_position, end_position, strand, protein_id, min(id) AS id"
+    " FROM {} WHERE assembly_id IN (SELECT assembly_id FROM held) GROUP BY ALL",
+}
+# The id each staged contig and occurrence takes: the lowest existing one of its assembly that it
+# matches, or else the lowest staged one.
+MATCH = (
+    "CREATE TEMP TABLE contig_ids AS SELECT c.id AS staged_id,"
+    " coalesce(e.id, min(c.id) OVER (PARTITION BY r.assembly_id, c.hash)) AS id"
+    " FROM staged_contig c JOIN registry r ON r.id = c.assembly_proteins_id"
+    " LEFT JOIN existing_contig e ON e.assembly_id = r.assembly_id AND e.hash = c.hash",
+    "CREATE TEMP TABLE occurrence_ids AS SELECT o.id AS staged_id, m.id AS contig_id,"
+    " coalesce(e.id, min(o.id) OVER ("
+    "PARTITION BY m.id, o.start_position, o.end_position, o.strand, o.protein_id)) AS id"
+    " FROM staged_occurrence o JOIN contig_ids m ON m.staged_id = o.contig_id"
+    " LEFT JOIN existing_occurrence e ON e.contig_id = m.id"
+    " AND e.start_position = o.start_position AND e.end_position = o.end_position"
+    " AND e.strand = o.strand AND e.protein_id = o.protein_id",
+)
+# Each file of the day but the proteins': the matched rows whose id is their own, and the links.
 DAY_FILES = {
-    "contig": "SELECT c.*, r.assembly_id FROM staged_contig c"
-    " JOIN registry r ON r.id = c.assembly_proteins_id",
-    "occurrence": "SELECT o.*, r.assembly_id FROM staged_occurrence o"
-    " JOIN registry r ON r.id = o.assembly_proteins_id",
-    "occurrence_analysis": "SELECT id AS occurrence_id, assembly_proteins_id, gene_caller_id, truncation"
-    " FROM staged_occurrence",
+    "contig": "SELECT c.id, r.assembly_id, c.name, c.original_name, c.length, c.hash,"
+    " c.kmer_coverage FROM staged_contig c"
+    " JOIN registry r ON r.id = c.assembly_proteins_id"
+    " JOIN contig_ids m ON m.staged_id = c.id WHERE m.id = c.id",
+    "occurrence": "SELECT o.id, o.protein_id, m.contig_id, r.assembly_id, o.start_position,"
+    " o.end_position, o.strand FROM staged_occurrence o"
+    " JOIN registry r ON r.id = o.assembly_proteins_id"
+    " JOIN occurrence_ids m ON m.staged_id = o.id WHERE m.id = o.id",
+    "occurrence_analysis": "SELECT DISTINCT m.id AS occurrence_id, o.assembly_proteins_id,"
+    " o.gene_caller_id, o.truncation"
+    " FROM staged_occurrence o JOIN occurrence_ids m ON m.staged_id = o.id",
 }
 # The rows that a server-side cursor sends at a time.
 BATCH_ROWS = 100_000
@@ -229,7 +263,10 @@ def choose_assembly_proteins(cursor) -> list[int]:
 
 
 def write_day_files(root: Path, day: date, staged: Staged) -> dict[str, int]:
-    """Writes the protein, contig, occurrence and occurrence_analysis files of the day.
+    """Matches the staged contigs and occurrences per assembly, and writes the protein, contig, occurrence and occurrence_analysis files of the day.
+
+    Within an assembly, contigs with one hash are one contig, and occurrences with one contig, start,
+    end, strand and protein are one occurrence, with a link to each record that predicted it.
 
     :param root: The protein dataset's directory.
     :param day: The day.
@@ -249,22 +286,41 @@ def write_day_files(root: Path, day: date, staged: Staged) -> dict[str, int]:
             "protein",
             (batch for _, batch in slices),
         )
-    counts = {}
-    for table in STAGED_SCHEMAS:
-        counts[f"{table}s"] = pq.ParquetFile(staged.files[table]).metadata.num_rows
+    counts = {"protein": pq.ParquetFile(staged.files["protein"]).metadata.num_rows}
     with layout.connect(memory_limit, tmp_dir) as con:
         con.register("registry", staged.assembly_proteins)
+        con.register(
+            "loading",
+            pa.table({"id": pa.array(staged.assembly_proteins_ids, pa.int32())}),
+        )
         for table in ("contig", "occurrence"):
             con.read_parquet(str(staged.files[table])).create_view(f"staged_{table}")
+        con.execute(HELD)
+        held = con.execute("SELECT count(*) FROM held").fetchone()[0]
+        for table, sql in EXISTING.items():
+            # Only complete days, so that a rerun after a failure matches against the same rows.
+            if held:
+                con.read_parquet(
+                    [str(path) for path in layout.files(root, table)],
+                    hive_partitioning=False,
+                ).create_view(f"{table}_files")
+            else:
+                con.register(f"{table}_files", layout.SCHEMAS[table].empty_table())
+            con.execute(
+                f"CREATE TEMP TABLE existing_{table} AS {sql.format(f'{table}_files')}"
+            )
+        for sql in MATCH:
+            con.execute(sql)
         for table, sql in DAY_FILES.items():
+            path = root / table / f"day={day}" / "part-000.parquet"
             layout.write_sorted(
-                root / table / f"day={day}" / "part-000.parquet",
+                path,
                 table,
                 con.execute(
-                    f"SELECT {', '.join(layout.SCHEMAS[table].names)} FROM ({sql})"
-                    f" ORDER BY {', '.join(layout.SORT_ORDER[table])}"
+                    f"{sql} ORDER BY {', '.join(layout.SORT_ORDER[table])}"
                 ).to_arrow_reader(layout.ROW_GROUP_SIZE),
             )
+            counts[table] = pq.ParquetFile(path).metadata.num_rows
     return counts
 
 
@@ -342,9 +398,9 @@ def finish_update(
             status=DatasetUpdate.Status.DONE,
             finished_at=timezone.now(),
             assembly_proteins=len(assembly_proteins_ids),
-            proteins=counts["proteins"],
-            contigs=counts["contigs"],
-            occurrences=counts["occurrences"],
+            proteins=counts["protein"],
+            contigs=counts["contig"],
+            occurrences=counts["occurrence"],
         )
         if updated != 1:
             raise DatasetUpdateError(f"Dataset update {update_id} is no longer running")
