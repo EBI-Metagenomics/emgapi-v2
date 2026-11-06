@@ -36,7 +36,12 @@ pytestmark = [
     pytest.mark.usefixtures("mgyp_as_accession", "prefect_harness", "slurm"),
 ]
 
-D0, D1, D2, D3 = (date(2026, 9, 30), *(date(2026, 10, n) for n in (1, 2, 3)))
+D0, D1, D2, D3 = (
+    date(2026, 9, 30),
+    date(2026, 10, 1),
+    date(2026, 10, 2),
+    date(2026, 10, 3),
+)
 # The rows the staged rows give each table of the protein dataset.
 FROM_STAGED = {
     "protein": "SELECT id, hash, sequence FROM proteindb.staged_protein",
