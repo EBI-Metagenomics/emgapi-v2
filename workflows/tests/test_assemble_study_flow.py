@@ -31,6 +31,7 @@ from workflows.flows.assemble_study import (
 )
 from workflows.flows.assemble_study_tasks.assemble_samplesheets import (
     get_reference_genome,
+    run_assembler_for_samplesheet,
     update_assemblers_and_contaminant_ref_of_assemblies_from_samplesheet,
 )
 from workflows.flows.assemble_study_tasks.make_samplesheets import (
@@ -1084,3 +1085,98 @@ def test_reference_genome_selection(prefect_harness, mgnify_assemblies, caplog):
     run.save()
     ref = get_reference_genome(study)
     assert ref.startswith("chicken")
+
+
+def _run_samplesheet_with_reports(
+    tmp_path: Path,
+    study: analyses.models.Study,
+    qc_failed: dict[str, str],
+    assembled_runs_csv_content: Optional[str] = None,
+):
+    run_accessions = sorted(
+        {assembly.runs_label for assembly in study.assemblies_reads.all()}
+    )
+    samplesheet = tmp_path / "samplesheet.csv"
+    pd.DataFrame(
+        {
+            "reads_accession": run_accessions,
+            "assembler": ["metaspades"] * len(run_accessions),
+        }
+    ).to_csv(samplesheet, index=False)
+
+    outdir = tmp_path / "out"
+    outdir.mkdir()
+    (outdir / "qc_failed_runs.csv").write_text(
+        "\n".join(f"{run},{reason}" for run, reason in qc_failed.items())
+    )
+    if assembled_runs_csv_content is not None:
+        (outdir / "assembled_runs.csv").write_text(assembled_runs_csv_content)
+
+    run_assembler_for_samplesheet(
+        study, samplesheet, "abc123", tmp_path / "work", outdir
+    )
+    return run_accessions
+
+
+@pytest.mark.django_db(transaction=True)
+@pytest.mark.parametrize("assembled_runs_csv_content", [None, ""])
+def test_run_assembler_for_samplesheet_all_runs_qc_failed(
+    prefect_harness,
+    mgnify_assemblies,
+    mock_cluster_can_accept_jobs_yes,
+    mock_start_cluster_job,
+    mock_check_cluster_job_all_completed,
+    tmp_path,
+    assembled_runs_csv_content,
+):
+    """
+    When every run fails pre-assembly QC, miassembler writes no (or an empty)
+    assembled_runs.csv. This is a valid outcome and must not fail the flow.
+    """
+    study = mgnify_assemblies[0].reads_study
+    run_accessions = {a.runs_label for a in study.assemblies_reads.all()}
+    qc_failed = {run: "filter_ratio_threshold_exceeded" for run in run_accessions}
+
+    _run_samplesheet_with_reports(
+        tmp_path, study, qc_failed, assembled_runs_csv_content
+    )
+
+    for assembly in study.assemblies_reads.all():
+        assert assembly.status[assembly.AssemblyStates.PRE_ASSEMBLY_QC_FAILED]
+        assert (
+            assembly.status["pre_assembly_qc_failed_reason"]
+            == "filter_ratio_threshold_exceeded"
+        )
+        assert not assembly.status.get(assembly.AssemblyStates.ASSEMBLY_FAILED)
+
+
+@pytest.mark.django_db(transaction=True)
+def test_run_assembler_for_samplesheet_missing_assembled_runs_csv_not_all_qc_failed(
+    prefect_harness,
+    mgnify_assemblies,
+    mock_cluster_can_accept_jobs_yes,
+    mock_start_cluster_job,
+    mock_check_cluster_job_all_completed,
+    tmp_path,
+):
+    """
+    If assembled_runs.csv is missing and some runs are not accounted for by the QC
+    report, the flow must still fail and every assembly in the samplesheet is marked
+    as failed.
+    """
+    study = mgnify_assemblies[0].reads_study
+    run_accessions = sorted({a.runs_label for a in study.assemblies_reads.all()})
+    assert len(run_accessions) > 1
+    qc_failed_run = run_accessions[0]
+
+    with pytest.raises(Exception, match="Missing end of execution assembled runs csv"):
+        _run_samplesheet_with_reports(
+            tmp_path, study, {qc_failed_run: "filter_ratio_threshold_exceeded"}
+        )
+
+    for assembly in study.assemblies_reads.all():
+        assert assembly.status[assembly.AssemblyStates.ASSEMBLY_FAILED]
+        assert (
+            assembly.status["assembly_failed_reason"]
+            == f"The miassembler output is missing the {tmp_path / 'out' / 'assembled_runs.csv'} file."
+        )
