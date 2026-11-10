@@ -13,11 +13,9 @@ from pydantic import BaseModel
 from typing_extensions import Annotated
 
 import analyses.models
-from analyses.base_models.with_downloads_models import (
-    DownloadFile,
-    DownloadFileIndexFile,
-)
+from analyses.base_models.with_downloads_models import DownloadFile
 from analyses.base_models.with_experiment_type_models import WithExperimentTypeModel
+from emgapiv2.api.downloads import MGnifyDownloadFile, MGnifyDownloadFileIndexFile
 from emgapiv2.api.storage import private_storage
 from emgapiv2.api.third_party_metadata import EuropePmcAnnotationResponse
 from emgapiv2.enum_utils import FutureStrEnum
@@ -172,38 +170,11 @@ class MGnifySampleDetail(MGnifySampleWithMetadata):
     class Meta(MGnifySample.Meta): ...
 
 
-class MGnifyDownloadFileIndexFile(Schema, DownloadFileIndexFile):
-    path: Annotated[str, Field(exclude=True)]
-    url: Optional[str] = Field(
-        None,
-        description="Full URL of the index file.",
-        examples=["https://www.ebi.ac.uk/metagenomics/path/to/annotations.tsv.gz.gzi"],
-    )
-
-
-class MGnifyAnalysisDownloadFile(Schema, DownloadFile):
+class MGnifyAnalysisDownloadFile(MGnifyDownloadFile):
     path: Annotated[str, Field(exclude=True)]
     parent_identifier: Annotated[Union[int, str], Field(exclude=True)]
     parent_is_private: Annotated[Optional[bool], Field(exclude=True)] = None
     parent_results_dir: Annotated[Optional[str], Field(exclude=True)] = None
-    index_file: Annotated[
-        Optional[DownloadFileIndexFile | list[DownloadFileIndexFile]],
-        Field(exclude=True),
-    ] = None
-    index_files: Optional[list[MGnifyDownloadFileIndexFile]] = Field(
-        None,
-        examples=[
-            [
-                {
-                    "index_type": "gzi",
-                    "url": urljoin(
-                        EMG_CONFIG.service_urls.transfer_services_url_root,
-                        "annotations.tsv.gz.gzi",
-                    ),
-                }
-            ]
-        ],
-    )
 
     url: Optional[str] = Field(
         None,  # Optional because legacy analyses may not have an external_results_dir
@@ -257,22 +228,12 @@ class MGnifyAnalysisDownloadFile(Schema, DownloadFile):
         """
         if obj.index_file is None or obj.parent_results_dir is None:
             return None
-        raw_indexes = (
-            [obj.index_file]
-            if isinstance(obj.index_file, DownloadFileIndexFile)
-            else obj.index_file
+        return MGnifyDownloadFile.resolve_index_file_urls(
+            obj,
+            lambda path: MGnifyAnalysisDownloadFile._build_file_url(
+                path, obj.parent_results_dir, obj.parent_is_private
+            ),
         )
-        return [
-            MGnifyDownloadFileIndexFile.model_validate(
-                {
-                    **idx.model_dump(),
-                    "url": MGnifyAnalysisDownloadFile._build_file_url(
-                        idx.path, obj.parent_results_dir, obj.parent_is_private
-                    ),
-                }
-            )
-            for idx in raw_indexes
-        ]
 
     @classmethod
     def from_parent(cls, parent_obj, download_files: list[DownloadFile]) -> list:

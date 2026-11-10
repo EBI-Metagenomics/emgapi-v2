@@ -387,6 +387,24 @@ class TestImportOutOfProductionAssemblyAnalysisResultsRealData:
         assert study.biome is not None, "Study biome was not set"
         assert study.features.has_v6_analyses is True
 
+        # Study-level summaries are written straight to the pipeline results dir
+        # (not the batch-partials "summaries" subdir) and added to downloads
+        pipeline_config = EMG_CONFIG.assembly_analysis_pipeline
+        study_summaries_dir = (
+            study.results_dir_path
+            / f"{pipeline_config.pipeline_name}_{pipeline_config.pipeline_version}"
+        )
+        assert list(
+            study_summaries_dir.glob(f"{study.first_accession}*_study_summary.tsv")
+        ), f"Expected study summaries in {study_summaries_dir}"
+        assert not list(
+            (study_summaries_dir / "summaries").glob("*_study_summary.tsv")
+        ), "Study summaries should not be left in the partials dir"
+        assert any(
+            dl.get("download_group", "").startswith("study_summary.v6.assembly")
+            for dl in study.downloads
+        ), "Expected study summaries to have been added to downloads"
+
         analysis = study.analyses.filter(
             assembly__ena_accessions__contains=[
                 assembly_test_scenario.assembly_accession_success

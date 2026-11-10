@@ -51,7 +51,8 @@ def copy_out_of_production_assembly_analysis_results(
     )
 
     study_prefix = accession_prefix_separated_dir_path(study.first_accession, -3)
-    nfs_results_root = Path(results_dir) / "results"
+    study.set_results_dir_default()
+    nfs_results_root = study.results_dir_path / "assembly_v6_out_of_prod" / "results"
 
     external_results_root = (
         EMG_CONFIG.slurm.private_results_dir

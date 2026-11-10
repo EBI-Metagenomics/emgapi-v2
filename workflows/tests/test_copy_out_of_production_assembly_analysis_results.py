@@ -483,7 +483,11 @@ class TestCopyOutOfProductionAssemblyAnalysisResults:
             external_call.kwargs["destination_root"]
             != nfs_call.kwargs["destination_root"]
         )
-        assert nfs_call.kwargs["destination_root"] == tmp_path / "results"
+        study = analysis.study
+        study.refresh_from_db()
+        assert nfs_call.kwargs["destination_root"] == (
+            study.results_dir_path / "assembly_v6_out_of_prod" / "results"
+        )
 
     @patch(
         "workflows.flows.analysis.assembly.tasks.copy_out_of_production_assembly_analysis_results.update_results_dirs_from_copy_results"

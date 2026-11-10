@@ -23,6 +23,7 @@ class DownloadType(FutureStrEnum):
     STATISTICS = "Statistics"
     NON_CODING_RNAS = "non-coding RNAs"
     GENOME_ANALYSIS = "Genome analysis"
+    GENOME_SEQUENCE = "Genome sequence"
     RO_CRATE = "Analysis RO Crate"
     OTHER = "Other"
 

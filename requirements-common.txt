@@ -7,6 +7,7 @@ typing_extensions~=4.14.1
 tzdata
 pendulum
 pandas
+semver~=3.0  # pipeline version parsing
 
 # Django and plugins
 django==5.2.7
@@ -32,6 +33,7 @@ django-tasks-db~=0.12.0
 
 # DB
 psycopg-pool==3.3.0
+duckdb==1.5.6
 
 # Pydantic
 pydantic<2.12.0  # TODO upgrade once https://github.com/eadwinCode/django-ninja-jwt/pull/151 is released

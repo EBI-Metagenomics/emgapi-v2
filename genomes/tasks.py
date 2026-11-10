@@ -9,6 +9,7 @@ from django.conf import settings
 
 from emgapiv2.tasking import TaskContext, task
 
+from .branchwater import BranchwaterError, process_branchwater_search
 from .sourmash import run_sourmash_gather
 
 logger = logging.getLogger(__name__)
@@ -111,3 +112,23 @@ def run_sourmash_gather_request(
         "signatures": signature_results,
         "archive_path": archive_path,
     }
+
+
+@task(takes_context=True, queue_name="branchwater")
+def run_branchwater_search(
+    context: TaskContext,
+    query_path: str,
+    result_path: str,
+) -> dict[str, Any]:
+    try:
+        result = process_branchwater_search(query_path, result_path)
+    except BranchwaterError as exc:
+        logger.exception("Branchwater job %s failed", context.task_result.id)
+        result = {"status": "FAILED", "reason": exc.message}
+    except Exception:
+        logger.exception("Branchwater job %s failed", context.task_result.id)
+        result = {
+            "status": "FAILED",
+            "reason": "Branchwater search failed. Please try again.",
+        }
+    return {"job_id": context.task_result.id, **result}

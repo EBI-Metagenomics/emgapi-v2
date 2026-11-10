@@ -8,6 +8,8 @@ from workflows.data_io_utils.file_rules.common_rules import (
     FileIsNotEmptyRule,
     GlobHasFilesCountRule,
     GlobHasFilesRule,
+    TSVHasDataRule,
+    tsv_has_data,
 )
 from workflows.data_io_utils.file_rules.mgnify_v6_result_rules import (
     FileConformsToTaxonomyTSVSchemaRule,
@@ -46,6 +48,37 @@ def test_file_rules_utils(tmp_path):
     hello_file = tmp_path / "hello.tsv"
     hello_file.write_text("hello world")
     File(path=hello_file, rules=[MyRule])
+
+
+def test_tsv_has_data_rule(tmp_path):
+    header_only = tmp_path / "header-only.tsv"
+    header_only.write_text("#query\tdbhit\n")
+    assert not tsv_has_data(header_only, required_fieldnames={"query", "dbhit"})
+    with pytest.raises(ValidationError):
+        File(path=header_only, rules=[TSVHasDataRule])
+
+    with_data = tmp_path / "with-data.tsv"
+    with_data.write_text("#query\tdbhit\nseq-1\thit-1\n")
+    assert tsv_has_data(with_data, required_fieldnames={"query", "dbhit"})
+    File(path=with_data, rules=[TSVHasDataRule])
+
+    empty = tmp_path / "empty.tsv"
+    empty.touch()
+    with pytest.raises(ValueError, match="no header row"):
+        tsv_has_data(empty)
+
+    malformed_header = tmp_path / "malformed-header.tsv"
+    malformed_header.write_text("not-an-mseq-header\n")
+    with pytest.raises(ValueError, match="missing required fields"):
+        tsv_has_data(
+            malformed_header,
+            required_fieldnames={"query", "dbhit"},
+        )
+
+    invalid_utf8 = tmp_path / "invalid-utf8.tsv"
+    invalid_utf8.write_bytes(b"\xff\xfe\n")
+    with pytest.raises(UnicodeDecodeError):
+        tsv_has_data(invalid_utf8)
 
 
 def test_dir_rules_utils(tmp_path):

@@ -5,7 +5,10 @@ import json
 import logging
 import os
 
-from analyses.base_models.with_downloads_models import DownloadFileIndexFile
+from analyses.base_models.with_downloads_models import (
+    DownloadFileIndexFile,
+    DownloadType,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -27,9 +30,70 @@ GENOME_DOWNLOAD_DESCRIPTIONS = {
     "Nucleic Acid Sequence": "Genome assembly in FASTA format",
     "Nucleic Acid Sequence index": "Genome assembly index",
     "Predicted CDS (aa)": "Predicted CDS translated into amino acid sequences in FASTA format",
-    "Pathofact2-style report": "Pathogenicity-related annotations at protein level in TSV format",
+    "PathoFact 2 style report": "Pathogenicity-related annotations at protein level in TSV format",
     "Corrected gene prevalence": "Pan-genome gene frequencies (core/middle/rare) after completeness correction",
 }
+
+GENOME_DOWNLOAD_DESCRIPTIONS_EUKS = {
+    "Genome Annotation": "Integrated genome annotation, combining BRAKER and MetaEuk gene predictions with functional and non-coding RNA annotation, in GFF format",
+    "Genome BRAKER3 Annotation": "Result of gene prediction with BRAKER3 in GFF format",
+    "Genome MetaEuk Annotation": "Result of protein homology-based gene prediction with MetaEuk in GFF format",
+    "Genome dbCAN Annotation": "Result of carbohydrate-utilising enzyme annotation at the protein level in GFF format",
+    "Genome rRNA Sequence": "Predicted rRNA sequences in FASTA format",
+    "Nucleic Acid Sequence": "Genome assembly with repeats soft-masked (when applicable) in FASTA format",
+}
+
+GENOME_ANALYSIS_DOWNLOAD_GROUPS = {
+    "_antismash.gff": "bgcs",
+    "_sanntis.gff": "bgcs",
+    "_gecco.gff": "bgcs",
+    "_crisprcasfinder.gff": "crispr",
+    "_crisprcasfinder.tsv": "crispr",
+    "_amrfinderplus.tsv": "amr",
+    "_defense_finder.gff": "defense_systems",
+    "_mobilome.gff": "mobilome",
+    "_virify.gff": "virify",
+    "_virify_metadata.tsv": "virify",
+    "_dbcan.gff": "dbcan",
+    "_cazy_summary.tsv": "dbcan",
+    "_eggNOG.tsv": "eggnog",
+    "_cog_summary.tsv": "eggnog",
+    "_InterProScan.tsv": "interpro",
+    "_kegg_classes.tsv": "kegg",
+    "_kegg_modules.tsv": "kegg",
+    "_kegg_pathways.tsv": "kegg",
+    "_pathofact2_combined_report.tsv": "pathogenicity",
+    "_annotation_coverage.tsv": "annotation",
+    ".gff": "annotation",
+}
+
+
+def get_genome_download_labels(path):
+    """Classify imported genome files, including legacy uncompressed downloads."""
+    filename = os.path.basename(path)
+    for suffix in (".fai", ".gzi", ".csi", ".gz"):
+        filename = filename.removesuffix(suffix)
+    if filename == "pan-genome.fna":
+        return "genome_sequence.pangenome", DownloadType.GENOME_SEQUENCE
+    if filename.endswith(".faa"):
+        return "genome_sequence.proteins", DownloadType.GENOME_SEQUENCE
+    if filename.endswith("_rRNAs.fasta"):
+        return "genome_sequence.rrna", DownloadType.GENOME_SEQUENCE
+    if filename.endswith(".fna"):
+        return "genome_sequence.assembly", DownloadType.GENOME_SEQUENCE
+    if "pan-genome" in path.split("/") or filename in {
+        "core_genes.txt",
+        "gene_presence_absence.Rtab",
+        "genes_presence-absence.Rtab",
+        "gene_presence_absence.csv",
+        "gene_prevalence_corrected.txt",
+        "mashtree.nwk",
+    }:
+        return "genome_analysis.pangenome", DownloadType.GENOME_ANALYSIS
+    for suffix, group in GENOME_ANALYSIS_DOWNLOAD_GROUPS.items():
+        if filename.endswith(suffix):
+            return f"genome_analysis.{group}", DownloadType.GENOME_ANALYSIS
+    return "genome_analysis", DownloadType.GENOME_ANALYSIS
 
 
 def get_expected_genome_files(accession):
@@ -591,6 +655,22 @@ def _upload_genome_files(
             True,
         ),
         (
+            "Genome BRAKER3 Annotation",
+            "gff",
+            f"{genome.accession}_braker.gff",
+            "Genome analysis",
+            "genome",
+            False,
+        ),
+        (
+            "Genome MetaEuk Annotation",
+            "gff",
+            f"{genome.accession}_metaeuk.gff",
+            "Genome analysis",
+            "genome",
+            False,
+        ),
+        (
             "Genome AntiSMASH Annotation",
             "gff",
             f"{genome.accession}_antismash.gff",
@@ -711,7 +791,7 @@ def _upload_genome_files(
             False,
         ),
         (
-            "Pathofact2-style report",
+            "PathoFact 2 style report",
             "tsv",
             f"{genome.accession}_pathofact2_combined_report.tsv",
             "Genome analysis",
@@ -814,7 +894,13 @@ def _upload_genome_files(
 
 
 def prepare_downloadable_file(
-    desc_label, file_format, file_name, group_type=None, subdir=None
+    desc_label,
+    file_format,
+    file_name,
+    group_type=None,
+    subdir=None,
+    *,
+    is_eukaryote=False,
 ):
     """
     Prepare a downloadable file object.
@@ -825,6 +911,7 @@ def prepare_downloadable_file(
         file_name: The name of the file
         group_type: The group type for the file
         subdir: The subdirectory containing the file
+        is_eukaryote: Whether to use eukaryotic download descriptions
 
     Returns:
         A DownloadFile object
@@ -840,7 +927,7 @@ def prepare_downloadable_file(
         "fasta": DownloadFileType.FASTA,
         "fna": DownloadFileType.FASTA,
         "fai": DownloadFileType.OTHER,
-        "gff": DownloadFileType.OTHER,
+        "gff": DownloadFileType.GFF,
         "tsv": DownloadFileType.TSV,
         "csv": DownloadFileType.CSV,
         "json": DownloadFileType.JSON,
@@ -861,12 +948,15 @@ def prepare_downloadable_file(
     download_type = download_type_mapping.get(key, DownloadType.OTHER)
     alias = os.path.basename(file_name)
     relative_path = os.path.join(subdir or "", file_name)
+    descriptions = GENOME_DOWNLOAD_DESCRIPTIONS
+    if is_eukaryote:
+        descriptions = descriptions | GENOME_DOWNLOAD_DESCRIPTIONS_EUKS
     download_file = DownloadFile(
         path=relative_path,
         alias=alias,
         download_type=download_type,
         file_type=file_type,
-        long_description=GENOME_DOWNLOAD_DESCRIPTIONS.get(desc_label, desc_label),
+        long_description=descriptions.get(desc_label, desc_label),
         short_description=desc_label,
         download_group=group_type or "catalogue",
     )
@@ -900,11 +990,22 @@ def prepare_downloadable_file(
 
 
 def prepare_downloadable_file_v4(
-    desc_label, file_format, file_name, group_type=None, subdir=None
+    desc_label,
+    file_format,
+    file_name,
+    group_type=None,
+    subdir=None,
+    *,
+    is_eukaryote=False,
 ):
     # Use the underlying format for metadata, while preserving compressed paths.
     download = prepare_downloadable_file(
-        desc_label, file_format, file_name.removesuffix(".gz"), group_type, subdir
+        desc_label,
+        file_format,
+        file_name.removesuffix(".gz"),
+        group_type,
+        subdir,
+        is_eukaryote=is_eukaryote,
     )
     download.path = os.path.join(subdir or "", file_name)
     download.alias = file_name
@@ -918,6 +1019,9 @@ def prepare_downloadable_file_v4(
         download.index_file = DownloadFileIndexFile(
             index_type="csi", path=f"{download.path}.csi"
         )
+    download.download_group, download.download_type = get_genome_download_labels(
+        download.path
+    )
     return download
 
 
@@ -948,6 +1052,8 @@ def upload_file(
         require_existent_and_non_empty: Whether the file is required to exist and be non-empty
         database: The database to use for saving the model instance
     """
+    from genomes.models import CatalogueGenome, GenomeCatalogue
+
     path_parts = (
         [directory, subdir, file_name]
         if directory
@@ -963,8 +1069,18 @@ def upload_file(
         )
         return
 
+    catalogue = (
+        model_instance.catalogue
+        if isinstance(model_instance, CatalogueGenome)
+        else model_instance
+    )
     download_file = download_factory(
-        desc_label, file_format, file_name, group_type, subdir
+        desc_label,
+        file_format,
+        file_name,
+        group_type,
+        subdir,
+        is_eukaryote=catalogue.catalogue_type == GenomeCatalogue.EUKS,
     )
     try:
         model_instance.add_download(download_file)

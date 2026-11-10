@@ -1,5 +1,4 @@
 from django.db.models import Prefetch
-from django.shortcuts import get_object_or_404
 from ninja_extra import api_controller, http_get, paginate
 from ninja_extra.schemas import NinjaPaginationResponseSchema
 
@@ -11,6 +10,8 @@ from analyses.schemas import (
     GenomeAssemblyLinkSchema,
     MGnifyAnalysis,
 )
+from emgapiv2.api import perms
+from emgapiv2.api.auth import DjangoSuperUserAuth, NoAuth, WebinJWTAuth
 from emgapiv2.api.perms import UnauthorisedIsUnfoundController
 from emgapiv2.api.schema_utils import (
     ApiSections,
@@ -46,6 +47,10 @@ class AssemblyController(UnauthorisedIsUnfoundController):
         summary="Get assembly by accession",
         description=("Get detailed information about a specific assembly. "),
         operation_id="get_assembly",
+        auth=[WebinJWTAuth(), DjangoSuperUserAuth(), NoAuth()],
+        permissions=[
+            perms.IsPublic | perms.IsWebinOwner | perms.IsAdminUserWithObjectPerms
+        ],
         openapi_extra=make_links_section(
             {
                 **make_related_detail_link(
@@ -76,8 +81,8 @@ class AssemblyController(UnauthorisedIsUnfoundController):
         ),
     )
     def get_assembly(self, accession: str):
-        assembly = get_object_or_404(
-            analyses.models.Assembly.public_objects.select_related(
+        assembly = self.get_object_or_exception(
+            analyses.models.Assembly.objects_not_suppressed.select_related(
                 "reads_study", "assembly_study", "assembler", "sample"
             ).prefetch_related("runs"),
             ena_accessions__contains=[accession],
@@ -94,12 +99,16 @@ class AssemblyController(UnauthorisedIsUnfoundController):
         ),
         operation_id="list_genome_links_for_assembly",
         tags=[ApiSections.ASSEMBLIES, ApiSections.GENOMES],
+        auth=[WebinJWTAuth(), DjangoSuperUserAuth(), NoAuth()],
+        permissions=[
+            perms.IsPublic | perms.IsWebinOwner | perms.IsAdminUserWithObjectPerms
+        ],
     )
     @paginate()
     def list_genome_links_for_assembly(self, accession: str):
         # TODO: optimize with prefetch_related if needed
-        assembly = get_object_or_404(
-            analyses.models.Assembly.public_objects,
+        assembly = self.get_object_or_exception(
+            analyses.models.Assembly.objects_not_suppressed,
             ena_accessions__contains=[accession],
         )
 
@@ -127,11 +136,15 @@ class AssemblyController(UnauthorisedIsUnfoundController):
         ),
         operation_id="list_additional_contained_genomes_for_assembly",
         tags=[ApiSections.ASSEMBLIES, ApiSections.GENOMES],
+        auth=[WebinJWTAuth(), DjangoSuperUserAuth(), NoAuth()],
+        permissions=[
+            perms.IsPublic | perms.IsWebinOwner | perms.IsAdminUserWithObjectPerms
+        ],
     )
     @paginate()
     def list_additional_contained_genomes_for_assembly(self, accession: str):
-        assembly = get_object_or_404(
-            analyses.models.Assembly.public_objects,
+        assembly = self.get_object_or_exception(
+            analyses.models.Assembly.objects_not_suppressed,
             ena_accessions__contains=[accession],
         )
         additional_contained_genomes_query_set = (
@@ -157,14 +170,18 @@ class AssemblyController(UnauthorisedIsUnfoundController):
         ),
         operation_id="list_analyses_for_assembly",
         tags=[ApiSections.ASSEMBLIES, ApiSections.ANALYSES],
+        auth=[WebinJWTAuth(), DjangoSuperUserAuth(), NoAuth()],
+        permissions=[
+            perms.IsPublic | perms.IsWebinOwner | perms.IsAdminUserWithObjectPerms
+        ],
     )
     @paginate()
     def list_analyses_for_assembly(self, accession: str):
-        assembly = get_object_or_404(
-            analyses.models.Assembly.public_objects,
+        assembly = self.get_object_or_exception(
+            analyses.models.Assembly.objects_not_suppressed,
             ena_accessions__contains=[accession],
         )
-        qs = analyses.models.Analysis.public_objects.select_related(
+        qs = analyses.models.Analysis.objects_not_suppressed.select_related(
             "study", "sample", "run", "assembly"
-        ).filter(assembly=assembly)
+        ).filter(assembly=assembly, is_ready=True)
         return qs

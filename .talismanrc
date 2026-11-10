@@ -53,6 +53,9 @@ fileignoreconfig:
 - filename: conftest.py
   allowed_patterns: [password="password123"]
 
+- filename: deployment/README.md
+  checksum: 6564bee473795ac762382ac9371bfe3396fc9c7c544d4e764e6f36d6c3aacf41
+
 - filename: deployment/ebi-wp-k8s-hl/ebi-wp-k8s-hl.yaml
   checksum: 5b5fee63f59bcf5779cea584d87a043b21b22f6d10a67a0a1957f186fbfc490b
 
@@ -67,6 +70,12 @@ fileignoreconfig:
 
 - filename: emgapiv2/api/auth.py
   checksum: 5d028587b866b9dd2ac7aa0c4279441cc0d495e4df9338729db30ac583e49299
+
+- filename: emgapiv2/api/branchwater.py
+  checksum: c481a7bdcc61d84c34245dc82191347db863b19ae4626b27bad33e34a10d90b3
+
+- filename: emgapiv2/api/tests/test_branchwater_jobs.py
+  checksum: 3a4e942c8a3209d69408482437128e9fb66c2c707075f27dc0e5fd0cdc3622b3
 
 - filename: emgapiv2/api/storage.py
   checksum: be76261cc58f5ccea9a0b0d9179894ff3260cb5672aa69a4cfc66732200fed0d
@@ -84,13 +93,13 @@ fileignoreconfig:
   allowed_patterns: [key]
 
 - filename: emgapiv2/config.py
-  checksum: 9481c34133aaa792dd444f4768f8ee48ea07f20b4df605c66d2b10a860931031
+  checksum: 35bd761d4a4484ec836807f972edaa3dc8b41d86302644ba22900f107f7b3a61
 
 - filename: emgapiv2/settings.py
-  checksum: d258d3aa03cfd5ebf524983ed798ece725a9a28a5f3373a871013e6432914e60
+  checksum: 11f68dc2264602c1c56b1b25ecfbe6a1ef7489ec40d53c47859089dd9d9bb834
 
 - filename: emgapiv2/settings_test.py
-  checksum: 57884ddda11a6381bbc9e5f4b2ba7a92fbf8b7ce9db515e5d4d6db496ac818a8
+  checksum: 4af9f4bfad8819f761227fc67233df93b82eda6013ed3958db3d5bdc4bcedde2
 
 - filename: emgapiv2/test_utils.py
   checksum: ab3eefe0d1b722d23b8dd55ba55a364e5f6593403f0d96898d0745c900f7926f

@@ -197,7 +197,7 @@ DATABASE_ROUTERS = ["proteins.routers.MGYPRouter"]
 TASKS = {
     "default": {
         "BACKEND": "django_tasks_db.DatabaseBackend",
-        "QUEUES": ["default"],
+        "QUEUES": ["default", "branchwater"],
     }
 }
 
