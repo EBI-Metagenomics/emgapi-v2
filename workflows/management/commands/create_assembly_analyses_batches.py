@@ -1,7 +1,7 @@
 import logging
 from pathlib import Path
 
-from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand, CommandError
 
 import analyses.models
 import ena.models
@@ -9,6 +9,9 @@ import workflows.models
 from workflows.ena_utils.ena_api_requests import (
     get_study_assemblies_from_ena,
     get_study_from_ena,
+)
+from workflows.flows.analysis.assembly.tasks.create_analyses_for_assemblies import (
+    create_analyses_for_assemblies,
 )
 
 logger = logging.getLogger(__name__)
@@ -71,6 +74,12 @@ class Command(BaseCommand):
         mgnify_study.refresh_from_db()
         self.stdout.write(f"MGnify Study: {mgnify_study.accession}")
 
+        # Same check as the flow: without an owner, nobody can see the private analyses.
+        if mgnify_study.is_private and not ena_study.webin_submitter:
+            raise CommandError(
+                f"Study {ena_study.accession} is private but has no webin_submitter."
+            )
+
         # Set biome
         # if not mgnify_study.biome:
         #     biome = analyses.models.Biome.objects.get(path=biome_path)
@@ -93,21 +102,10 @@ class Command(BaseCommand):
             else analyses.models.Analysis.PipelineVersions.v5
         )
 
-        analyses_list = []
-        for assembly in mgnify_study.assemblies_assembly.filter(
-            ena_accessions__overlap=assemblies_accessions
-        ).select_related("sample"):
-            analysis, created = analyses.models.Analysis.objects.get_or_create(
-                study=mgnify_study,
-                sample=assembly.sample,
-                assembly=assembly,
-                ena_study=mgnify_study.ena_study,
-                pipeline_version=pipeline_version,
-            )
-            if created:
-                self.stdout.write(f"Created analysis for {assembly.first_accession}")
-            analysis.inherit_experiment_type()
-            analyses_list.append(analysis)
+        # Use the flow's task, so that analyses are created in one place only.
+        analyses_list = create_analyses_for_assemblies(
+            mgnify_study.id, assemblies_accessions, pipeline_version
+        )
 
         self.stdout.write(f"Created {len(analyses_list)} analyses")
 
