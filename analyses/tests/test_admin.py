@@ -339,3 +339,49 @@ def test_set_experiment_type_action_without_an_experiment_type_changes_nothing(
     assert response.status_code == 302
     run.refresh_from_db()
     assert run.experiment_type == experiment_type_before
+
+
+@pytest.mark.django_db
+def test_study_batches_are_reachable_through_the_abstract_fks_reverse_accessor(
+    admin_client, raw_reads_mgnify_study, tmp_path
+):
+    """
+    Pins the reverse accessor that the assembly-analysis admin reads batches
+    through. ``StudyAnalysisBatch.study`` declares
+    ``related_name="analysis_batches"`` on an *abstract* model, so a second
+    concrete subclass cannot be added until it becomes ``"%(class)s_batches"``.
+
+    This test exists so that the rename is a visible, named diff rather than an
+    incidental breakage: when the related_name changes, update the accessor here
+    and in ``analyses/admin/study.py``.
+    """
+    batch = AssemblyAnalysisBatch.objects.create(
+        study=raw_reads_mgnify_study,
+        batch_type="test",
+        workspace_dir=str(tmp_path),
+        total_analyses=0,
+    )
+
+    assert list(raw_reads_mgnify_study.analysis_batches.all()) == [batch]
+    assert (
+        AssemblyAnalysisBatch._meta.get_field("study").remote_field.related_name
+        == "analysis_batches"
+    )
+
+    # The summary page and the refresh view both read batches through it.
+    summary = admin_client.get(
+        reverse(
+            "admin:analyses_study_show_assembly_analysis_status_summary",
+            args=[raw_reads_mgnify_study.pk],
+        )
+    )
+    assert summary.status_code == 200
+    assert len(summary.context["batches_table"]["rows"]) == 1
+
+    refresh = admin_client.get(
+        reverse(
+            "admin_refresh_study_assembly_analysis_counts",
+            kwargs={"study_id": raw_reads_mgnify_study.pk},
+        )
+    )
+    assert refresh.status_code == 302

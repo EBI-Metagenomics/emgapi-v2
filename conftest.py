@@ -34,6 +34,7 @@ pytest_plugins = [
     "workflows.nextflow_utils.fixtures.conftest",
     "workflows.fixtures.ena_utils.conftest",
     "workflows.fixtures.assembly_analysis.conftest",
+    "workflows.fixtures.amplicon.conftest",
     "genomes.fixtures.genome.conftest",
     "kvstore.fixtures.conftest",
 ]
