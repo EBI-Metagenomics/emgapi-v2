@@ -43,7 +43,10 @@ class Status(NamedTuple):
     no_rule: dict[
         str, int
     ]  # annotated assembly analyses by pipeline version, of versions without gene-caller rules
-    withheld: list[str]  # MGYAs of assembly proteins records that are not in emgapi-v2
+    withheld: list[
+        str
+    ]  # MGYAs of assembly proteins records in neither emgapi-v2 nor v1
+    from_v1: int | None  # MGYAs whose metadata is from MGnify v1, None without its copy
     owner: DatasetOwner
     owner_states: list[str]  # of the owner's SLURM job
 
@@ -67,11 +70,17 @@ class Status(NamedTuple):
                 f"Last protein id: {self.last_protein_id}, {self.last_protein_id / MAX_PROTEIN_ID:.4%} of the MGYP range",
                 "Annotated assembly analyses of pipeline versions with no gene-caller rule: "
                 + (", ".join(f"{v} {n}" for v, n in self.no_rule.items()) or "none"),
-                f"MGYAs of assembly proteins records not in emgapi-v2: {len(self.withheld)}"
+                f"MGYAs of assembly proteins records in neither emgapi-v2 nor MGnify v1: {len(self.withheld)}"
                 + (
                     f", for example {', '.join(self.withheld[:10])}"
                     if self.withheld
                     else ""
+                ),
+                "MGYAs whose metadata is from MGnify v1: "
+                + (
+                    f"none, as the protein dataset has no {layout.V1_ANALYSES}"
+                    if self.from_v1 is None
+                    else str(self.from_v1)
                 ),
                 "Owner of the protein dataset: "
                 + (
@@ -111,8 +120,13 @@ class Status(NamedTuple):
             )
         if self.withheld:
             found.append(
-                f"{len(self.withheld)} MGYAs of assembly proteins records are not in emgapi-v2,"
-                " so releases publish none of their proteins"
+                f"{len(self.withheld)} MGYAs of assembly proteins records are in neither emgapi-v2"
+                " nor MGnify v1, so releases publish none of their proteins"
+            )
+        if self.from_v1 == 0:
+            found.append(
+                f"no MGYA's metadata is from MGnify v1 any more, so {layout.V1_ANALYSES} in the"
+                " protein dataset can be deleted"
             )
         # A requeued job has a record for each time it ran, the current one last.
         running = self.owner_states[-1:] == ["RUNNING"]
@@ -162,7 +176,7 @@ def status(root: Path) -> Status:
             "analysis_accession", flat=True
         )
     )
-    known = metadata.find_analyses(mgyas)
+    known = metadata.find_analyses(mgyas, root)
 
     owner = DatasetOwner.objects.get()
     owner_states = (
@@ -183,6 +197,11 @@ def status(root: Path) -> Status:
         last_protein_id,
         no_rule,
         [mgya for mgya in mgyas if mgya not in known],
+        (
+            sum(analysis["from_v1"] for analysis in known.values())
+            if (root / layout.V1_ANALYSES).exists()
+            else None
+        ),
         owner,
         owner_states,
     )

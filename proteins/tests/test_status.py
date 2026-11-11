@@ -8,7 +8,13 @@ from proteins.dataset import status as status_module
 from proteins.dataset.owner import take
 from proteins.dataset.status import status
 from proteins.routers import MGYP
-from proteins.tests.conftest import SUBMITTED, make_analysis, make_study, query
+from proteins.tests.conftest import (
+    SUBMITTED,
+    make_analysis,
+    make_study,
+    query,
+    write_v1_analyses,
+)
 from workflows.flows.proteins import check_proteins_status as flow
 
 pytestmark = [
@@ -69,9 +75,10 @@ def test_no_check_fails_on_a_healthy_state(root, slurm):
     assert now.problems() == []
     flow.check_proteins_status()
     lines = now.report().splitlines()
-    assert lines[-3:] == [
+    assert lines[-4:] == [
         "Annotated assembly analyses of pipeline versions with no gene-caller rule: none",
-        "MGYAs of assembly proteins records not in emgapi-v2: 0",
+        "MGYAs of assembly proteins records in neither emgapi-v2 nor MGnify v1: 0",
+        "MGYAs whose metadata is from MGnify v1: none, as the protein dataset has no v1/analyses.parquet",
         f"Owner of the protein dataset: update, execution {owner.execution_id},"
         f" flow run None, since {now.owner.acquired_at}, SLURM job 2"
         f" submitted at {now.owner.slurm_submit_at}, whose states are RUNNING",
@@ -101,17 +108,34 @@ def test_each_failed_check_is_reported_and_fails_the_flow(root, slurm, monkeypat
         f"protein ids are at {now.last_protein_id}, above 90% of {now.last_protein_id}",
         "annotated assembly analyses of pipeline versions with no gene-caller rule,"
         " which the listing skips: V1 1, V4 2",
-        "1 MGYAs of assembly proteins records are not in emgapi-v2,"
+        "1 MGYAs of assembly proteins records are in neither emgapi-v2 nor MGnify v1,"
         " so releases publish none of their proteins",
         "the protein dataset is owned by job 1, whose states are FAILED",
     ]
     assert now.problems() == problems
     assert (
-        "MGYAs of assembly proteins records not in emgapi-v2: 1, for example MGYA99999999"
-        in now.report()
+        "MGYAs of assembly proteins records in neither emgapi-v2 nor MGnify v1: 1,"
+        " for example MGYA99999999" in now.report()
     )
     with pytest.raises(flow.StatusCheckFailed, match="7 checks failed"):
         flow.check_proteins_status()
+
+
+def test_counts_the_mgyas_from_v1_and_reports_its_copy_once_unused(root):
+    v6 = make_analysis(make_study("PRJ1"), "ERZ1")
+    record(v6.accession, timedelta(hours=1))
+    # emgapi-v2 wins over the copy, so no record uses it.
+    write_v1_analyses(root, v6.accession, "MGYA99999998")
+    assert status(root).problems()[-1] == (
+        "no MGYA's metadata is from MGnify v1 any more, so v1/analyses.parquet in the"
+        " protein dataset can be deleted"
+    )
+
+    record("MGYA99999998", timedelta(hours=1))
+    now = status(root)
+    assert now.withheld == [] and now.from_v1 == 1
+    assert "MGYAs whose metadata is from MGnify v1: 1" in now.report().splitlines()
+    assert not any("v1" in problem for problem in now.problems())
 
 
 @pytest.mark.parametrize(

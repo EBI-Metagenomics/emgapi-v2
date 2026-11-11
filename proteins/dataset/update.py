@@ -351,7 +351,7 @@ def write_metadata_snapshot(root: Path, day: date, staged: Staged) -> None:
     layout.write(
         directory / "assembly_proteins.parquet",
         "metadata/assembly_proteins",
-        metadata.build_snapshot(staged.assembly_proteins, staged.assemblies),
+        metadata.build_snapshot(staged.assembly_proteins, staged.assemblies, root),
     )
     layout.write(
         directory / "assembly_proteins_registry.parquet",

@@ -6,6 +6,7 @@ from pathlib import Path
 from uuid import uuid4
 
 import psycopg
+import pyarrow as pa
 import pytest
 from django.db import connections, transaction
 from prefect.client.orchestration import get_client
@@ -15,6 +16,7 @@ from psycopg.conninfo import make_conninfo
 import ena.models as ena_models
 from analyses.models import Analysis, Assembly, Sample, Study
 from proteins.accession.inputs import read_input
+from proteins.dataset import layout
 from proteins.routers import MGYP
 
 FIXTURES = Path(__file__).parent.parent / "fixtures"
@@ -194,6 +196,31 @@ def make_analysis(study, erz, version="V6", results_dir=None, state=IMPORTED):
     )
     analysis.mark_status(state)
     return analysis
+
+
+def write_v1_analyses(root: Path, *mgyas, **values):
+    """Writes the migration's copy of MGnify v1's analyses, one 5.0 analysis per MGYA, with the values given."""
+    layout.write(
+        root / layout.V1_ANALYSES,
+        "v1/analyses",
+        pa.Table.from_pylist(
+            [
+                {
+                    "assembly_accession": f"ERZ-{mgya}",
+                    "pipeline_version": "5.0",
+                    "analysis_accession": mgya,
+                    "study_accession": "MGYS00000001",
+                    "ena_study_accession": "ERP1",
+                    "biome_lineage": "root:Engineered",
+                    "is_private": False,
+                    "is_suppressed": False,
+                    **values,
+                }
+                for mgya in mgyas
+            ],
+            layout.SCHEMAS["v1/analyses"],
+        ),
+    )
 
 
 class Killed(BaseException):

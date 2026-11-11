@@ -65,6 +65,8 @@ SCHEMAS = {
         ("pipeline_version", pa.string(), False),
         ("analysis_accession", pa.string(), False),
         ("study_accession", pa.string(), False),
+        # The study's ERP, as the release names it.
+        ("ena_study_accession", pa.string(), True),
         ("biome_lineage", pa.string(), True),  # NULL when the sample has no biome
         ("is_private", pa.bool_(), False),
         ("is_suppressed", pa.bool_(), False),
@@ -87,7 +89,20 @@ SCHEMAS = {
         ("name", pa.string(), False),
         ("version", pa.string(), False),
     ),
+    # MGnify v1's 4.1 and 5.0 assembly analyses, written by the migration, for the snapshot of the
+    # records whose MGYA emgapi-v2 does not have. Deleted once none is left.
+    "v1/analyses": _schema(
+        ("assembly_accession", pa.string(), False),
+        ("pipeline_version", pa.string(), False),
+        ("analysis_accession", pa.string(), False),
+        ("study_accession", pa.string(), False),
+        ("ena_study_accession", pa.string(), True),
+        ("biome_lineage", pa.string(), True),
+        ("is_private", pa.bool_(), False),
+        ("is_suppressed", pa.bool_(), False),
+    ),
 }
+V1_ANALYSES = "v1/analyses.parquet"
 
 SORT_ORDER = {
     "protein": ["hash"],
@@ -98,6 +113,7 @@ SORT_ORDER = {
     "metadata/assembly_proteins_registry": ["id"],
     "metadata/assemblies": ["id"],
     "metadata/gene_callers": ["id"],
+    "v1/analyses": ["analysis_accession"],
 }
 
 ROW_GROUP_SIZE = 122_880
