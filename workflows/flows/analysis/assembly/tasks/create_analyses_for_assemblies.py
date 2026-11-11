@@ -33,6 +33,10 @@ def create_analyses_for_assemblies(
             assembly=assembly,
             ena_study=study.ena_study,
             pipeline_version=pipeline,
+            defaults={
+                "is_private": study.ena_study.is_private,
+                "webin_submitter": study.ena_study.webin_submitter,
+            },
         )
         if created:
             logger.info(
