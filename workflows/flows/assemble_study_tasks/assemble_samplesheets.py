@@ -257,7 +257,26 @@ def run_assembler_for_samplesheet(
                 )
             )
 
-        if not assembled_runs_csv.is_file():
+        # miassembler does not write assembled_runs.csv (or writes it empty) when no
+        # run gets through pre-assembly QC. That is a valid outcome, not a pipeline failure.
+        all_runs_qc_failed = bool(qc_failed_runs) and all(
+            assembly.runs_label in qc_failed_runs for assembly in assemblies
+        )
+
+        if assembled_runs_csv.is_file():
+            assembled_runs_report = load_assembled_runs_report(assembled_runs_csv)
+            if assembled_runs_report.empty and not all_runs_qc_failed:
+                raise RuntimeError(
+                    "miassembler reported no successful assemblies; "
+                    f"refusing to continue with {samplesheet_csv}."
+                )
+            assembled_run_accessions = list(assembled_runs_report["run_accession"])
+        elif all_runs_qc_failed:
+            logger.warning(
+                f"No {assembled_runs_csv} file, but every run in {samplesheet_csv} "
+                f"failed pre-assembly QC according to {qc_failed_csv}."
+            )
+        else:
             for assembly in assemblies:
                 mark_assembly_status(
                     assembly,
@@ -268,13 +287,6 @@ def run_assembler_for_samplesheet(
                 f"Missing end of execution assembled runs csv file. Expected path {assembled_runs_csv}."
             )
 
-        assembled_runs_report = load_assembled_runs_report(assembled_runs_csv)
-        if assembled_runs_report.empty:
-            raise RuntimeError(
-                "miassembler reported no successful assemblies; "
-                f"refusing to continue with {samplesheet_csv}."
-            )
-        assembled_run_accessions = list(assembled_runs_report["run_accession"])
         assembled_runs = set(assembled_run_accessions)
 
         for assembly in assemblies:
