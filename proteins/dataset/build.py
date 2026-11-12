@@ -220,6 +220,9 @@ def build_partition(conn: psycopg.Connection, p: int, files: list[Path]) -> None
     )
     conn.execute(f"DROP TABLE {name}")
     # The partition's CHECK constraints are required to attach it, and the range one spares ATTACH its scan.
+    # LIKE does not copy storage parameters, so mgyp_schema.sql's are repeated: vacuum after every 100,000
+    # inserts, so that lookups of new proteins become index-only. The threshold is fixed, since a proportional
+    # one would vacuum less and less often as the partition grows.
     conn.execute(
         f"""CREATE TABLE {name} (LIKE protein INCLUDING CONSTRAINTS,
                 CONSTRAINT {name}_range CHECK ({in_range}))
