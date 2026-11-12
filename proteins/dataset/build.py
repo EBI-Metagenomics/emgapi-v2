@@ -74,10 +74,15 @@ class BuildError(Exception):
 def build_mgyp_database(
     dsn: str, root: Path, rebuild: bool = False, protein_id_start: int | None = None
 ) -> date:
-    """Builds the MGYP database from the latest complete day of the protein dataset, into a schema just created by mgyp_schema.sql.
+    """Fills the MGYP database, the Postgres schema that accessioning looks hashes up in, from the protein dataset.
 
-    Without `rebuild`, this follows the migration, and the protein dataset must hold its day only.
-    Returns the day built from.
+    The protein dataset, the parquet files, holds every protein, contig and occurrence; the MGYP database
+    holds only what accessioning needs: the hash -> MGYP map, the registries and the staged rows. The
+    migration writes the protein dataset only, so this runs once after it, and again only to recover a lost
+    MGYP database (`rebuild`). It is not part of the daily runs.
+
+    It loads the latest complete day into a schema just created by mgyp_schema.sql. Without `rebuild`, the
+    protein dataset must hold the migration's day only. Returns the day built from.
 
     :param dsn: libpq connection string of the MGYP database, as proteindb_owner.
     :param root: The protein dataset's directory.
