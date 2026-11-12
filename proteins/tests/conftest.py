@@ -77,7 +77,9 @@ def owner_dsn() -> str:
     owner = connections["default"].settings_dict
     names = "USER", "PASSWORD"
     return make_conninfo(
-        role_dsn(None), **{name.lower(): owner[name] for name in names}
+        role_dsn(None),
+        options="-c search_path=proteindb",
+        **{name.lower(): owner[name] for name in names},
     )
 
 

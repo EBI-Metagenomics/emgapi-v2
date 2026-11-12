@@ -4,6 +4,7 @@ from datetime import date
 import pyarrow as pa
 import pytest
 from django.core.management import call_command
+from psycopg.conninfo import make_conninfo
 
 from proteins.dataset import layout, update
 from proteins.dataset.build import LOST_MGYP_MARGIN, BuildError, build_mgyp_database
@@ -218,6 +219,12 @@ def test_refuses_a_schema_that_is_not_empty(migrated):
         match="protein, assembly, assembly_proteins, gene_caller, dataset_update not empty",
     ):
         build_mgyp_database(owner_dsn(), migrated)
+
+
+def test_refuses_a_dsn_without_the_schema_on_its_search_path(migrated):
+    with pytest.raises(BuildError, match="add options='-c search_path=<schema>'"):
+        build_mgyp_database(make_conninfo(owner_dsn(), options=""), migrated)
+    assert loaded() == {}
 
 
 def test_a_duplicate_in_a_registry_stops_the_build_before_the_partitions(migrated):

@@ -17,7 +17,8 @@ class Command(BaseCommand):
             "--dsn",
             required=True,
             help="libpq connection string of the MGYP database as proteindb_owner,"
-            " such as 'host=H dbname=D user=proteindb_owner'",
+            " with the schema on its search_path, such as"
+            " \"host=H dbname=D user=proteindb_owner options='-c search_path=proteindb'\"",
         )
         parser.add_argument(
             "--rebuild",

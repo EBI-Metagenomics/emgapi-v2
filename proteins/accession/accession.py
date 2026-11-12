@@ -132,7 +132,7 @@ def lookup_partitions(
         found |= dict(
             conn.execute(
                 sql.SQL("SELECT q.hash, k.id FROM q JOIN {} k USING (hash)").format(
-                    sql.Identifier("proteindb", f"protein_{partition:02x}")
+                    sql.Identifier(f"protein_{partition:02x}")
                 )
             ).fetchall()
         )

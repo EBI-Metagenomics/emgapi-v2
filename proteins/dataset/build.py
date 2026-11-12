@@ -102,7 +102,6 @@ def build_mgyp_database(
     logger.info(f"protein ids start at {protein_id_start}")
 
     with psycopg.connect(dsn, autocommit=True) as conn:
-        conn.execute("SET search_path = proteindb")
         check_empty(conn)
         # Before the hours of the partitions, so that their unique constraints fail early.
         with conn.transaction():
@@ -159,9 +158,14 @@ def check_empty(conn: psycopg.Connection) -> None:
 
     :param conn: A connection to the MGYP database, as proteindb_owner.
     """
-    (partitions,) = conn.execute(
-        "SELECT count(*) FROM pg_inherits WHERE inhparent = 'protein'::regclass"
-    ).fetchone()
+    try:
+        (partitions,) = conn.execute(
+            "SELECT count(*) FROM pg_inherits WHERE inhparent = 'protein'::regclass"
+        ).fetchone()
+    except psycopg.errors.UndefinedTable:
+        raise BuildError(
+            "No protein table on the search_path: add options='-c search_path=<schema>' to the DSN"
+        )
     if partitions != 64:
         raise BuildError(
             f"protein has {partitions} partitions: drop the schema and apply mgyp_schema.sql again"
