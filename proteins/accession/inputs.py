@@ -1,13 +1,12 @@
 """Step 1 of accessioning: reading the input into memory and checking it."""
 
 import csv
-import hashlib
 import re
 from typing import NamedTuple
 
-from .contract import InvalidSequence, protein_hash, validate_sequence
 from .fasta import open_text, read_fasta
 from .gff import read_gff
+from .hashing import InvalidSequence, contig_hash, protein_hash
 
 SPADES_COVERAGE = re.compile(r"_cov_([0-9]+(?:\.[0-9]+)?)")
 PARTIAL = re.compile(r"(?<![^;\s])partial=([^;\s]*)")
@@ -28,7 +27,7 @@ class InvalidInput(ValueError):
 class Occurrence(NamedTuple):
     gene_id: str
     description: str  # the rest of the FASTA header
-    sequence: str  # validated and upper-cased
+    sequence: str  # validated
     hash: bytes
     contig: str
     start: int
@@ -103,7 +102,7 @@ def read_input(
             problems.append(f"{record.id}: not in the GFF")
             continue
         try:
-            sequence = validate_sequence(record.sequence).decode("ascii")
+            hash = protein_hash(record.sequence)
         except InvalidSequence as e:
             problems.append(f"{record.id}: {e}")
             continue
@@ -119,13 +118,12 @@ def read_input(
                 problems.append(f"{record.id}: no single valid partial= flag")
                 continue
             truncation = flags[0]
-        hash = protein_hash(sequence)
-        proteins[hash] = sequence
+        proteins[hash] = record.sequence
         occurrences.append(
             Occurrence(
                 record.id,
                 record.description,
-                sequence,
+                record.sequence,
                 hash,
                 gene.contig,
                 gene.start,
@@ -153,12 +151,17 @@ def read_input(
             if original_name is None:
                 problems.append(f"contig {record.id}: not in the contig map")
                 continue
+        try:
+            hash = contig_hash(record.sequence)
+        except InvalidSequence as e:
+            problems.append(f"contig {record.id}: {e}")
+            continue
         coverage = original_name and SPADES_COVERAGE.search(original_name)
         found[record.id] = Contig(
             record.id,
             original_name,
             len(record.sequence),
-            hashlib.sha256(record.sequence.upper().encode("ascii")).digest(),
+            hash,
             float(coverage[1]) if coverage else None,
         )
     problems += [

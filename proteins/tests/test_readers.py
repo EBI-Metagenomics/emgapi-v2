@@ -5,9 +5,9 @@ from pathlib import Path
 
 import pytest
 
-from proteins.accession.contract import validate_sequence
 from proteins.accession.fasta import FastaRecord, read_fasta
 from proteins.accession.gff import Gene, read_gff
+from proteins.accession.hashing import validate_sequence
 
 # The pipeline's tests/assembly_erz101.fasta.gz with its contigs renamed as the pipeline
 # does, run through its COMBINED_GENE_CALLER subworkflow with the caller versions the

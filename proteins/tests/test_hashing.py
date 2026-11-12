@@ -1,11 +1,13 @@
 import csv
 import gzip
+import hashlib
 from pathlib import Path
 
 import pytest
 
-from proteins.accession.contract import (
+from proteins.accession.hashing import (
     InvalidSequence,
+    contig_hash,
     protein_hash,
     validate_sequence,
 )
@@ -15,24 +17,22 @@ def test_upper_case_sequence_is_unchanged():
     assert validate_sequence("MKVLAAGIX") == b"MKVLAAGIX"
 
 
-def test_lower_case_is_upper_cased():
-    assert validate_sequence("mkVlaagix") == b"MKVLAAGIX"
-
-
-def test_case_does_not_change_the_hash():
-    assert protein_hash("mkvlaagix") == protein_hash("MKVLAAGIX")
+def test_the_hash_is_of_the_sequence_as_it_is():
+    assert protein_hash("MKVLAAGIX") == hashlib.sha256(b"MKVLAAGIX").digest()
+    assert contig_hash("ACGTN") == hashlib.sha256(b"ACGTN").digest()
 
 
 @pytest.mark.parametrize(
     "sequence, character, position",
     [
+        ("mKV", "m", 1),  # lower case is not upper-cased
         ("MKV*", "*", 4),  # trailing stop
         ("MK*V", "*", 3),  # internal stop
         ("MK V", " ", 3),
         ("MKV\n", "\n", 4),
         ("MK1V", "1", 3),
         ("MK-V", "-", 3),
-        # Non-ASCII letters that upper() would turn into ASCII ones.
+        # Non-ASCII letters, which upper() would turn into ASCII ones.
         ("MKVß", "ß", 4),  # -> "SS"
         ("ıMKV", "ı", 1),  # -> "I"
         ("MﬁKV", "ﬁ", 2),  # -> "FI"
@@ -43,15 +43,14 @@ def test_invalid_sequence_names_first_offending_character(
 ):
     with pytest.raises(InvalidSequence) as excinfo:
         validate_sequence(sequence)
-    assert excinfo.value.character == character
-    assert excinfo.value.position == position
-    assert f"{character!r} at position {position}" in str(excinfo.value)
+    assert (
+        str(excinfo.value) == f"invalid character {character!r} at position {position}"
+    )
 
 
 def test_only_the_first_offending_character_is_reported():
-    with pytest.raises(InvalidSequence) as excinfo:
+    with pytest.raises(InvalidSequence, match="'\\*' at position 2"):
         validate_sequence("M*K-V")
-    assert (excinfo.value.character, excinfo.value.position) == ("*", 2)
 
 
 def test_empty_sequence_is_rejected():
@@ -62,6 +61,8 @@ def test_empty_sequence_is_rejected():
 def test_invalid_sequence_is_never_hashed():
     with pytest.raises(InvalidSequence):
         protein_hash("MKV*")
+    with pytest.raises(InvalidSequence):
+        contig_hash("acgt")
 
 
 def test_reproduces_hashes_stored_in_the_current_database():

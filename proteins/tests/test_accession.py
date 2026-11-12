@@ -10,16 +10,14 @@ from proteins.accession.accession import (
     register_assembly,
     register_gene_callers,
 )
-from proteins.accession.contract import protein_hash
+from proteins.accession.hashing import protein_hash
 from proteins.accession.inputs import InvalidInput, read_input
 from proteins.routers import MGYP
 from proteins.tests.conftest import (
     FIXTURES,
     PUBLISHED_V6,
     query,
-    read_assembly,
     read_published,
-    write_assembly,
 )
 
 pytestmark = pytest.mark.django_db(databases=["default", MGYP], transaction=True)
@@ -104,12 +102,6 @@ def test_new_assembly_is_staged_exactly(connect_accession, erz101, assembly):
             for o in input.occurrences
         )
     )
-
-
-def test_lower_case_input_is_staged_upper_cased(connect_accession, tmp_path):
-    input = read_assembly(write_assembly(tmp_path / "ERZ1", ["mkv"]))
-    accession(connect_accession, "ERZ1", SOURCE, "6.0", input, "MGYA1")
-    assert query("SELECT sequence FROM proteindb.staged_protein") == [("MKV",)]
 
 
 def test_assembly_with_only_known_proteins_adds_none(connect_accession, erz101):

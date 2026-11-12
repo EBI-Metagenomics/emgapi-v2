@@ -5,7 +5,7 @@ from typing import Iterable
 from django.db import models
 
 from proteins.accession.accession import mgyp
-from proteins.accession.contract import protein_hash
+from proteins.accession.hashing import protein_hash
 from proteins.accession.inputs import V6_GENE_CALLERS, GeneCallers
 
 

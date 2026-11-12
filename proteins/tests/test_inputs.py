@@ -4,8 +4,8 @@ from pathlib import Path
 
 import pytest
 
-from proteins.accession.contract import protein_hash
 from proteins.accession.fasta import read_fasta
+from proteins.accession.hashing import protein_hash
 from proteins.accession.inputs import InvalidInput, major_minor, read_input
 from proteins.tests.conftest import PUBLISHED_V6, read_published
 
@@ -67,7 +67,7 @@ def files(tmp_path):
     def make(
         genes,
         gff=None,
-        contigs=">c1\nACGTACGTA\n>c2\nacgt\n",
+        contigs=">c1\nACGTACGTA\n>c2\nACGT\n",
         contig_map=None,
         description="# 1 # 9 # -1 # ID=1;partial=00",
     ):
@@ -88,14 +88,14 @@ def problems(*paths):
     return excinfo.value.problems
 
 
-def test_lower_case_sequences_are_upper_cased(files):
-    (occurrence,) = read_input(*files({"g1": "mkv"})).occurrences
-    assert occurrence.sequence == "MKV"
-    assert occurrence.hash == protein_hash("MKV")
+def test_lower_case_sequences_are_invalid(files):
+    assert problems(*files({"g1": "mkv"})) == [
+        "g1: invalid character 'm' at position 1"
+    ]
 
 
 def test_proteins_are_distinct_and_sorted_by_hash(files):
-    result = read_input(*files({"g1": "MKV", "g2": "mkv", "g3": "MAG", "g4": "MKV"}))
+    result = read_input(*files({"g1": "MKV", "g2": "MKV", "g3": "MAG", "g4": "MKV"}))
     assert result.proteins == sorted(
         [(protein_hash("MKV"), "MKV"), (protein_hash("MAG"), "MAG")]
     )
@@ -156,9 +156,18 @@ def test_only_contigs_carrying_a_gene_are_kept(files):
     assert contig.length == 9
 
 
-def test_contig_hash_is_of_the_upper_cased_sequence(files):
+def test_contig_hash_is_of_the_sequence(files):
     (contig,) = read_input(*files({"g1": "MKV"}, gff=gff_row("g1", "c2"))).contigs
     assert contig.hash == hashlib.sha256(b"ACGT").digest()
+
+
+def test_names_every_invalid_contig(files):
+    contigs = ">c1\nACGTACGTA*\n>c2\nacgt\n"
+    gff = gff_row("g1") + gff_row("g2", "c2")
+    assert problems(*files({"g1": "MKV", "g2": "MAG"}, gff=gff, contigs=contigs)) == [
+        "contig c1: invalid character '*' at position 10",
+        "contig c2: invalid character 'a' at position 1",
+    ]
 
 
 @pytest.mark.parametrize(

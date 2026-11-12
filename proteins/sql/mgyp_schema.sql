@@ -14,7 +14,7 @@ CREATE TABLE protein (
     PRIMARY KEY (hash) INCLUDE (id)
 ) PARTITION BY RANGE (hash);
 COMMENT ON COLUMN protein.hash IS
-    'sha256 of the upper-cased sequence; only A-Z allowed, anything else is rejected (hash contract v1)';
+    'sha256 of the sequence; only A-Z allowed, anything else is rejected (hash contract v1)';
 
 -- 64 partitions on the hash's top 6 bits, the same split as the protein dataset: protein_00 .. protein_3f.
 -- Partition p holds the hashes whose first byte is in [4p, 4p + 4).
@@ -74,7 +74,7 @@ CREATE TABLE staged_contig (
     name                text    NOT NULL,                 -- the pipeline's name, e.g. ERZ101_17
     original_name        text,                             -- the submitted name; NULL when unknown
     length               integer NOT NULL,
-    hash                 bytea   NOT NULL,                 -- sha256 of the upper-cased contig sequence
+    hash                 bytea   NOT NULL,                 -- sha256 of the contig sequence; only A-Z allowed (hash contract v1)
     kmer_coverage        double precision,
     staged_at            timestamptz NOT NULL DEFAULT now(),
     UNIQUE (assembly_proteins_id, name)
