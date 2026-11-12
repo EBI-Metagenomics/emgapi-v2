@@ -5,6 +5,9 @@ fileignoreconfig:
 - filename: .github/workflows/release_k8s.yml
   checksum: 0e93196d244417801fd40ad6bfa01f53a6bf04257371378a1dc3e14cbc7a04d8
 
+- filename: .github/workflows/test.yml
+  allowed_patterns: ["POSTGRES_PASSWORD: postgres"]
+
 - filename: README.md
   checksum: d8137e9ccf9810642995fd8874cda51b33a1bd41c90f968919e91b6483014d3c
 
@@ -50,6 +53,9 @@ fileignoreconfig:
 - filename: conftest.py
   allowed_patterns: [password="password123"]
 
+- filename: deployment/README.md
+  checksum: 6564bee473795ac762382ac9371bfe3396fc9c7c544d4e764e6f36d6c3aacf41
+
 - filename: deployment/ebi-wp-k8s-hl/ebi-wp-k8s-hl.yaml
   checksum: 5b5fee63f59bcf5779cea584d87a043b21b22f6d10a67a0a1957f186fbfc490b
 
@@ -66,10 +72,10 @@ fileignoreconfig:
   checksum: 5d028587b866b9dd2ac7aa0c4279441cc0d495e4df9338729db30ac583e49299
 
 - filename: emgapiv2/api/branchwater.py
-  checksum: 2331bfb7c0ce1e477f67518b5d1ec2adbfbbea84b7fbda2a13a349bd6ed45627
+  checksum: c481a7bdcc61d84c34245dc82191347db863b19ae4626b27bad33e34a10d90b3
 
 - filename: emgapiv2/api/tests/test_branchwater_jobs.py
-  checksum: a8111088f8558bfb0417ea6a5a0d79db650c605e8e5e791122ff95e3febb2168
+  checksum: 3a4e942c8a3209d69408482437128e9fb66c2c707075f27dc0e5fd0cdc3622b3
 
 - filename: emgapiv2/api/storage.py
   checksum: be76261cc58f5ccea9a0b0d9179894ff3260cb5672aa69a4cfc66732200fed0d
@@ -87,13 +93,13 @@ fileignoreconfig:
   allowed_patterns: [key]
 
 - filename: emgapiv2/config.py
-  checksum: 08e2680598ee0719f717dc73019948001ebfcbaf700a3ee2dfb0e442acaebd26
+  checksum: 35bd761d4a4484ec836807f972edaa3dc8b41d86302644ba22900f107f7b3a61
 
 - filename: emgapiv2/settings.py
-  checksum: c2733b3d7d83ed030eda5cd6b431e1e2b96812c07c56e8b62a714539a09aa65b
+  checksum: 11f68dc2264602c1c56b1b25ecfbe6a1ef7489ec40d53c47859089dd9d9bb834
 
 - filename: emgapiv2/settings_test.py
-  checksum: ded898400b4eda7e3cf75694af1b66235975a85eb5b8f49f3a2c708163a7aad4
+  checksum: 4af9f4bfad8819f761227fc67233df93b82eda6013ed3958db3d5bdc4bcedde2
 
 - filename: emgapiv2/test_utils.py
   checksum: ab3eefe0d1b722d23b8dd55ba55a364e5f6593403f0d96898d0745c900f7926f
@@ -118,6 +124,12 @@ fileignoreconfig:
 
 - filename: kvstore/tests.py
   allowed_patterns: [key, test_key, update_key]
+
+- filename: proteins/sql/mgyp_schema.sql
+  ignore_detectors: [filename]
+
+- filename: proteins/sql/mgyp_roles.sql
+  ignore_detectors: [filename]
 
 - filename: pyproject.toml
   allowed_patterns: [Config key]
