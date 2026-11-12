@@ -127,6 +127,9 @@ class DatasetError(Exception):
 def prefix(hash: bytes) -> str:
     """The partition of a hash: its top 6 bits as two hex digits, as in the MGYP database.
 
+    PostgreSQL routes rows by the bounds in mgyp_schema.sql, which this must match. The dataset update files
+    each day's new proteins under their prefix, so that each partition can be built from its own files.
+
     :param hash: A protein's 32-byte hash.
     """
     return f"{hash[0] >> 2:02x}"
