@@ -1,8 +1,10 @@
 import shutil
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
+from django.conf import settings
 
 from analyses.models import Analysis
 from proteins.accession.inputs import InvalidInput
@@ -24,8 +26,9 @@ pytestmark = [
 
 
 @pytest.fixture
-def results(tmp_path):
-    """Lays out ERZ101's predicted genes as an assembly analysis's results of an ERZ."""
+def results(tmp_path, monkeypatch):
+    """Lays out ERZ101's predicted genes as an assembly analysis's results of an ERZ, under the FTP results root."""
+    monkeypatch.setattr(settings.EMG_CONFIG.slurm, "ftp_results_dir", str(tmp_path))
 
     def make(erz):
         directory = tmp_path / erz
@@ -37,7 +40,7 @@ def results(tmp_path):
             ("fasta.gz", f"qc/{erz}_filtered_contigs.fasta.gz"),
         ):
             shutil.copy(FIXTURES / f"ERZ101.{fixture}", directory / path)
-        return directory
+        return directory.relative_to(tmp_path)
 
     return make
 
@@ -52,11 +55,11 @@ def records():
 
 def test_lists_only_pending_analyses_of_versions_with_rules(results):
     a, b = make_study("PRJ1"), make_study("PRJ2")
-    pending = make_analysis(a, "ERZ1", results_dir=results("ERZ1"))
+    pending = make_analysis(a, "ERZ1", external_results_dir=results("ERZ1"))
     make_analysis(a, "ERZ2", state=Analysis.AnalysisStates.ANALYSIS_COMPLETED)
     make_analysis(a, "ERZ3", version="V5")
     make_analysis(a, "ERZ4", version="V4.1")
-    recorded = make_analysis(a, "ERZ5", results_dir=results("ERZ5"))
+    recorded = make_analysis(a, "ERZ5", external_results_dir=results("ERZ5"))
     analyses.ingest_analysis(recorded.accession)
     # The lowest id is taken, though its study comes later.
     first = make_analysis(b, "ERZ6", version="V6.1")
@@ -101,9 +104,11 @@ def test_listing_flow_starts_one_chunk_flow_for_each_chunk(monkeypatch):
 @pytest.mark.usefixtures("prefect_harness")
 def test_chunk_ingests_the_others_then_fails_naming_the_failed_analysis(results):
     study = make_study("PRJ1")
-    good = make_analysis(study, "ERZ1", results_dir=results("ERZ1"))
-    missing = make_analysis(study, "ERZ2", results_dir=results("ERZ2").parent / "x")
-    other = make_analysis(study, "ERZ3", results_dir=results("ERZ3"))
+    good = make_analysis(study, "ERZ1", external_results_dir=results("ERZ1"))
+    missing = make_analysis(
+        study, "ERZ2", external_results_dir=results("ERZ2").parent / "x"
+    )
+    other = make_analysis(study, "ERZ3", external_results_dir=results("ERZ3"))
 
     with pytest.raises(
         flows.IngestionFailed, match=f"1 of 3 analyses: {missing.accession}$"
@@ -122,7 +127,7 @@ def test_chunk_ingests_the_others_then_fails_naming_the_failed_analysis(results)
 def test_a_listing_after_a_chunk_commits_takes_none_of_its_analyses(results):
     study = make_study("PRJ1")
     chunk = [
-        make_analysis(study, f"ERZ{n}", results_dir=results(f"ERZ{n}"))
+        make_analysis(study, f"ERZ{n}", external_results_dir=results(f"ERZ{n}"))
         for n in range(2)
     ]
     results_ = flows.ingest_assembly_proteins_chunk([a.accession for a in chunk])
@@ -133,9 +138,11 @@ def test_a_listing_after_a_chunk_commits_takes_none_of_its_analyses(results):
 @pytest.mark.usefixtures("prefect_harness")
 def test_by_hand_one_mgya_or_every_analysis_of_one_erz(results):
     study = make_study("PRJ1")
-    v6 = make_analysis(study, "ERZ1", results_dir=results("ERZ1"))
-    v6_1 = make_analysis(study, "ERZ1", version="V6.1", results_dir=v6.results_dir)
-    other = make_analysis(study, "ERZ2", results_dir=results("ERZ2"))
+    v6 = make_analysis(study, "ERZ1", external_results_dir=results("ERZ1"))
+    v6_1 = make_analysis(
+        study, "ERZ1", version="V6.1", external_results_dir=v6.external_results_dir
+    )
+    other = make_analysis(study, "ERZ2", external_results_dir=results("ERZ2"))
 
     flows.ingest_analysis_proteins(other.accession)
     assert records() == [("ERZ2", "6.0", other.accession)]
@@ -148,7 +155,9 @@ def test_by_hand_one_mgya_or_every_analysis_of_one_erz(results):
 
 
 def test_genes_are_staged_with_the_gene_callers_of_the_version(results):
-    analysis = make_analysis(make_study("PRJ1"), "ERZ1", results_dir=results("ERZ1"))
+    analysis = make_analysis(
+        make_study("PRJ1"), "ERZ1", external_results_dir=results("ERZ1")
+    )
     analyses.ingest_analysis(analysis.accession)
     assert set(
         StagedOccurrence.objects.values_list("gene_caller__name", flat=True)
@@ -157,7 +166,7 @@ def test_genes_are_staged_with_the_gene_callers_of_the_version(results):
 
 def test_genes_of_a_caller_the_version_does_not_have_fail(results, monkeypatch):
     analysis = make_analysis(
-        make_study("PRJ1"), "ERZ1", version="V6.1", results_dir=results("ERZ1")
+        make_study("PRJ1"), "ERZ1", version="V6.1", external_results_dir=results("ERZ1")
     )
     monkeypatch.setitem(
         GeneCaller.BY_PIPELINE_VERSION,
@@ -171,16 +180,33 @@ def test_genes_of_a_caller_the_version_does_not_have_fail(results, monkeypatch):
 
 def test_an_analysis_of_a_version_without_rules_fails(results):
     analysis = make_analysis(
-        make_study("PRJ1"), "ERZ1", version="V5", results_dir=results("ERZ1")
+        make_study("PRJ1"), "ERZ1", version="V5", external_results_dir=results("ERZ1")
     )
     with pytest.raises((NotImplementedError, UnsupportedPipelineVersion)):
         analyses.ingest_analysis(analysis.accession)
     assert records() == []
 
 
-def test_an_analysis_without_its_files_fails(tmp_path):
-    analysis = make_analysis(make_study("PRJ1"), "ERZ1", results_dir=tmp_path)
+def test_an_analysis_without_its_files_fails(results):
+    analysis = make_analysis(make_study("PRJ1"), "ERZ1", external_results_dir="ERZ1")
     with pytest.raises(FileNotFoundError):
         analyses.ingest_analysis(analysis.accession)
     assert records() == []
     assert query("SELECT count(*) FROM staged_protein") == [(0,)]
+
+
+def test_an_analysis_not_yet_copied_out_fails(results):
+    analysis = make_analysis(make_study("PRJ1"), "ERZ1")
+    with pytest.raises(ValueError, match="no external results dir"):
+        analyses.ingest_analysis(analysis.accession)
+    assert records() == []
+
+
+def test_a_private_analysis_is_read_from_the_private_results_root(results, monkeypatch):
+    analysis = make_analysis(make_study("PRJ1"), "ERZ1", external_results_dir="ERZ1")
+    analysis.is_private = True
+    analysis.save()
+    monkeypatch.setattr(settings.EMG_CONFIG.slurm, "private_results_dir", "/private")
+    assert analysis.predicted_genes_files().proteins == Path(
+        "/private/ERZ1/cds/ERZ1_predicted_cds.faa.gz"
+    )

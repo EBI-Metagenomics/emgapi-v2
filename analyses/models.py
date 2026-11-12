@@ -1127,17 +1127,27 @@ class Analysis(
     def predicted_genes_files(self) -> PredictedGenesFiles:
         """The protein FASTA, the GFF and the contigs of this assembly analysis.
 
+        Read from the external results dir: results_dir is a slurm workdir, which is cleaned periodically.
+
         :return: The paths of the files.
         :raises NotImplementedError: When the pipeline version has no rule yet.
+        :raises ValueError: When the results haven't been copied to the external results dir.
         """
         if self.pipeline_version in {
             self.PipelineVersions.v6,
             self.PipelineVersions.v6_1,
             self.PipelineVersions.v6_2,
         }:
+            if not self.external_results_dir:
+                raise ValueError(f"{self} has no external results dir")
             config = settings.EMG_CONFIG.assembly_analysis_pipeline
             erz = self.assembly.first_accession
-            results = Path(self.results_dir)
+            root = (
+                settings.EMG_CONFIG.slurm.private_results_dir
+                if self.is_private
+                else settings.EMG_CONFIG.slurm.ftp_results_dir
+            )
+            results = Path(root) / self.external_results_dir
             return PredictedGenesFiles(
                 proteins=results / config.cds_folder / f"{erz}_predicted_cds.faa.gz",
                 genes=results / config.cds_folder / f"{erz}_predicted_cds.gff.gz",

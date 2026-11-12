@@ -503,6 +503,8 @@ deployments:
   work_pool:
     name: slurm
     job_variables:
+      # It reads the results on /nfs, which only the datamover nodes mount.
+      partition: datamover
       cpu: 4
       memory: 16
       time_limit: 24
@@ -516,6 +518,8 @@ deployments:
   work_pool:
     name: slurm
     job_variables:
+      # It reads the results on /nfs, which only the datamover nodes mount.
+      partition: datamover
       cpu: 4
       memory: 16
       time_limit: 4

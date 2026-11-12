@@ -172,7 +172,7 @@ def make_study(accession):
     return Study.objects.create(ena_study=ena_study, title=accession)
 
 
-def make_analysis(study, erz, version="V6", results_dir=None, state=IMPORTED):
+def make_analysis(study, erz, version="V6", external_results_dir=None, state=IMPORTED):
     assembly = Assembly.objects.filter(ena_accessions__contains=[erz]).first()
     if assembly is None:
         ena_sample = ena_models.Sample.objects.create(
@@ -192,7 +192,7 @@ def make_analysis(study, erz, version="V6", results_dir=None, state=IMPORTED):
         assembly=assembly,
         experiment_type=Analysis.ExperimentTypes.ASSEMBLY,
         pipeline_version=version,
-        results_dir=results_dir and str(results_dir),
+        external_results_dir=external_results_dir and str(external_results_dir),
     )
     analysis.mark_status(state)
     return analysis
