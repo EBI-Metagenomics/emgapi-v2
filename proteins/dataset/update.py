@@ -104,6 +104,13 @@ class DatasetUpdateError(Exception):
 
 
 class Staged(NamedTuple):
+    """The staged rows that this update moves into the protein dataset, as read from the MGYP database.
+
+    Accessioning writes an analysis's new proteins, contigs and occurrences to the staged tables in the
+    transaction that allocates their MGYPs. They stay there, accessioned but not yet in the protein dataset,
+    until the dataset update writes them into the day's files and deletes them.
+    """
+
     assembly_proteins_ids: list[int]
     files: dict[str, Path]  # each staged table's rows, in the scratch directory
     assembly_proteins: pa.Table  # the registries, read in the same snapshot as the rows
