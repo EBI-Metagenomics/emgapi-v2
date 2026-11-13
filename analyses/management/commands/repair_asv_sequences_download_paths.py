@@ -8,6 +8,8 @@ from analyses.models import Analysis
 ASV_SEQUENCES_DOWNLOAD_GROUP = "asv.sequences"
 DOWNLOAD_GROUP = "download_group"
 PATH = "path"
+# asv.sequences only exists from v6; never touch older analyses' downloads.
+V6_OR_LATER = [v for v in Analysis.PipelineVersions if float(v.value.lstrip("V")) >= 6]
 
 
 class Command(BaseCommand):
@@ -27,7 +29,8 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         asv_folder = Path(settings.EMG_CONFIG.amplicon_pipeline.asv_folder)
         analyses = Analysis.objects.filter(
-            downloads__contains=[{DOWNLOAD_GROUP: ASV_SEQUENCES_DOWNLOAD_GROUP}]
+            pipeline_version__in=V6_OR_LATER,
+            downloads__contains=[{DOWNLOAD_GROUP: ASV_SEQUENCES_DOWNLOAD_GROUP}],
         )
         repaired = 0
         for analysis in analyses:

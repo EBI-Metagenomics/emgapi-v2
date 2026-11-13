@@ -8,19 +8,23 @@ from analyses.base_models.with_downloads_models import (
 )
 from analyses.models import Analysis
 
-WORKDIR_PATH = (
-    "/nfs/production/rdf/metagenomics/projects/automation/slurm_workdir/"
-    "PRJEB1/amplicon_v6.2/abc123/ERR1/asv/ERR1_asv_seqs.fasta"
-)
+WORKDIR_PATH = "/fake/workdir/PRJEB1/abc123/ERR1/asv/ERR1_asv_seqs.fasta"
 
 
-def _analysis(study, sample, accession: str, asv_seqs_path: str) -> Analysis:
+def _analysis(
+    study,
+    sample,
+    accession: str,
+    asv_seqs_path: str,
+    pipeline_version: str = Analysis.PipelineVersions.v6_2,
+) -> Analysis:
     analysis = Analysis.objects.create(
         accession=accession,
         study=study,
         sample=sample,
         ena_study=study.ena_study,
         experiment_type=Analysis.ExperimentTypes.AMPLICON,
+        pipeline_version=pipeline_version,
     )
     for path, alias, group in (
         (
@@ -64,6 +68,15 @@ def test_absolute_asv_sequences_paths_are_made_relative_to_the_results_dir(
     fine = _analysis(
         raw_reads_mgnify_study, sample, "MGYA00000902", "asv/ERR1_asv_seqs.fasta"
     )
+    pre_v6 = _analysis(
+        raw_reads_mgnify_study,
+        sample,
+        "MGYA00000904",
+        "asv/ERR1_asv_seqs.fasta",
+        pipeline_version=Analysis.PipelineVersions.v5,
+    )
+    pre_v6.downloads[1]["path"] = WORKDIR_PATH
+    pre_v6.save()
 
     call_command("repair_asv_sequences_download_paths", "--dry-run")
     assert _paths(broken)["asv.sequences"] == WORKDIR_PATH
@@ -74,6 +87,7 @@ def test_absolute_asv_sequences_paths_are_made_relative_to_the_results_dir(
         "asv.sequences": "asv/ERR1_asv_seqs.fasta",
     }
     assert _paths(fine)["asv.sequences"] == "asv/ERR1_asv_seqs.fasta"
+    assert _paths(pre_v6)["asv.sequences"] == WORKDIR_PATH
 
 
 @pytest.mark.django_db
