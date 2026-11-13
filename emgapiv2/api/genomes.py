@@ -57,6 +57,9 @@ def order_catalogue_genomes(qs, order):
     if order.order in {"accession", "-accession"}:
         prefix = "-" if order.order.startswith("-") else ""
         return qs.order_by(f"{prefix}genome__accession")
+    if not order.order:
+        # stable default so pagination is deterministic
+        return qs.order_by("genome__accession")
     return order.order_by(qs)
 
 
