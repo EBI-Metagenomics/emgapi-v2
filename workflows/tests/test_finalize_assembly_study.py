@@ -150,6 +150,13 @@ def test_finalize_assembly_study_invalid_flow_ids(
 
     # Tasks should be called because none are "running" (None/invalid are skipped)
     mock_merge.assert_called_once()
+    # Pinned deliberately: the gate's `except Exception` reads *any* failed
+    # flow-run lookup as "not running", so a study finalizes on the strength of
+    # a lookup that threw. The hardening recommendation replaces the gate with a
+    # query over work ("is any member's analysis still non-terminal?"), at which
+    # point a raising lookup stops being able to authorise finalization.
+    mock_add.assert_called_once()
+    mock_copy.assert_called_once()
 
 
 @pytest.mark.django_db
