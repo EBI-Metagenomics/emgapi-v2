@@ -1179,6 +1179,16 @@ def test_prefect_analyse_amplicon_flow(
     assert len(ssu) == 3
     assert ssu[0]["organism"] == "sk__Bacteria;k__;p__Bacillota;c__Bacilli"
 
+    # Download paths are relative to the analysis' results dir: an absolute one becomes
+    # a URL into the pipeline's workdir, which is not served.
+    downloads = analysis_which_should_have_taxonomies_imported.downloads_as_objects
+    assert downloads
+    assert not [dl.path for dl in downloads if Path(dl.path).is_absolute()]
+    asv_sequences = [dl for dl in downloads if dl.download_group == "asv.sequences"]
+    assert [str(dl.path) for dl in asv_sequences] == [
+        f"asv/{amplicon_run_all_results}_asv_seqs.fasta"
+    ]
+
     assert (
         analysis_which_should_have_taxonomies_imported.KnownMetadataKeys.MARKER_GENE_SUMMARY
         in analysis_which_should_have_taxonomies_imported.metadata

@@ -235,6 +235,12 @@ class WithDownloadsModel(models.Model):
     downloads = models.JSONField(blank=True, default=list)
 
     def add_download(self, download: DownloadFile):
+        if Path(download.path).is_absolute():
+            # A download's URL is its path joined to the results dir: an absolute path
+            # would replace the results dir, pointing at a file that is not served.
+            raise ValueError(
+                f"Download path {download.path} must be relative to the results dir of {self}"
+            )
         if download.alias in [dl.get("alias") for dl in self.downloads]:
             raise FileExistsError(
                 f"Duplicate download alias found in {self}.downloads list - not adding {download.path}"

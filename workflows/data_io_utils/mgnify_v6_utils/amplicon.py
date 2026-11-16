@@ -510,7 +510,7 @@ def import_asv(analysis: analyses.models.Analysis, dir_for_analysis: Path):
     asv_dir.files.append(asv_seqs)
     analysis.add_download(
         DownloadFile(
-            path=asv_seqs.path,
+            path=asv_seqs.path.relative_to(analysis.results_dir),
             file_type=DownloadFileType.FASTA,
             alias=asv_seqs.path.name,
             download_type=DownloadType.SEQUENCE_DATA,
