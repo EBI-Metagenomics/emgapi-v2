@@ -392,7 +392,6 @@ def finish_update(
     """
     with transaction.atomic(using=MGYP):
         owner.confirm()
-        # Raw SQL: QuerySet.delete() would load the rows first.
         with connections[MGYP].cursor() as cursor:
             for table in ("occurrence", "contig", "protein"):
                 cursor.execute(

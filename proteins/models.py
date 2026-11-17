@@ -168,8 +168,6 @@ class GeneCaller(MGnifyProteinsBase):
 # The dataset update copies them to the Parquet files, then deletes them in the same
 # transaction that marks the day done. So these tables are empty after each dataset update.
 # Use the models to count and inspect rows (the status check, the admin), not to write them.
-# Do not use QuerySet.delete() on them: Django loads related rows first, which is slow for
-# millions of rows. The dataset update deletes them with one SQL DELETE for each table.
 
 
 class StagedProtein(MGnifyProteinsBase):
