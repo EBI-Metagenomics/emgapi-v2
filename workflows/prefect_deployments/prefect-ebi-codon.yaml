@@ -564,7 +564,8 @@ deployments:
   description: |-
     Log the state of the MGYP database and of the protein dataset, and fail if any of its checks fails: an overdue dataset update,
     rows staged too long, an incomplete day before the last update, protein ids near their limit, annotated analyses of a pipeline
-    version with no gene-caller rule, records whose MGYA is not in emgapi-v2, or an owner of the protein dataset whose job is not running.
+    version with no gene-caller rule, records whose MGYA is in neither emgapi-v2 nor MGnify v1, a copy of MGnify v1 that no record
+    uses any more, or an owner of the protein dataset whose job is not running.
   entrypoint: workflows/flows/proteins/check_proteins_status.py:check_proteins_status
   parameters: {}
   work_pool:
