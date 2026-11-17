@@ -484,14 +484,14 @@ deployments:
   triggers:
     # Starts the protein ingestion when the results sync of an assembly analysis batch completes.
     # The flow finds the pending analyses itself, so it needs no parameters from the event.
-    # TODO: check the event and related resource fields against the Prefect server.
+    # Matched on the flow, not its deployment: run_assembly_batch runs it as a subflow, which has no deployment.
     # Enabled at cutover, with the schedules below.
     - type: event
       enabled: false
       expect: ["prefect.flow-run.Completed"]
       match_related:
-        prefect.resource.role: deployment
-        prefect.resource.name: sync_assembly_batch_results_deployment
+        prefect.resource.role: flow
+        prefect.resource.name: copy-assembly-batch-results
 
 - name: ingest_assembly_proteins_chunk_deployment
   description: |-
