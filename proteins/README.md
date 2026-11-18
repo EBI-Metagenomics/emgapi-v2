@@ -103,10 +103,11 @@ The dataset update and the merge share one Prefect global concurrency limit, `pr
 
 For example, SLURM loses contact with the node of an update, whose process still runs. SLURM marks its job `NODE_FAIL`, and its lease expires. Someone runs the update again the same day: it deletes the first run's files of the day, writes the day, and commits, deleting the staged rows. Then the node is back, and the first process overwrites the day's files with the rows it read earlier, so the rows staged in between are in no file. With the owner record, the second run fails at start, naming the first run's job, and the first process exits before its next write.
 
-The `slurm` work pool's worker, prefect-slurm, already counts a crashed run whose SLURM job still runs against its deployment's `concurrency_limit: 1`, so a second update is not even submitted. That does not replace the owner record:
+The `slurm` work pool's worker, prefect-slurm, already counts a run that Prefect shows as pending, running or cancelling, and whose SLURM job has not ended, against its deployment's `concurrency_limit: 1`, so a second update is not even submitted. That does not replace the owner record:
 
 - it does not keep the update and the merge apart;
 - it takes `NODE_FAIL` as ended, so it submits the second run of the example;
+- it stops counting a run once it has marked it Crashed, which it does as soon as SLURM shows the run's job in any state but running, `NODE_FAIL` and `COMPLETING` included;
 - it does not stop a process that lost its slot from writing again.
 
 An update or merge that fails at start with "The protein dataset is owned by job N" found an owner whose job has not visibly ended. The check reports the owner whose job is not running too. Run `sacct -j N`. If the job still runs and should not, `scancel N` and wait until `sacct` shows it ended: the next run then takes over by itself. If its node failed, make sure with the cluster team that none of its processes still run. Only then, with the schedules paused, clear the row as `proteindb_owner`: `UPDATE proteindb.dataset_owner SET flow = NULL, slurm_job_id = NULL, slurm_submit_at = NULL, execution_id = NULL, flow_run_id = NULL, acquired_at = NULL WHERE execution_id = '<the recorded one>'`. If the Prefect slot is still taken too, reset its active slots to 0 with `prefect gcl update protein-dataset --active-slots 0`. Resume the schedules. Never clear the row while the old job might still run.
