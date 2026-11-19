@@ -144,15 +144,104 @@ def test_api_analyses_list(raw_read_analyses, ninja_api_client):
 
 
 @pytest.mark.django_db
-def test_api_study_analyses_list(raw_read_analyses, ninja_api_client):
+@pytest.mark.parametrize("query", ["", "?order="])
+def test_api_study_analyses_list(raw_read_analyses, ninja_api_client, query):
     finished_analyses = list(filter(lambda a: a.is_ready, raw_read_analyses))
     items = call_endpoint_and_get_data(
         ninja_api_client,
-        f"/studies/{raw_read_analyses[0].study.accession}/analyses/",
+        f"/studies/{raw_read_analyses[0].study.accession}/analyses/{query}",
         count=len(finished_analyses),
     )
     assert items[0]["accession"] in [a.accession for a in finished_analyses]
     assert items[0]["experiment_type"] in ["Metagenomic", "Amplicon"]
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    ("order", "expected_indices"),
+    [
+        ("accession", [0, 1, 2]),
+        ("-accession", [2, 1, 0]),
+        ("sample_accession", [2, 1, 0]),
+        ("-sample_accession", [0, 1, 2]),
+    ],
+)
+def test_api_study_analyses_ordering(
+    raw_read_analyses, ninja_api_client, order, expected_indices
+):
+    # Prefer the first BioSample accession, or the first accession if none match.
+    sample_accessions = [
+        ["ERS000001", "SAMN30000001", "SAMN00000001"],
+        ["SRS000003", "SAMN10000001"],
+        ["ERS000002", "alias-SAMN00000001"],
+    ]
+    for analysis, accessions in zip(raw_read_analyses, sample_accessions):
+        analysis.sample.ena_accessions = accessions
+        analysis.sample.save()
+        analysis.mark_status(Analysis.AnalysisStates.ANALYSIS_ANNOTATIONS_IMPORTED)
+
+    items = call_endpoint_and_get_data(
+        ninja_api_client,
+        f"/studies/{raw_read_analyses[0].study.accession}/analyses/?order={order}",
+        count=len(raw_read_analyses),
+    )
+    assert [item["accession"] for item in items] == [
+        raw_read_analyses[index].accession for index in expected_indices
+    ]
+    displayed_sample_accessions = ["SAMN30000001", "SAMN10000001", "ERS000002"]
+    assert [item["sample"]["accession"] for item in items] == [
+        displayed_sample_accessions[index] for index in expected_indices
+    ]
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    ("order", "expected_indices"),
+    [("sample_accession", [1, 2, 0]), ("-sample_accession", [0, 2, 1])],
+)
+def test_api_study_analyses_sample_ordering_pagination(
+    raw_read_analyses, ninja_api_client, order, expected_indices
+):
+    first_sample = raw_read_analyses[0].sample
+    second_sample = raw_read_analyses[1].sample
+    for analysis, sample in zip(
+        raw_read_analyses, [second_sample, first_sample, first_sample]
+    ):
+        analysis.sample = sample
+        analysis.mark_status(Analysis.AnalysisStates.ANALYSIS_ANNOTATIONS_IMPORTED)
+
+    accessions = []
+    for page in range(1, len(raw_read_analyses) + 1):
+        items = call_endpoint_and_get_data(
+            ninja_api_client,
+            f"/studies/{raw_read_analyses[0].study.accession}/analyses/"
+            f"?order={order}&page={page}&page_size=1",
+            count=len(raw_read_analyses),
+        )
+        assert len(items) == 1
+        accessions.append(items[0]["accession"])
+    assert accessions == [
+        raw_read_analyses[index].accession for index in expected_indices
+    ]
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    "order",
+    [
+        "sample_title",
+        "pipeline_version",
+        "run_or_assembly_accession",
+        "sample__ena_sample_id",
+    ],
+)
+def test_api_study_analyses_reject_unsupported_ordering(
+    raw_reads_mgnify_study, ninja_api_client, order
+):
+    response = ninja_api_client.get(
+        f"/studies/{raw_reads_mgnify_study.accession}/analyses/?order={order}"
+    )
+    assert response.status_code == 422
 
 
 @pytest.mark.django_db
