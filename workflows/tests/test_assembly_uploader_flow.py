@@ -1,11 +1,16 @@
 import pytest
 import responses
+from assembly_uploader.release_study import StudyReleaseError
 from django.urls import reverse
 from responses import matchers
 
 import analyses.models as mg_models
 import ena.models
-from workflows.flows.upload_assembly import handle_tpa_study, upload_assembly
+from workflows.flows.upload_assembly import (
+    handle_tpa_study,
+    release_tpa_study_if_complete,
+    upload_assembly,
+)
 from workflows.prefect_utils.testing_utils import run_flow_and_capture_logs
 
 
@@ -126,6 +131,10 @@ def test_prefect_assembly_upload_flow_assembly_metaspades(
     )
 
     assembly.refresh_from_db()
+    assert assembly.assembly_study.first_accession == registered_study
+    # new TPA study is private until released
+    assert assembly.assembly_study.ena_study.is_private
+    assert assembly.assembly_study.is_private
     assert round(assembly.metadata[assembly.CommonMetadataKeys.COVERAGE], 4) == 0.0476
     assert (
         round(assembly.metadata[assembly.CommonMetadataKeys.COVERAGE_DEPTH], 3)
@@ -242,3 +251,115 @@ def test_prefect_assembly_upload_flow_blocked_for_unsupported_experiment_type(
         mg_models.Assembly.AssemblyStates.ASSEMBLY_UPLOAD_BLOCKED
     )
     assert not assembly.status.get(mg_models.Assembly.AssemblyStates.ASSEMBLY_UPLOADED)
+
+
+DROPBOX_DEV = "https://wwwdev.ebi.ac.uk/ena/submit/drop-box/submit"
+
+
+def _make_tpa_study(accession="PRJEB999001", is_private=True):
+    ena_study = ena.models.Study.objects.create(
+        title="TPA study", accession=accession, is_private=is_private
+    )
+    return mg_models.Study.objects.create(
+        ena_study=ena_study, title="TPA study", is_private=is_private
+    )
+
+
+def _mark_completed(assemblies, uploaded=True, assembly_study=None):
+    for assembly in assemblies:
+        assembly.mark_status(mg_models.Assembly.AssemblyStates.ASSEMBLY_COMPLETED)
+        if uploaded:
+            assembly.mark_status(mg_models.Assembly.AssemblyStates.ASSEMBLY_UPLOADED)
+        if assembly_study:
+            assembly.assembly_study = assembly_study
+            assembly.save()
+
+
+@pytest.mark.django_db(transaction=True)
+def test_release_tpa_study_when_all_assemblies_uploaded(
+    raw_reads_mgnify_study, mgnify_assemblies, prefect_harness
+):
+    tpa_study = _make_tpa_study()
+    _mark_completed(mgnify_assemblies, assembly_study=tpa_study)
+    dropbox = responses.add(responses.POST, DROPBOX_DEV, body='success="true"')
+
+    released = release_tpa_study_if_complete(raw_reads_mgnify_study, dry_run=True)
+
+    assert released == tpa_study
+    assert dropbox.call_count == 1
+    assert b'<RELEASE target="PRJEB999001"/>' in dropbox.calls[0].request.body
+    tpa_study.refresh_from_db()
+    assert not tpa_study.is_private
+    assert not tpa_study.ena_study.is_private
+
+    # already released: calling again does not resubmit
+    assert release_tpa_study_if_complete(raw_reads_mgnify_study, dry_run=True) is None
+    assert dropbox.call_count == 1
+
+
+@pytest.mark.django_db(transaction=True)
+def test_release_tpa_study_not_released_while_upload_pending(
+    raw_reads_mgnify_study, mgnify_assemblies, prefect_harness
+):
+    tpa_study = _make_tpa_study()
+    _mark_completed(mgnify_assemblies, assembly_study=tpa_study)
+    pending = mgnify_assemblies[0]
+    pending.mark_status(
+        mg_models.Assembly.AssemblyStates.ASSEMBLY_UPLOADED, set_status_as=False
+    )
+    pending.mark_status(mg_models.Assembly.AssemblyStates.ASSEMBLY_UPLOAD_FAILED)
+    dropbox = responses.add(responses.POST, DROPBOX_DEV, body='success="true"')
+
+    assert release_tpa_study_if_complete(raw_reads_mgnify_study, dry_run=True) is None
+    assert dropbox.call_count == 0
+    tpa_study.refresh_from_db()
+    assert tpa_study.is_private
+
+    # a QC-failed assembly is not expected to be uploaded, so it does not block release
+    pending.mark_status(mg_models.Assembly.AssemblyStates.POST_ASSEMBLY_QC_FAILED)
+    assert (
+        release_tpa_study_if_complete(raw_reads_mgnify_study, dry_run=True) == tpa_study
+    )
+    assert dropbox.call_count == 1
+
+
+@pytest.mark.django_db(transaction=True)
+def test_release_tpa_study_never_releases_brokered_reads_study(
+    raw_reads_mgnify_study, mgnify_assemblies, prefect_harness
+):
+    # private assemblies are brokered into the reads study itself
+    _mark_completed(mgnify_assemblies, assembly_study=raw_reads_mgnify_study)
+    dropbox = responses.add(responses.POST, DROPBOX_DEV, body='success="true"')
+
+    assert release_tpa_study_if_complete(raw_reads_mgnify_study, dry_run=True) is None
+    assert dropbox.call_count == 0
+
+
+@pytest.mark.django_db(transaction=True)
+def test_release_tpa_study_fails_on_multiple_assembly_studies(
+    raw_reads_mgnify_study, mgnify_assemblies, prefect_harness
+):
+    _mark_completed(mgnify_assemblies, assembly_study=_make_tpa_study("PRJEB999001"))
+    other = mgnify_assemblies[0]
+    other.assembly_study = _make_tpa_study("PRJEB999002")
+    other.save()
+    dropbox = responses.add(responses.POST, DROPBOX_DEV, body='success="true"')
+
+    with pytest.raises(Exception, match="multiple assembly studies"):
+        release_tpa_study_if_complete(raw_reads_mgnify_study, dry_run=True)
+    assert dropbox.call_count == 0
+
+
+@pytest.mark.django_db(transaction=True)
+def test_release_tpa_study_stays_private_if_ena_rejects(
+    raw_reads_mgnify_study, mgnify_assemblies, prefect_harness
+):
+    tpa_study = _make_tpa_study()
+    _mark_completed(mgnify_assemblies, assembly_study=tpa_study)
+    responses.add(responses.POST, DROPBOX_DEV, body='success="false"')
+
+    with pytest.raises(StudyReleaseError):
+        release_tpa_study_if_complete(raw_reads_mgnify_study, dry_run=True)
+    tpa_study.refresh_from_db()
+    assert tpa_study.is_private
+    assert tpa_study.ena_study.is_private

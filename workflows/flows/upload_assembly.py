@@ -6,7 +6,12 @@ from importlib.resources import files
 from pathlib import Path
 from typing import Optional
 
-from assembly_uploader import assembly_manifest, study_xmls, submit_study
+from assembly_uploader import (
+    assembly_manifest,
+    release_study,
+    study_xmls,
+    submit_study,
+)
 from Bio import SeqIO
 from django.core.exceptions import MultipleObjectsReturned, ObjectDoesNotExist
 from django.urls import reverse
@@ -225,8 +230,12 @@ def handle_tpa_study(
         )
         logger.info(f"Study submitted successfully under {registered_study}")
 
+        # New TPA studies are held private by ENA until we release them
+        # (see release_tpa_study_if_complete), once all assemblies are uploaded.
         newly_registered_ena_study, created = ena.models.Study.objects.get_or_create(
-            accession=registered_study, title=assembly_study_title
+            accession=registered_study,
+            title=assembly_study_title,
+            defaults={"is_private": True},
         )
         if created:
             logger.info(f"Created new ENA study {newly_registered_ena_study}")
@@ -237,6 +246,7 @@ def handle_tpa_study(
                 "title": newly_registered_ena_study.title,
                 "biome": assembly.reads_study.biome,
                 "ena_accessions": [registered_study],
+                "is_private": newly_registered_ena_study.is_private,
             },
         )
         if created:
@@ -247,6 +257,77 @@ def handle_tpa_study(
     assembly.save()
 
     return assembly_study
+
+
+@task(
+    retries=2,
+    task_run_name="Release TPA study of {reads_study} if all assemblies are uploaded",
+)
+def release_tpa_study_if_complete(
+    reads_study: analyses.models.Study, dry_run: bool = True
+) -> Optional[analyses.models.Study]:
+    """
+    Publicly release the TPA (assembly) study registered for a reads study's assemblies,
+    but only once every assembly that should be uploaded has been uploaded.
+
+    Assemblies that failed post-assembly QC are not expected to be uploaded and are ignored.
+    Private assemblies brokered into the reads study itself are never released.
+    The study is only released if it is marked private in the DB, so this is safe to call repeatedly.
+
+    :param reads_study: The raw-reads MGnify study whose assemblies were uploaded.
+    :param dry_run: If True, use the ENA TEST (wwwdev) dropbox.
+    :return: The released study, or None if nothing was released.
+    """
+    logger = get_run_logger()
+    AssemblyStates = analyses.models.Assembly.AssemblyStates
+
+    assemblies = reads_study.assemblies_reads.filter_by_statuses(
+        [AssemblyStates.ASSEMBLY_COMPLETED]
+    ).exclude_by_statuses([AssemblyStates.POST_ASSEMBLY_QC_FAILED])
+    if not assemblies.exists():
+        logger.info(f"No assemblies to upload for {reads_study}, nothing to release")
+        return None
+
+    not_uploaded = assemblies.exclude_by_statuses([AssemblyStates.ASSEMBLY_UPLOADED])
+    if not_uploaded.exists():
+        logger.info(
+            f"Not releasing TPA study of {reads_study}: {not_uploaded.count()} of "
+            f"{assemblies.count()} assemblies are not uploaded yet"
+        )
+        return None
+
+    tpa_studies = {
+        assembly.assembly_study
+        for assembly in assemblies
+        if assembly.assembly_study and assembly.assembly_study != reads_study
+    }
+    if not tpa_studies:
+        logger.info(f"No TPA study registered for {reads_study}, nothing to release")
+        return None
+    if len(tpa_studies) > 1:
+        raise Exception(
+            f"Assemblies of {reads_study} belong to multiple assembly studies "
+            f"({', '.join(str(study) for study in tpa_studies)}). Resolve manually before releasing."
+        )
+
+    tpa_study: analyses.models.Study = tpa_studies.pop()
+    if not tpa_study.ena_study or not tpa_study.ena_study.is_private:
+        logger.info(f"TPA study {tpa_study} is not marked private, nothing to release")
+        return None
+
+    accession = tpa_study.ena_study.accession
+    logger.info(f"All assemblies of {reads_study} are uploaded. Releasing {accession}")
+    with TemporaryEnv(
+        ENA_WEBIN=EMG_CONFIG.webin.emg_webin_account,
+        ENA_WEBIN_PASSWORD=EMG_CONFIG.webin.emg_webin_password,
+    ):
+        release_study.release_study(accession, is_test=dry_run)
+
+    # Saving the ENA study propagates is_private to the MGnify study (post_save signal)
+    tpa_study.ena_study.is_private = False
+    tpa_study.ena_study.save()
+    logger.info(f"Released TPA study {accession}")
+    return tpa_study
 
 
 @task

@@ -256,7 +256,7 @@ fileignoreconfig:
   checksum: 8ad9be595fec33682cd1c23db036ac27453692e0a2b71bf80b104117f0bfbd6f
 
 - filename: workflows/flows/upload_assembly.py
-  allowed_patterns: [key]
+  allowed_patterns: [key, ENA_WEBIN_PASSWORD=EMG_CONFIG.webin.emg_webin_password]
 
 - filename: workflows/prefect_utils/slurm_flow.py
   allowed_patterns: [key]
