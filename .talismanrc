@@ -134,6 +134,9 @@ fileignoreconfig:
 - filename: pyproject.toml
   allowed_patterns: [Config key]
 
+- filename: proteins/tests/test_concurrency.py
+  checksum: e7e57759fe069b86953315cce08f466d78cd09406943474a9956ecf19651e26f
+
 - filename: slurm-dev-environment/configs/jwt_hs256.key
   checksum: cf9887754600f97f20b4afb223bcd666c3b0aa47dab9b067669c24997f398c26
 

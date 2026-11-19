@@ -3,8 +3,8 @@ from prefect.deployments import run_deployment
 
 from activate_django_first import EMG_CONFIG
 
-from proteins.ingestion import analyses
-from proteins.ingestion.analyses import IngestionResult
+from proteins.ingestion import assembly_analyses
+from proteins.ingestion.assembly_analyses import IngestionResult
 from workflows.prefect_utils.flows_utils import django_db_flow as flow
 from workflows.prefect_utils.flows_utils import django_db_task as task
 
@@ -19,7 +19,7 @@ class IngestionFailed(Exception):
 
 @task(task_run_name="Ingest the proteins of {analysis_accession}")
 def ingest_analysis_task(analysis_accession: str) -> IngestionResult:
-    return analyses.ingest_analysis(analysis_accession)
+    return assembly_analyses.ingest_analysis(analysis_accession)
 
 
 @flow(flow_run_name="Ingest assembly proteins")
@@ -33,8 +33,10 @@ def ingest_assembly_proteins(study_accession: str | None = None) -> int:
     :return: The number of chunks started.
     """
     logger = get_run_logger()
-    pending = analyses.find_pending_analyses(study_accession)
-    chunks = analyses.chunk_by_study(pending, EMG_CONFIG.proteins.ingestion_chunk_size)
+    pending = assembly_analyses.find_pending_analyses(study_accession)
+    chunks = assembly_analyses.chunk_by_study(
+        pending, EMG_CONFIG.proteins.ingestion_chunk_size
+    )
     for chunk in chunks:
         run_deployment(
             name=CHUNK_DEPLOYMENT,
@@ -81,5 +83,5 @@ def ingest_analysis_proteins(accession: str) -> list[IngestionResult]:
     """
     return [
         ingest_analysis_task(analysis_accession)
-        for analysis_accession in analyses.resolve_accession(accession)
+        for analysis_accession in assembly_analyses.resolve_accession(accession)
     ]

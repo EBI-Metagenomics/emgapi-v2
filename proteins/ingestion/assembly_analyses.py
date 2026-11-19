@@ -7,10 +7,9 @@ from operator import attrgetter
 from typing import NamedTuple
 
 from analyses.models import Analysis
-from proteins.accession.accession import accession
-from proteins.accession.inputs import read_input
+from proteins.accessioning.assembly_proteins import accession_assembly_proteins
+from proteins.accessioning.predicted_genes import read_predicted_genes
 from proteins.models import AssemblyProteins, GeneCaller
-from proteins.routers import mgyp_connection
 
 logger = logging.getLogger(__name__)
 
@@ -138,19 +137,18 @@ def ingest_analysis(analysis_accession: str) -> IngestionResult:
         return IngestionResult(analysis_accession, skipped=True, proteins=0)
 
     files = analysis.predicted_genes_files()
-    input = read_input(
+    predicted_genes = read_predicted_genes(
         files.proteins,
         files.genes,
         files.contigs,
         files.contig_map,
         gene_callers=GeneCaller.of_pipeline_version(version),
     )
-    ids = accession(
-        mgyp_connection,
+    ids = accession_assembly_proteins(
         erz,
         AssemblyProteins.Source.ASSEMBLY_ANALYSIS.value,
         version,
-        input,
+        predicted_genes,
         analysis_accession=analysis_accession,
     )
     logger.info(

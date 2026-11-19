@@ -6,7 +6,7 @@ Each function is one step, which the update_protein_dataset flow runs as a task.
 import logging
 import shutil
 from datetime import date
-from itertools import groupby
+from itertools import batched, groupby
 from operator import itemgetter
 from pathlib import Path
 from typing import Iterable, Iterator, NamedTuple
@@ -17,16 +17,25 @@ from django.conf import settings
 from django.db import connections, transaction
 from django.utils import timezone
 
-from proteins.dataset import layout, metadata
+from proteins.dataset import parquet_files
+from proteins.dataset.export import metadata_snapshot
 from proteins.dataset.owner import Owner
-from proteins.models import DatasetUpdate
+from proteins.models import (
+    Assembly,
+    AssemblyProteins,
+    DatasetUpdate,
+    GeneCaller,
+    StagedContig,
+    StagedOccurrence,
+    StagedProtein,
+)
 from proteins.routers import MGYP
 
 logger = logging.getLogger(__name__)
 
 # The staged tables, with the columns read from each.
 STAGED_SCHEMAS = {
-    "protein": layout.SCHEMAS["protein"],
+    "protein": parquet_files.SCHEMAS["protein"],
     "contig": pa.schema(
         [
             ("id", pa.int64()),
@@ -34,7 +43,7 @@ STAGED_SCHEMAS = {
             ("name", pa.string()),
             ("original_name", pa.string()),
             ("length", pa.int32()),
-            ("hash", layout.HASH),
+            ("hash", parquet_files.HASH),
             ("kmer_coverage", pa.float64()),
         ]
     ),
@@ -51,6 +60,11 @@ STAGED_SCHEMAS = {
             ("truncation", pa.string()),
         ]
     ),
+}
+STAGED_MODELS = {
+    "protein": StagedProtein,
+    "contig": StagedContig,
+    "occurrence": StagedOccurrence,
 }
 # The assemblies of the records in A that have a record outside A, whose rows are in the protein dataset.
 HELD = (
@@ -128,14 +142,14 @@ def clean_up_failed_update(root: Path) -> None:
             "day", flat=True
         )
     )
-    complete = set(layout.complete_days(root))
+    complete = set(parquet_files.complete_days(root))
     # As after a restore of the MGYP database to before an update: that update's rows are staged again.
     if ahead := sorted(complete - done):
         raise DatasetUpdateError(
             f"The protein dataset has days that are not done in dataset_update: {', '.join(map(str, ahead))}."
             " The protein dataset is ahead of the MGYP database, so updating again would duplicate their rows"
         )
-    for day in sorted((layout.days_with_files(root) | done) - complete):
+    for day in sorted((parquet_files.days_with_files(root) | done) - complete):
         if day not in done:
             logger.warning("deleting the files of %s, left by a failed update", day)
             delete_day(root, day)
@@ -199,52 +213,50 @@ def start_update(day: date) -> int:
 def read_staged_rows(scratch: Path) -> Staged:
     """Reads the staged rows and the registries in one snapshot, so that the registries hold no record without its rows.
 
-    A server-side cursor on the Django connection streams the rows to Parquet in batches, so a
-    backlog does not have to fit in memory.
+    A server-side cursor streams the rows to Parquet in batches, so a backlog does not have to fit in memory.
 
     :param scratch: A local directory for the Parquet files of the staged rows.
     """
     with transaction.atomic(using=MGYP):
-        conn = connections[MGYP]
-        with conn.cursor() as cursor:
-            # The first statement of the transaction, so that every read below sees one snapshot.
+        with connections[MGYP].cursor() as cursor:
+            # Raw SQL: Django has no API for the isolation of one transaction. It must be the first
+            # statement of the transaction, so that every read below sees one snapshot.
             cursor.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY")
-            assembly_proteins_ids = choose_assembly_proteins(cursor)
-            cursor.execute(
-                "SELECT id, assembly_id, source, pipeline_version, analysis_accession"
-                " FROM assembly_proteins"
-            )
-            assembly_proteins = to_table(
-                cursor.fetchall(), layout.SCHEMAS["metadata/assembly_proteins_registry"]
-            )
-            cursor.execute("SELECT id, accession FROM assembly")
-            assemblies = to_table(
-                cursor.fetchall(), layout.SCHEMAS["metadata/assemblies"]
-            )
-            cursor.execute("SELECT id, name, version FROM gene_caller")
-            gene_callers = to_table(
-                cursor.fetchall(), layout.SCHEMAS["metadata/gene_callers"]
-            )
+        assembly_proteins_ids = choose_assembly_proteins()
+        assembly_proteins = to_table(
+            AssemblyProteins.objects.values_list(
+                "id", "assembly_id", "source", "pipeline_version", "analysis_accession"
+            ),
+            parquet_files.SCHEMAS["metadata/assembly_proteins_registry"],
+        )
+        assemblies = to_table(
+            Assembly.objects.values_list("id", "accession"),
+            parquet_files.SCHEMAS["metadata/assemblies"],
+        )
+        gene_callers = to_table(
+            GeneCaller.objects.values_list("id", "name", "version"),
+            parquet_files.SCHEMAS["metadata/gene_callers"],
+        )
         files = {}
         for table, schema in STAGED_SCHEMAS.items():
             files[table] = scratch / f"{table}.parquet"
-            # A named cursor is a server-side cursor: it sends the rows in batches.
-            with conn.connection.cursor(name=f"read_staged_{table}") as rows:
-                rows.execute(
-                    f"SELECT {', '.join(schema.names)} FROM staged_{table}"
-                    " WHERE assembly_proteins_id = ANY(%s)",
-                    [assembly_proteins_ids],
-                )
-                with pq.ParquetWriter(files[table], schema) as writer:
-                    while batch := rows.fetchmany(BATCH_ROWS):
-                        writer.write_table(to_table(batch, schema))
+            # iterator() reads with a server-side cursor, BATCH_ROWS rows at a time.
+            rows = (
+                STAGED_MODELS[table]
+                .objects.filter(assembly_proteins_id__in=assembly_proteins_ids)
+                .values_list(*schema.names)
+                .iterator(chunk_size=BATCH_ROWS)
+            )
+            with pq.ParquetWriter(files[table], schema) as writer:
+                for batch in batched(rows, BATCH_ROWS):
+                    writer.write_table(to_table(batch, schema))
     return Staged(
         assembly_proteins_ids, files, assembly_proteins, assemblies, gene_callers
     )
 
 
-def to_table(rows: list[tuple], schema: pa.Schema) -> pa.Table:
-    """Rows from a cursor as an Arrow table.
+def to_table(rows: Iterable[tuple], schema: pa.Schema) -> pa.Table:
+    """Rows as an Arrow table.
 
     :param rows: Tuples in the column order of the schema.
     :param schema: The schema of the table.
@@ -256,17 +268,16 @@ def to_table(rows: list[tuple], schema: pa.Schema) -> pa.Table:
     )
 
 
-def choose_assembly_proteins(cursor) -> list[int]:
+def choose_assembly_proteins() -> list[int]:
     """The assembly proteins records with staged rows. Each record's rows are committed together and never staged again, so they are complete.
 
-    :param cursor: A cursor in the snapshot of read_staged_rows().
+    Run it in the snapshot of read_staged_rows().
     """
-    cursor.execute(
-        "SELECT assembly_proteins_id FROM staged_protein"
-        " UNION SELECT assembly_proteins_id FROM staged_contig"
-        " UNION SELECT assembly_proteins_id FROM staged_occurrence"
+    ids = StagedProtein.objects.values_list("assembly_proteins_id").union(
+        StagedContig.objects.values_list("assembly_proteins_id"),
+        StagedOccurrence.objects.values_list("assembly_proteins_id"),
     )
-    return sorted(row[0] for row in cursor.fetchall())
+    return sorted(id for (id,) in ids)
 
 
 def write_day_files(root: Path, day: date, staged: Staged) -> dict[str, int]:
@@ -284,17 +295,17 @@ def write_day_files(root: Path, day: date, staged: Staged) -> dict[str, int]:
     # Sorted by hash, the rows are also grouped by prefix, the hash's top bits.
     memory_limit = settings.EMG_CONFIG.proteins.duckdb_memory_limit
     tmp_dir = settings.EMG_CONFIG.proteins.tmp_dir
-    batches = layout.sorted_batches(
+    batches = parquet_files.sorted_batches(
         "protein", [staged.files["protein"]], memory_limit, tmp_dir
     )
     for prefix, slices in groupby(by_prefix(batches), itemgetter(0)):
-        layout.write_sorted(
+        parquet_files.write_sorted(
             root / "protein" / f"prefix={prefix}" / f"day-{day}.parquet",
             "protein",
             (batch for _, batch in slices),
         )
     counts = {"protein": pq.ParquetFile(staged.files["protein"]).metadata.num_rows}
-    with layout.connect(memory_limit, tmp_dir) as con:
+    with parquet_files.connect(memory_limit, tmp_dir) as con:
         con.register("registry", staged.assembly_proteins)
         con.register(
             "loading",
@@ -308,11 +319,13 @@ def write_day_files(root: Path, day: date, staged: Staged) -> dict[str, int]:
             # Only complete days, so that a rerun after a failure matches against the same rows.
             if held:
                 con.read_parquet(
-                    [str(path) for path in layout.files(root, table)],
+                    [str(path) for path in parquet_files.files(root, table)],
                     hive_partitioning=False,
                 ).create_view(f"{table}_files")
             else:
-                con.register(f"{table}_files", layout.SCHEMAS[table].empty_table())
+                con.register(
+                    f"{table}_files", parquet_files.SCHEMAS[table].empty_table()
+                )
             con.execute(
                 f"CREATE TEMP TABLE existing_{table} AS {sql.format(f'{table}_files')}"
             )
@@ -320,12 +333,12 @@ def write_day_files(root: Path, day: date, staged: Staged) -> dict[str, int]:
             con.execute(sql)
         for table, sql in DAY_FILES.items():
             path = root / table / f"day={day}" / "part-000.parquet"
-            layout.write_sorted(
+            parquet_files.write_sorted(
                 path,
                 table,
                 con.execute(
-                    f"{sql} ORDER BY {', '.join(layout.SORT_ORDER[table])}"
-                ).to_arrow_reader(layout.ROW_GROUP_SIZE),
+                    f"{sql} ORDER BY {', '.join(parquet_files.SORT_ORDER[table])}"
+                ).to_arrow_reader(parquet_files.ROW_GROUP_SIZE),
             )
             counts[table] = pq.ParquetFile(path).metadata.num_rows
     return counts
@@ -341,7 +354,9 @@ def by_prefix(
     """
     for batch in batches:
         start = 0
-        for prefix, run in groupby(map(layout.prefix, batch["hash"].to_pylist())):
+        for prefix, run in groupby(
+            map(parquet_files.prefix, batch["hash"].to_pylist())
+        ):
             length = sum(1 for _ in run)
             yield prefix, batch.slice(start, length)
             start += length
@@ -355,22 +370,24 @@ def write_metadata_snapshot(root: Path, day: date, staged: Staged) -> None:
     :param staged: What read_staged_rows() read.
     """
     directory = root / "metadata" / f".tmp-day={day}"
-    layout.write(
+    parquet_files.write(
         directory / "assembly_proteins.parquet",
         "metadata/assembly_proteins",
-        metadata.build_snapshot(staged.assembly_proteins, staged.assemblies, root),
+        metadata_snapshot.build_snapshot(
+            staged.assembly_proteins, staged.assemblies, root
+        ),
     )
-    layout.write(
+    parquet_files.write(
         directory / "assembly_proteins_registry.parquet",
         "metadata/assembly_proteins_registry",
         staged.assembly_proteins,
     )
-    layout.write(
+    parquet_files.write(
         directory / "assemblies.parquet",
         "metadata/assemblies",
         staged.assemblies,
     )
-    layout.write(
+    parquet_files.write(
         directory / "gene_callers.parquet",
         "metadata/gene_callers",
         staged.gene_callers,
@@ -392,12 +409,11 @@ def finish_update(
     """
     with transaction.atomic(using=MGYP):
         owner.confirm()
-        with connections[MGYP].cursor() as cursor:
-            for table in ("occurrence", "contig", "protein"):
-                cursor.execute(
-                    f"DELETE FROM staged_{table} WHERE assembly_proteins_id = ANY(%s)",
-                    [assembly_proteins_ids],
-                )
+        # Occurrences first, for their foreign key to the contigs.
+        for model in (StagedOccurrence, StagedContig, StagedProtein):
+            model.objects.filter(
+                assembly_proteins_id__in=assembly_proteins_ids
+            ).delete()
         updated = DatasetUpdate.objects.filter(
             id=update_id, status=DatasetUpdate.Status.RUNNING
         ).update(

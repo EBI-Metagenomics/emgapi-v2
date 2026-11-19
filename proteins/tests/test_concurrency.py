@@ -1,6 +1,7 @@
 """The accessioning core run as processes: concurrent analyses, killed attempts and overlapping attempts."""
 
 import json
+import os
 import random
 import subprocess
 import sys
@@ -18,40 +19,40 @@ pytestmark = pytest.mark.django_db(databases=["default", MGYP], transaction=True
 REPO = Path(__file__).resolve().parent.parent.parent
 TIMEOUT = 120  # seconds; an attempt still running then is taken to be deadlocked
 
-# Accessions one assembly, with one function of the core replaced to stop it at a given point.
+# Accessions one assembly with Django, as dsn's role, with one function of the core replaced to stop it at a given point.
 # Writes each sequence's protein id to <directory>/<name>.json.
 RUN = """
 import json, os, signal, sys, time
-from contextlib import contextmanager
 from pathlib import Path
 
-import psycopg
+import django
+from psycopg.conninfo import conninfo_to_dict
 
-import proteins.accession.accession as core
-from proteins.accession.inputs import read_input
+django.setup()
+from django.db import connections
 
 dsn, directory, assembly, mgya, name, point, signal_file, release_file = sys.argv[1:]
 directory = Path(directory)
+params = conninfo_to_dict(dsn)
+settings = connections["mgyp"].settings_dict
+settings.update(NAME=params["dbname"], USER=params["user"], PASSWORD=params["password"])
+settings.update(HOST=params.get("host", settings["HOST"]), PORT=params.get("port", settings["PORT"]))
+settings["OPTIONS"] = {**settings.get("OPTIONS", {}), "application_name": params["application_name"]}
+
+import proteins.accessioning.assembly_proteins as core
+from proteins.accessioning.predicted_genes import read_predicted_genes
+
+stage_occurrences, stage = core.stage_occurrences, core.stage
 
 
-@contextmanager
-def connect():
-    with psycopg.connect(dsn, autocommit=True) as conn:
-        yield conn
-
-
-copy_rows, stage = core.copy_rows, core.stage
-
-
-def before_occurrences(conn, table, *rest):
-    if table.startswith("staged_occurrence"):
-        if point == "kill-before-commit":
-            os.kill(os.getpid(), signal.SIGKILL)
-        if point == "pause-before-commit":
-            Path(signal_file).touch()
-            while not Path(release_file).exists():
-                time.sleep(0.05)
-    return copy_rows(conn, table, *rest)
+def before_occurrences(*args):
+    if point == "kill-before-commit":
+        os.kill(os.getpid(), signal.SIGKILL)
+    if point == "pause-before-commit":
+        Path(signal_file).touch()
+        while not Path(release_file).exists():
+            time.sleep(0.05)
+    return stage_occurrences(*args)
 
 
 def stage_then_kill(*args):
@@ -59,11 +60,11 @@ def stage_then_kill(*args):
     os.kill(os.getpid(), signal.SIGKILL)
 
 
-core.copy_rows = before_occurrences
+core.stage_occurrences = before_occurrences
 if point == "kill-after-commit":
     core.stage = stage_then_kill
-input = read_input(directory / "in.faa", directory / "in.gff", directory / "contigs.fasta")
-ids = core.accession(connect, assembly, "assembly_analysis", "6.0", input, mgya, connections=4)
+input = read_predicted_genes(directory / "in.faa", directory / "in.gff", directory / "contigs.fasta")
+ids = core.accession_assembly_proteins(assembly, "assembly_analysis", "6.0", input, mgya)
 (directory / f"{name}.json").write_text(json.dumps({s: ids[h] for h, s in input.proteins}))
 """
 
@@ -74,6 +75,7 @@ def start(directory, assembly, mgya, name="out", point="", signal_file="", relea
         [sys.executable, "-c", RUN, dsn, str(directory), assembly, mgya, name, point]
         + [str(signal_file), str(release)],
         cwd=REPO,
+        env={**os.environ, "DJANGO_SETTINGS_MODULE": "emgapiv2.settings_test"},
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,
@@ -102,7 +104,7 @@ def random_sequences(rng, n):
     return ["M" + "".join(rng.choices("ACDEFGHIKLMNPQRSTVWY", k=40)) for _ in range(n)]
 
 
-def test_concurrent_analyses_of_overlapping_assemblies(tmp_path, connect_accession):
+def test_concurrent_analyses_of_overlapping_assemblies(tmp_path, emptied_mgyp_db):
     rng = random.Random(0)
     for round in range(20):
         shared = random_sequences(rng, 150)
@@ -150,7 +152,7 @@ def test_concurrent_analyses_of_overlapping_assemblies(tmp_path, connect_accessi
 
 
 @pytest.fixture
-def assembly(tmp_path, connect_accession):
+def assembly(tmp_path, emptied_mgyp_db):
     return write_assembly(tmp_path / "ERZ1", random_sequences(random.Random(1), 50))
 
 

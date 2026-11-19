@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from proteins.accession.hashing import (
+from proteins.accessioning.hashing import (
     InvalidSequence,
     contig_hash,
     protein_hash,

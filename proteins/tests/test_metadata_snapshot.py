@@ -2,9 +2,12 @@ from unittest.mock import patch
 
 import pyarrow as pa
 import pytest
+from django.db import connection
+from django.test.utils import CaptureQueriesContext
 
 from analyses.models import Analysis, Biome
-from proteins.dataset import layout, metadata
+from proteins.dataset import parquet_files
+from proteins.dataset.export import metadata_snapshot
 from proteins.tests.conftest import make_analysis, make_study, write_v1_analyses
 
 pytestmark = pytest.mark.django_db
@@ -24,10 +27,10 @@ def registry(*records):
             }
             for id, analysis, source in records
         ],
-        layout.SCHEMAS["metadata/assembly_proteins_registry"],
+        parquet_files.SCHEMAS["metadata/assembly_proteins_registry"],
     ), pa.Table.from_pylist(
         [{"id": int(erz[3:]), "accession": erz} for erz in erzs],
-        layout.SCHEMAS["metadata/assemblies"],
+        parquet_files.SCHEMAS["metadata/assemblies"],
     )
 
 
@@ -54,12 +57,12 @@ def test_one_row_per_record_with_the_study_and_biome_of_its_mgya(engineered, tmp
     other = make_analysis(b, "ERZ2")
 
     with (
-        patch.object(metadata, "CHUNK", 2),
+        patch.object(metadata_snapshot, "CHUNK", 2),
         patch.object(
-            metadata.Analysis.objects, "filter", wraps=Analysis.objects.filter
+            metadata_snapshot.Analysis.objects, "filter", wraps=Analysis.objects.filter
         ) as chunks,
     ):
-        snapshot = metadata.build_snapshot(
+        snapshot = metadata_snapshot.build_snapshot(
             *registry(
                 (3, other, "assembly_analysis"),
                 (1, v6, "assembly_analysis"),
@@ -68,7 +71,7 @@ def test_one_row_per_record_with_the_study_and_biome_of_its_mgya(engineered, tmp
             tmp_path,
         )
     assert chunks.call_count == 2
-    assert snapshot.schema == layout.SCHEMAS["metadata/assembly_proteins"]
+    assert snapshot.schema == parquet_files.SCHEMAS["metadata/assembly_proteins"]
     assert snapshot.to_pylist() == [
         {
             "assembly_proteins_id": 3,
@@ -128,7 +131,7 @@ def test_a_flag_is_set_when_the_analysis_its_assembly_or_its_study_has_it(
     ):
         type(model).objects.filter(pk=model.pk).update(**{flag: value})
 
-    (row,) = metadata.build_snapshot(
+    (row,) = metadata_snapshot.build_snapshot(
         *registry((1, analysis, "assembly_analysis")), tmp_path
     ).to_pylist()
     assert row[flag] is (on_analysis or on_assembly or on_study)
@@ -150,7 +153,7 @@ def test_an_mgya_not_in_emgapi_takes_its_metadata_from_the_copy_of_v1(tmp_path):
     from_v1.delete()
     gone.delete()
 
-    rows = metadata.build_snapshot(*records, tmp_path).to_pylist()
+    rows = metadata_snapshot.build_snapshot(*records, tmp_path).to_pylist()
     # emgapi-v2 wins over v1.
     assert rows[0]["analysis_accession"] == analysis.accession
     assert rows[0]["is_suppressed"] is False
@@ -169,3 +172,29 @@ def test_an_mgya_not_in_emgapi_takes_its_metadata_from_the_copy_of_v1(tmp_path):
             "is_suppressed": True,
         }
     ]
+
+
+def test_the_biome_lineages_take_the_same_queries_for_any_number_of_biomes(
+    engineered, tmp_path, django_assert_num_queries
+):
+    host = Biome.objects.create(biome_name="Host-associated", path="root.host")
+    human = Biome.objects.create(biome_name="Human", path="root.host.human")
+    study = make_study("PRJ1")
+    analyses = []
+    for erz, biome in ("ERZ1", engineered), ("ERZ2", host), ("ERZ3", human):
+        analysis = make_analysis(study, erz)
+        analysis.sample.biome = biome
+        analysis.sample.save()
+        analyses.append(analysis)
+
+    with CaptureQueriesContext(connection) as one_biome:
+        metadata_snapshot.find_analyses([analyses[0].accession], tmp_path)
+    with django_assert_num_queries(len(one_biome)):
+        known = metadata_snapshot.find_analyses(
+            [analysis.accession for analysis in analyses], tmp_path
+        )
+
+    assert {mgya: row["biome_lineage"] for mgya, row in known.items()} == {
+        analysis.accession: analysis.sample.biome.pretty_lineage
+        for analysis in analyses
+    }

@@ -3,7 +3,7 @@ from pathlib import Path
 from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
 
-from proteins.dataset.build import BuildError, build_mgyp_database
+from proteins.dataset.rebuild.mgyp_database import BuildError, build_mgyp_database
 
 
 class Command(BaseCommand):

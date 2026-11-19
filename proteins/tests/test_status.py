@@ -4,10 +4,10 @@ from datetime import date, timedelta
 import pytest
 
 from analyses.models import Analysis
-from proteins.dataset import status as status_module
+from proteins import status as status_module
 from proteins.dataset.owner import take
-from proteins.dataset.status import status
 from proteins.routers import MGYP
+from proteins.status import status
 from proteins.tests.conftest import (
     SUBMITTED,
     make_analysis,

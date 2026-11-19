@@ -8,9 +8,13 @@ from django.db import connections
 from django.db.models import Count, Min
 
 from analyses.models import Analysis
-from proteins.dataset import layout, metadata
+from proteins.dataset import parquet_files
+from proteins.dataset.export import metadata_snapshot
 from proteins.dataset.owner import states_of
-from proteins.ingestion.analyses import annotated_assembly_analyses, versions_with_rules
+from proteins.ingestion.assembly_analyses import (
+    annotated_assembly_analyses,
+    versions_with_rules,
+)
 from proteins.models import (
     AssemblyProteins,
     DatasetOwner,
@@ -78,7 +82,7 @@ class Status(NamedTuple):
                 ),
                 "MGYAs whose metadata is from MGnify v1: "
                 + (
-                    f"none, as the protein dataset has no {layout.V1_ANALYSES}"
+                    f"none, as the protein dataset has no {parquet_files.V1_ANALYSES}"
                     if self.from_v1 is None
                     else str(self.from_v1)
                 ),
@@ -125,7 +129,7 @@ class Status(NamedTuple):
             )
         if self.from_v1 == 0:
             found.append(
-                f"no MGYA's metadata is from MGnify v1 any more, so {layout.V1_ANALYSES} in the"
+                f"no MGYA's metadata is from MGnify v1 any more, so {parquet_files.V1_ANALYSES} in the"
                 " protein dataset can be deleted"
             )
         # A requeued job has a record for each time it ran, the current one last.
@@ -159,6 +163,7 @@ def status(root: Path) -> Status:
         staged[model._meta.db_table] = counts["rows"]
         oldest += [counts["first"]] if counts["first"] else []
 
+    # Raw SQL: the ORM cannot read a sequence.
     with connections[MGYP].cursor() as cursor:
         cursor.execute("SELECT last_value FROM protein_id_seq")
         (last_protein_id,) = cursor.fetchone()
@@ -176,7 +181,7 @@ def status(root: Path) -> Status:
             "analysis_accession", flat=True
         )
     )
-    known = metadata.find_analyses(mgyas, root)
+    known = metadata_snapshot.find_analyses(mgyas, root)
 
     owner = DatasetOwner.objects.get()
     owner_states = (
@@ -185,7 +190,7 @@ def status(root: Path) -> Status:
         else []
     )
 
-    complete = layout.complete_days(root)
+    complete = parquet_files.complete_days(root)
     return Status(
         last.finished_at if last else None,
         last.day if last else None,
@@ -193,13 +198,13 @@ def status(root: Path) -> Status:
         staged,
         min(oldest, default=None),
         complete[-1] if complete else None,
-        sorted(layout.days_with_files(root) - set(complete)),
+        sorted(parquet_files.days_with_files(root) - set(complete)),
         last_protein_id,
         no_rule,
         [mgya for mgya in mgyas if mgya not in known],
         (
             sum(analysis["from_v1"] for analysis in known.values())
-            if (root / layout.V1_ANALYSES).exists()
+            if (root / parquet_files.V1_ANALYSES).exists()
             else None
         ),
         owner,
