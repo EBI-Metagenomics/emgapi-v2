@@ -143,13 +143,32 @@ class StudyController(UnauthorisedIsUnfoundController):
         ],
     )
     @paginate()
-    def list_mgnify_study_analyses(self, accession: str):
+    def list_mgnify_study_analyses(
+        self,
+        accession: str,
+        order: OrderByFilter[
+            Literal[
+                "accession", "-accession", "sample_accession", "-sample_accession", ""
+            ]
+        ] = Query(...),
+    ):
         study = self.get_object_or_exception(
             analyses.models.Study.objects_not_suppressed, accession=accession
         )
-        return analyses.models.Analysis.objects_not_suppressed.filter(
+        qs = analyses.models.Analysis.objects_not_suppressed.filter(
             study=study, is_ready=True
         )
+        if order.order in {"sample_accession", "-sample_accession"}:
+            qs = qs.alias(
+                sample_accession=analyses.models.Sample.build_first_accession_expression(
+                    "sample__ena_accessions"
+                )
+            )
+            accession_order = (
+                "-accession" if order.order.startswith("-") else "accession"
+            )
+            return qs.order_by(order.order, accession_order)
+        return order.order_by(qs)
 
     @http_get(
         "/{accession}/publications/",
