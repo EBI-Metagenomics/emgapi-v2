@@ -1,0 +1,5 @@
+Virus,AAI to closest RaFAH reference,Host genus,Confidence score,List of methods
+MGYV0000025065,8.56,d__Bacteria;p__Pseudomonadota;c__Gammaproteobacteria;o__Enterobacterales;f__Alteromonadaceae;g__Alteromonas,93.60,blast;95.50 iPHoP-RF;68.60
+MGYV0000111872,46.15,d__Bacteria;p__Pseudomonadota;c__Gammaproteobacteria;o__Enterobacterales;f__Alteromonadaceae;g__Colwellia_A,91.00,iPHoP-RF;93.40 blast;93.20
+MGYV0000125952,12.69,d__Bacteria;p__Bacillota;c__Clostridia;o__Peptostreptococcales;f__Natronincolaceae;g__Anaerovirgula,91.20,blast;93.60 iPHoP-RF;67.00
+MGYV0000123871,25.48,d__Bacteria;p__Pseudomonadota;c__Alphaproteobacteria;o__Rhizobiales;f__Rhizobiaceae;g__Aquamicrobium_A,90.10,blast;92.60 iPHoP-RF;74.80

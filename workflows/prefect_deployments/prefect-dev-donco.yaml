@@ -203,6 +203,21 @@ deployments:
   work_pool:
     name: slurm
 
+- name: import_viral_catalogue_flow_deployment
+  description: Import the compact marine viral catalogue without cluster jobs.
+  entrypoint: workflows/flows/import_viral_catalogue_flow.py:import_viral_catalogue_flow
+  parameters:
+    results_directory: /nfs/production/catalogs/marine-viruses/v1.0
+    catalogue_id: marine-viruses-v1-0
+    name: Marine Viruses v1.0 (development fixture)
+    version: "1.0"
+    biome: Marine
+    ftp_url: http://localhost:8080/pub/databases/metagenomics/mgnify_viruses/marine-viruses/v1.0/
+    description: Nine real viral fragments, three plasmids and one synthetic ASAv6 fragment.
+    is_public: false
+  work_pool:
+    name: slurm
+
 - name: import_genomes_flow_deployment
   description: |-
     Import the compact Ocean Prokaryotes v2.0 update fixture. The flow leaves the

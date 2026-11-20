@@ -1,0 +1,19 @@
+{
+  "total_contigs": 1,
+  "mpf_data_available": false,
+  "categories": {
+    "conjugative": {
+      "count": 0,
+      "percent": 0.0,
+      "note": "plaSquid detects the MOB relaxase gene only, not MPF/T4SS conjugation machinery; no contig can be placed here without independently supplied MPF evidence. A genuinely conjugative plasmid is reported as 'mobilizable' instead. See MOB-suite's mob_typer output for a complete conjugative/mobilizable/non_mobilizable call on the same representative contigs."
+    },
+    "mobilizable": {
+      "count": 1,
+      "percent": 100.0
+    },
+    "non_mobilizable": {
+      "count": 0,
+      "percent": 0.0
+    }
+  }
+}

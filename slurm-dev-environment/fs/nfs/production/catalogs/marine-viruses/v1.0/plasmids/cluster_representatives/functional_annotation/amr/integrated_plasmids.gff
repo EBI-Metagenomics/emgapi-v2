@@ -1,0 +1,2 @@
+##gff-version 3
+MGYV0000056305	Prodigal:002006	CDS	153	3398	.	+	0	ID=MGYG000446349_01270;Name=bepE;gene=bepE;inference=ab initio prediction:Prodigal:002006,similar to AA sequence:UniProtKB:Q8G2M6;locus_tag=MGYG000446349_01270;product=Efflux pump membrane transporter BepE;eggNOG=1142394.PSMK_14920;cog=V;kegg=ko:K03296;pfam=PF00873;interpro=IPR001036,IPR027463;mobile_element_type=plasmid;pathofact2=arg,mge;drug_class=fluoroquinolone,tetracycline;amr_tool=rgi;amr_tool_ident=44.32
