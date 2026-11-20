@@ -1,0 +1,18 @@
+{
+  "total_contigs": 1,
+  "mpf_data_available": true,
+  "categories": {
+    "conjugative": {
+      "count": 0,
+      "percent": 0.0
+    },
+    "mobilizable": {
+      "count": 1,
+      "percent": 100.0
+    },
+    "non_mobilizable": {
+      "count": 0,
+      "percent": 0.0
+    }
+  }
+}

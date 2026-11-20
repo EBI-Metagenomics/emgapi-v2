@@ -1,0 +1,14 @@
+{
+  "total_sequences": 13,
+  "viral_clusters": 9,
+  "prophages": 1,
+  "synthetic_sequences": 1,
+  "viral_sequences": 9,
+  "plasmids": 3,
+  "plasmid_clusters": 3,
+  "unique_sequences": 12,
+  "qc_excluded_sequences": 0,
+  "number_of_biomes": 1,
+  "total_proteins_viruses": 415,
+  "total_proteins_plasmids": 13
+}
