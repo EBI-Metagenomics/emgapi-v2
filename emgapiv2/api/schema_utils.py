@@ -22,6 +22,7 @@ class ApiSections(FutureStrEnum):
     MISC = "Miscellaneous"
     AUTH = "Authentication"
     GENOMES = "Genomes"
+    VIRUSES = "Viruses"
     ASSEMBLIES = "Assemblies"
 
 

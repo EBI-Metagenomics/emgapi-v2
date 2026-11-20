@@ -103,6 +103,7 @@ INSTALLED_APPS = [
     "analyses",
     "workflows",
     "genomes",
+    "viruses",
     "kvstore",
 ]
 

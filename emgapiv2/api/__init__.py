@@ -26,6 +26,7 @@ from .samples import SampleController
 from .studies import StudyController
 from .super_studies import SuperStudyController
 from .token_controller import WebinJwtController
+from .viruses import VirusController
 
 GenomeList.model_rebuild()
 GenomeDetail.model_rebuild()
@@ -69,6 +70,10 @@ api = NinjaExtraAPI(
             "termsOfService": "https://www.ebi.ac.uk/about/terms-of-use",
         },
         "tags": [
+            {
+                OpenApiKeywords.NAME: ApiSections.VIRUSES,
+                OpenApiKeywords.DESCRIPTION: "Viral catalogues and fragments from MAGs or assembly analyses.",
+            },
             {
                 OpenApiKeywords.NAME: ApiSections.STUDIES,
                 OpenApiKeywords.DESCRIPTION: dedent("""
@@ -154,6 +159,7 @@ api.register_controllers(SampleController)
 api.register_controllers(StudyController)
 api.register_controllers(SuperStudyController)
 api.register_controllers(GenomeController)
+api.register_controllers(VirusController)
 api.register_controllers(AssemblyController)
 api.register_controllers(BiomeController)
 api.register_controllers(MyDataController)

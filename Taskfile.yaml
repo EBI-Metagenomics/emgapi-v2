@@ -129,6 +129,11 @@ tasks:
       - mkdir -p slurm-dev-environment/fs/nfs/production/dev-slurm-work-dir
       - chmod -R o+w slurm-dev-environment/fs
 
+      # Serve the compact viral catalogue through the local FTP HTTP service.
+      - mkdir -p slurm-dev-environment/fs/nfs/ftp/public/databases/metagenomics/mgnify_viruses/marine-viruses/v1.0
+      - cp -r slurm-dev-environment/fs/nfs/production/catalogs/marine-viruses/v1.0/viruses slurm-dev-environment/fs/nfs/production/catalogs/marine-viruses/v1.0/plasmids slurm-dev-environment/fs/nfs/production/catalogs/marine-viruses/v1.0/additional_data slurm-dev-environment/fs/nfs/ftp/public/databases/metagenomics/mgnify_viruses/marine-viruses/v1.0/
+      - cp slurm-dev-environment/fs/nfs/production/catalogs/marine-viruses/v1.0/catalogue.json slurm-dev-environment/fs/nfs/ftp/public/databases/metagenomics/mgnify_viruses/marine-viruses/v1.0/
+
   run-dev-genome-catalogue-update:
     desc: "Import the Ocean Prokaryotes v2.0 fixture as a ready catalogue release"
     cmds:

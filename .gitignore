@@ -35,6 +35,7 @@ deployment/**
 dev-db.json
 talisman_report/
 slurm-dev-environment/fs/nfs/ftp/public/databases/metagenomics/mgnify_results/*
+slurm-dev-environment/fs/nfs/ftp/public/databases/metagenomics/mgnify_viruses/
 genomes/temp/*
 slurm-dev-environment/fs/nfs/public/tests/assembly_v6_output/ERP106708/MGYS*
 slurm-dev-environment/fs/nfs/public/tests/amplicon_v6_output/dwca/*
@@ -43,3 +44,4 @@ slurm-dev-environment/fs/hps/ebi-search-e2e
 .claude/*
 CLAUDE.md
 slurm-*.out
+.mi
