@@ -1,10 +1,11 @@
 """Models of the MGYP database. sql/mgyp_schema.sql creates the tables, not Django migrations."""
 
+from collections import defaultdict
 from typing import Iterable
 
-from django.db import models
+from django.db import connections, models
+from django.db.models.functions import Now
 
-from proteins.accessioning.assembly_proteins import mgyp
 from proteins.accessioning.hashing import protein_hash
 from proteins.accessioning.predicted_genes import V6_GENE_CALLERS, GeneCallers
 
@@ -21,7 +22,47 @@ class MGnifyProteinsBase(models.Model):
         managed = False
 
 
+# Hashes in one lookup query. Each query reads one partition, so this only bounds the query's size.
+LOOKUP_CHUNK = 5000
+
+
+def mgyp(id: int) -> str:
+    """The MGYP accession of a protein id.
+
+    :param id: The protein's id.
+    """
+    return f"MGYP{id:012d}"
+
+
+def partition(hash: bytes) -> int:
+    """The protein table's partition of a hash: its top 6 bits, as in mgyp_schema.sql."""
+    return hash[0] >> 2
+
+
 class ProteinQuerySet(models.QuerySet):
+    def ids_of_hashes(self, hashes: Iterable[bytes]) -> dict[bytes, int]:
+        """The protein id of each hash that has one. Hashes without an id are not in the result.
+
+        Each query has the hashes of one partition only. Django sends them as literals,
+        so PostgreSQL reads only that partition.
+
+        :param hashes: Protein hashes.
+        """
+        by_partition = defaultdict(list)
+        for hash in hashes:
+            by_partition[partition(hash)].append(hash)
+        found = {}
+        for group in by_partition.values():
+            for start in range(0, len(group), LOOKUP_CHUNK):
+                chunk = group[start : start + LOOKUP_CHUNK]
+                found |= {
+                    bytes(hash): id
+                    for hash, id in self.filter(hash__in=chunk).values_list(
+                        "hash", "protein_id"
+                    )
+                }
+        return found
+
     def find_mgyps(self, sequences: Iterable[str]) -> dict[str, str]:
         """The MGYP of each sequence that has one. Sequences without an MGYP are not in the result.
 
@@ -30,8 +71,49 @@ class ProteinQuerySet(models.QuerySet):
         :raises InvalidSequence: When a sequence fails the hash contract.
         """
         by_hash = {Protein.hash_of(sequence): sequence for sequence in sequences}
-        found = self.filter(hash__in=by_hash).values_list("hash", "protein_id")
-        return {by_hash[bytes(hash)]: mgyp(protein_id) for hash, protein_id in found}
+        return {
+            by_hash[hash]: mgyp(id) for hash, id in self.ids_of_hashes(by_hash).items()
+        }
+
+    def allocate(
+        self, proteins: list[tuple[bytes, str]], assembly_proteins_id: int
+    ) -> dict[bytes, int]:
+        """Gives ids to new proteins, and stages the ones that this transaction inserted.
+
+        Raw SQL, for correctness: RETURNING gives only the proteins that this INSERT added.
+        The ORM cannot tell them from the proteins that another job added since the lookup,
+        and a protein staged twice goes into the protein dataset twice.
+        Run it in a transaction: the temporary table is dropped at the commit.
+
+        :param proteins: (hash, sequence) of the proteins that the lookup did not find.
+        :param assembly_proteins_id: The record that introduces them.
+        :return: The id of each of the proteins, including those another job added since the lookup.
+        """
+        with connections[self.db].cursor() as cursor:
+            cursor.execute(
+                "CREATE TEMP TABLE new_protein (sequence text, hash bytea PRIMARY KEY) ON COMMIT DROP"
+            )
+            with cursor.copy(
+                "COPY new_protein (hash, sequence) FROM STDIN (FORMAT binary)"
+            ) as copy:
+                copy.set_types(["bytea", "text"])
+                for row in proteins:
+                    copy.write_row(row)
+            # In hash order, so that jobs with overlapping new proteins lock them in the same order.
+            cursor.execute(
+                """
+                WITH ins AS (
+                    INSERT INTO protein (hash, id)
+                    SELECT hash, nextval('protein_id_seq') FROM new_protein ORDER BY hash
+                    ON CONFLICT (hash) DO NOTHING
+                    RETURNING hash, id
+                )
+                INSERT INTO staged_protein (id, hash, sequence, assembly_proteins_id)
+                SELECT ins.id, ins.hash, n.sequence, %s FROM ins JOIN new_protein n USING (hash)
+                """,
+                [assembly_proteins_id],
+            )
+        return self.ids_of_hashes(hash for hash, _ in proteins)
 
 
 class Protein(MGnifyProteinsBase):
@@ -100,7 +182,7 @@ class AssemblyProteins(MGnifyProteinsBase):
     pipeline_version = models.TextField()
     # The assembly analysis (MGYA). With source gene_calling, the analysis that took the proteins.
     analysis_accession = models.TextField(unique=True)
-    ingested_at = models.DateTimeField()
+    ingested_at = models.DateTimeField(db_default=Now())
 
     class Meta(MGnifyProteinsBase.Meta):
         db_table = "assembly_proteins"
@@ -167,7 +249,28 @@ class GeneCaller(MGnifyProteinsBase):
 # The accessioning core writes them, in one transaction for each assembly proteins record.
 # The dataset update copies them to the Parquet files, then deletes them in the same
 # transaction that marks the day done. So these tables are empty after each dataset update.
-# Use the models to count and inspect rows (the status check, the admin), not to write them.
+# The accessioning core writes contigs and occurrences with StagedQuerySet.copy_rows().
+
+
+class StagedQuerySet(models.QuerySet):
+    def copy_rows(self, fields: list[str], rows: Iterable[tuple]) -> None:
+        """Writes rows with COPY. The database gives the ids and staged_at.
+
+        Raw SQL, for speed: for 200,000 occurrences, bulk_create() took about 7x as long.
+
+        :param fields: The model's field names, in the order of each row.
+        :param rows: Tuples of values, in the order of fields.
+        """
+        connection = connections[self.db]
+        table = connection.ops.quote_name(self.model._meta.db_table)
+        columns = ", ".join(
+            connection.ops.quote_name(self.model._meta.get_field(field).column)
+            for field in fields
+        )
+        with connection.cursor() as cursor:
+            with cursor.copy(f"COPY {table} ({columns}) FROM STDIN") as copy:
+                for row in rows:
+                    copy.write_row(row)
 
 
 class StagedProtein(MGnifyProteinsBase):
@@ -177,7 +280,7 @@ class StagedProtein(MGnifyProteinsBase):
     hash = models.BinaryField()
     sequence = models.TextField()
     assembly_proteins = models.ForeignKey(AssemblyProteins, on_delete=models.DO_NOTHING)
-    staged_at = models.DateTimeField()
+    staged_at = models.DateTimeField(db_default=Now())
 
     class Meta(MGnifyProteinsBase.Meta):
         db_table = "staged_protein"
@@ -186,7 +289,7 @@ class StagedProtein(MGnifyProteinsBase):
 class StagedContig(MGnifyProteinsBase):
     """A contig of an ingested assembly, that waits for the next dataset update."""
 
-    id = models.BigIntegerField(primary_key=True)
+    id = models.BigAutoField(primary_key=True)  # from contig_id_seq
     assembly_proteins = models.ForeignKey(AssemblyProteins, on_delete=models.DO_NOTHING)
     name = models.TextField()  # the pipeline's name, for example ERZ101_17
     original_name = models.TextField(
@@ -195,7 +298,9 @@ class StagedContig(MGnifyProteinsBase):
     length = models.IntegerField()
     hash = models.BinaryField()
     kmer_coverage = models.FloatField(null=True)
-    staged_at = models.DateTimeField()
+    staged_at = models.DateTimeField(db_default=Now())
+
+    objects = StagedQuerySet.as_manager()
 
     class Meta(MGnifyProteinsBase.Meta):
         db_table = "staged_contig"
@@ -204,7 +309,7 @@ class StagedContig(MGnifyProteinsBase):
 class StagedOccurrence(MGnifyProteinsBase):
     """One predicted gene: one protein at one position on one contig, from one gene caller. It waits for the next dataset update."""
 
-    id = models.BigIntegerField(primary_key=True)
+    id = models.BigAutoField(primary_key=True)  # from occurrence_id_seq
     assembly_proteins = models.ForeignKey(AssemblyProteins, on_delete=models.DO_NOTHING)
     gene_id = models.TextField()
     # Not a ForeignKey, since Protein is identified by its hash.
@@ -215,7 +320,9 @@ class StagedOccurrence(MGnifyProteinsBase):
     end_position = models.IntegerField()
     strand = models.SmallIntegerField()  # -1 or 1
     truncation = models.TextField(null=True)  # Pyrodigal's partial=XY
-    staged_at = models.DateTimeField()
+    staged_at = models.DateTimeField(db_default=Now())
+
+    objects = StagedQuerySet.as_manager()
 
     class Meta(MGnifyProteinsBase.Meta):
         db_table = "staged_occurrence"

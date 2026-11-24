@@ -12,13 +12,13 @@ The source is the pipeline that called the genes. Today it is always `assembly_a
 |---|---|
 | MGYP database | PostgreSQL, Django alias `mgyp`, schema `proteindb`. It holds the hash and id of each protein, the assembly proteins records, the gene callers, the staged rows, the dataset updates and the owner of the protein dataset. `sql/mgyp_schema.sql` creates it, not Django migrations. The models in `models.py` are unmanaged. |
 | Protein dataset | Parquet files in `EMG_CONFIG.proteins.dataset_dir`. All proteins, contigs and occurrences, and one metadata snapshot for each day. Protein releases read it. |
-| Accessioning core | `accessioning/`: the hash contract, reading the predicted genes, the MGYP lookup and the staging transaction. It does not import Django. |
+| Accessioning core | `accessioning/`: the hash contract, reading the predicted genes, the MGYP lookup and the staging transaction. It uses the models; the raw SQL is in `ProteinQuerySet.allocate()` and `StagedQuerySet.copy_rows()`. |
 
 | Path | |
 |---|---|
 | `sql/mgyp_schema.sql`, `sql/mgyp_roles.sql` | The schema and its grants, and the role settings |
-| `apps.py`, `models.py`, `admin.py`, `routers.py` | Django: the system check, unmanaged models, read-only admin, the router and the `mgyp` connection |
-| `accessioning/` | The accessioning core (no Django) |
+| `apps.py`, `models.py`, `admin.py`, `routers.py` | Django: the system check, unmanaged models, read-only admin, the router |
+| `accessioning/` | The accessioning core |
 | `readers.py` | The FASTA and GFF readers |
 | `ingestion/assembly_analyses.py` | Pending analyses, chunks, and the ingestion of one analysis |
 | `dataset/parquet_files.py`, `dataset/export/metadata_snapshot.py` | The protein dataset files, and the metadata snapshot |
@@ -39,7 +39,6 @@ The source is the pipeline that called the genes. Today it is always `assembly_a
 | `EMG_PROTEINS__TMP_DIR` | The dataset update's scratch, and where DuckDB spills while it sorts, on `/hps/nobackup`: up to ~22 GB for one prefix of the merge. It must exist, and the jobs of the `slurm` work pool must be able to create and delete files in it. |
 | `EMG_PROTEINS__DUCKDB_MEMORY_LIMIT` | The memory limit of DuckDB when it sorts, `32GB`. DuckDB goes over it, so keep it about half of the job memory. |
 | `EMG_PROTEINS__INGESTION_CHUNK_SIZE` | Analyses in one chunk flow run, `50`. |
-| `EMG_PROTEINS__CONNECTION_WAIT_SECONDS` | How long a connection to the MGYP database waits while all connections are taken, `600`. |
 | `EMG_PROTEINS__DATASET_CONCURRENCY_LIMIT` | The Prefect global concurrency limit that the dataset update and the merge share, `protein-dataset`. |
 
 | Role | Used by |
@@ -121,4 +120,4 @@ An update or merge that fails at start with "The protein dataset is owned by job
 
 ## Tests
 
-`pytest proteins`. The tests cover the hash contract, the file readers, and that the accessioning core does not import Django.
+`pytest proteins`. The tests cover the hash contract, the file readers, and the accessioning core.

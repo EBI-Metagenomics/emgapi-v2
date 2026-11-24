@@ -1,6 +1,5 @@
 import os
 import subprocess
-from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
 from uuid import uuid4
@@ -117,18 +116,6 @@ def emptied_mgyp_db(mgyp_db):
         "UPDATE proteindb.dataset_owner SET flow = NULL, slurm_job_id = NULL,"
         " slurm_submit_at = NULL, execution_id = NULL, flow_run_id = NULL, acquired_at = NULL"
     )
-
-
-@pytest.fixture
-def connect_accession(emptied_mgyp_db):
-    """The accessioning core's connect: autocommit connections as proteindb_accession."""
-
-    @contextmanager
-    def connect():
-        with psycopg.connect(role_dsn("proteindb_accession"), autocommit=True) as conn:
-            yield conn
-
-    return connect
 
 
 def write_assembly(directory: Path, sequences: list[str], caller="Pyrodigal_v3.6.3"):

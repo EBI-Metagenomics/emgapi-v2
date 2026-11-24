@@ -1,4 +1,5 @@
 import shutil
+from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime, timezone
 from functools import cache
 from unittest.mock import patch
@@ -8,6 +9,7 @@ import psycopg
 import pyarrow as pa
 import pyarrow.parquet as pq
 import pytest
+from django.db import connections
 
 from analyses.models import Study
 from proteins.accessioning.assembly_proteins import accession_assembly_proteins
@@ -75,15 +77,27 @@ def study():
     return make_study("PRJ1")
 
 
+def as_another_job(function, *args):
+    """Runs function in a thread, so that it has its own connections and commits, as another job does."""
+
+    def run_and_close():
+        try:
+            return function(*args)
+        finally:
+            connections.close_all()
+
+    with ThreadPoolExecutor(1) as pool:
+        return pool.submit(run_and_close).result()
+
+
 @pytest.fixture
-def stage(connect_accession, study):
+def stage(study):
     """Accessions an assembly for a new analysis of it, by default one emgapi-v2 knows."""
 
     def stage(assembly, version="V6", known=True, input=None):
         analysis = make_analysis(study, assembly, version)
         # Few connections, so that 8 xdist workers stay within the server's limit.
         accession_assembly_proteins(
-            connect_accession,
             assembly,
             "assembly_analysis",
             analysis.pipeline_major_minor,
@@ -569,7 +583,7 @@ def test_an_analysis_committed_while_an_update_reads_waits_for_the_next(
 
     def choose_then_commit_another(cursor):
         chosen = choose(cursor)
-        committed.append(stage(*late))
+        committed.append(as_another_job(stage, *late))
         return chosen
 
     with patch.object(
@@ -597,7 +611,7 @@ def test_an_analysis_committed_while_an_update_reads_waits_for_the_next(
     ids=["known-proteins", "new-protein"],
 )
 def test_a_rebuild_after_an_analysis_committed_while_an_update_read_stages_it_once(
-    root, stage, late, connect_accession
+    root, stage, late
 ):
     stage("ERZ101")
     choose = daily_update.choose_assembly_proteins
@@ -605,7 +619,7 @@ def test_a_rebuild_after_an_analysis_committed_while_an_update_read_stages_it_on
 
     def choose_then_commit_another(cursor):
         chosen = choose(cursor)
-        committed.append(stage(*late))
+        committed.append(as_another_job(stage, *late))
         return chosen
 
     with patch.object(
@@ -622,7 +636,6 @@ def test_a_rebuild_after_an_analysis_committed_while_an_update_read_stages_it_on
     build_mgyp_database(owner_dsn(), root, rebuild=True, protein_id_start=last + 1)
     analysis = committed[0]
     accession_assembly_proteins(
-        connect_accession,
         late[0],
         "assembly_analysis",
         analysis.pipeline_major_minor,
@@ -662,7 +675,7 @@ def test_a_record_whose_mgya_is_not_in_emgapi_is_withheld_and_the_rest_loaded(
 
 
 def test_a_rebuild_restores_a_withheld_record_and_never_gives_its_id_to_another(
-    root, stage, connect_accession
+    root, stage
 ):
     stage("ERZ101")
     withheld = stage("ERZ29562087", known=False)
@@ -682,7 +695,6 @@ def test_a_rebuild_restores_a_withheld_record_and_never_gives_its_id_to_another(
     unrelated = stage("ERZ25069264")
     withheld.save(force_insert=True)
     accession_assembly_proteins(
-        connect_accession,
         "ERZ29562087",
         "assembly_analysis",
         withheld.pipeline_major_minor,

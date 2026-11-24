@@ -10,7 +10,6 @@ from analyses.models import Analysis
 from proteins.accessioning.assembly_proteins import accession_assembly_proteins
 from proteins.accessioning.predicted_genes import read_predicted_genes
 from proteins.models import AssemblyProteins, GeneCaller
-from proteins.routers import mgyp_connection
 
 logger = logging.getLogger(__name__)
 
@@ -146,7 +145,6 @@ def ingest_analysis(analysis_accession: str) -> IngestionResult:
         gene_callers=GeneCaller.of_pipeline_version(version),
     )
     ids = accession_assembly_proteins(
-        mgyp_connection,
         erz,
         AssemblyProteins.Source.ASSEMBLY_ANALYSIS.value,
         version,
