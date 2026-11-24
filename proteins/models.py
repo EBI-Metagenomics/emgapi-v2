@@ -6,8 +6,8 @@ from typing import Iterable
 from django.db import connections, models
 from django.db.models.functions import Now
 
+from analyses.models import V6_GENE_CALLERS, GeneCallers
 from proteins.accessioning.hashing import protein_hash
-from proteins.accessioning.predicted_genes import V6_GENE_CALLERS, GeneCallers
 
 
 class UnsupportedPipelineVersion(Exception):

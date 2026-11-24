@@ -4,6 +4,7 @@ import csv
 import re
 from typing import NamedTuple
 
+from analyses.models import V6_GENE_CALLERS, GeneCallers
 from proteins.readers import open_text, read_fasta, read_gff
 
 from .hashing import InvalidSequence, contig_hash, protein_hash
@@ -12,10 +13,6 @@ SPADES_COVERAGE = re.compile(r"_cov_([0-9]+(?:\.[0-9]+)?)")
 PARTIAL = re.compile(r"(?<![^;\s])partial=([^;\s]*)")
 TRUNCATIONS = {"00", "01", "10", "11"}
 PIPELINE_VERSION = re.compile(r"([0-9]\.[0-9])(\..*)?")
-
-# Each gene caller of a pipeline version, and whether its FASTA headers carry a partial= flag.
-GeneCallers = dict[str, bool]
-V6_GENE_CALLERS: GeneCallers = {"Pyrodigal": True, "FragGeneScanRS": False}
 
 
 class InvalidInput(ValueError):

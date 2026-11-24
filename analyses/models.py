@@ -900,6 +900,12 @@ class PredictedGenesFiles(NamedTuple):
     contig_map: Path | None = None
 
 
+# PROTOTYPE: fabricated for the proteins app. The analyses app owns these gene callers.
+# Each gene caller of a pipeline version, and whether its FASTA headers carry a partial= flag.
+GeneCallers = dict[str, bool]
+V6_GENE_CALLERS: GeneCallers = {"Pyrodigal": True, "FragGeneScanRS": False}
+
+
 class Analysis(
     InferredMetadataMixin,
     TimeStampedModel,
