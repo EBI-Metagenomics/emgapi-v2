@@ -6,8 +6,6 @@ from django.db.models import Q
 
 from analyses.base_models.base_models import TimeStampedModel
 from analyses.base_models.with_downloads_models import WithDownloadsModel
-from emgapiv2.model_utils import JSONFieldWithSchema
-from viruses.occurrences import ViralFragmentOccurrence
 
 
 class ViralCatalogue(WithDownloadsModel, TimeStampedModel):
@@ -21,7 +19,7 @@ class ViralCatalogue(WithDownloadsModel, TimeStampedModel):
         related_name="catalogues",
     )
 
-    catalogue_id = models.SlugField(max_length=100, primary_key=True)
+    catalogue_id = models.CharField(max_length=40, primary_key=True)
     name = models.CharField(max_length=200)
     version = models.CharField(max_length=40)
     description = models.TextField(blank=True)
@@ -33,6 +31,21 @@ class ViralCatalogue(WithDownloadsModel, TimeStampedModel):
 
     class Meta:
         ordering = ["catalogue_id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["is_public"],
+                condition=Q(is_public=True),
+                name="one_public_viral_catalogue",
+            )
+        ]
+
+    def clean(self) -> None:
+        """Use a release version as the catalogue identifier."""
+        super().clean()
+        if self.catalogue_id != f"v{self.version.removeprefix('v')}":
+            raise ValidationError(
+                {"catalogue_id": "Use the version ID, for example v1.0"}
+            )
 
     def __str__(self) -> str:
         return self.name
@@ -52,7 +65,7 @@ class ViralFragment(TimeStampedModel):
 
 
 class ViralCatalogueViralFragment(TimeStampedModel):
-    """Representative annotations and source occurrences for one catalogue release."""
+    """Representative summaries and original cluster metadata for one release."""
 
     catalogue = models.ForeignKey(
         ViralCatalogue, on_delete=models.CASCADE, related_name="fragment_entries"
@@ -70,17 +83,17 @@ class ViralCatalogueViralFragment(TimeStampedModel):
     is_provirus = models.BooleanField(default=False)
     sequence_type = models.CharField(
         max_length=20,
-        choices=[("virus", "Virus"), ("prophage", "Prophage")],
+        choices=[("virus", "Virus"), ("prophage", "Prophage"), ("plasmid", "Plasmid")],
         default="virus",
         db_index=True,
     )
     taxonomy = models.JSONField(default=dict, blank=True)
-    metadata = models.JSONField(default=dict, blank=True)
-    occurrences = JSONFieldWithSchema(
-        schema=ViralFragmentOccurrence, is_list=True, default=list
+    metadata_rows = models.JSONField(default=list)
+    source_analyses = models.ManyToManyField(
+        "analyses.Analysis", blank=True, related_name="viral_cluster_entries"
     )
-    cluster_member_occurrences = JSONFieldWithSchema(
-        schema=ViralFragmentOccurrence, is_list=True, default=list, blank=True
+    source_genomes = models.ManyToManyField(
+        "genomes.CatalogueGenome", blank=True, related_name="viral_cluster_entries"
     )
 
     class Meta:
@@ -109,36 +122,21 @@ class ViralCatalogueViralFragment(TimeStampedModel):
         return self.fragment.nt_sequence_sha256
 
     def clean(self) -> None:
-        """Validate occurrence roles without imposing a checksum uniqueness rule."""
+        """Validate the raw metadata subset against its representative."""
         super().clean()
-        if not self.occurrences:
+        if not self.metadata_rows or not any(
+            row.get("ID") == self.accession for row in self.metadata_rows
+        ):
             raise ValidationError(
-                {"occurrences": "A representative must have an occurrence"}
+                {"metadata_rows": "The representative row is required"}
             )
-        representatives = [
-            ViralFragmentOccurrence.model_validate(item) for item in self.occurrences
-        ]
-        members = [
-            ViralFragmentOccurrence.model_validate(item)
-            for item in self.cluster_member_occurrences
-        ]
-        if any(item.fragment_accession != self.accession for item in representatives):
+        if any(row.get("Cluster_rep") != self.accession for row in self.metadata_rows):
             raise ValidationError(
-                {
-                    "occurrences": "Representative occurrences must match the fragment accession"
-                }
+                {"metadata_rows": "All rows must belong to this cluster"}
             )
-        if any(item.fragment_accession == self.accession for item in members):
+        if self.cluster_size != len({row["ID"] for row in self.metadata_rows}):
             raise ValidationError(
-                {
-                    "cluster_member_occurrences": "Member occurrences must exclude the representative"
-                }
-            )
-        if self.cluster_size != 1 + len({item.fragment_accession for item in members}):
-            raise ValidationError(
-                {
-                    "cluster_size": "Cluster size must match the distinct member accessions"
-                }
+                {"cluster_size": "Cluster size must match distinct metadata IDs"}
             )
 
     def __str__(self) -> str:

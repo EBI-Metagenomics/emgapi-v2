@@ -240,14 +240,34 @@ def catalogue_downloads(directory: Path) -> list[dict]:
     :param directory: The catalogue release root.
     :return: Available curated downloads with relative paths.
     """
+    groups = [
+        *DOWNLOAD_GROUPS,
+        (
+            "viruses.viral_taxonomy",
+            DownloadType.TAXONOMIC_ANALYSIS,
+            [
+                (
+                    f"viruses/cluster_representatives/taxonomy/{db}/{db}_krona.html",
+                    f"{label} Krona taxonomy",
+                    f"Interactive {label} viral taxonomy.",
+                )
+                for db, label in [
+                    ("genomad", "geNomad"),
+                    ("viphogs", "ViPhOG"),
+                    ("vitap", "VITAP"),
+                ]
+            ],
+        ),
+    ]
     downloads = []
-    for group, download_type, files in DOWNLOAD_GROUPS:
+    for group, download_type, files in groups:
         for relative, label, description in files:
             path = directory / relative
             if not path.is_file() or path.is_symlink():
                 continue
             suffix = Path(path.name.removesuffix(".gz")).suffix.lower()
             file_type = {
+                ".html": DownloadFileType.HTML,
                 ".tsv": DownloadFileType.TSV,
                 ".csv": DownloadFileType.CSV,
                 ".txt": DownloadFileType.TSV,

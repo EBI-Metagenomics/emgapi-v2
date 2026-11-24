@@ -31,4 +31,4 @@ class ViralCatalogueViralFragmentAdmin(JSONFieldWidgetOverridesMixin, ModelAdmin
     list_display = ("fragment", "catalogue", "cluster_size", "checkv_quality")
     list_filter = ("catalogue", "checkv_quality")
     search_fields = ("fragment__accession",)
-    raw_id_fields = ("fragment",)
+    raw_id_fields = ("fragment", "source_analyses", "source_genomes")

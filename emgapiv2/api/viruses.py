@@ -1,15 +1,17 @@
-"""Public endpoints for MGnify Viruses."""
+"""Live and administrator-preview MGnify Viruses endpoints."""
 
 from typing import Literal
 
-from django.db.models import Count, Exists, F, Func, OuterRef, Q, Sum, Value
-from django.db.models.fields.json import DataContains
-from django.db.models.functions import Coalesce, JSONObject
+from django.db.models import Count, Q, Sum, Value
+from django.db.models.functions import Coalesce
 from django.shortcuts import get_object_or_404
+from ninja import Query
 from ninja_extra import api_controller, http_get, paginate
 from ninja_extra.schemas import NinjaPaginationResponseSchema
 
 from analyses.models import Analysis
+from emgapiv2.api.auth import NoAuth, WebinJWTAuth
+from emgapiv2.api.perms import IsWebinAdmin
 from emgapiv2.api.schema_utils import ApiSections
 from genomes.models import CatalogueGenome
 from viruses.models import ViralCatalogue, ViralCatalogueViralFragment
@@ -20,43 +22,37 @@ from viruses.schemas import (
 )
 
 
-def referenced_source(queryset, key):
-    """Check both occurrence arrays for sources whose visibility changed."""
-    needle = Func(JSONObject(**{key: F("pk")}), function="jsonb_build_array")
-    return Exists(
-        queryset.filter(
-            DataContains(OuterRef("occurrences"), needle)
-            | DataContains(OuterRef("cluster_member_occurrences"), needle)
+def visible_fragments(request):
+    """Keep unpublished catalogues and private source rows behind admin access."""
+    entries = ViralCatalogueViralFragment.objects.all()
+    if IsWebinAdmin().has_permission(request, None):
+        return entries
+    return entries.filter(catalogue__is_public=True).exclude(
+        Q(
+            source_analyses__in=Analysis.objects.filter(
+                Q(is_private=True) | Q(is_suppressed=True) | Q(is_ready=False)
+            )
+        )
+        | Q(
+            source_genomes__in=CatalogueGenome.objects.exclude(
+                catalogue__status__in=["published", "retired"]
+            )
         )
     )
 
 
-def public_fragments():
-    """Hide clusters containing private analyses or unreleased genome sources."""
-    invalid_analyses = Analysis.objects.filter(
-        Q(is_private=True) | Q(is_suppressed=True) | Q(is_ready=False)
-    )
-    invalid_genomes = CatalogueGenome.objects.exclude(
-        catalogue__status__in=["published", "retired"]
-    )
-    return (
-        ViralCatalogueViralFragment.objects.filter(catalogue__is_public=True)
-        .alias(
-            hidden_analysis=referenced_source(invalid_analyses, "analysis_id"),
-            hidden_genome=referenced_source(invalid_genomes, "catalogue_genome_id"),
-        )
-        .filter(hidden_analysis=False, hidden_genome=False)
-    )
-
-
-def public_catalogues():
-    """Count representatives separately from sequences across their clusters."""
-    visible = Q(fragment_entries__in=public_fragments())
-    return ViralCatalogue.objects.filter(is_public=True).annotate(
-        fragment_count=Count("fragment_entries", filter=visible),
-        cluster_count=Count("fragment_entries", filter=visible),
+def visible_catalogues(request):
+    """Count the imported representatives visible to this caller."""
+    catalogues = ViralCatalogue.objects.all()
+    if not IsWebinAdmin().has_permission(request, None):
+        catalogues = catalogues.filter(is_public=True)
+    visible = Q(fragment_entries__in=visible_fragments(request))
+    viral = visible & ~Q(fragment_entries__sequence_type="plasmid")
+    return catalogues.annotate(
+        fragment_count=Count("fragment_entries", filter=viral),
+        cluster_count=Count("fragment_entries", filter=viral),
         total_sequence_count=Coalesce(
-            Sum("fragment_entries__cluster_size", filter=visible), Value(0)
+            Sum("fragment_entries__cluster_size", filter=viral), Value(0)
         ),
         virus_count=Count(
             "fragment_entries",
@@ -67,23 +63,26 @@ def public_catalogues():
             filter=visible & Q(fragment_entries__sequence_type="prophage"),
         ),
         provirus_count=Count(
-            "fragment_entries", filter=visible & Q(fragment_entries__is_provirus=True)
+            "fragment_entries", filter=viral & Q(fragment_entries__is_provirus=True)
+        ),
+        plasmid_count=Count(
+            "fragment_entries",
+            filter=visible & Q(fragment_entries__sequence_type="plasmid"),
         ),
     )
 
 
-@api_controller("viruses", tags=[ApiSections.VIRUSES])
+@api_controller("viruses", tags=[ApiSections.VIRUSES], auth=[WebinJWTAuth(), NoAuth()])
 class VirusController:
-    """Browse catalogue releases and their fragments."""
+    """Open the live release, or an administrator's preview version."""
 
     @http_get(
-        "/catalogues/",
-        response=NinjaPaginationResponseSchema[ViralCatalogueSchema],
-        operation_id="list_viral_catalogues",
+        "/catalogues/latest",
+        response=ViralCatalogueSchema,
+        operation_id="get_latest_viral_catalogue",
     )
-    @paginate()
-    def list_catalogues(self, request):
-        return public_catalogues()
+    def latest(self, request):
+        return get_object_or_404(visible_catalogues(request), is_public=True)
 
     @http_get(
         "/catalogues/{catalogue_id}",
@@ -91,7 +90,7 @@ class VirusController:
         operation_id="get_viral_catalogue",
     )
     def get_catalogue(self, request, catalogue_id: str):
-        return get_object_or_404(public_catalogues(), pk=catalogue_id)
+        return get_object_or_404(visible_catalogues(request), pk=catalogue_id)
 
     @http_get(
         "/catalogues/{catalogue_id}/fragments",
@@ -103,12 +102,16 @@ class VirusController:
         self,
         request,
         catalogue_id: str,
+        kind: Literal["viruses", "plasmids"] = "viruses",
         search: str = "",
         source_type: Literal["genome", "analysis"] | None = None,
-        cluster_representative: str | None = None,
-        representatives_only: bool = False,
-        is_provirus: bool | None = None,
-        sequence_type: Literal["virus", "prophage"] | None = None,
+        sequence_type: Literal["virus", "prophage", "plasmid"] | None = None,
+        completeness_min: float | None = Query(None, ge=0, le=100),
+        completeness_max: float | None = Query(None, ge=0, le=100),
+        contamination_min: float | None = Query(None, ge=0, le=100),
+        contamination_max: float | None = Query(None, ge=0, le=100),
+        length_min: int | None = Query(None, ge=0),
+        length_max: int | None = Query(None, ge=0),
         order: Literal[
             "accession",
             "-accession",
@@ -116,38 +119,52 @@ class VirusController:
             "-length",
             "completeness",
             "-completeness",
+            "contamination",
+            "-contamination",
             "",
         ] = "accession",
     ):
-        get_object_or_404(ViralCatalogue, pk=catalogue_id, is_public=True)
-        fragments = (
-            public_fragments()
+        get_object_or_404(visible_catalogues(request), pk=catalogue_id)
+        entries = (
+            visible_fragments(request)
             .filter(catalogue_id=catalogue_id)
             .select_related("fragment")
         )
+        entries = (
+            entries.filter(sequence_type="plasmid")
+            if kind == "plasmids"
+            else entries.exclude(sequence_type="plasmid")
+        )
         if search:
-            fragments = fragments.filter(
+            entries = entries.filter(
                 Q(fragment__accession__icontains=search)
-                | Q(occurrences__icontains=search)
-                | Q(cluster_member_occurrences__icontains=search)
-                | Q(taxonomy__icontains=search)
+                | Q(metadata_rows__icontains=search)
             )
         if source_type:
-            fragments = fragments.filter(
-                Q(occurrences__contains=[{"source_type": source_type}])
-                | Q(cluster_member_occurrences__contains=[{"source_type": source_type}])
+            sources = (
+                [source_type, "assembly"]
+                if source_type == "analysis"
+                else [source_type]
             )
-        if is_provirus is not None:
-            fragments = fragments.filter(is_provirus=is_provirus)
+            query = Q()
+            for source in sources:
+                query |= Q(metadata_rows__contains=[{"Source": source}])
+            entries = entries.filter(query)
         if sequence_type:
-            fragments = fragments.filter(sequence_type=sequence_type)
-        if cluster_representative:
-            fragments = fragments.filter(fragment__accession=cluster_representative)
-        # Every stored catalogue entry is a representative; keep the old flag harmless.
+            entries = entries.filter(sequence_type=sequence_type)
+        for field, lower, upper in [
+            ("completeness", completeness_min, completeness_max),
+            ("contamination", contamination_min, contamination_max),
+            ("length", length_min, length_max),
+        ]:
+            if lower is not None:
+                entries = entries.filter(**{f"{field}__gte": lower})
+            if upper is not None:
+                entries = entries.filter(**{f"{field}__lte": upper})
         field = order or "accession"
         if field in {"accession", "-accession"}:
             field = field.replace("accession", "fragment__accession")
-        return fragments.order_by(field, "pk")
+        return entries.order_by(field, "pk")
 
     @http_get(
         "/catalogues/{catalogue_id}/fragments/{accession}",
@@ -156,7 +173,7 @@ class VirusController:
     )
     def get_fragment(self, request, catalogue_id: str, accession: str):
         return get_object_or_404(
-            public_fragments().select_related("fragment"),
+            visible_fragments(request).select_related("fragment", "catalogue"),
             catalogue_id=catalogue_id,
             fragment__accession=accession,
         )

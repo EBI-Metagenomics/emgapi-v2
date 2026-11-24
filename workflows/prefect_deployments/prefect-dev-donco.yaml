@@ -208,7 +208,7 @@ deployments:
   entrypoint: workflows/flows/import_viral_catalogue_flow.py:import_viral_catalogue_flow
   parameters:
     results_directory: /nfs/production/catalogs/marine-viruses/v1.0
-    catalogue_id: marine-viruses-v1-0
+    catalogue_id: v1.0
     name: Marine Viruses v1.0 (development fixture)
     version: "1.0"
     biome: Marine

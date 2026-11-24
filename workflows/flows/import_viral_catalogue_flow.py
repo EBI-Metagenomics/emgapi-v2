@@ -17,7 +17,6 @@ from analyses.models import Analysis
 from genomes.models import CatalogueGenome
 from viruses.downloads import catalogue_downloads
 from viruses.models import ViralCatalogue, ViralCatalogueViralFragment, ViralFragment
-from viruses.occurrences import ViralFragmentOccurrence
 from workflows.prefect_utils.flows_utils import django_db_flow as flow
 from workflows.prefect_utils.flows_utils import django_db_task as task
 
@@ -29,10 +28,6 @@ REQUIRED_COLUMNS = {
     "Source_accession",
     "Sequence_length",
     "Sequence_sha256",
-    "checkv_quality",
-    "completeness",
-    "contamination",
-    "provirus",
 }
 MISSING = {"", "NA", "N/A", "missing", "None", "-"}
 ANNOTATION_FIELDS = (
@@ -63,14 +58,14 @@ def optional_number(value: str) -> float | None:
     return number
 
 
-def read_fragments(directory: Path) -> list[dict]:
+def read_fragments(directory: Path, kind: str = "viruses") -> list[dict]:
     """Validate all detections, including repeated accessions at different sources.
 
     :param directory: The catalogue root.
     :return: Validated source rows and their provenance snapshots.
     :raises ValueError: If identifiers, annotations or cluster references conflict.
     """
-    compressed = directory / "viruses/viruses-all-metadata.tsv.gz"
+    compressed = directory / f"{kind}/{kind}-all-metadata.tsv.gz"
     path = compressed if compressed.exists() else compressed.with_suffix("")
     opener = gzip.open if path.suffix == ".gz" else open
     rows = []
@@ -159,31 +154,19 @@ def read_fragments(directory: Path) -> list[dict]:
                         raise ValueError(
                             f"Source {analysis_accession} is not an assembly analysis"
                         )
-            occurrence = ViralFragmentOccurrence(
-                fragment_accession=accession,
-                nt_sequence_sha256=checksum,
-                original_id=source["Original_ID"],
-                prediction_tool=source.get("Source_of_prediction", ""),
-                source_type=source_type,
-                source_accession=source["Source_accession"],
-                source_genome_accession=genome_accession,
-                catalogue_genome_id=genome.pk if genome else None,
-                genome_catalogue_id=genome.catalogue_id if genome else None,
-                analysis_id=analysis.pk if analysis else None,
-                analysis_accession=str(analysis.accession) if analysis else None,
-                source_sample=source.get("Source_sample", ""),
-                source_study=source.get("Source_project", ""),
-                source_lineage=source.get("Source_lineage", ""),
-            )
-            if source["provirus"] not in {"Yes", "No"}:
+            links = {
+                "catalogue_genome_id": genome.pk if genome else None,
+                "analysis_id": analysis.pk if analysis else None,
+            }
+            if source.get("provirus", "No") not in {"Yes", "No"}:
                 raise ValueError(f"Invalid provirus value for {accession}")
             length = int(source["Sequence_length"])
             if length <= 0:
                 raise ValueError(f"Invalid sequence length for {accession}")
-            sequence_type = source.get("Sequence_type") or (
-                "prophage" if "|prophage-" in source["Original_ID"] else "virus"
-            )
-            if sequence_type not in {"virus", "prophage"}:
+            sequence_type = (
+                "plasmid" if kind == "plasmids" else source.get("Sequence_type")
+            ) or ("prophage" if "|prophage-" in source["Original_ID"] else "virus")
+            if sequence_type not in {"virus", "prophage", "plasmid"}:
                 raise ValueError(f"Invalid fragment type for {accession}")
             rows.append(
                 {
@@ -192,18 +175,18 @@ def read_fragments(directory: Path) -> list[dict]:
                     "cluster_representative": source["Cluster_rep"],
                     "length": length,
                     "prediction_tool": source.get("Source_of_prediction", ""),
-                    "checkv_quality": source["checkv_quality"],
+                    "checkv_quality": source.get("checkv_quality", ""),
                     "miuvig_quality": source.get("miuvig_quality", ""),
-                    "completeness": optional_number(source["completeness"]),
-                    "contamination": optional_number(source["contamination"]),
-                    "is_provirus": source["provirus"] == "Yes",
+                    "completeness": optional_number(source.get("completeness", "")),
+                    "contamination": optional_number(source.get("contamination", "")),
+                    "is_provirus": source.get("provirus", "No") == "Yes",
                     "sequence_type": sequence_type,
                     "taxonomy": {
                         key: source.get(f"{key}_lineage", "")
                         for key in ("vitap", "viphogs", "genomad")
                     },
                     "metadata": source,
-                    "occurrence": occurrence.model_dump(),
+                    "links": links,
                 }
             )
     if not rows:
@@ -221,7 +204,7 @@ def read_fragments(directory: Path) -> list[dict]:
 
 
 def group_fragments(rows: list[dict]) -> list[dict]:
-    """Keep representative annotations and concatenate both occurrence classes.
+    """Keep representative summaries and the original rows of each cluster.
 
     :param rows: Validated detections from the metadata table.
     :return: One entry payload per representative.
@@ -243,18 +226,7 @@ def group_fragments(rows: list[dict]) -> list[dict]:
             for row in representatives[1:]
         ):
             raise ValueError(f"Conflicting representative annotations for {accession}")
-        occurrences = []
-        members = []
-        seen = set()
-        for row in detections:
-            occurrence = row["occurrence"]
-            key = json.dumps(occurrence, sort_keys=True)
-            if key in seen:
-                continue
-            seen.add(key)
-            (occurrences if row["accession"] == accession else members).append(
-                occurrence
-            )
+        metadata_rows = [row["metadata"] for row in detections]
         entries.append(
             {
                 **{field: representative[field] for field in ANNOTATION_FIELDS},
@@ -269,10 +241,18 @@ def group_fragments(rows: list[dict]) -> list[dict]:
                     )
                 ),
                 "nt_sequence_sha256": representative["nt_sequence_sha256"],
-                "metadata": representative["metadata"],
+                "metadata_rows": metadata_rows,
+                "analysis_ids": {
+                    row["links"]["analysis_id"]
+                    for row in detections
+                    if row["links"]["analysis_id"]
+                },
+                "genome_ids": {
+                    row["links"]["catalogue_genome_id"]
+                    for row in detections
+                    if row["links"]["catalogue_genome_id"]
+                },
                 "cluster_size": len({row["accession"] for row in detections}),
-                "occurrences": occurrences,
-                "cluster_member_occurrences": members,
             }
         )
     return entries
@@ -307,15 +287,19 @@ def import_catalogue(
     """
     directory = Path(results_directory)
     rows = read_fragments(directory)
+    if (directory / "plasmids/plasmids-all-metadata.tsv.gz").exists() or (
+        directory / "plasmids/plasmids-all-metadata.tsv"
+    ).exists():
+        rows += read_fragments(directory, "plasmids")
     payloads = group_fragments(rows)
     if is_public:
-        occurrences = [row["occurrence"] for row in rows]
+        source_links = [row["links"] for row in rows]
         analysis_ids = {
-            item["analysis_id"] for item in occurrences if item["analysis_id"]
+            item["analysis_id"] for item in source_links if item["analysis_id"]
         }
         genome_ids = {
             item["catalogue_genome_id"]
-            for item in occurrences
+            for item in source_links
             if item["catalogue_genome_id"]
         }
         if Analysis.public_objects.filter(pk__in=analysis_ids).count() != len(
@@ -348,9 +332,16 @@ def import_catalogue(
         "downloads": catalogue_downloads(directory),
     }.items():
         setattr(catalogue, key, value)
+    if is_public:
+        ViralCatalogue.objects.exclude(pk=catalogue.pk).filter(is_public=True).update(
+            is_public=False
+        )
     catalogue.full_clean()
-    entries = []
+    catalogue.save()
+    catalogue.fragment_entries.all().delete()
     for payload in payloads:
+        analysis_ids = payload.pop("analysis_ids")
+        genome_ids = payload.pop("genome_ids")
         accession = payload.pop("accession")
         checksum = payload.pop("nt_sequence_sha256")
         fragment, _ = ViralFragment.objects.get_or_create(
@@ -371,10 +362,9 @@ def import_catalogue(
             catalogue=catalogue, fragment=fragment, **payload
         )
         entry.full_clean(validate_unique=False, validate_constraints=False)
-        entries.append(entry)
-    catalogue.save()
-    catalogue.fragment_entries.all().delete()
-    ViralCatalogueViralFragment.objects.bulk_create(entries, batch_size=1000)
+        entry.save()
+        entry.source_analyses.set(analysis_ids)
+        entry.source_genomes.set(genome_ids)
     return catalogue
 
 

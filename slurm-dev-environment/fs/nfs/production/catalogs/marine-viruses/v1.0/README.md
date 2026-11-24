@@ -98,7 +98,7 @@ from workflows.flows.import_viral_catalogue_flow import import_viral_catalogue_f
 
 import_viral_catalogue_flow(
     results_directory='/nfs/donco/results/marine-viruses/v1.0',
-    catalogue_id='marine-viruses-v1-0',
+    catalogue_id='v1.0',
     name='Marine Viruses v1.0 (development fixture)',
     version='1.0',
     biome='Marine',
@@ -107,39 +107,25 @@ import_viral_catalogue_flow(
 )
 ```
 
-## Database identities and occurrence snapshots
+## Database identities and cluster metadata
 
+The importer reads both viral and plasmid metadata tables.
 Only cluster representatives become database fragment records.
-`ViralFragment` stores the stable accession and nucleotide SHA256.
-The database does not require nucleotide hashes to be unique.
-The pipeline assigns accessions to sequences.
-`ViralCatalogueViralFragment` stores each release's representative annotations.
-Its uniqueness constraint covers catalogue and fragment together.
-One fragment identity can therefore occur in several catalogue releases.
+`ViralFragment` stores each stable accession and nucleotide SHA256.
+`ViralCatalogueViralFragment` stores release annotations and the original metadata rows for the complete cluster.
+The detail endpoint returns these rows with a link to their source TSV.
+Source-analysis and catalogue-genome relations preserve current source visibility checks.
 
-The importer groups the complete metadata table by `Cluster_rep`.
-Representative rows supply the annotations.
-Repeated representative detections supply `occurrences`.
-Other member detections supply `cluster_member_occurrences`.
-These JSON arrays use the existing Pydantic-validated field implementation.
-Each item retains its own fragment accession, nucleotide checksum, source, and original sequence identifier.
-Identical duplicate detections are collapsed.
-Distinct source locations remain separate.
-Cluster size counts distinct fragment accessions, rather than detection rows.
-
-Optional `Source_catalogue_genome` values identify exact `CatalogueGenome` records.
-Optional `Source_genome_catalogue` values select a genome release alongside `Source_genome`.
-Otherwise, a local genome link uses its published catalogue snapshot.
-Optional `Source_analysis` values identify exact assembly analyses.
-Occurrence snapshots retain these identifiers without requiring another occurrence table.
-The API checks current visibility of local source references.
-The raw metadata remains a catalogue download.
-All member annotations remain available through the catalogue FTP directory.
+Catalogue identifiers are version IDs such as `v1.0`.
+Only one catalogue can be public at a time.
+Importing a public release makes previous releases private.
+Authenticated Webin administrators can inspect private versions directly.
+The latest-release endpoint always selects the public release.
 
 ## Website downloads
 
 The fixture retains all 107 source paths.
-The API registers 33 labelled downloads from these paths.
+The API registers 36 labelled downloads from these paths.
 The curated groups follow the example pages: coding sequences, metadata, viral taxonomy,
 host taxonomy, functional annotation, and protein catalogue.
 Additional count files support the website charts.

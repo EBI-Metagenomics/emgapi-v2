@@ -8,7 +8,6 @@ from ninja import Schema
 from pydantic import Field
 
 from emgapiv2.api.downloads import MGnifyDownloadFile
-from viruses.occurrences import ViralFragmentOccurrence
 
 
 class ViralDownloadFile(MGnifyDownloadFile):
@@ -41,9 +40,8 @@ class ViralCatalogueSchema(Schema):
     downloads: list[ViralDownloadFile]
 
     @staticmethod
-    def resolve_plasmid_count(obj) -> int | None:
-        """Read plasmid totals separately from viral fragments."""
-        return obj.other_stats.get("plasmids")
+    def resolve_plasmid_count(obj) -> int:
+        return obj.plasmid_count
 
     @staticmethod
     def resolve_downloads(obj) -> list[dict]:
@@ -62,102 +60,35 @@ class ViralCatalogueSchema(Schema):
 
 
 class ViralFragmentSchema(Schema):
-    """Fragment quality, taxonomies and source provenance."""
+    """Fields needed for the representative list and its filters."""
 
     accession: str
     catalogue_id: str
-    original_id: str
-    cluster_representative: str
     length: int
-    sequence_sha256: str
-    nt_sequence_sha256: str
     cluster_size: int
-    occurrence_count: int
-    cluster_member_occurrence_count: int
-    source_types: list[str]
-    source_type: str
-    source_accession: str
-    source_genome_accession: str | None
-    source_analysis_accession: str | None
-    source_sample: str
-    source_study: str
-    source_lineage: str
-    prediction_tool: str
+    sequence_type: str
     checkv_quality: str
-    miuvig_quality: str
     completeness: float | None
     contamination: float | None
-    is_provirus: bool
-    sequence_type: str
-    taxonomy: dict[str, str]
-
-    @staticmethod
-    def resolve_sequence_sha256(obj) -> str:
-        """Expose the nucleotide checksum through the existing API field."""
-        return obj.nt_sequence_sha256
-
-    @staticmethod
-    def resolve_cluster_representative(obj):
-        return obj.accession
-
-    @staticmethod
-    def resolve_occurrence_count(obj):
-        return len(obj.occurrences)
-
-    @staticmethod
-    def resolve_cluster_member_occurrence_count(obj):
-        return len(obj.cluster_member_occurrences)
+    source_types: list[str]
 
     @staticmethod
     def resolve_source_types(obj):
         return sorted(
             {
-                ViralFragmentOccurrence.model_validate(item).source_type
-                for item in [*obj.occurrences, *obj.cluster_member_occurrences]
+                "analysis" if row["Source"] == "assembly" else row["Source"]
+                for row in obj.metadata_rows
             }
         )
 
-    @staticmethod
-    def resolve_original_id(obj):
-        return primary_occurrence(obj).original_id
-
-    @staticmethod
-    def resolve_source_type(obj):
-        return primary_occurrence(obj).source_type
-
-    @staticmethod
-    def resolve_source_accession(obj):
-        return primary_occurrence(obj).source_accession
-
-    @staticmethod
-    def resolve_source_genome_accession(obj):
-        return primary_occurrence(obj).source_genome_accession
-
-    @staticmethod
-    def resolve_source_analysis_accession(obj):
-        return primary_occurrence(obj).analysis_accession
-
-    @staticmethod
-    def resolve_source_sample(obj):
-        return primary_occurrence(obj).source_sample
-
-    @staticmethod
-    def resolve_source_study(obj):
-        return primary_occurrence(obj).source_study
-
-    @staticmethod
-    def resolve_source_lineage(obj):
-        return primary_occurrence(obj).source_lineage
-
 
 class ViralFragmentDetail(ViralFragmentSchema):
-    """The complete source metadata for one fragment."""
+    """Original metadata rows for a representative and its cluster members."""
 
-    metadata: dict
-    occurrences: list[ViralFragmentOccurrence]
-    cluster_member_occurrences: list[ViralFragmentOccurrence]
+    metadata_rows: list[dict[str, str]]
+    metadata_url: str
 
-
-def primary_occurrence(obj) -> ViralFragmentOccurrence:
-    """Provide the first representative detection for compatibility fields."""
-    return ViralFragmentOccurrence.model_validate(obj.occurrences[0])
+    @staticmethod
+    def resolve_metadata_url(obj):
+        kind = "plasmids" if obj.sequence_type == "plasmid" else "viruses"
+        return obj.catalogue.ftp_url.rstrip("/") + f"/{kind}/{kind}-all-metadata.tsv.gz"

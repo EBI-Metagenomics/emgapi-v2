@@ -6,7 +6,6 @@ from django.conf import settings
 
 from analyses.models import Analysis
 from viruses.models import ViralCatalogue
-from viruses.occurrences import ViralFragmentOccurrence
 from workflows.flows.import_viral_catalogue_flow import import_catalogue
 
 
@@ -20,7 +19,7 @@ def seed_dev_viral_catalogue() -> ViralCatalogue:
             Path(settings.BASE_DIR)
             / "slurm-dev-environment/fs/nfs/production/catalogs/marine-viruses/v1.0"
         ),
-        catalogue_id="marine-viruses-v1-0",
+        catalogue_id="v1.0",
         name="Marine Viruses v1.0 (development fixture)",
         version="1.0",
         biome="Marine",
@@ -35,15 +34,5 @@ def seed_dev_viral_catalogue() -> ViralCatalogue:
         entry = catalogue.fragment_entries.select_related("fragment").get(
             fragment__accession="MGYV9999999999"
         )
-        occurrence = ViralFragmentOccurrence.model_validate(
-            entry.occurrences[0]
-        ).model_copy(
-            update={
-                "analysis_id": analysis.pk,
-                "analysis_accession": str(analysis.accession),
-            }
-        )
-        entry.occurrences = [occurrence.model_dump()]
-        entry.full_clean()
-        entry.save(update_fields=["occurrences", "updated_at"])
+        entry.source_analyses.add(analysis)
     return catalogue
