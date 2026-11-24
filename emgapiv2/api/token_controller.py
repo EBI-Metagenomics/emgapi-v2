@@ -1,11 +1,9 @@
 import logging
 
-from django.conf import settings
 from ninja.errors import HttpError
 from ninja_extra import api_controller, http_post
 from ninja_extra.permissions import AllowAny
 from ninja_jwt.controller import NinjaJWTSlidingController
-from ninja_jwt.tokens import SlidingToken
 
 from emgapiv2.api import ApiSections
 from emgapiv2.api.auth import (
@@ -17,6 +15,7 @@ from emgapiv2.api.auth import (
     authenticate_webin_user,
     get_webin_account_details,
 )
+from emgapiv2.webin_tokens import create_webin_token
 
 logger = logging.getLogger(__name__)
 
@@ -47,11 +46,7 @@ class WebinJwtController(NinjaJWTSlidingController):
         if not (webin_id := authenticate_webin_user(username, password)):
             raise HttpError(401, "Invalid credentials")
 
-        token = SlidingToken()
-        token["username"] = webin_id
-        admin_account = settings.EMG_CONFIG.webin.emg_webin_account
-        if admin_account and webin_id.casefold() == admin_account.casefold():
-            token["is_admin"] = True
+        token = create_webin_token(webin_id)
 
         return WebinTokenResponse(token=str(token), token_type="sliding")
 

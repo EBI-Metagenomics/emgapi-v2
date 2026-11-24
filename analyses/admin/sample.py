@@ -8,6 +8,7 @@ from analyses.admin.base import (
     TabularInlinePaginatedWithTabSupport,
 )
 from analyses.models import Sample, SampleRelatedSample
+from emgapiv2.admin_mixins import ImpersonateOwnerAdminMixin
 
 
 class SampleRelatedSamplesInline(TabularInlinePaginatedWithTabSupport):
@@ -18,7 +19,16 @@ class SampleRelatedSamplesInline(TabularInlinePaginatedWithTabSupport):
 
 
 @admin.register(Sample)
-class SampleAdmin(ENABrowserLinkMixin, JSONFieldWidgetOverridesMixin, ModelAdmin):
+class SampleAdmin(
+    ImpersonateOwnerAdminMixin,
+    ENABrowserLinkMixin,
+    JSONFieldWidgetOverridesMixin,
+    ModelAdmin,
+):
+    impersonation_path = "samples"
+    impersonation_accession_field = "first_accession"
+    actions_detail = ENABrowserLinkMixin.actions_detail + ["impersonate_owner"]
+
     search_fields = [
         "id",
         "ena_accessions",

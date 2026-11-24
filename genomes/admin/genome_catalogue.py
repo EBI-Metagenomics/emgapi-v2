@@ -8,11 +8,17 @@ from unfold.decorators import action
 from unfold.enums import ActionVariant
 
 from analyses.admin.base import JSONFieldWidgetOverridesMixin
+from emgapiv2.admin_mixins import ImpersonateOwnerAdminMixin
 from genomes.models import GenomeCatalogue
 
 
 @admin.register(GenomeCatalogue)
-class GenomeCatalogueAdmin(JSONFieldWidgetOverridesMixin, ModelAdmin):
+class GenomeCatalogueAdmin(
+    ImpersonateOwnerAdminMixin, JSONFieldWidgetOverridesMixin, ModelAdmin
+):
+    impersonation_path = "genome-catalogues"
+    impersonation_accession_field = "catalogue_id"
+
     search_fields = [
         "name",
         "catalogue_id",
@@ -30,7 +36,7 @@ class GenomeCatalogueAdmin(JSONFieldWidgetOverridesMixin, ModelAdmin):
     ]
     list_filter = ["status", "series__catalogue_type", "series"]
     actions = ["publish_selected_releases"]
-    actions_detail = ["publish_release"]
+    actions_detail = ["publish_release", "impersonate_owner"]
     readonly_fields = [
         "status",
         "published_at",
@@ -103,9 +109,12 @@ class GenomeCatalogueAdmin(JSONFieldWidgetOverridesMixin, ModelAdmin):
 
     def get_actions_detail(self, request, object_id):
         catalogue = self.get_queryset(request).filter(pk=object_id).first()
+        actions = super().get_actions_detail(request, object_id)
         if catalogue is None or catalogue.status != GenomeCatalogue.Status.READY:
-            return []
-        return super().get_actions_detail(request, object_id)
+            actions = [
+                action for action in actions if action.method != self.publish_release
+            ]
+        return actions
 
     def _publish(self, request, catalogue_ids):
         try:

@@ -372,6 +372,7 @@ class LegacyServiceConfig(BaseModel):
 
 
 class ServiceURLsConfig(BaseModel):
+    web_client_root: str = "http://localhost:9000/metagenomics"
     app_root: str = "http://localhost:8000"
     base_url: str = ""
     transfer_services_url_root: str = (
