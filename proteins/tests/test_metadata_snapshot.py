@@ -2,6 +2,8 @@ from unittest.mock import patch
 
 import pyarrow as pa
 import pytest
+from django.db import connection
+from django.test.utils import CaptureQueriesContext
 
 from analyses.models import Analysis, Biome
 from proteins.dataset import parquet_files
@@ -170,3 +172,35 @@ def test_an_mgya_not_in_emgapi_takes_its_metadata_from_the_copy_of_v1(tmp_path):
             "is_suppressed": True,
         }
     ]
+
+
+def test_the_biome_lineages_take_the_same_queries_for_any_number_of_biomes(
+    engineered, tmp_path, django_assert_num_queries
+):
+    host = Biome.objects.create(biome_name="Host-associated", path="root.host")
+    human = Biome.objects.create(biome_name="Human", path="root.host.human")
+    study = make_study("PRJ1")
+    analyses = []
+    for erz, biome in ("ERZ1", engineered), ("ERZ2", host), ("ERZ3", human):
+        analysis = make_analysis(study, erz)
+        analysis.sample.biome = biome
+        analysis.sample.save()
+        analyses.append(analysis)
+
+    with CaptureQueriesContext(connection) as one_biome:
+        metadata_snapshot.find_analyses([analyses[0].accession], tmp_path)
+    with django_assert_num_queries(len(one_biome)):
+        known = metadata_snapshot.find_analyses(
+            [analysis.accession for analysis in analyses], tmp_path
+        )
+
+    assert {mgya: row["biome_lineage"] for mgya, row in known.items()} == {
+        analysis.accession: analysis.sample.biome.pretty_lineage
+        for analysis in analyses
+    }
+
+
+def test_a_biome_lineage_leaves_out_an_ancestor_not_in_the_table(engineered):
+    gut = Biome.objects.create(biome_name="Gut", path="root.host.gut")
+    assert metadata_snapshot.biome_lineages({gut.id}) == {gut.id: gut.pretty_lineage}
+    assert gut.pretty_lineage == "root:Gut"

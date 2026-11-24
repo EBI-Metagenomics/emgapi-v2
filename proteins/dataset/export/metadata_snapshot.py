@@ -1,10 +1,13 @@
 """The metadata snapshot: what emgapi-v2, or MGnify v1, knows of each assembly proteins record, written each day with the protein dataset."""
 
 import logging
+from functools import reduce
+from operator import or_
 from pathlib import Path
 
 import pyarrow as pa
 import pyarrow.parquet as pq
+from django.db.models import Q
 
 from analyses.models import Analysis, Biome, Study
 from proteins.dataset import parquet_files
@@ -48,10 +51,7 @@ def find_analyses(mgyas: list[str], root: Path) -> dict[str, dict]:
         mgya: row["sample__biome_id"] or row["study__biome_id"]
         for mgya, row in rows.items()
     }
-    lineages = {
-        biome.id: biome.pretty_lineage
-        for biome in Biome.objects.filter(id__in=set(biomes.values()))
-    }
+    lineages = biome_lineages(set(biomes.values()) - {None})
     known = {
         mgya: {
             "study_accession": row["study__accession"],
@@ -78,6 +78,36 @@ def find_analyses(mgyas: list[str], root: Path) -> dict[str, dict]:
             del row["assembly_accession"], row["pipeline_version"]
             known[row.pop("analysis_accession")] = row | {"from_v1": True}
     return known
+
+
+def biome_lineages(biome_ids: set[int]) -> dict[int, str]:
+    """Each biome's lineage, as Biome.pretty_lineage gives it, in 2 queries for any number of biomes.
+
+    :param biome_ids: The biomes.
+    :return: By biome id, the lineage, for example "root:Host-associated:Human".
+    """
+    paths = dict(Biome.objects.filter(id__in=biome_ids).values_list("id", "path"))
+    if not paths:
+        return {}
+    # A path's ancestors include the path itself, as in Biome.ancestors().
+    is_ancestor = reduce(or_, (Q(path__ancestors=path) for path in paths.values()))
+    names = {
+        ".".join(path): name
+        for path, name in Biome.objects.filter(is_ancestor).values_list(
+            "path", "biome_name"
+        )
+    }
+    # Like Biome.ancestors(), this leaves out an ancestor that is not in the table.
+    return {
+        id: ":".join(
+            names[ancestor]
+            for ancestor in (
+                ".".join(path[:depth]) for depth in range(1, len(path) + 1)
+            )
+            if ancestor in names
+        )
+        for id, path in paths.items()
+    }
 
 
 def build_snapshot(
