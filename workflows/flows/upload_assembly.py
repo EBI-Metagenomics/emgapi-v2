@@ -31,6 +31,11 @@ from workflows.prefect_utils.slurm_flow import (
 )
 from workflows.prefect_utils.slurm_policies import ResubmitIfFailedPolicy
 
+WEBIN_CLI_REPORT = "webin-cli.report"
+WEBIN_CLI_ABS_CONSENT_MESSAGE = (
+    "Incomplete Access and Benefit Sharing (ABS) acknowledgement"
+)
+
 OPTIONAL_SPADES_FILES = [
     ".assembly_graph.fastg.gz",
     ".assembly_graph_with_scaffolds.gfa.gz",
@@ -350,7 +355,7 @@ def prepare_assembly(
 def get_assigned_assembly_accession(assembly: analyses.models.Assembly, manifest: Path):
     logger = get_run_logger()
     logger.info(f"Getting assembly accession for {assembly}")
-    webin_cli_log = manifest.parent / Path("webin-cli.report")
+    webin_cli_log = manifest.parent / Path(WEBIN_CLI_REPORT)
     logger.info(f"Looking for {webin_cli_log}")
     if os.path.exists(webin_cli_log):
         with open(webin_cli_log, "r") as report:
@@ -372,6 +377,19 @@ def get_assigned_assembly_accession(assembly: analyses.models.Assembly, manifest
 @task()
 def add_erz_accession(assembly: analyses.models.Assembly, erz_accession):
     assembly.add_erz_accession(erz_accession)
+
+
+def is_webin_cli_abs_consent_error(manifest: Path, job_log: Optional[str]) -> bool:
+    """
+    Checks whether webin-cli failed because the Webin account has not completed the ABS acknowledgement.
+    The message is in webin-cli.report and in webin-cli's stdout (part of the slurm job log).
+    """
+    if job_log and WEBIN_CLI_ABS_CONSENT_MESSAGE in job_log:
+        return True
+    report = manifest.parent / WEBIN_CLI_REPORT
+    return report.is_file() and WEBIN_CLI_ABS_CONSENT_MESSAGE in report.read_text(
+        errors="ignore"
+    )
 
 
 @task(
@@ -409,7 +427,7 @@ def submit_assembly_slurm(
             ("-userName", username),
             ("-password", password),
             EMG_CONFIG.webin.aspera_ascp_executor and "-ascp",
-            dry_run and "-test -validate",
+            dry_run and ("-test", "-validate"),
             not dry_run and "-submit",
         ]
     )
@@ -430,10 +448,16 @@ def submit_assembly_slurm(
             resubmit_policy=ResubmitIfFailedPolicy,
             working_dir=manifest.parent,
         )
-    except ClusterJobFailedException:
-        logger.error(
-            f"Something went wrong running webin-cli upload for {mgnify_assembly}"
-        )
+    except ClusterJobFailedException as e:
+        if is_webin_cli_abs_consent_error(manifest, e.message):
+            logger.error(
+                f"webin-cli upload for {mgnify_assembly} failed: Webin account {username} has not completed "
+                f"the Access and Benefit Sharing (ABS) acknowledgement."
+            )
+        else:
+            logger.error(
+                f"Something went wrong running webin-cli upload for {mgnify_assembly}"
+            )
         mark_assembly_status(
             mgnify_assembly,
             status=mgnify_assembly.AssemblyStates.ASSEMBLY_UPLOAD_FAILED,
