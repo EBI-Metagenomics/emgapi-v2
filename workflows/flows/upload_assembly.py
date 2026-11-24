@@ -381,7 +381,7 @@ def add_erz_accession(assembly: analyses.models.Assembly, erz_accession):
 
 def is_webin_cli_abs_consent_error(manifest: Path, job_log: Optional[str]) -> bool:
     """
-    Whether webin-cli failed because the Webin account has not completed the ABS acknowledgement.
+    Checks whether webin-cli failed because the Webin account has not completed the ABS acknowledgement.
     The message is in webin-cli.report and in webin-cli's stdout (part of the slurm job log).
     """
     if job_log and WEBIN_CLI_ABS_CONSENT_MESSAGE in job_log:
