@@ -6,8 +6,9 @@ import pytest
 from django.core.management import call_command
 from psycopg.conninfo import make_conninfo
 
-from proteins.dataset import layout, update
+from proteins.dataset import parquet_files
 from proteins.dataset.build import LOST_MGYP_MARGIN, BuildError, build_mgyp_database
+from proteins.dataset.export import daily_update
 from proteins.routers import MGYP
 from proteins.tests.conftest import owner_dsn, query
 
@@ -52,11 +53,13 @@ GENE_CALLERS = [
 
 
 def write_day(root, day, proteins, kind, records=RECORDS):
-    for prefix in {layout.prefix(hash) for hash in proteins}:
+    for prefix in {parquet_files.prefix(hash) for hash in proteins}:
         rows = [
-            (id, hash) for hash, id in proteins.items() if layout.prefix(hash) == prefix
+            (id, hash)
+            for hash, id in proteins.items()
+            if parquet_files.prefix(hash) == prefix
         ]
-        layout.write(
+        parquet_files.write(
             root / "protein" / f"prefix={prefix}" / f"{kind}-{day}.parquet",
             "protein",
             pa.table(
@@ -68,7 +71,7 @@ def write_day(root, day, proteins, kind, records=RECORDS):
             ),
         )
     contig_id, occurrence_id = (7, 12) if day == M else (8, 13)
-    layout.write(
+    parquet_files.write(
         root / "contig" / f"day={day}" / "part-000.parquet",
         "contig",
         pa.table(
@@ -83,7 +86,7 @@ def write_day(root, day, proteins, kind, records=RECORDS):
             }
         ),
     )
-    layout.write(
+    parquet_files.write(
         root / "occurrence" / f"day={day}" / "part-000.parquet",
         "occurrence",
         pa.table(
@@ -98,7 +101,7 @@ def write_day(root, day, proteins, kind, records=RECORDS):
             }
         ),
     )
-    layout.write(
+    parquet_files.write(
         root / "occurrence_analysis" / f"day={day}" / "part-000.parquet",
         "occurrence_analysis",
         pa.table(
@@ -131,13 +134,13 @@ def write_day(root, day, proteins, kind, records=RECORDS):
         ("metadata/assemblies", ASSEMBLIES),
         ("metadata/gene_callers", GENE_CALLERS),
     ]:
-        layout.write(
+        parquet_files.write(
             root
             / "metadata"
             / f"day={day}"
             / f"{table.removeprefix('metadata/')}.parquet",
             table,
-            pa.Table.from_pylist(rows, layout.SCHEMAS[table]),
+            pa.Table.from_pylist(rows, parquet_files.SCHEMAS[table]),
         )
 
 
@@ -284,7 +287,7 @@ def test_a_rebuild_builds_the_latest_day_and_skips_the_margin_of_protein_ids(
         (D, "done"),
     ]
     # The next dataset update's first step finds the MGYP database level with the protein dataset.
-    update.clean_up_failed_update(migrated)
+    daily_update.clean_up_failed_update(migrated)
 
 
 def test_command_builds_from_the_configured_protein_dataset(

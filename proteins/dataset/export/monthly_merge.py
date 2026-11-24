@@ -10,7 +10,7 @@ from pathlib import Path
 
 from django.conf import settings
 
-from proteins.dataset import layout
+from proteins.dataset import parquet_files
 from proteins.dataset.owner import Owner
 
 logger = logging.getLogger(__name__)
@@ -41,9 +41,9 @@ def merge_dataset(root: Path, owner: Owner) -> int:
     :param owner: This run's ownership of the protein dataset, checked before each prefix.
     :return: The number of prefixes merged.
     """
-    day = layout.complete_days(root)[-1]
+    day = parquet_files.complete_days(root)[-1]
     by_prefix = defaultdict(list)
-    for path in layout.files(root, "protein", day):
+    for path in parquet_files.files(root, "protein", day):
         by_prefix[path.parent].append(path)
     merged = 0
     for prefix, files in sorted(by_prefix.items()):
@@ -64,7 +64,7 @@ def merge_prefix(prefix: Path, files: list[Path], day: date) -> None:
     """
     logger.info("merging %s: %d files", prefix.name, len(files))
     base = prefix / f"base-{day}.parquet"
-    layout.merge(
+    parquet_files.merge(
         base,
         "protein",
         files,

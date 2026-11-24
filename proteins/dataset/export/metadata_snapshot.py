@@ -7,7 +7,7 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 
 from analyses.models import Analysis, Biome, Study
-from proteins.dataset import layout
+from proteins.dataset import parquet_files
 
 logger = logging.getLogger(__name__)
 
@@ -70,7 +70,7 @@ def find_analyses(mgyas: list[str], root: Path) -> dict[str, dict]:
         }
         for mgya, row in rows.items()
     }
-    v1 = root / layout.V1_ANALYSES
+    v1 = root / parquet_files.V1_ANALYSES
     if (missing := set(mgyas) - known.keys()) and v1.exists():
         for row in pq.read_table(
             v1, filters=[("analysis_accession", "in", sorted(missing))]
@@ -125,4 +125,6 @@ def build_snapshot(
         for record in records
         if record["analysis_accession"] in known
     ]
-    return pa.Table.from_pylist(rows, layout.SCHEMAS["metadata/assembly_proteins"])
+    return pa.Table.from_pylist(
+        rows, parquet_files.SCHEMAS["metadata/assembly_proteins"]
+    )

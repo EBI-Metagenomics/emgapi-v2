@@ -4,7 +4,7 @@ from prefect import get_run_logger
 
 from activate_django_first import EMG_CONFIG
 
-from proteins.dataset.status import status
+from proteins.status import status
 from workflows.prefect_utils.flows_utils import django_db_flow as flow
 
 

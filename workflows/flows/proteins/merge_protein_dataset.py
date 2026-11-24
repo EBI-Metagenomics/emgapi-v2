@@ -4,7 +4,7 @@ from prefect import get_run_logger
 
 from activate_django_first import EMG_CONFIG
 
-from proteins.dataset import merge
+from proteins.dataset.export import monthly_merge
 from proteins.dataset.owner import Owner, owner
 from workflows.prefect_utils.flows_utils import django_db_flow as flow
 from workflows.prefect_utils.flows_utils import django_db_task as task
@@ -12,12 +12,12 @@ from workflows.prefect_utils.flows_utils import django_db_task as task
 
 @task(task_run_name="Clean up an interrupted merge")
 def clean_up_interrupted_merge(root: Path) -> None:
-    merge.clean_up_interrupted_merge(root)
+    monthly_merge.clean_up_interrupted_merge(root)
 
 
 @task(task_run_name="Merge the protein files of each prefix")
 def merge_dataset(root: Path, owned: Owner) -> int:
-    return merge.merge_dataset(root, owned)
+    return monthly_merge.merge_dataset(root, owned)
 
 
 @flow(flow_run_name="Merge the protein dataset")

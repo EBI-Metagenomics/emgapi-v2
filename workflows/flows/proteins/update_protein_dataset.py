@@ -6,7 +6,7 @@ from prefect import get_run_logger
 
 from activate_django_first import EMG_CONFIG
 
-from proteins.dataset import update
+from proteins.dataset.export import daily_update
 from proteins.dataset.owner import Owner, owner
 from workflows.prefect_utils.flows_utils import django_db_flow as flow
 from workflows.prefect_utils.flows_utils import django_db_task as task
@@ -14,34 +14,36 @@ from workflows.prefect_utils.flows_utils import django_db_task as task
 
 @task(task_run_name="Clean up a failed dataset update")
 def clean_up_failed_update(root: Path) -> None:
-    update.clean_up_failed_update(root)
+    daily_update.clean_up_failed_update(root)
 
 
 @task(task_run_name="Check if the dataset update of {day} is done")
 def is_done(day: date) -> bool:
-    return update.is_done(day)
+    return daily_update.is_done(day)
 
 
 @task(task_run_name="Start the dataset update of {day}")
 def start_update(day: date) -> int:
-    return update.start_update(day)
+    return daily_update.start_update(day)
 
 
 @task(task_run_name="Read the staged rows")
-def read_staged_rows(scratch: Path) -> update.Staged:
-    return update.read_staged_rows(scratch)
+def read_staged_rows(scratch: Path) -> daily_update.Staged:
+    return daily_update.read_staged_rows(scratch)
 
 
 @task(
     task_run_name="Write the protein, contig, occurrence and occurrence_analysis files of {day}"
 )
-def write_day_files(root: Path, day: date, staged: update.Staged) -> dict[str, int]:
-    return update.write_day_files(root, day, staged)
+def write_day_files(
+    root: Path, day: date, staged: daily_update.Staged
+) -> dict[str, int]:
+    return daily_update.write_day_files(root, day, staged)
 
 
 @task(task_run_name="Write the metadata snapshot of {day}")
-def write_metadata_snapshot(root: Path, day: date, staged: update.Staged) -> None:
-    update.write_metadata_snapshot(root, day, staged)
+def write_metadata_snapshot(root: Path, day: date, staged: daily_update.Staged) -> None:
+    daily_update.write_metadata_snapshot(root, day, staged)
 
 
 @task(task_run_name="Finish dataset update {update_id}")
@@ -51,12 +53,12 @@ def finish_update(
     counts: dict[str, int],
     owned: Owner,
 ) -> None:
-    update.finish_update(update_id, assembly_proteins_ids, counts, owned)
+    daily_update.finish_update(update_id, assembly_proteins_ids, counts, owned)
 
 
 @task(task_run_name="Mark {day} complete")
 def mark_day_complete(root: Path, day: date) -> None:
-    update.mark_day_complete(root, day)
+    daily_update.mark_day_complete(root, day)
 
 
 @flow(flow_run_name="Update the protein dataset")
@@ -90,7 +92,7 @@ def update_protein_dataset():
                 finish_update(update_id, staged.assembly_proteins_ids, counts, owned)
         except Exception as e:
             # Marks the row failed only if finish_update did not commit.
-            update.record_error(update_id, e, failed=True)
+            daily_update.record_error(update_id, e, failed=True)
             raise
 
         owned.check()

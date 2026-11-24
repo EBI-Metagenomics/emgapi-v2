@@ -21,10 +21,10 @@ The source is the pipeline that called the genes. Today it is always `assembly_a
 | `accessioning/` | The accessioning core (no Django) |
 | `readers.py` | The FASTA and GFF readers |
 | `ingestion/assembly_analyses.py` | Pending analyses, chunks, and the ingestion of one analysis |
-| `dataset/layout.py`, `dataset/metadata.py` | The protein dataset layout, and the metadata snapshot |
-| `dataset/update.py`, `dataset/merge.py` | The steps of the dataset update and of the merge |
+| `dataset/parquet_files.py`, `dataset/export/metadata_snapshot.py` | The protein dataset files, and the metadata snapshot |
+| `dataset/export/daily_update.py`, `dataset/export/monthly_merge.py` | The steps of the dataset update and of the merge |
 | `dataset/owner.py` | Ownership of the protein dataset: the limit, the slot and the owner record |
-| `dataset/status.py` | The state and its checks |
+| `status.py` | The state and its checks |
 | `dataset/build.py`, `management/commands/build_mgyp_database.py` | Building the MGYP database from the protein dataset, after the migration and to recover a lost database. A command, because it runs as `proteindb_owner` |
 | `workflows/flows/proteins/` | The Prefect flows, which run the rest of the work |
 

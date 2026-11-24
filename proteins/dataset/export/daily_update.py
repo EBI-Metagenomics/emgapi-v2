@@ -17,7 +17,8 @@ from django.conf import settings
 from django.db import connections, transaction
 from django.utils import timezone
 
-from proteins.dataset import layout, metadata
+from proteins.dataset import parquet_files
+from proteins.dataset.export import metadata_snapshot
 from proteins.dataset.owner import Owner
 from proteins.models import DatasetUpdate
 from proteins.routers import MGYP
@@ -26,7 +27,7 @@ logger = logging.getLogger(__name__)
 
 # The staged tables, with the columns read from each.
 STAGED_SCHEMAS = {
-    "protein": layout.SCHEMAS["protein"],
+    "protein": parquet_files.SCHEMAS["protein"],
     "contig": pa.schema(
         [
             ("id", pa.int64()),
@@ -34,7 +35,7 @@ STAGED_SCHEMAS = {
             ("name", pa.string()),
             ("original_name", pa.string()),
             ("length", pa.int32()),
-            ("hash", layout.HASH),
+            ("hash", parquet_files.HASH),
             ("kmer_coverage", pa.float64()),
         ]
     ),
@@ -128,14 +129,14 @@ def clean_up_failed_update(root: Path) -> None:
             "day", flat=True
         )
     )
-    complete = set(layout.complete_days(root))
+    complete = set(parquet_files.complete_days(root))
     # As after a restore of the MGYP database to before an update: that update's rows are staged again.
     if ahead := sorted(complete - done):
         raise DatasetUpdateError(
             f"The protein dataset has days that are not done in dataset_update: {', '.join(map(str, ahead))}."
             " The protein dataset is ahead of the MGYP database, so updating again would duplicate their rows"
         )
-    for day in sorted((layout.days_with_files(root) | done) - complete):
+    for day in sorted((parquet_files.days_with_files(root) | done) - complete):
         if day not in done:
             logger.warning("deleting the files of %s, left by a failed update", day)
             delete_day(root, day)
@@ -215,15 +216,16 @@ def read_staged_rows(scratch: Path) -> Staged:
                 " FROM assembly_proteins"
             )
             assembly_proteins = to_table(
-                cursor.fetchall(), layout.SCHEMAS["metadata/assembly_proteins_registry"]
+                cursor.fetchall(),
+                parquet_files.SCHEMAS["metadata/assembly_proteins_registry"],
             )
             cursor.execute("SELECT id, accession FROM assembly")
             assemblies = to_table(
-                cursor.fetchall(), layout.SCHEMAS["metadata/assemblies"]
+                cursor.fetchall(), parquet_files.SCHEMAS["metadata/assemblies"]
             )
             cursor.execute("SELECT id, name, version FROM gene_caller")
             gene_callers = to_table(
-                cursor.fetchall(), layout.SCHEMAS["metadata/gene_callers"]
+                cursor.fetchall(), parquet_files.SCHEMAS["metadata/gene_callers"]
             )
         files = {}
         for table, schema in STAGED_SCHEMAS.items():
@@ -284,17 +286,17 @@ def write_day_files(root: Path, day: date, staged: Staged) -> dict[str, int]:
     # Sorted by hash, the rows are also grouped by prefix, the hash's top bits.
     memory_limit = settings.EMG_CONFIG.proteins.duckdb_memory_limit
     tmp_dir = settings.EMG_CONFIG.proteins.tmp_dir
-    batches = layout.sorted_batches(
+    batches = parquet_files.sorted_batches(
         "protein", [staged.files["protein"]], memory_limit, tmp_dir
     )
     for prefix, slices in groupby(by_prefix(batches), itemgetter(0)):
-        layout.write_sorted(
+        parquet_files.write_sorted(
             root / "protein" / f"prefix={prefix}" / f"day-{day}.parquet",
             "protein",
             (batch for _, batch in slices),
         )
     counts = {"protein": pq.ParquetFile(staged.files["protein"]).metadata.num_rows}
-    with layout.connect(memory_limit, tmp_dir) as con:
+    with parquet_files.connect(memory_limit, tmp_dir) as con:
         con.register("registry", staged.assembly_proteins)
         con.register(
             "loading",
@@ -308,11 +310,13 @@ def write_day_files(root: Path, day: date, staged: Staged) -> dict[str, int]:
             # Only complete days, so that a rerun after a failure matches against the same rows.
             if held:
                 con.read_parquet(
-                    [str(path) for path in layout.files(root, table)],
+                    [str(path) for path in parquet_files.files(root, table)],
                     hive_partitioning=False,
                 ).create_view(f"{table}_files")
             else:
-                con.register(f"{table}_files", layout.SCHEMAS[table].empty_table())
+                con.register(
+                    f"{table}_files", parquet_files.SCHEMAS[table].empty_table()
+                )
             con.execute(
                 f"CREATE TEMP TABLE existing_{table} AS {sql.format(f'{table}_files')}"
             )
@@ -320,12 +324,12 @@ def write_day_files(root: Path, day: date, staged: Staged) -> dict[str, int]:
             con.execute(sql)
         for table, sql in DAY_FILES.items():
             path = root / table / f"day={day}" / "part-000.parquet"
-            layout.write_sorted(
+            parquet_files.write_sorted(
                 path,
                 table,
                 con.execute(
-                    f"{sql} ORDER BY {', '.join(layout.SORT_ORDER[table])}"
-                ).to_arrow_reader(layout.ROW_GROUP_SIZE),
+                    f"{sql} ORDER BY {', '.join(parquet_files.SORT_ORDER[table])}"
+                ).to_arrow_reader(parquet_files.ROW_GROUP_SIZE),
             )
             counts[table] = pq.ParquetFile(path).metadata.num_rows
     return counts
@@ -341,7 +345,9 @@ def by_prefix(
     """
     for batch in batches:
         start = 0
-        for prefix, run in groupby(map(layout.prefix, batch["hash"].to_pylist())):
+        for prefix, run in groupby(
+            map(parquet_files.prefix, batch["hash"].to_pylist())
+        ):
             length = sum(1 for _ in run)
             yield prefix, batch.slice(start, length)
             start += length
@@ -355,22 +361,24 @@ def write_metadata_snapshot(root: Path, day: date, staged: Staged) -> None:
     :param staged: What read_staged_rows() read.
     """
     directory = root / "metadata" / f".tmp-day={day}"
-    layout.write(
+    parquet_files.write(
         directory / "assembly_proteins.parquet",
         "metadata/assembly_proteins",
-        metadata.build_snapshot(staged.assembly_proteins, staged.assemblies, root),
+        metadata_snapshot.build_snapshot(
+            staged.assembly_proteins, staged.assemblies, root
+        ),
     )
-    layout.write(
+    parquet_files.write(
         directory / "assembly_proteins_registry.parquet",
         "metadata/assembly_proteins_registry",
         staged.assembly_proteins,
     )
-    layout.write(
+    parquet_files.write(
         directory / "assemblies.parquet",
         "metadata/assemblies",
         staged.assemblies,
     )
-    layout.write(
+    parquet_files.write(
         directory / "gene_callers.parquet",
         "metadata/gene_callers",
         staged.gene_callers,

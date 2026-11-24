@@ -12,8 +12,9 @@ import pytest
 from analyses.models import Study
 from proteins.accessioning.assembly_proteins import accession_assembly_proteins
 from proteins.accessioning.predicted_genes import read_predicted_genes
-from proteins.dataset import layout, merge, update
+from proteins.dataset import parquet_files
 from proteins.dataset.build import build_mgyp_database
+from proteins.dataset.export import daily_update, monthly_merge
 from proteins.dataset.owner import OwnershipError, take
 from proteins.routers import MGYP
 from proteins.tests.conftest import (
@@ -134,7 +135,7 @@ def in_dataset(root, as_of=None):
         table: sorted(
             (
                 tuple(row.values())
-                for path in layout.files(root, table, as_of)
+                for path in parquet_files.files(root, table, as_of)
                 for row in pq.read_table(path).to_pylist()
             ),
             key=repr,
@@ -163,7 +164,7 @@ def day_layout(day, proteins):
     """The files an uninterrupted update writes for `day`."""
     return {
         *(
-            f"protein/prefix={layout.prefix(hash)}/day-{day}.parquet"
+            f"protein/prefix={parquet_files.prefix(hash)}/day-{day}.parquet"
             for _, hash, _ in proteins
         ),
         f"occurrence/day={day}/part-000.parquet",
@@ -177,7 +178,7 @@ def day_layout(day, proteins):
 
 
 def snapshot(root, as_of=None):
-    (path,) = layout.files(root, "metadata/assembly_proteins", as_of)
+    (path,) = parquet_files.files(root, "metadata/assembly_proteins", as_of)
     return {
         (row["assembly_accession"], row["pipeline_version"], row["analysis_accession"])
         for row in pq.read_table(path).to_pylist()
@@ -207,9 +208,10 @@ def test_two_days_of_updates_hold_every_staged_row_once(root, stage):
     assert in_dataset(root) == joined(day1, day2)
     assert in_dataset(root, D1) == day1
     assert staged() == NOTHING_STAGED
-    for path in layout.files(root, "protein"):
+    for path in parquet_files.files(root, "protein"):
         assert {
-            layout.prefix(hash) for hash in pq.read_table(path)["hash"].to_pylist()
+            parquet_files.prefix(hash)
+            for hash in pq.read_table(path)["hash"].to_pylist()
         } == {path.parent.name.removeprefix("prefix=")}
     assert set(listing(root)) == day_layout(D1, day1["protein"]) | day_layout(
         D2, day2["protein"]
@@ -217,8 +219,8 @@ def test_two_days_of_updates_hold_every_staged_row_once(root, stage):
     assert snapshot(root) == records(first + second)
     assert snapshot(root, D1) == records(first)
     # Each record's assembly is in metadata/assemblies.
-    (snapshot_path,) = layout.files(root, "metadata/assembly_proteins")
-    (assemblies_path,) = layout.files(root, "metadata/assemblies")
+    (snapshot_path,) = parquet_files.files(root, "metadata/assembly_proteins")
+    (assemblies_path,) = parquet_files.files(root, "metadata/assemblies")
     assert {
         (row["assembly_id"], row["assembly_accession"])
         for row in pq.read_table(snapshot_path).to_pylist()
@@ -252,13 +254,16 @@ def test_records_of_one_assembly_share_its_contigs_and_occurrences(root, stage, 
         run(D1)
     stage("ERZ101", "V6.1")
     if days == "two-days-crash":
-        original = update.write_day_files
+        original = daily_update.write_day_files
 
         def crashing(*args):
             original(*args)
             raise Killed()
 
-        with patch.object(update, "write_day_files", crashing), pytest.raises(Killed):
+        with (
+            patch.object(daily_update, "write_day_files", crashing),
+            pytest.raises(Killed),
+        ):
             run(D2)
     run(D2)
 
@@ -364,7 +369,7 @@ def test_an_assembly_holding_a_contig_and_an_occurrence_twice_matches_their_lowe
         path = root / table / f"day={D1}" / "part-000.parquet"
         rows = pq.read_table(path).to_pylist()
         copies = [{**row, "id": row["id"] + 10**9} for row in rows]
-        layout.write(path, table, pa.Table.from_pylist(rows + copies))
+        parquet_files.write(path, table, pa.Table.from_pylist(rows + copies))
     originals = {id for id, *_ in day_rows(root, "occurrence", D1) if id < 10**9}
 
     stage("ERZ101", "V6.1")
@@ -379,7 +384,7 @@ def test_an_assembly_holding_a_contig_and_an_occurrence_twice_matches_their_lowe
 
 def test_a_day_with_nothing_staged_is_complete(root):
     run(D1)
-    assert layout.complete_days(root) == [D1]
+    assert parquet_files.complete_days(root) == [D1]
     assert in_dataset(root) == NOTHING_STAGED
     assert set(listing(root)) == day_layout(D1, [])
 
@@ -417,14 +422,14 @@ def test_a_crash_at_each_step_ends_as_an_uninterrupted_update(
     stage("ERZ101")
     stage("ERZ29562087")
     expected = staged()
-    original = getattr(update, step)
+    original = getattr(daily_update, step)
 
     def crashing(*args, **kwargs):
         if when == "after":
             original(*args, **kwargs)
         raise error
 
-    with patch.object(update, step, crashing), pytest.raises(type(error)):
+    with patch.object(daily_update, step, crashing), pytest.raises(type(error)):
         run(D1)
     committed = step == "mark_day_complete" or (step, when) == (
         "finish_update",
@@ -464,7 +469,7 @@ def test_a_crash_at_each_step_ends_as_an_uninterrupted_update(
 def test_an_update_whose_row_was_marked_failed_does_not_commit(root, stage):
     stage("ERZ101")
     expected = staged()
-    write_day_files = update.write_day_files
+    write_day_files = daily_update.write_day_files
 
     def write_then_lose_the_row(*args):
         counts = write_day_files(*args)
@@ -472,12 +477,12 @@ def test_an_update_whose_row_was_marked_failed_does_not_commit(root, stage):
         return counts
 
     with (
-        patch.object(update, "write_day_files", write_then_lose_the_row),
-        pytest.raises(update.DatasetUpdateError, match="no longer running"),
+        patch.object(daily_update, "write_day_files", write_then_lose_the_row),
+        pytest.raises(daily_update.DatasetUpdateError, match="no longer running"),
     ):
         run(D1)
     assert staged() == expected
-    assert layout.complete_days(root) == []
+    assert parquet_files.complete_days(root) == []
 
 
 def test_a_rename_that_always_fails_deletes_nothing(root, stage):
@@ -487,7 +492,7 @@ def test_a_rename_that_always_fails_deletes_nothing(root, stage):
     def failing(root, day):
         raise OSError("rename failed")
 
-    with patch.object(update, "mark_day_complete", failing):
+    with patch.object(daily_update, "mark_day_complete", failing):
         with pytest.raises(OSError):
             run(D1)
         before = listing(root)
@@ -503,14 +508,14 @@ def test_a_rename_that_always_fails_deletes_nothing(root, stage):
 def test_a_done_day_without_its_snapshot_fails_and_names_the_day(root, stage):
     stage("ERZ101")
     with (
-        patch.object(update, "mark_day_complete", side_effect=Killed),
+        patch.object(daily_update, "mark_day_complete", side_effect=Killed),
         pytest.raises(Killed),
     ):
         run(D1)
     shutil.rmtree(root / "metadata" / f".tmp-day={D1}")
 
     for day in (D1, D2):
-        with pytest.raises(update.DatasetUpdateError, match=str(D1)):
+        with pytest.raises(daily_update.DatasetUpdateError, match=str(D1)):
             run(day)
 
 
@@ -522,7 +527,7 @@ def test_a_complete_day_not_done_stops_the_update_and_names_the_day(root, stage)
     stage("ERZ29562087")
     before, waiting = listing(root), staged()
 
-    with pytest.raises(update.DatasetUpdateError, match=str(D0)):
+    with pytest.raises(daily_update.DatasetUpdateError, match=str(D0)):
         run(D2)
     assert listing(root) == before
     assert staged() == waiting
@@ -559,7 +564,7 @@ def test_an_analysis_committed_while_an_update_reads_waits_for_the_next(
 ):
     first = stage("ERZ101")
     expected = staged()
-    choose = update.choose_assembly_proteins
+    choose = daily_update.choose_assembly_proteins
     committed = []
 
     def choose_then_commit_another(cursor):
@@ -567,7 +572,9 @@ def test_an_analysis_committed_while_an_update_reads_waits_for_the_next(
         committed.append(stage(*late))
         return chosen
 
-    with patch.object(update, "choose_assembly_proteins", choose_then_commit_another):
+    with patch.object(
+        daily_update, "choose_assembly_proteins", choose_then_commit_another
+    ):
         run(D1)
 
     assert in_dataset(root) == expected
@@ -593,7 +600,7 @@ def test_a_rebuild_after_an_analysis_committed_while_an_update_read_stages_it_on
     root, stage, late, connect_accession
 ):
     stage("ERZ101")
-    choose = update.choose_assembly_proteins
+    choose = daily_update.choose_assembly_proteins
     committed = []
 
     def choose_then_commit_another(cursor):
@@ -601,7 +608,9 @@ def test_a_rebuild_after_an_analysis_committed_while_an_update_read_stages_it_on
         committed.append(stage(*late))
         return chosen
 
-    with patch.object(update, "choose_assembly_proteins", choose_then_commit_another):
+    with patch.object(
+        daily_update, "choose_assembly_proteins", choose_then_commit_another
+    ):
         run(D1)
     expected, waiting = in_dataset(root), staged()
     ((last,),) = query("SELECT last_value FROM proteindb.protein_id_seq")
@@ -686,7 +695,7 @@ def test_a_rebuild_restores_a_withheld_record_and_never_gives_its_id_to_another(
     run(D2)
     ids = dict(query("SELECT analysis_accession, id FROM proteindb.assembly_proteins"))
     assert ids[withheld.accession] == withheld_id != ids[unrelated.accession]
-    (path,) = layout.files(root, "metadata/assembly_proteins")
+    (path,) = parquet_files.files(root, "metadata/assembly_proteins")
     assert (withheld_id, withheld.accession) in {
         (row["assembly_proteins_id"], row["analysis_accession"])
         for row in pq.read_table(path).to_pylist()
@@ -700,7 +709,7 @@ def test_a_flag_changed_in_emgapi_is_in_the_next_snapshot_both_ways(root, stage,
     for day, private in ((D1, False), (D2, True), (D3, False)):
         Study.objects.filter(pk=study.pk).update(is_private=private)
         run(day)
-        (path,) = layout.files(root, "metadata/assembly_proteins")
+        (path,) = parquet_files.files(root, "metadata/assembly_proteins")
         privacy += pq.read_table(path)["is_private"].to_pylist()
     assert privacy == [False, True, False]
 
@@ -756,7 +765,7 @@ def test_an_update_that_loses_ownership_writes_nothing_more(
     expected = staged()
     as_job(1)
     lost = {}
-    with lose_ownership_after(update, step, root, lost), pytest.raises(error):
+    with lose_ownership_after(daily_update, step, root, lost), pytest.raises(error):
         run(D1)
 
     assert listing(root) == lost
@@ -779,7 +788,10 @@ def test_a_merge_that_loses_ownership_writes_nothing_more(root, stage, slurm, ex
     expected = in_dataset(root)
     as_job(1)
     lost = {}
-    with lose_ownership_after(merge, "merge_prefix", root, lost), pytest.raises(Killed):
+    with (
+        lose_ownership_after(monthly_merge, "merge_prefix", root, lost),
+        pytest.raises(Killed),
+    ):
         merge_flow.merge_protein_dataset()
 
     assert listing(root) == lost

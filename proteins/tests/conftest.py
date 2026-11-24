@@ -16,7 +16,7 @@ from psycopg.conninfo import make_conninfo
 import ena.models as ena_models
 from analyses.models import Analysis, Assembly, Sample, Study
 from proteins.accessioning.predicted_genes import read_predicted_genes
-from proteins.dataset import layout
+from proteins.dataset import parquet_files
 from proteins.routers import MGYP
 
 FIXTURES = Path(__file__).parent.parent / "fixtures"
@@ -202,8 +202,8 @@ def make_analysis(study, erz, version="V6", external_results_dir=None, state=IMP
 
 def write_v1_analyses(root: Path, *mgyas, **values):
     """Writes the migration's copy of MGnify v1's analyses, one 5.0 analysis per MGYA, with the values given."""
-    layout.write(
-        root / layout.V1_ANALYSES,
+    parquet_files.write(
+        root / parquet_files.V1_ANALYSES,
         "v1/analyses",
         pa.Table.from_pylist(
             [
@@ -220,7 +220,7 @@ def write_v1_analyses(root: Path, *mgyas, **values):
                 }
                 for mgya in mgyas
             ],
-            layout.SCHEMAS["v1/analyses"],
+            parquet_files.SCHEMAS["v1/analyses"],
         ),
     )
 

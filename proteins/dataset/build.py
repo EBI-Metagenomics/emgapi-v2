@@ -12,7 +12,7 @@ import psycopg
 import pyarrow as pa
 import pyarrow.parquet as pq
 
-from proteins.dataset import layout
+from proteins.dataset import parquet_files
 
 logger = logging.getLogger(__name__)
 
@@ -90,13 +90,13 @@ def build_mgyp_database(
     :param protein_id_start: The first protein id to allocate. By default, the protein dataset's
         highest + 1, or for a rebuild + LOST_MGYP_MARGIN.
     """
-    days = layout.complete_days(root)
+    days = parquet_files.complete_days(root)
     if not rebuild and len(days) > 1:
         raise BuildError(
             f"The protein dataset has {len(days)} complete days, so this is a rebuild, which needs --rebuild"
         )
     day = days[-1]
-    files = {table: layout.files(root, table, day) for table in SEQUENCES}
+    files = {table: parquet_files.files(root, table, day) for table in SEQUENCES}
     top = {table: max_id(files[table]) for table in SEQUENCES}
     if protein_id_start is None:
         protein_id_start = top["protein"] + (LOST_MGYP_MARGIN if rebuild else 1)
@@ -111,7 +111,7 @@ def build_mgyp_database(
         # Before the hours of the partitions, so that their unique constraints fail early.
         with conn.transaction():
             for name, (table, columns) in REGISTRIES.items():
-                (path,) = layout.files(root, table, day)
+                (path,) = parquet_files.files(root, table, day)
                 rows = pq.read_table(path).select(list(columns.values()))
                 with conn.cursor().copy(
                     f"COPY {name} ({', '.join(columns)}) FROM STDIN"
