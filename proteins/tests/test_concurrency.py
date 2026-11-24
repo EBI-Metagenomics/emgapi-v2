@@ -27,8 +27,8 @@ from pathlib import Path
 
 import psycopg
 
-import proteins.accession.accession as core
-from proteins.accession.inputs import read_input
+import proteins.accessioning.assembly_proteins as core
+from proteins.accessioning.predicted_genes import read_predicted_genes
 
 dsn, directory, assembly, mgya, name, point, signal_file, release_file = sys.argv[1:]
 directory = Path(directory)
@@ -62,8 +62,8 @@ def stage_then_kill(*args):
 core.copy_rows = before_occurrences
 if point == "kill-after-commit":
     core.stage = stage_then_kill
-input = read_input(directory / "in.faa", directory / "in.gff", directory / "contigs.fasta")
-ids = core.accession(connect, assembly, "assembly_analysis", "6.0", input, mgya, connections=4)
+input = read_predicted_genes(directory / "in.faa", directory / "in.gff", directory / "contigs.fasta")
+ids = core.accession_assembly_proteins(connect, assembly, "assembly_analysis", "6.0", input, mgya, connections=4)
 (directory / f"{name}.json").write_text(json.dumps({s: ids[h] for h, s in input.proteins}))
 """
 

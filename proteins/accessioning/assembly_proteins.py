@@ -8,7 +8,7 @@ from typing import Callable, ContextManager
 import psycopg
 from psycopg import sql
 
-from .inputs import Input, major_minor
+from .predicted_genes import PredictedGenes, major_minor
 
 logger = logging.getLogger(__name__)
 
@@ -22,12 +22,12 @@ class IncompleteRerun(Exception):
     """The assembly proteins record already exists, but some of its proteins have no MGYP."""
 
 
-def accession(
+def accession_assembly_proteins(
     connect: Connect,
     assembly: str,
     source: str,
     pipeline_version: str,
-    input: Input,
+    predicted_genes: PredictedGenes,
     analysis_accession: str,
     connections: int = 16,
 ) -> dict[bytes, int]:
@@ -40,25 +40,28 @@ def accession(
     :param assembly: The ENA assembly accession.
     :param source: The pipeline that predicted the genes: "assembly_analysis" or "gene_calling".
     :param pipeline_version: The source pipeline's version, reduced to major.minor.
-    :param input: The proteins, contigs and occurrences, from read_input().
+    :param predicted_genes: The proteins, contigs and occurrences, from read_predicted_genes().
     :param analysis_accession: The MGYA of the assembly analysis.
     :param connections: How many connections the lookups use.
     :raises InvalidInput: When the version is not major.minor with one digit each, before any connection.
     """
     pipeline_version = major_minor(pipeline_version)
-    hashes = [hash for hash, _ in input.proteins]
+    hashes = [hash for hash, _ in predicted_genes.proteins]
     ids = lookup(connect, hashes, connections)
     with connect() as conn:
         assembly_id = register_assembly(conn, assembly)
         callers = register_gene_callers(
-            conn, sorted({(o.caller_name, o.caller_version) for o in input.occurrences})
+            conn,
+            sorted(
+                {(o.caller_name, o.caller_version) for o in predicted_genes.occurrences}
+            ),
         )
         staged = stage(
             conn,
             assembly_id,
             source,
             pipeline_version,
-            input,
+            predicted_genes,
             ids,
             callers,
             analysis_accession,
@@ -199,7 +202,7 @@ def stage(
     assembly_id: int,
     source: str,
     pipeline_version: str,
-    input: Input,
+    input: PredictedGenes,
     found: dict[bytes, int],
     callers: dict[tuple[str, str], int],
     analysis_accession: str,
@@ -210,7 +213,7 @@ def stage(
     :param assembly_id: The assembly's id, from register_assembly().
     :param source: The pipeline that predicted the genes: "assembly_analysis" or "gene_calling".
     :param pipeline_version: The source pipeline's major.minor.
-    :param input: The proteins, contigs and occurrences, from read_input().
+    :param input: The proteins, contigs and occurrences, from read_predicted_genes().
     :param found: The ids the lookup found.
     :param callers: Each gene caller's id, by (name, version).
     :param analysis_accession: The MGYA of the assembly analysis.

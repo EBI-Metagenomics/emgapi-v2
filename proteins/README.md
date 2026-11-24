@@ -12,14 +12,15 @@ The source is the pipeline that called the genes. Today it is always `assembly_a
 |---|---|
 | MGYP database | PostgreSQL, Django alias `mgyp`, schema `proteindb`. It holds the hash and id of each protein, the assembly proteins records, the gene callers, the staged rows, the dataset updates and the owner of the protein dataset. `sql/mgyp_schema.sql` creates it, not Django migrations. The models in `models.py` are unmanaged. |
 | Protein dataset | Parquet files in `EMG_CONFIG.proteins.dataset_dir`. All proteins, contigs and occurrences, and one metadata snapshot for each day. Protein releases read it. |
-| Accessioning core | `accession/`: the hash contract, the file reader, the MGYP lookup and the staging transaction. It does not import Django. |
+| Accessioning core | `accessioning/`: the hash contract, reading the predicted genes, the MGYP lookup and the staging transaction. It does not import Django. |
 
 | Path | |
 |---|---|
 | `sql/mgyp_schema.sql`, `sql/mgyp_roles.sql` | The schema and its grants, and the role settings |
 | `apps.py`, `models.py`, `admin.py`, `routers.py` | Django: the system check, unmanaged models, read-only admin, the router and the `mgyp` connection |
-| `accession/` | The accessioning core (no Django) |
-| `ingestion/analyses.py` | Pending analyses, chunks, and the ingestion of one analysis |
+| `accessioning/` | The accessioning core (no Django) |
+| `readers.py` | The FASTA and GFF readers |
+| `ingestion/assembly_analyses.py` | Pending analyses, chunks, and the ingestion of one analysis |
 | `dataset/layout.py`, `dataset/metadata.py` | The protein dataset layout, and the metadata snapshot |
 | `dataset/update.py`, `dataset/merge.py` | The steps of the dataset update and of the merge |
 | `dataset/owner.py` | Ownership of the protein dataset: the limit, the slot and the owner record |

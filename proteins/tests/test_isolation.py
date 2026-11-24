@@ -6,10 +6,14 @@ REPO = Path(__file__).resolve().parent.parent.parent
 
 CHECK = """
 import importlib, pkgutil, sys
-import proteins.accession as package
+import proteins.accessioning as package
 for module in pkgutil.iter_modules(package.__path__):
-    importlib.import_module(f"proteins.accession.{module.name}")
-allowed = (str(package.__path__[0]), sys.argv[1] + "/proteins/__init__.py")
+    importlib.import_module(f"proteins.accessioning.{module.name}")
+allowed = (
+    str(package.__path__[0]),
+    sys.argv[1] + "/proteins/__init__.py",
+    sys.argv[1] + "/proteins/readers.py",
+)
 print(*sorted(
     name for name, m in sys.modules.items()
     if name == "django"

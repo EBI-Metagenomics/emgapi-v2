@@ -10,7 +10,10 @@ from django.db.models import Count, Min
 from analyses.models import Analysis
 from proteins.dataset import layout, metadata
 from proteins.dataset.owner import states_of
-from proteins.ingestion.analyses import annotated_assembly_analyses, versions_with_rules
+from proteins.ingestion.assembly_analyses import (
+    annotated_assembly_analyses,
+    versions_with_rules,
+)
 from proteins.models import (
     AssemblyProteins,
     DatasetOwner,

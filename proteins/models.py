@@ -4,9 +4,9 @@ from typing import Iterable
 
 from django.db import models
 
-from proteins.accession.accession import mgyp
-from proteins.accession.hashing import protein_hash
-from proteins.accession.inputs import V6_GENE_CALLERS, GeneCallers
+from proteins.accessioning.assembly_proteins import mgyp
+from proteins.accessioning.hashing import protein_hash
+from proteins.accessioning.predicted_genes import V6_GENE_CALLERS, GeneCallers
 
 
 class UnsupportedPipelineVersion(Exception):

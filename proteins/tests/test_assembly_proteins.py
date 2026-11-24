@@ -2,16 +2,16 @@ import logging
 
 import pytest
 
-from proteins.accession.accession import (
+from proteins.accessioning.assembly_proteins import (
     IncompleteRerun,
-    accession,
+    accession_assembly_proteins,
     lookup,
     lookup_partitions,
     register_assembly,
     register_gene_callers,
 )
-from proteins.accession.hashing import protein_hash
-from proteins.accession.inputs import InvalidInput, read_input
+from proteins.accessioning.hashing import protein_hash
+from proteins.accessioning.predicted_genes import InvalidInput, read_predicted_genes
 from proteins.routers import MGYP
 from proteins.tests.conftest import (
     FIXTURES,
@@ -27,7 +27,7 @@ SOURCE = "assembly_analysis"
 
 @pytest.fixture(scope="module")
 def erz101():
-    return read_input(
+    return read_predicted_genes(
         FIXTURES / "ERZ101.faa.gz",
         FIXTURES / "ERZ101.gff.gz",
         FIXTURES / "ERZ101.fasta.gz",
@@ -51,7 +51,9 @@ def counts():
 @pytest.mark.parametrize("assembly", ["ERZ101", *PUBLISHED_V6])
 def test_new_assembly_is_staged_exactly(connect_accession, erz101, assembly):
     input = erz101 if assembly == "ERZ101" else read_published(assembly)
-    ids = accession(connect_accession, assembly, SOURCE, "6.0", input, "MGYA1")
+    ids = accession_assembly_proteins(
+        connect_accession, assembly, SOURCE, "6.0", input, "MGYA1"
+    )
 
     assert set(ids) == {hash for hash, _ in input.proteins}
     assert len(set(ids.values())) == len(ids)
@@ -105,11 +107,16 @@ def test_new_assembly_is_staged_exactly(connect_accession, erz101, assembly):
 
 
 def test_assembly_with_only_known_proteins_adds_none(connect_accession, erz101):
-    first = accession(connect_accession, "ERZ101", SOURCE, "6.0", erz101, "MGYA1")
+    first = accession_assembly_proteins(
+        connect_accession, "ERZ101", SOURCE, "6.0", erz101, "MGYA1"
+    )
     before = counts()
 
     assert (
-        accession(connect_accession, "ERZ102", SOURCE, "6.0", erz101, "MGYA2") == first
+        accession_assembly_proteins(
+            connect_accession, "ERZ102", SOURCE, "6.0", erz101, "MGYA2"
+        )
+        == first
     )
     after = counts()
     assert after["protein"] == before["protein"]
@@ -120,12 +127,16 @@ def test_assembly_with_only_known_proteins_adds_none(connect_accession, erz101):
 def test_rerun_stages_nothing_and_returns_the_same_ids(
     connect_accession, erz101, caplog
 ):
-    first = accession(connect_accession, "ERZ101", SOURCE, "6.0", erz101, "MGYA1")
+    first = accession_assembly_proteins(
+        connect_accession, "ERZ101", SOURCE, "6.0", erz101, "MGYA1"
+    )
     before = counts()
 
     with caplog.at_level(logging.WARNING):
         assert (
-            accession(connect_accession, "ERZ101", SOURCE, "6.0", erz101, "MGYA1")
+            accession_assembly_proteins(
+                connect_accession, "ERZ101", SOURCE, "6.0", erz101, "MGYA1"
+            )
             == first
         )
     assert counts() == before
@@ -133,12 +144,14 @@ def test_rerun_stages_nothing_and_returns_the_same_ids(
 
 
 def test_rerun_with_a_protein_without_mgyp_fails(connect_accession, erz101):
-    accession(connect_accession, "ERZ101", SOURCE, "6.0", erz101, "MGYA1")
+    accession_assembly_proteins(
+        connect_accession, "ERZ101", SOURCE, "6.0", erz101, "MGYA1"
+    )
     before = counts()
 
     new = (protein_hash("MNEWPROTEIN"), "MNEWPROTEIN")
     with pytest.raises(IncompleteRerun, match="1 of its proteins have no MGYP"):
-        accession(
+        accession_assembly_proteins(
             connect_accession,
             "ERZ101",
             SOURCE,
@@ -154,7 +167,7 @@ def test_failure_before_commit_leaves_nothing_and_a_rerun_succeeds(
 ):
     # The occurrences on the missing contig fail the transaction after its proteins are inserted.
     with pytest.raises(KeyError):
-        accession(
+        accession_assembly_proteins(
             connect_accession,
             "ERZ101",
             SOURCE,
@@ -164,12 +177,16 @@ def test_failure_before_commit_leaves_nothing_and_a_rerun_succeeds(
         )
     assert set(counts().values()) == {0}
 
-    ids = accession(connect_accession, "ERZ101", SOURCE, "6.0", erz101, "MGYA1")
+    ids = accession_assembly_proteins(
+        connect_accession, "ERZ101", SOURCE, "6.0", erz101, "MGYA1"
+    )
     assert len(ids) == len(erz101.proteins)
 
 
 def test_patch_version_is_recorded_as_major_minor(connect_accession, erz101):
-    accession(connect_accession, "ERZ101", SOURCE, "6.1.2", erz101, "MGYA1")
+    accession_assembly_proteins(
+        connect_accession, "ERZ101", SOURCE, "6.1.2", erz101, "MGYA1"
+    )
     assert query("SELECT pipeline_version FROM proteindb.assembly_proteins") == [
         ("6.1",)
     ]
@@ -182,7 +199,9 @@ def refuse_to_connect():
 @pytest.mark.parametrize("version", ["6.10", "10.0"])
 def test_invalid_version_fails_before_connecting(erz101, version):
     with pytest.raises(InvalidInput, match="one digit each"):
-        accession(refuse_to_connect, "ERZ101", SOURCE, version, erz101, "MGYA1")
+        accession_assembly_proteins(
+            refuse_to_connect, "ERZ101", SOURCE, version, erz101, "MGYA1"
+        )
 
 
 @pytest.fixture
@@ -240,8 +259,12 @@ def test_registering_a_known_assembly_takes_no_identity_value(connect_accession)
 
 
 def test_two_versions_of_an_assembly_share_its_id(connect_accession, erz101):
-    accession(connect_accession, "ERZ101", SOURCE, "6.0", erz101, "MGYA1")
-    accession(connect_accession, "ERZ101", SOURCE, "6.1", erz101, "MGYA2")
+    accession_assembly_proteins(
+        connect_accession, "ERZ101", SOURCE, "6.0", erz101, "MGYA1"
+    )
+    accession_assembly_proteins(
+        connect_accession, "ERZ101", SOURCE, "6.1", erz101, "MGYA2"
+    )
     assert query(
         "SELECT a.accession, count(*) FROM proteindb.assembly_proteins p"
         " JOIN proteindb.assembly a ON a.id = p.assembly_id GROUP BY a.accession"
@@ -255,5 +278,7 @@ def test_known_gene_callers_need_no_identity_value(connect_accession, erz101):
         )
     query("ALTER TABLE proteindb.gene_caller ALTER COLUMN id RESTART WITH 32767")
 
-    ids = accession(connect_accession, "ERZ101", SOURCE, "6.0", erz101, "MGYA1")
+    ids = accession_assembly_proteins(
+        connect_accession, "ERZ101", SOURCE, "6.0", erz101, "MGYA1"
+    )
     assert len(ids) == len(erz101.proteins)

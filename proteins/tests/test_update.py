@@ -10,8 +10,8 @@ import pyarrow.parquet as pq
 import pytest
 
 from analyses.models import Study
-from proteins.accession.accession import accession
-from proteins.accession.inputs import read_input
+from proteins.accessioning.assembly_proteins import accession_assembly_proteins
+from proteins.accessioning.predicted_genes import read_predicted_genes
 from proteins.dataset import layout, merge, update
 from proteins.dataset.build import build_mgyp_database
 from proteins.dataset.owner import OwnershipError, take
@@ -61,7 +61,7 @@ TABLES = tuple(FROM_STAGED)
 def read(assembly):
     # ERZ102 is a copy of ERZ101: the same contigs in another assembly.
     if assembly in ("ERZ101", "ERZ102"):
-        return read_input(
+        return read_predicted_genes(
             *(FIXTURES / f"ERZ101.{suffix}" for suffix in ("faa.gz", "gff.gz")),
             FIXTURES / "ERZ101.fasta.gz",
             FIXTURES / "ERZ101_mapping.csv",
@@ -81,7 +81,7 @@ def stage(connect_accession, study):
     def stage(assembly, version="V6", known=True, input=None):
         analysis = make_analysis(study, assembly, version)
         # Few connections, so that 8 xdist workers stay within the server's limit.
-        accession(
+        accession_assembly_proteins(
             connect_accession,
             assembly,
             "assembly_analysis",
@@ -612,7 +612,7 @@ def test_a_rebuild_after_an_analysis_committed_while_an_update_read_stages_it_on
         conn.execute(SCHEMA_SQL.read_text())
     build_mgyp_database(owner_dsn(), root, rebuild=True, protein_id_start=last + 1)
     analysis = committed[0]
-    accession(
+    accession_assembly_proteins(
         connect_accession,
         late[0],
         "assembly_analysis",
@@ -672,7 +672,7 @@ def test_a_rebuild_restores_a_withheld_record_and_never_gives_its_id_to_another(
     build_mgyp_database(owner_dsn(), root, rebuild=True, protein_id_start=last + 1)
     unrelated = stage("ERZ25069264")
     withheld.save(force_insert=True)
-    accession(
+    accession_assembly_proteins(
         connect_accession,
         "ERZ29562087",
         "assembly_analysis",

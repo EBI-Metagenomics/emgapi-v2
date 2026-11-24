@@ -7,8 +7,8 @@ import pytest
 from django.conf import settings
 
 from analyses.models import Analysis
-from proteins.accession.inputs import InvalidInput
-from proteins.ingestion import analyses
+from proteins.accessioning.predicted_genes import InvalidInput
+from proteins.ingestion import assembly_analyses
 from proteins.models import (
     AssemblyProteins,
     GeneCaller,
@@ -60,14 +60,14 @@ def test_lists_only_pending_analyses_of_versions_with_rules(results):
     make_analysis(a, "ERZ3", version="V5")
     make_analysis(a, "ERZ4", version="V4.1")
     recorded = make_analysis(a, "ERZ5", external_results_dir=results("ERZ5"))
-    analyses.ingest_analysis(recorded.accession)
+    assembly_analyses.ingest_analysis(recorded.accession)
     # The lowest id is taken, though its study comes later.
     first = make_analysis(b, "ERZ6", version="V6.1")
     make_analysis(a, "ERZ6", version="V6.1")
 
-    assert analyses.find_pending_analyses() == [pending, first]
-    assert analyses.find_pending_analyses(a.accession) == [pending]
-    assert analyses.find_pending_analyses(b.accession) == [first]
+    assert assembly_analyses.find_pending_analyses() == [pending, first]
+    assert assembly_analyses.find_pending_analyses(a.accession) == [pending]
+    assert assembly_analyses.find_pending_analyses(b.accession) == [first]
 
 
 def test_chunks_hold_analyses_of_one_study():
@@ -75,7 +75,7 @@ def test_chunks_hold_analyses_of_one_study():
         SimpleNamespace(study_id=study, accession=f"MGYA{n}")
         for n, study in enumerate([1, 1, 1, 2])
     ]
-    assert analyses.chunk_by_study(listed, 2) == [
+    assert assembly_analyses.chunk_by_study(listed, 2) == [
         ["MGYA0", "MGYA1"],
         ["MGYA2"],
         ["MGYA3"],
@@ -120,7 +120,7 @@ def test_chunk_ingests_the_others_then_fails_naming_the_failed_analysis(results)
         ("ERZ1", "6.0", good.accession),
         ("ERZ3", "6.0", other.accession),
     ]
-    assert analyses.find_pending_analyses() == [missing]
+    assert assembly_analyses.find_pending_analyses() == [missing]
 
 
 @pytest.mark.usefixtures("prefect_harness")
@@ -132,7 +132,7 @@ def test_a_listing_after_a_chunk_commits_takes_none_of_its_analyses(results):
     ]
     results_ = flows.ingest_assembly_proteins_chunk([a.accession for a in chunk])
     assert [r.skipped for r in results_] == [False, False]
-    assert analyses.find_pending_analyses() == []
+    assert assembly_analyses.find_pending_analyses() == []
 
 
 @pytest.mark.usefixtures("prefect_harness")
@@ -158,7 +158,7 @@ def test_genes_are_staged_with_the_gene_callers_of_the_version(results):
     analysis = make_analysis(
         make_study("PRJ1"), "ERZ1", external_results_dir=results("ERZ1")
     )
-    analyses.ingest_analysis(analysis.accession)
+    assembly_analyses.ingest_analysis(analysis.accession)
     assert set(
         StagedOccurrence.objects.values_list("gene_caller__name", flat=True)
     ) == {"Pyrodigal", "FragGeneScanRS"}
@@ -174,7 +174,7 @@ def test_genes_of_a_caller_the_version_does_not_have_fail(results, monkeypatch):
         {"Pyrodigal": True},
     )
     with pytest.raises(InvalidInput, match="FragGeneScanRS"):
-        analyses.ingest_analysis(analysis.accession)
+        assembly_analyses.ingest_analysis(analysis.accession)
     assert records() == []
 
 
@@ -183,14 +183,14 @@ def test_an_analysis_of_a_version_without_rules_fails(results):
         make_study("PRJ1"), "ERZ1", version="V5", external_results_dir=results("ERZ1")
     )
     with pytest.raises((NotImplementedError, UnsupportedPipelineVersion)):
-        analyses.ingest_analysis(analysis.accession)
+        assembly_analyses.ingest_analysis(analysis.accession)
     assert records() == []
 
 
 def test_an_analysis_without_its_files_fails(results):
     analysis = make_analysis(make_study("PRJ1"), "ERZ1", external_results_dir="ERZ1")
     with pytest.raises(FileNotFoundError):
-        analyses.ingest_analysis(analysis.accession)
+        assembly_analyses.ingest_analysis(analysis.accession)
     assert records() == []
     assert query("SELECT count(*) FROM staged_protein") == [(0,)]
 
@@ -198,7 +198,7 @@ def test_an_analysis_without_its_files_fails(results):
 def test_an_analysis_not_yet_copied_out_fails(results):
     analysis = make_analysis(make_study("PRJ1"), "ERZ1")
     with pytest.raises(ValueError, match="no external results dir"):
-        analyses.ingest_analysis(analysis.accession)
+        assembly_analyses.ingest_analysis(analysis.accession)
     assert records() == []
 
 

@@ -4,8 +4,8 @@ import csv
 import re
 from typing import NamedTuple
 
-from .fasta import open_text, read_fasta
-from .gff import read_gff
+from proteins.readers import open_text, read_fasta, read_gff
+
 from .hashing import InvalidSequence, contig_hash, protein_hash
 
 SPADES_COVERAGE = re.compile(r"_cov_([0-9]+(?:\.[0-9]+)?)")
@@ -46,7 +46,7 @@ class Contig(NamedTuple):
     kmer_coverage: float | None
 
 
-class Input(NamedTuple):
+class PredictedGenes(NamedTuple):
     occurrences: list[Occurrence]  # in the FASTA's order
     proteins: list[tuple[bytes, str]]  # distinct (hash, sequence), sorted by hash
     contigs: list[Contig]  # only those carrying a gene
@@ -67,13 +67,13 @@ def major_minor(pipeline_version: str) -> str:
     return match[1]
 
 
-def read_input(
+def read_predicted_genes(
     faa,
     gff,
     contigs,
     contig_map=None,
     gene_callers: GeneCallers = V6_GENE_CALLERS,
-) -> Input:
+) -> PredictedGenes:
     """Raises InvalidInput naming every problem found, or ValueError for a malformed file.
 
     :param faa: The combined gene caller's protein FASTA.
@@ -172,7 +172,7 @@ def read_input(
 
     if problems:
         raise InvalidInput(problems)
-    return Input(occurrences, sorted(proteins.items()), list(found.values()))
+    return PredictedGenes(occurrences, sorted(proteins.items()), list(found.values()))
 
 
 def read_contig_map(path) -> dict[str, str]:

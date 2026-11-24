@@ -15,7 +15,7 @@ from psycopg.conninfo import make_conninfo
 
 import ena.models as ena_models
 from analyses.models import Analysis, Assembly, Sample, Study
-from proteins.accession.inputs import read_input
+from proteins.accessioning.predicted_genes import read_predicted_genes
 from proteins.dataset import layout
 from proteins.routers import MGYP
 
@@ -31,7 +31,7 @@ PUBLISHED_V6 = ("ERZ29562087", "ERZ25069264", "ERZ29895170")
 
 
 def read_published(assembly):
-    return read_input(
+    return read_predicted_genes(
         *(FIXTURES / f"{assembly}.{suffix}.gz" for suffix in ("faa", "gff", "fasta"))
     )
 
@@ -145,7 +145,7 @@ def write_assembly(directory: Path, sequences: list[str], caller="Pyrodigal_v3.6
 
 
 def read_assembly(directory: Path):
-    return read_input(
+    return read_predicted_genes(
         directory / "in.faa", directory / "in.gff", directory / "contigs.fasta"
     )
 

@@ -4,9 +4,13 @@ from pathlib import Path
 
 import pytest
 
-from proteins.accession.fasta import read_fasta
-from proteins.accession.hashing import protein_hash
-from proteins.accession.inputs import InvalidInput, major_minor, read_input
+from proteins.accessioning.hashing import protein_hash
+from proteins.accessioning.predicted_genes import (
+    InvalidInput,
+    major_minor,
+    read_predicted_genes,
+)
+from proteins.readers import read_fasta
 from proteins.tests.conftest import PUBLISHED_V6, read_published
 
 FIXTURES = Path(__file__).parent.parent / "fixtures"
@@ -17,7 +21,7 @@ CONTIG_MAP = FIXTURES / "ERZ101_mapping.csv"
 
 
 def test_reads_the_pipeline_output():
-    result = read_input(FAA, GFF, CONTIGS, CONTIG_MAP)
+    result = read_predicted_genes(FAA, GFF, CONTIGS, CONTIG_MAP)
 
     records = list(read_fasta(FAA))
     assert [o.gene_id for o in result.occurrences] == [r.id for r in records]
@@ -46,7 +50,9 @@ def test_reads_the_pipeline_output():
 
 
 def test_without_a_contig_map_original_names_are_unknown():
-    assert all(c.original_name is None for c in read_input(FAA, GFF, CONTIGS).contigs)
+    assert all(
+        c.original_name is None for c in read_predicted_genes(FAA, GFF, CONTIGS).contigs
+    )
 
 
 def write(path: Path, text: str) -> Path:
@@ -84,7 +90,7 @@ def files(tmp_path):
 
 def problems(*paths):
     with pytest.raises(InvalidInput) as excinfo:
-        read_input(*paths)
+        read_predicted_genes(*paths)
     return excinfo.value.problems
 
 
@@ -95,7 +101,9 @@ def test_lower_case_sequences_are_invalid(files):
 
 
 def test_proteins_are_distinct_and_sorted_by_hash(files):
-    result = read_input(*files({"g1": "MKV", "g2": "MKV", "g3": "MAG", "g4": "MKV"}))
+    result = read_predicted_genes(
+        *files({"g1": "MKV", "g2": "MKV", "g3": "MAG", "g4": "MKV"})
+    )
     assert result.proteins == sorted(
         [(protein_hash("MKV"), "MKV"), (protein_hash("MAG"), "MAG")]
     )
@@ -151,13 +159,15 @@ def test_contig_names_must_be_unique(files):
 
 
 def test_only_contigs_carrying_a_gene_are_kept(files):
-    (contig,) = read_input(*files({"g1": "MKV"})).contigs
+    (contig,) = read_predicted_genes(*files({"g1": "MKV"})).contigs
     assert contig.name == "c1"
     assert contig.length == 9
 
 
 def test_contig_hash_is_of_the_sequence(files):
-    (contig,) = read_input(*files({"g1": "MKV"}, gff=gff_row("g1", "c2"))).contigs
+    (contig,) = read_predicted_genes(
+        *files({"g1": "MKV"}, gff=gff_row("g1", "c2"))
+    ).contigs
     assert contig.hash == hashlib.sha256(b"ACGT").digest()
 
 
@@ -181,7 +191,7 @@ def test_names_every_invalid_contig(files):
     ],
 )
 def test_kmer_coverage_comes_from_spades_names(files, original_name, kmer_coverage):
-    (contig,) = read_input(
+    (contig,) = read_predicted_genes(
         *files({"g1": "MKV"}, contig_map=f"original\trenamed\n{original_name}\tc1\n")
     ).contigs
     assert contig.original_name == original_name
@@ -200,7 +210,7 @@ def test_every_contig_carrying_a_gene_must_be_in_the_contig_map(files):
 
 def test_contig_map_must_have_the_pipeline_header(files):
     with pytest.raises(ValueError, match="header"):
-        read_input(*files({"g1": "MKV"}, contig_map="x\tc1\n"))
+        read_predicted_genes(*files({"g1": "MKV"}, contig_map="x\tc1\n"))
 
 
 @pytest.mark.parametrize("assembly", PUBLISHED_V6)
@@ -229,7 +239,7 @@ def test_reads_published_v6_output(assembly):
 @pytest.mark.parametrize("strand", ["+", "-"])
 @pytest.mark.parametrize("partial", ["00", "01", "10", "11"])
 def test_pyrodigal_truncation_is_the_partial_flag(files, strand, partial):
-    (occurrence,) = read_input(
+    (occurrence,) = read_predicted_genes(
         *files(
             {"g1": "MKV"},
             gff=gff_row("g1", strand=strand),
@@ -241,7 +251,7 @@ def test_pyrodigal_truncation_is_the_partial_flag(files, strand, partial):
 
 @pytest.mark.parametrize("description", ["", "# 1 # 9 # -1 # ID=1_1;partial=01"])
 def test_fraggenescan_has_no_truncation(files, description):
-    (occurrence,) = read_input(
+    (occurrence,) = read_predicted_genes(
         *files(
             {"g1": "MKV"},
             gff=gff_row("g1", source="FragGeneScanRS_v1.1.0"),
@@ -261,12 +271,14 @@ def test_only_the_versions_gene_callers_are_known(files, source):
 
 def test_gene_callers_come_from_the_pipeline_version(files):
     paths = files({"g1": "MKV"}, gff=gff_row("g1", source="Prodigal_v2.6.3"))
-    (occurrence,) = read_input(*paths, gene_callers={"Prodigal": True}).occurrences
+    (occurrence,) = read_predicted_genes(
+        *paths, gene_callers={"Prodigal": True}
+    ).occurrences
     assert occurrence.truncation == "00"
 
     paths = files({"g1": "MKV"}, gff=gff_row("g1", source="Pyrodigal_v3.6.3"))
     with pytest.raises(InvalidInput, match=r"is not one of \['Prodigal'\]"):
-        read_input(*paths, gene_callers={"Prodigal": True})
+        read_predicted_genes(*paths, gene_callers={"Prodigal": True})
 
 
 @pytest.mark.parametrize(
