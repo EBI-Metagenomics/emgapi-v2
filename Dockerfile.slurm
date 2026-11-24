@@ -75,7 +75,8 @@ COPY slurm-dev-environment/configs/prefect-flow-environment.sh /usr/local/bin/pr
 RUN chmod 0555 /usr/local/bin/prefect-flow-environment.sh
 
 RUN mkdir -p /usr/bin/webin-cli
-RUN wget https://github.com/enasequence/webin-cli/releases/download/7.3.0/webin-cli-7.3.0.jar -O /usr/bin/webin-cli/webin-cli.jar
+ARG WEBIN_CLI_VERSION=11.0.0
+RUN wget https://github.com/enasequence/webin-cli/releases/download/${WEBIN_CLI_VERSION}/webin-cli-${WEBIN_CLI_VERSION}.jar -O /usr/bin/webin-cli/webin-cli.jar
 RUN chmod +x /usr/bin/webin-cli/webin-cli.jar
 ENV PATH="/usr/bin/webin-cli:$PATH"
 

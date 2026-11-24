@@ -7,7 +7,7 @@
   </appender>
 
   <root level="DEBUG">
-    {# debug level logging for webin-cli #}
+    <!-- debug level logging for webin-cli -->
     <appender-ref ref="STDOUT" />
   </root>
 

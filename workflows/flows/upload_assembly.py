@@ -409,7 +409,7 @@ def submit_assembly_slurm(
             ("-userName", username),
             ("-password", password),
             EMG_CONFIG.webin.aspera_ascp_executor and "-ascp",
-            dry_run and "-test -validate",
+            dry_run and ("-test", "-validate"),
             not dry_run and "-submit",
         ]
     )
