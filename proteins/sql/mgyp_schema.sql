@@ -145,7 +145,8 @@ GRANT USAGE, SELECT ON SEQUENCE protein_id_seq, contig_id_seq, occurrence_id_seq
 GRANT SELECT ON ALL TABLES IN SCHEMA proteindb TO proteindb_read;
 GRANT SELECT ON ALL SEQUENCES IN SCHEMA proteindb TO proteindb_read;
 
--- Lookups query the partitions directly, and PostgreSQL checks privileges on the table named in the query.
+-- Lookups query protein itself, which needs no grant on the partitions. This grant lets a query name a partition
+-- directly: PostgreSQL checks privileges on the table named in the query.
 DO $$
 BEGIN
   FOR p IN 0..63 LOOP
