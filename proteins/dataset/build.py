@@ -11,22 +11,13 @@ import numpy as np
 import psycopg
 import pyarrow as pa
 import pyarrow.parquet as pq
+from django.apps import apps
 
 from proteins.dataset import parquet_files
+from proteins.models import DatasetOwner
 
 logger = logging.getLogger(__name__)
 
-# Every table but dataset_owner, which always has its one row.
-TABLES = (
-    "protein",
-    "assembly",
-    "assembly_proteins",
-    "gene_caller",
-    "staged_protein",
-    "staged_contig",
-    "staged_occurrence",
-    "dataset_update",
-)
 # In the order of their foreign keys.
 REGISTRIES = {
     "assembly": ("metadata/assemblies", {"id": "id", "accession": "accession"}),
@@ -158,6 +149,15 @@ def max_id(files: list[Path]) -> int:
     return top
 
 
+def tables() -> list[str]:
+    """Every table of the MGYP database but dataset_owner, which always has its one row."""
+    return [
+        model._meta.db_table
+        for model in apps.get_app_config("proteins").get_models()
+        if model is not DatasetOwner
+    ]
+
+
 def check_empty(conn: psycopg.Connection) -> None:
     """An interrupted build is not resumed, so it must start from the schema mgyp_schema.sql creates.
 
@@ -177,7 +177,7 @@ def check_empty(conn: psycopg.Connection) -> None:
         )
     filled = [
         table
-        for table in TABLES
+        for table in tables()
         if conn.execute(f"SELECT EXISTS (SELECT FROM {table})").fetchone()[0]
     ]
     if filled:

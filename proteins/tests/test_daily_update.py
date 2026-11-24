@@ -581,8 +581,8 @@ def test_an_analysis_committed_while_an_update_reads_waits_for_the_next(
     choose = daily_update.choose_assembly_proteins
     committed = []
 
-    def choose_then_commit_another(cursor):
-        chosen = choose(cursor)
+    def choose_then_commit_another():
+        chosen = choose()
         committed.append(as_another_job(stage, *late))
         return chosen
 
@@ -617,8 +617,8 @@ def test_a_rebuild_after_an_analysis_committed_while_an_update_read_stages_it_on
     choose = daily_update.choose_assembly_proteins
     committed = []
 
-    def choose_then_commit_another(cursor):
-        chosen = choose(cursor)
+    def choose_then_commit_another():
+        chosen = choose()
         committed.append(as_another_job(stage, *late))
         return chosen
 

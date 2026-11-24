@@ -163,6 +163,7 @@ def status(root: Path) -> Status:
         staged[model._meta.db_table] = counts["rows"]
         oldest += [counts["first"]] if counts["first"] else []
 
+    # Raw SQL: the ORM cannot read a sequence.
     with connections[MGYP].cursor() as cursor:
         cursor.execute("SELECT last_value FROM protein_id_seq")
         (last_protein_id,) = cursor.fetchone()
