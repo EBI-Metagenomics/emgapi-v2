@@ -1,3 +1,4 @@
+import csv
 import gzip
 import os
 import re
@@ -361,20 +362,18 @@ def generate_assembly_csv(
         update_assembly_metadata(assembly)
 
     assembly_csv = metadata_dir / Path(f"{assembly.runs.first().first_accession}.csv")
-    with open(assembly_csv, "w") as file_out:
-        file_out.write(
-            ",".join(["Run", "Coverage", "Assembler", "Version", "Filepath"]) + "\n"
-        )
-        line = ",".join(
+    with open(assembly_csv, "w", newline="") as file_out:
+        writer = csv.writer(file_out)
+        writer.writerow(["Runs", "Coverage", "Assembler", "Version", "Filepath"])
+        writer.writerow(
             [
-                " ".join([run.first_accession for run in assembly.runs.all()]),
+                ",".join(run.first_accession for run in assembly.runs.all()),
                 str(assembly.metadata.get(assembly.CommonMetadataKeys.COVERAGE_DEPTH)),
                 assembly.assembler.name,
                 str(assembly.assembler.version),
                 os.path.abspath(assembly_path),
             ]
         )
-        file_out.write(line + "\n")
     logger.info(f"CSV: {os.path.abspath(assembly_csv)}")
     return assembly_csv
 
@@ -416,15 +415,19 @@ def prepare_assembly(
         assembly_manifest_writer = assembly_manifest.AssemblyManifestGenerator(
             study=mgnify_assembly.reads_study.first_accession,
             assembly_study=mgnify_assembly.assembly_study.first_accession,
-            assemblies_csv=data_csv_path,
+            assemblies_table=data_csv_path,
+            assemblies_table_delimiter=",",
             output_dir=upload_folder,
             private=mgnify_assembly.is_private,
             tpa=mgnify_assembly.assembly_study.id != mgnify_assembly.reads_study.id,
         )
         assembly_manifest_writer.write()
 
+    # assembly_uploader names manifests by the first 12 characters of the assembly's MD5.
+    # TODO: use the paths returned by write() once an assembly_uploader release (>1.3.6) returns them.
+    assembly_md5 = assembly_manifest.get_md5(assembly_path)
     manifest = assembly_manifest_writer.upload_dir / Path(
-        mgnify_assembly.runs_label + ".manifest"
+        f"{assembly_md5[:12]}.manifest"
     )
     return manifest
 
