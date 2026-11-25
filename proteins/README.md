@@ -76,7 +76,8 @@ The schedules and the trigger are inactive until cutover.
 - the protein dataset has an incomplete day before the last dataset update;
 - protein ids are above 90 % of 10¹²;
 - annotated assembly analyses have a pipeline version with no gene-caller rule, other than the legacy versions 1.0 to 5.0: the migration gives 4.1 and 5.0 their records, and the older versions have none. The listing skips them;
-- an assembly proteins record has an MGYA that is not in emgapi-v2, so releases publish none of its proteins;
+- an assembly proteins record has an MGYA that is in neither emgapi-v2 nor MGnify v1, so releases publish none of its proteins;
+- no MGYA's metadata is from MGnify v1 any more, and the protein dataset still has its copy of v1, `v1/analyses.parquet`;
 - the protein dataset has an owner whose SLURM job is not running.
 
 **During a release**, pause the schedules of `update_protein_dataset_deployment` and `merge_protein_dataset_deployment`, check that neither is running, and resume both once the release no longer reads the protein dataset. The merge is the only flow that deletes the files of a complete day.
@@ -91,7 +92,8 @@ The schedules and the trigger are inactive until cutover.
 | `AnalysisAlreadyRecorded` | The MGYA already has a record of another ERZ or `major.minor`, named in the error. Find out which is right, that record or the analysis in emgapi-v2. Nothing was written. |
 | `UnsupportedPipelineVersion`, `NotImplementedError`, or the check reports a pipeline version with no gene-caller rule | The pipeline version of the analysis has no rule yet. Add it to `GeneCaller.BY_PIPELINE_VERSION` and `Analysis.predicted_genes_files()`. |
 | A dataset update failed | Run it again, or wait for the next run. Its first step deletes what a failed update left, and marks a committed day complete. |
-| The dataset update logs "withholding the records of N MGYAs", and the check reports MGYAs not in emgapi-v2 | Those MGYAs of the MGYP database are not in emgapi-v2, so releases publish none of their proteins. Find out why the analyses were deleted, and restore them: the next update puts them back. |
+| The dataset update logs "withholding the records of N MGYAs", and the check reports MGYAs in neither emgapi-v2 nor MGnify v1 | Those MGYAs of the MGYP database are in neither emgapi-v2 nor MGnify v1, so releases publish none of their proteins. Find out why the analyses were deleted, and restore them: the next update puts them back. |
+| The check reports that no MGYA's metadata is from MGnify v1 | The import of the legacy studies into emgapi-v2 is complete. Delete `v1/analyses.parquet` from the protein dataset. |
 | A file of the protein dataset is lost or corrupted | Restore it from the backup. Files are never changed after they are written. |
 | The MGYP database lost commits that the dataset update has not read | No file has those MGYPs, but someone could have seen them, so they must never be given again. Disable the trigger of `ingest_assembly_proteins_deployment`, and wait until no ingestion run is pending or running. As `proteindb_owner`, skip 10⁸ ids: `SELECT setval('proteindb.protein_id_seq', last_value + 100000000) FROM proteindb.protein_id_seq`. Enable the trigger again and run `ingest_assembly_proteins` once: it finds the records that were lost. |
 | The MGYP database is lost | Restore it from the PostgreSQL backups. Unless the restore is known to have lost no commits, continue as for lost commits, above. |
@@ -121,4 +123,14 @@ An update or merge that fails at start with "The protein dataset is owned by job
 
 ## Tests
 
-`pytest proteins`. The tests cover the hash contract, the file readers, and the accessioning core.
+`pytest proteins`. The tests run against an `mgyp` test database with `mgyp_schema.sql` and `mgyp_roles.sql` applied, as the runtime roles, so the grants are tested too. They cover:
+
+- the hash contract, and the FASTA and GFF readers;
+- the schema, the roles' privileges, the router and the `proteins.W001` warning;
+- accessioning: new and known proteins, reruns, an MGYA already recorded under another version, a kill before and after the commit, concurrent analyses meeting the same new proteins, and lookups that read one partition per query;
+- the listing of pending analyses, the chunks, and ingestion by hand;
+- every step of the dataset update, a crash at each step, an analysis committed while an update reads, and a record withheld from the snapshot;
+- an assembly's records sharing its contigs and occurrences, on the same day and on later days, and a migrated assembly that holds a contig twice;
+- the merge, ownership of the protein dataset against a mocked SLURM, and the metadata snapshot;
+- every status check;
+- the MGYP database build, and a rebuild after the database is lost.
