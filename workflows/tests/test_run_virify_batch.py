@@ -16,7 +16,7 @@ from workflows.models import (
     AssemblyAnalysisPipeline,
     AssemblyAnalysisPipelineStatus,
 )
-from workflows.prefect_utils.slurm_flow import ClusterJobFailedException
+from workflows.prefect_utils.slurm_flow import SubprocessFailedException
 
 
 @pytest.fixture
@@ -129,7 +129,7 @@ def test_run_virify_batch_success(
 @pytest.mark.django_db(transaction=True)
 @patch("workflows.flows.analysis.assembly.flows.run_virify_batch.run_cluster_job")
 @patch("workflows.flows.analysis.assembly.flows.run_virify_batch.flow_run")
-def test_run_virify_batch_cluster_job_failed(
+def test_run_virify_batch_process_failed(
     mock_flow_run,
     mock_run_cluster_job,
     prefect_harness,
@@ -142,9 +142,7 @@ def test_run_virify_batch_cluster_job_failed(
     """Test running the virify pipeline when the cluster job fails."""
     # Set up mocks
     mock_flow_run.id = "test_flow_run_id"
-    mock_run_cluster_job.side_effect = ClusterJobFailedException(
-        "Cluster job failed", "FAILED"
-    )
+    mock_run_cluster_job.side_effect = SubprocessFailedException(123, 1)
 
     # Create analyses with assemblies using fixtures
     Analysis.objects.create(
@@ -188,8 +186,9 @@ def test_run_virify_batch_cluster_job_failed(
     )
     samplesheet_path.write_text("sample,assembly\ntest_sample,test_assembly.fasta")
 
-    # Call the flow function - should not raise by default
-    run_virify_batch(assembly_analyses_batch_id=batch.id)
+    # Process failures must propagate to the flow.
+    with pytest.raises(SubprocessFailedException):
+        run_virify_batch.with_options(retries=0)(assembly_analyses_batch_id=batch.id)
 
     # Verify batch status is FAILED
     batch.refresh_from_db()
@@ -229,7 +228,8 @@ def test_run_virify_batch_no_samplesheet(
     )
 
     # GoGoFlow
-    run_virify_batch(assembly_analyses_batch_id=batch.id)
+    with pytest.raises(FileNotFoundError):
+        run_virify_batch.with_options(retries=0)(assembly_analyses_batch_id=batch.id)
 
     # Verify that the batch state shows failure (no samplesheet means it can't run)
     batch.refresh_from_db()

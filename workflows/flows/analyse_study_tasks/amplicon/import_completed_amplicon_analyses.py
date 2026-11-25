@@ -86,6 +86,7 @@ def import_completed_analyses(
                 analysis.AnalysisStates.ANALYSIS_POST_SANITY_CHECK_FAILED,
                 reason=f"Failed during import: {e}",
             )
+            raise
 
 
 @flow(log_prints=True)

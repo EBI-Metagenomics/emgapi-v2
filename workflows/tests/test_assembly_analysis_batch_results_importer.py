@@ -378,11 +378,12 @@ class TestProcessImportResults:
             ),
         ]
 
-        process_import_results(
-            batch.id,
-            results,
-            AssemblyAnalysisPipeline.VIRIFY,
-        )
+        with pytest.raises(RuntimeError, match="results failed"):
+            process_import_results.with_options(retries=0)(
+                batch.id,
+                results,
+                AssemblyAnalysisPipeline.VIRIFY,
+            )
 
         # Verify batch analysis statuses updated
         for batch_analysis in batch_analyses:
@@ -444,7 +445,10 @@ class TestProcessImportResults:
             ImportResult(analysis_id=analyses[2].id, success=True, downloads_count=7),
         ]
 
-        process_import_results(batch.id, results, AssemblyAnalysisPipeline.MAP)
+        with pytest.raises(RuntimeError, match="results failed"):
+            process_import_results.with_options(retries=0)(
+                batch.id, results, AssemblyAnalysisPipeline.MAP
+            )
 
         # Verify only the failed one is marked
         batch_analyses[0].refresh_from_db()
@@ -577,11 +581,12 @@ class TestValidationOnlyMode:
         assert "Schema error" in validation_results[0].error
 
         # Process results to update statuses
-        process_import_results(
-            batch.id,
-            validation_results,
-            AssemblyAnalysisPipeline.ASA,
-        )
+        with pytest.raises(RuntimeError, match="results failed"):
+            process_import_results.with_options(retries=0)(
+                batch.id,
+                validation_results,
+                AssemblyAnalysisPipeline.ASA,
+            )
 
         # Verify status was marked as FAILED
         batch_analysis.refresh_from_db()
@@ -641,9 +646,10 @@ class TestValidationOnlyMode:
             validation_only=True,
         )
 
-        process_import_results(
-            batch.id, validation_results, AssemblyAnalysisPipeline.ASA
-        )
+        with pytest.raises(RuntimeError, match="results failed"):
+            process_import_results.with_options(retries=0)(
+                batch.id, validation_results, AssemblyAnalysisPipeline.ASA
+            )
 
         batch_analysis.refresh_from_db()
         assert batch_analysis.asa_status == AssemblyAnalysisPipelineStatus.FAILED
@@ -752,9 +758,10 @@ class TestValidationOnlyMode:
             validation_only=True,
         )
 
-        process_import_results(
-            batch.id, validation_results, AssemblyAnalysisPipeline.VIRIFY
-        )
+        with pytest.raises(RuntimeError, match="results failed"):
+            process_import_results.with_options(retries=0)(
+                batch.id, validation_results, AssemblyAnalysisPipeline.VIRIFY
+            )
 
         # First should still be COMPLETED, the second should be FAILED
         batch_analyses[0].refresh_from_db()
@@ -817,9 +824,10 @@ class TestErrorMessageDistinction:
             )
         ]
 
-        process_import_results(
-            batch.id, results, AssemblyAnalysisPipeline.VIRIFY, validation_only=True
-        )
+        with pytest.raises(RuntimeError, match="results failed"):
+            process_import_results.with_options(retries=0)(
+                batch.id, results, AssemblyAnalysisPipeline.VIRIFY, validation_only=True
+            )
 
         analysis.refresh_from_db()
         reason = analysis.status.get(
@@ -862,11 +870,12 @@ class TestErrorMessageDistinction:
             )
         ]
 
-        process_import_results(
-            batch.id,
-            results,
-            AssemblyAnalysisPipeline.MAP,
-        )
+        with pytest.raises(RuntimeError, match="results failed"):
+            process_import_results.with_options(retries=0)(
+                batch.id,
+                results,
+                AssemblyAnalysisPipeline.MAP,
+            )
 
         analysis.refresh_from_db()
         reason = analysis.status.get(
@@ -989,12 +998,13 @@ class TestErrorLogField:
             )
         ]
 
-        process_import_results(
-            batch.id,
-            results,
-            AssemblyAnalysisPipeline.ASA,
-            validation_only=True,
-        )
+        with pytest.raises(RuntimeError, match="results failed"):
+            process_import_results.with_options(retries=0)(
+                batch.id,
+                results,
+                AssemblyAnalysisPipeline.ASA,
+                validation_only=True,
+            )
 
         batch.refresh_from_db()
         assert len(batch.error_log) == 1

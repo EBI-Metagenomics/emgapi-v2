@@ -17,7 +17,7 @@ from workflows.models import (
     AssemblyAnalysisPipeline,
     AssemblyAnalysisPipelineStatus,
 )
-from workflows.prefect_utils.slurm_flow import ClusterJobFailedException
+from workflows.prefect_utils.slurm_flow import SubprocessFailedException
 
 
 def setup_asa_output_helpers(asa_outdir: Path, assembly_accession: str):
@@ -298,9 +298,7 @@ def test_asa_failure_stops_chain(
     """
     # Set up mocks
     mock_asa_flow_run.id = "test_asa_flow_run_id"
-    mock_asa_cluster_job.side_effect = ClusterJobFailedException(
-        "ASA pipeline failed", "FAILED"
-    )
+    mock_asa_cluster_job.side_effect = SubprocessFailedException(123, 1)
     mock_generate_samplesheet.return_value = (tmp_path / "samplesheet.csv", "test_hash")
 
     # Create analysis
@@ -319,7 +317,8 @@ def test_asa_failure_stops_chain(
     batch = batches[0]
 
     # Run the flow - should raise an exception
-    run_assembly_batch(assembly_analyses_batch_id=batch.id)
+    with pytest.raises(SubprocessFailedException):
+        run_assembly_batch.with_options(retries=0)(assembly_analyses_batch_id=batch.id)
 
     # Verify ASA failed (status counts already updated by the hook)
     batch.refresh_from_db()
@@ -366,6 +365,7 @@ def test_virify_failure_partial_results(
     mock_asa_cluster_job,
     mock_generate_samplesheet,
     prefect_harness,
+    monkeypatch,
     tmp_path,
     raw_reads_mgnify_study,
     raw_reads_mgnify_sample,
@@ -396,9 +396,7 @@ def test_virify_failure_partial_results(
 
     mocked_set_post_states.side_effect = mock_set_states_side_effect
 
-    mock_virify_cluster_job.side_effect = ClusterJobFailedException(
-        "VIRify pipeline failed", "FAILED"
-    )
+    mock_virify_cluster_job.side_effect = SubprocessFailedException(123, 1)
 
     mock_generate_samplesheet.return_value = (tmp_path / "samplesheet.csv", "test_hash")
 
@@ -423,8 +421,18 @@ def test_virify_failure_partial_results(
     asa_outdir = batch.get_pipeline_workspace(AssemblyAnalysisPipeline.ASA)
     setup_asa_output_helpers(asa_outdir, assembly_accession)
 
+    from workflows.flows.analysis.assembly.flows.run_virify_batch import (
+        run_virify_batch_task,
+    )
+
+    monkeypatch.setattr(
+        "workflows.flows.analysis.assembly.flows.run_assembly_analysis_pipeline_batch.run_virify_batch",
+        run_virify_batch_task.with_options(retries=0),
+    )
+
     # Run the flow
-    run_assembly_batch(assembly_analyses_batch_id=batch.id)
+    with pytest.raises(SubprocessFailedException):
+        run_assembly_batch.with_options(retries=0)(assembly_analyses_batch_id=batch.id)
 
     assert mocked_set_post_states.called
 
@@ -444,8 +452,8 @@ def test_virify_failure_partial_results(
     # Verify MAP was not started
     assert batch.pipeline_status_counts.map.pending == batch.total_analyses
 
-    # Verify summary was still generated (ASA completed)
-    assert mock_generate_summary.called
+    # A pipeline failure stops summary generation.
+    mock_generate_summary.assert_not_called()
 
 
 @pytest.mark.django_db(transaction=True)
@@ -478,6 +486,7 @@ def test_asa_not_ready_for_virify(
     mock_asa_flow_run,
     mock_asa_cluster_job,
     mock_generate_samplesheet,
+    monkeypatch,
     prefect_harness,
     tmp_path,
     raw_reads_mgnify_study,
@@ -526,8 +535,16 @@ def test_asa_not_ready_for_virify(
     )
     batch = batches[0]
 
-    # Run the flow
-    run_assembly_batch(assembly_analyses_batch_id=batch.id)
+    from workflows.flows.analysis.assembly.flows.run_virify_batch import (
+        run_virify_batch_task,
+    )
+
+    monkeypatch.setattr(
+        "workflows.flows.analysis.assembly.flows.run_assembly_analysis_pipeline_batch.run_virify_batch",
+        run_virify_batch_task.with_options(retries=0),
+    )
+    with pytest.raises(FileNotFoundError):
+        run_assembly_batch.with_options(retries=0)(assembly_analyses_batch_id=batch.id)
 
     assert mock_import_analyses.called
 

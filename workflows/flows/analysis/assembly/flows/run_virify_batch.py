@@ -27,7 +27,7 @@ from workflows.prefect_utils.build_cli_command import cli_command
 from workflows.prefect_utils.flows_utils import django_db_flow as flow
 from workflows.prefect_utils.flows_utils import django_db_task as task
 from workflows.prefect_utils.slurm_flow import (
-    ClusterJobFailedException,
+    SubprocessFailedException,
     run_cluster_job,
 )
 from workflows.prefect_utils.slurm_policies import ResubmitAlwaysPolicy
@@ -58,7 +58,7 @@ def run_virify_batch(assembly_analyses_batch_id: uuid.UUID):
     :param assembly_analyses_batch_id: Unique identifier for the assembly batch to be
         processed by the VIRify pipeline.
     :type assembly_analyses_batch_id: uuid.UUID
-    :raises ClusterJobFailedException: If the VIRify pipeline execution job fails.
+    :raises SubprocessFailedException: If the VIRify pipeline execution job fails.
     :raises Exception: For any unexpected errors during pipeline execution.
     """
     return run_virify_batch_task(assembly_analyses_batch_id)
@@ -154,7 +154,7 @@ def _run_virify_batch(assembly_analyses_batch_id: uuid.UUID):
         assembly_analysis_batch.batch_analyses.update(
             virify_status=AssemblyAnalysisPipelineStatus.FAILED
         )
-        return
+        raise FileNotFoundError(assembly_analysis_batch.last_error)
 
     logger.info(
         f"Using samplesheet {virify_samplesheet_path} for VIRify pipeline, saving in batch"
@@ -229,7 +229,7 @@ def _run_virify_batch(assembly_analyses_batch_id: uuid.UUID):
     except Exception as e:
         error_type = (
             "VIRIfy pipeline failed"
-            if isinstance(e, ClusterJobFailedException)
+            if isinstance(e, SubprocessFailedException)
             else "Unexpected error in VIRIfy pipeline"
         )
         logger.error(f"{error_type} for study {mgnify_study.ena_study.accession}: {e}")
@@ -242,6 +242,7 @@ def _run_virify_batch(assembly_analyses_batch_id: uuid.UUID):
         assembly_analysis_batch.batch_analyses.filter(
             virify_status=AssemblyAnalysisPipelineStatus.RUNNING
         ).update(virify_status=AssemblyAnalysisPipelineStatus.FAILED)
+        raise
     else:
         remove_dir(nextflow_workdir)  # will also delete past "abandoned" nextflow files
 

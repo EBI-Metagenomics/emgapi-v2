@@ -75,6 +75,12 @@ def process_import_results(
 
     # Persist the errors in the batch
     batch.save()
+    details = "; ".join(
+        f"Analysis {result.analysis_id}: {result.error}"
+        for result in import_results
+        if not result.success
+    )
+    raise RuntimeError(f"{pipeline_type.value.upper()} results failed: {details}")
 
 
 @task

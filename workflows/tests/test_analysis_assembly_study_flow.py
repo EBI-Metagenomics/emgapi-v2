@@ -40,6 +40,31 @@ from workflows.prefect_utils.testing_utils import (
 EMG_CONFIG = settings.EMG_CONFIG
 
 
+@pytest.fixture
+def disable_assembly_pipeline_retries(monkeypatch):
+    """Avoid retry delays for intentionally invalid pipeline output."""
+    import importlib
+
+    runner = importlib.import_module(
+        "workflows.flows.analysis.assembly.flows.run_assembly_analysis_pipeline_batch"
+    )
+    importer = importlib.import_module(
+        "workflows.flows.analysis.assembly.flows.import_asa_batch"
+    )
+    monkeypatch.setattr(
+        runner, "import_asa_batch", runner.import_asa_batch.with_options(retries=0)
+    )
+    monkeypatch.setattr(
+        importer,
+        "process_import_results",
+        importer.process_import_results.with_options(retries=0),
+    )
+    monkeypatch.setattr(
+        "workflows.tests.test_analysis_assembly_study_flow.run_assembly_batch",
+        run_assembly_batch.with_options(retries=0),
+    )
+
+
 def setup_assembly_batch_fixtures(scenario: AssemblyTestScenario):
     """
     Helper to copy test fixtures into the batch workspace after batch creation.
@@ -763,6 +788,7 @@ def test_prefect_analyse_assembly_flow_missing_directory(
     httpx_mock,
     prefect_harness,
     mock_cluster_can_accept_jobs_yes,
+    disable_assembly_pipeline_retries,
     mock_start_cluster_job,
     mock_check_cluster_job_all_completed,
     assembly_analysis_ena_study,
@@ -897,10 +923,11 @@ def test_prefect_analyse_assembly_flow_missing_directory(
     mock_suspend_flow_run.side_effect = suspend_side_effect
 
     # RUN MAIN FLOW
-    analysis_assembly_study(
-        study_accession=scenario.study_accession,
-        workspace_dir=str(scenario.workspace_dir),
-    )
+    with pytest.raises(RuntimeError, match="results failed"):
+        analysis_assembly_study(
+            study_accession=scenario.study_accession,
+            workspace_dir=str(scenario.workspace_dir),
+        )
 
     # Get study and analysis
     study = Study.objects.get_or_create_for_ena_study(scenario.study_accession)
@@ -945,6 +972,7 @@ def test_prefect_analyse_assembly_flow_invalid_schema(
     httpx_mock,
     prefect_harness,
     mock_cluster_can_accept_jobs_yes,
+    disable_assembly_pipeline_retries,
     mock_start_cluster_job,
     mock_check_cluster_job_all_completed,
     assembly_analysis_ena_study,
@@ -1078,10 +1106,11 @@ def test_prefect_analyse_assembly_flow_invalid_schema(
     mock_suspend_flow_run.side_effect = suspend_side_effect
 
     # RUN MAIN FLOW
-    analysis_assembly_study(
-        study_accession=scenario.study_accession,
-        workspace_dir=str(scenario.workspace_dir),
-    )
+    with pytest.raises(RuntimeError, match="results failed"):
+        analysis_assembly_study(
+            study_accession=scenario.study_accession,
+            workspace_dir=str(scenario.workspace_dir),
+        )
 
     # Get study and analysis
     study = Study.objects.get_or_create_for_ena_study(scenario.study_accession)
