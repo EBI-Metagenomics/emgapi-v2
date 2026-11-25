@@ -1,3 +1,4 @@
+import csv
 import gzip
 import os
 import re
@@ -6,7 +7,12 @@ from importlib.resources import files
 from pathlib import Path
 from typing import Optional
 
-from assembly_uploader import assembly_manifest, study_xmls, submit_study
+from assembly_uploader import (
+    assembly_manifest,
+    release_study,
+    study_xmls,
+    submit_study,
+)
 from Bio import SeqIO
 from django.core.exceptions import MultipleObjectsReturned, ObjectDoesNotExist
 from django.urls import reverse
@@ -52,10 +58,11 @@ def check_assembly(assembly: analyses.models.Assembly, assembly_path: Path):
     logger = get_run_logger()
     accession = assembly.runs_label
     logger.info(f"Check assembly {assembly}")
-    # check filesize
     if not assembly_path.is_file():
-        logger.warning(f"{assembly_path} does not exist")
-        return False
+        raise FileNotFoundError(
+            f"Contigs file for assembly {assembly} not found at {assembly_path}"
+        )
+    # check filesize
     file_size = os.path.getsize(assembly_path)
     if not file_size:
         logger.warning(f"Contigs file is empty for assembly {assembly}")
@@ -164,6 +171,22 @@ def submit_study_xml(
     return registered_study_accession
 
 
+def get_tpa_study(
+    reads_study: analyses.models.Study,
+) -> Optional[analyses.models.Study]:
+    """
+    The TPA (assembly) study already registered for a reads study's assemblies, if any.
+    All assemblies of a reads study share one TPA study (handle_tpa_study reuses it).
+    Private assemblies brokered into the reads study itself are not counted.
+    """
+    assembly_with_tpa_study = (
+        reads_study.assemblies_reads.filter(assembly_study__isnull=False)
+        .exclude(assembly_study=reads_study)
+        .first()
+    )
+    return assembly_with_tpa_study.assembly_study if assembly_with_tpa_study else None
+
+
 @task(
     retries=2,
     cache_key_fn=task_input_hash,
@@ -182,21 +205,11 @@ def handle_tpa_study(
     # if the assembly study (i.e. TPA study for public data) does not yet have an ENA study attached,
     # it means we need to register it.
 
-    # check if any assemblies in the same reads study as this assembly have an assembly study already
-    assembly_study = None
-    assembly_from_same_reads_study_with_assembly_study = (
-        assembly.reads_study.assemblies_reads.filter(
-            assembly_study__isnull=False
-        ).first()
-    )
-    if assembly_from_same_reads_study_with_assembly_study:
+    # reuse the TPA study if another assembly of the same reads study already has one
+    assembly_study = get_tpa_study(assembly.reads_study)
+    if assembly_study:
         logger.info(
-            f"Found {assembly_study = } on {assembly_from_same_reads_study_with_assembly_study}, "
-            f"which came from same reads study {assembly.reads_study} as {assembly}. "
-            f"Will assign that as assembly study."
-        )
-        assembly_study = (
-            assembly_from_same_reads_study_with_assembly_study.assembly_study
+            f"Reusing TPA study {assembly_study} of reads study {assembly.reads_study} for {assembly}"
         )
 
     if not (assembly_study and assembly_study.ena_study):
@@ -226,7 +239,11 @@ def handle_tpa_study(
         logger.info(f"Study submitted successfully under {registered_study}")
 
         newly_registered_ena_study, created = ena.models.Study.objects.get_or_create(
-            accession=registered_study, title=assembly_study_title
+            accession=registered_study,
+            title=assembly_study_title,
+            defaults={
+                "is_private": True
+            },  # new TPA studies are private until we release them
         )
         if created:
             logger.info(f"Created new ENA study {newly_registered_ena_study}")
@@ -237,6 +254,7 @@ def handle_tpa_study(
                 "title": newly_registered_ena_study.title,
                 "biome": assembly.reads_study.biome,
                 "ena_accessions": [registered_study],
+                "is_private": newly_registered_ena_study.is_private,
             },
         )
         if created:
@@ -247,6 +265,62 @@ def handle_tpa_study(
     assembly.save()
 
     return assembly_study
+
+
+@task(
+    retries=2,
+    task_run_name="Release TPA study of {reads_study} if all assemblies are uploaded",
+)
+def release_tpa_study_if_complete(
+    reads_study: analyses.models.Study, dry_run: bool = True
+) -> Optional[analyses.models.Study]:
+    """
+    Publicly release the TPA (assembly) study, but only once every assembly that
+    should be uploaded has been uploaded.
+
+    Assemblies that failed post-assembly QC are not expected to be uploaded and are ignored.
+    The study is only released if it is marked private in the DB, so this is safe to call repeatedly.
+
+    :param reads_study: The raw-reads MGnify study whose assemblies were uploaded.
+    :param dry_run: If True, use the ENA TEST server.
+    :return: The released study, or None if nothing was released.
+    """
+    logger = get_run_logger()
+    AssemblyStates = analyses.models.Assembly.AssemblyStates
+
+    assemblies = reads_study.assemblies_reads.filter_by_statuses(
+        [AssemblyStates.ASSEMBLY_COMPLETED]
+    ).exclude_by_statuses([AssemblyStates.POST_ASSEMBLY_QC_FAILED])
+    if not assemblies.exists():
+        logger.info(f"No assemblies to upload for {reads_study}, nothing to release")
+        return None
+
+    not_uploaded = assemblies.exclude_by_statuses([AssemblyStates.ASSEMBLY_UPLOADED])
+    if not_uploaded.exists():
+        logger.info(
+            f"Not releasing TPA study of {reads_study}: {not_uploaded.count()} of "
+            f"{assemblies.count()} assemblies are not uploaded yet"
+        )
+        return None
+
+    tpa_study = get_tpa_study(reads_study)
+    if not tpa_study or not tpa_study.ena_study or not tpa_study.ena_study.is_private:
+        logger.info(f"No private TPA study for {reads_study}, nothing to release")
+        return None
+
+    accession = tpa_study.ena_study.accession
+    logger.info(f"All assemblies of {reads_study} are uploaded. Releasing {accession}")
+    with TemporaryEnv(
+        ENA_WEBIN=EMG_CONFIG.webin.emg_webin_account,
+        ENA_WEBIN_PASSWORD=EMG_CONFIG.webin.emg_webin_password,
+    ):
+        release_study.release_study(accession, is_test=dry_run)
+
+    # Saving the ENA study propagates is_private to the MGnify study (post_save signal)
+    tpa_study.ena_study.is_private = False
+    tpa_study.ena_study.save()
+    logger.info(f"Released TPA study {accession}")
+    return tpa_study
 
 
 @task
@@ -280,20 +354,18 @@ def generate_assembly_csv(
         update_assembly_metadata(assembly)
 
     assembly_csv = metadata_dir / Path(f"{assembly.runs.first().first_accession}.csv")
-    with open(assembly_csv, "w") as file_out:
-        file_out.write(
-            ",".join(["Run", "Coverage", "Assembler", "Version", "Filepath"]) + "\n"
-        )
-        line = ",".join(
+    with open(assembly_csv, "w", newline="") as file_out:
+        writer = csv.writer(file_out)
+        writer.writerow(["Runs", "Coverage", "Assembler", "Version", "Filepath"])
+        writer.writerow(
             [
-                " ".join([run.first_accession for run in assembly.runs.all()]),
+                ",".join(run.first_accession for run in assembly.runs.all()),
                 str(assembly.metadata.get(assembly.CommonMetadataKeys.COVERAGE_DEPTH)),
                 assembly.assembler.name,
                 str(assembly.assembler.version),
                 os.path.abspath(assembly_path),
             ]
         )
-        file_out.write(line + "\n")
     logger.info(f"CSV: {os.path.abspath(assembly_csv)}")
     return assembly_csv
 
@@ -335,16 +407,19 @@ def prepare_assembly(
         assembly_manifest_writer = assembly_manifest.AssemblyManifestGenerator(
             study=mgnify_assembly.reads_study.first_accession,
             assembly_study=mgnify_assembly.assembly_study.first_accession,
-            assemblies_csv=data_csv_path,
+            assemblies_table=data_csv_path,
+            assemblies_table_delimiter=",",
             output_dir=upload_folder,
             private=mgnify_assembly.is_private,
             tpa=mgnify_assembly.assembly_study.id != mgnify_assembly.reads_study.id,
         )
-        assembly_manifest_writer.write()
+        manifest_paths = assembly_manifest_writer.write()
 
-    manifest = assembly_manifest_writer.upload_dir / Path(
-        mgnify_assembly.runs_label + ".manifest"
-    )
+    if len(manifest_paths) != 1:
+        raise Exception(
+            f"Expected one manifest for assembly {mgnify_assembly}, got {len(manifest_paths)}: {manifest_paths}"
+        )
+    manifest = Path(manifest_paths[0])
     return manifest
 
 
