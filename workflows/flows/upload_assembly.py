@@ -171,6 +171,22 @@ def submit_study_xml(
     return registered_study_accession
 
 
+def get_tpa_study(
+    reads_study: analyses.models.Study,
+) -> Optional[analyses.models.Study]:
+    """
+    The TPA (assembly) study already registered for a reads study's assemblies, if any.
+    All assemblies of a reads study share one TPA study (handle_tpa_study reuses it).
+    Private assemblies brokered into the reads study itself are not counted.
+    """
+    assembly_with_tpa_study = (
+        reads_study.assemblies_reads.filter(assembly_study__isnull=False)
+        .exclude(assembly_study=reads_study)
+        .first()
+    )
+    return assembly_with_tpa_study.assembly_study if assembly_with_tpa_study else None
+
+
 @task(
     retries=2,
     cache_key_fn=task_input_hash,
@@ -189,21 +205,11 @@ def handle_tpa_study(
     # if the assembly study (i.e. TPA study for public data) does not yet have an ENA study attached,
     # it means we need to register it.
 
-    # check if any assemblies in the same reads study as this assembly have an assembly study already
-    assembly_study = None
-    assembly_from_same_reads_study_with_assembly_study = (
-        assembly.reads_study.assemblies_reads.filter(
-            assembly_study__isnull=False
-        ).first()
-    )
-    if assembly_from_same_reads_study_with_assembly_study:
+    # reuse the TPA study if another assembly of the same reads study already has one
+    assembly_study = get_tpa_study(assembly.reads_study)
+    if assembly_study:
         logger.info(
-            f"Found {assembly_study = } on {assembly_from_same_reads_study_with_assembly_study}, "
-            f"which came from same reads study {assembly.reads_study} as {assembly}. "
-            f"Will assign that as assembly study."
-        )
-        assembly_study = (
-            assembly_from_same_reads_study_with_assembly_study.assembly_study
+            f"Reusing TPA study {assembly_study} of reads study {assembly.reads_study} for {assembly}"
         )
 
     if not (assembly_study and assembly_study.ena_study):
@@ -297,23 +303,9 @@ def release_tpa_study_if_complete(
         )
         return None
 
-    tpa_studies = {
-        assembly.assembly_study
-        for assembly in assemblies
-        if assembly.assembly_study and assembly.assembly_study != reads_study
-    }
-    if not tpa_studies:
-        logger.info(f"No TPA study registered for {reads_study}, nothing to release")
-        return None
-    if len(tpa_studies) > 1:
-        raise Exception(
-            f"Assemblies of {reads_study} belong to multiple assembly studies "
-            f"({', '.join(str(study) for study in tpa_studies)}). Resolve manually before releasing."
-        )
-
-    tpa_study: analyses.models.Study = tpa_studies.pop()
-    if not tpa_study.ena_study or not tpa_study.ena_study.is_private:
-        logger.info(f"TPA study {tpa_study} is not marked private, nothing to release")
+    tpa_study = get_tpa_study(reads_study)
+    if not tpa_study or not tpa_study.ena_study or not tpa_study.ena_study.is_private:
+        logger.info(f"No private TPA study for {reads_study}, nothing to release")
         return None
 
     accession = tpa_study.ena_study.accession

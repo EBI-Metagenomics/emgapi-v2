@@ -7,6 +7,7 @@ from responses import matchers
 import analyses.models as mg_models
 import ena.models
 from workflows.flows.upload_assembly import (
+    get_tpa_study,
     handle_tpa_study,
     release_tpa_study_if_complete,
     upload_assembly,
@@ -303,6 +304,21 @@ def _mark_completed(assemblies, uploaded=True, assembly_study=None):
 
 
 @pytest.mark.django_db(transaction=True)
+def test_get_tpa_study_ignores_assemblies_brokered_into_reads_study(
+    raw_reads_mgnify_study, mgnify_assemblies
+):
+    brokered, public = mgnify_assemblies[0], mgnify_assemblies[1]
+    brokered.assembly_study = raw_reads_mgnify_study
+    brokered.save()
+    assert get_tpa_study(raw_reads_mgnify_study) is None
+
+    tpa_study = _make_tpa_study()
+    public.assembly_study = tpa_study
+    public.save()
+    assert get_tpa_study(raw_reads_mgnify_study) == tpa_study
+
+
+@pytest.mark.django_db(transaction=True)
 def test_release_tpa_study_when_all_assemblies_uploaded(
     raw_reads_mgnify_study, mgnify_assemblies, prefect_harness
 ):
@@ -359,21 +375,6 @@ def test_release_tpa_study_never_releases_brokered_reads_study(
     dropbox = responses.add(responses.POST, DROPBOX_DEV, body='success="true"')
 
     assert release_tpa_study_if_complete(raw_reads_mgnify_study, dry_run=True) is None
-    assert dropbox.call_count == 0
-
-
-@pytest.mark.django_db(transaction=True)
-def test_release_tpa_study_fails_on_multiple_assembly_studies(
-    raw_reads_mgnify_study, mgnify_assemblies, prefect_harness
-):
-    _mark_completed(mgnify_assemblies, assembly_study=_make_tpa_study("PRJEB999001"))
-    other = mgnify_assemblies[0]
-    other.assembly_study = _make_tpa_study("PRJEB999002")
-    other.save()
-    dropbox = responses.add(responses.POST, DROPBOX_DEV, body='success="true"')
-
-    with pytest.raises(Exception, match="multiple assembly studies"):
-        release_tpa_study_if_complete(raw_reads_mgnify_study, dry_run=True)
     assert dropbox.call_count == 0
 
 
