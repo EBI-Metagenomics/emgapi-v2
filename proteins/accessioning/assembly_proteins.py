@@ -1,4 +1,4 @@
-"""Steps 3 and 4 of accessioning: looking up, and staging in one transaction."""
+"""Accessioning: looking up the proteins, and staging them in one transaction."""
 
 import logging
 from collections import defaultdict
@@ -67,7 +67,7 @@ def accession_assembly_proteins(
     if staged is not None:
         return ids | staged
 
-    # A rerun: the first attempt may have committed the proteins step 3 missed since.
+    # A rerun: the first attempt may have committed the proteins the lookup missed since.
     ids |= lookup([hash for hash in hashes if hash not in ids], connections)
     missing = len(hashes) - len(ids)
     if missing:
@@ -152,7 +152,7 @@ def stage(
     callers: dict[tuple[str, str], int],
     analysis_accession: str,
 ) -> dict[bytes, int] | None:
-    """The transaction: the ids of the proteins step 3 did not find, or None if the assembly proteins record exists.
+    """The transaction: the ids of the proteins the lookup did not find, or None if the assembly proteins record exists.
 
     :param assembly_id: The assembly's id, from register_assembly().
     :param source: The pipeline that predicted the genes: "assembly_analysis" or "gene_calling".
@@ -177,7 +177,7 @@ def stage(
                 raise
             return None
 
-        # Including the ones another job committed since step 3.
+        # Including the ones another job committed since the lookup.
         staged = Protein.objects.allocate(
             [
                 (hash, sequence)

@@ -1,4 +1,4 @@
-"""Step 1 of accessioning: reading the input into memory and checking it."""
+"""Reading the input of accessioning into memory and checking it."""
 
 import csv
 import re

@@ -21,7 +21,7 @@ def find_analyses(mgyas: list[str], root: Path) -> dict[str, dict]:
     """The snapshot's metadata of each of these MGYAs, from emgapi-v2, or from MGnify v1 for those emgapi-v2 does not have.
 
     The protein dataset holds the migration's copy of v1's analyses until the failed imports of their
-    studies into emgapi-v2 are retried, and none is left there (D26).
+    studies into emgapi-v2 are retried, and none is left there.
 
     :param mgyas: The MGYAs.
     :param root: The protein dataset's directory.
