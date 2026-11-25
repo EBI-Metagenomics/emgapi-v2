@@ -10,6 +10,7 @@ from analyses.admin.base import (
     StudyFilter,
 )
 from analyses.models import Assembler, Assembly
+from emgapiv2.admin_mixins import ImpersonateOwnerAdminMixin
 
 
 class AssemblyStatusListFilter(StatusListFilter):
@@ -18,7 +19,16 @@ class AssemblyStatusListFilter(StatusListFilter):
 
 
 @admin.register(Assembly)
-class AssemblyAdmin(ENABrowserLinkMixin, JSONFieldWidgetOverridesMixin, ModelAdmin):
+class AssemblyAdmin(
+    ImpersonateOwnerAdminMixin,
+    ENABrowserLinkMixin,
+    JSONFieldWidgetOverridesMixin,
+    ModelAdmin,
+):
+    impersonation_path = "assemblies"
+    impersonation_accession_field = "first_accession"
+    actions_detail = ENABrowserLinkMixin.actions_detail + ["impersonate_owner"]
+
     class StudyFilterForAssembly(StudyFilter):
         study_accession_search_fields = [
             "ena_study__accession",

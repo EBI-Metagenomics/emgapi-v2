@@ -4,12 +4,20 @@ from django.contrib import admin
 from unfold.admin import ModelAdmin
 
 from analyses.admin.base import JSONFieldWidgetOverridesMixin
+from emgapiv2.admin_mixins import ImpersonateOwnerAdminMixin
 from viruses.models import ViralCatalogue, ViralCatalogueViralFragment, ViralFragment
 
 
 @admin.register(ViralCatalogue)
-class ViralCatalogueAdmin(JSONFieldWidgetOverridesMixin, ModelAdmin):
+class ViralCatalogueAdmin(
+    ImpersonateOwnerAdminMixin, JSONFieldWidgetOverridesMixin, ModelAdmin
+):
     """Manage catalogue visibility."""
+
+    impersonation_path = "viruses"
+    impersonation_accession_field = "catalogue_id"
+
+    actions_detail = ["impersonate_owner"]
 
     list_display = ("catalogue_id", "name", "version", "biome", "is_public")
     list_filter = ("is_public",)

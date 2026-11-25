@@ -22,6 +22,7 @@ from analyses.admin.base import (
 )
 from analyses.admin.publication import StudyPublicationInline
 from analyses.models import Analysis, Assembly, Run, Study
+from emgapiv2.admin_mixins import ImpersonateOwnerAdminMixin
 from emgapiv2.widgets import StatusPathwayWidget
 from workflows.models import AssemblyAnalysisPipelineStatus
 
@@ -116,11 +117,15 @@ class _StudyPublicationInline(StudyPublicationInline):
 
 @admin.register(Study)
 class StudyAdmin(
+    ImpersonateOwnerAdminMixin,
     ENABrowserLinkMixin,
     JSONFieldWidgetOverridesMixin,
     CanonicalizeAccessionViewMixin,
     ModelAdmin,
 ):
+    impersonation_path = "studies"
+    impersonation_accession_field = "accession"
+
     inlines = [
         StudyRunsInline,
         StudyAssembliesInline,
@@ -140,6 +145,7 @@ class StudyAdmin(
         "biome__biome_name",
     ]
     actions_detail = [
+        "impersonate_owner",
         {
             "title": "Study reports",
             "icon": "table_chart",

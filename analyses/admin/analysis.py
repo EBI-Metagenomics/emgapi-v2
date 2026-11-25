@@ -14,6 +14,7 @@ from analyses.admin.base import (
     StudyFilter,
 )
 from analyses.models import Analysis
+from emgapiv2.admin_mixins import ImpersonateOwnerAdminMixin
 
 
 class AnalysisStatusListFilter(StatusListFilter):
@@ -22,7 +23,12 @@ class AnalysisStatusListFilter(StatusListFilter):
 
 
 @admin.register(Analysis)
-class AnalysisAdmin(JSONFieldWidgetOverridesMixin, ModelAdmin):
+class AnalysisAdmin(
+    ImpersonateOwnerAdminMixin, JSONFieldWidgetOverridesMixin, ModelAdmin
+):
+    impersonation_path = "analyses"
+    impersonation_accession_field = "accession"
+
     list_display = [
         "__str__",
         "assembly_or_run",
@@ -118,7 +124,7 @@ class AnalysisAdmin(JSONFieldWidgetOverridesMixin, ModelAdmin):
             ]
         )
 
-    actions_detail = ["get_annotations_json"]
+    actions_detail = ["get_annotations_json", "impersonate_owner"]
 
     @action(
         description="Download: annotations JSON",

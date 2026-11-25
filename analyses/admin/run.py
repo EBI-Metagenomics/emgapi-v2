@@ -9,10 +9,20 @@ from analyses.admin.base import (
     StudyFilter,
 )
 from analyses.models import Run
+from emgapiv2.admin_mixins import ImpersonateOwnerAdminMixin
 
 
 @admin.register(Run)
-class RunAdmin(ENABrowserLinkMixin, JSONFieldWidgetOverridesMixin, ModelAdmin):
+class RunAdmin(
+    ImpersonateOwnerAdminMixin,
+    ENABrowserLinkMixin,
+    JSONFieldWidgetOverridesMixin,
+    ModelAdmin,
+):
+    impersonation_path = "runs"
+    impersonation_accession_field = "first_accession"
+    actions_detail = ENABrowserLinkMixin.actions_detail + ["impersonate_owner"]
+
     actions = ["set_experiment_type"]
 
     class StudyFilterForRun(StudyFilter):
