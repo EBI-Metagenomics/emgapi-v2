@@ -62,8 +62,10 @@ def write(path: Path, text: str) -> Path:
     return path
 
 
-def gff_row(gene_id, contig="c1", source="Pyrodigal_v3.6.3", strand="-"):
-    return f"{contig}\t{source}\tCDS\t1\t9\t.\t{strand}\t0\tID={gene_id}\n"
+def gff_row(
+    gene_id, contig="c1", source="Pyrodigal_v3.6.3", strand="-", start=1, end=9
+):
+    return f"{contig}\t{source}\tCDS\t{start}\t{end}\t.\t{strand}\t0\tID={gene_id}\n"
 
 
 @pytest.fixture
@@ -152,10 +154,35 @@ def test_every_gene_contig_must_be_in_the_contigs_file(files):
     ]
 
 
-def test_contig_names_must_be_unique(files):
-    assert problems(*files({"g1": "MKV"}, contigs=">c1\nAC\n>c1\nAC\n")) == [
-        "contig c1: more than one record"
+@pytest.mark.parametrize("strand", ["+", "-"])
+@pytest.mark.parametrize("start, end", [(1, 9), (1, 1), (9, 9)])
+def test_genes_may_reach_the_contig_ends(files, strand, start, end):
+    (occurrence,) = read_predicted_genes(
+        *files({"g1": "MKV"}, gff=gff_row("g1", strand=strand, start=start, end=end))
+    ).occurrences
+    assert (occurrence.start, occurrence.end) == (start, end)
+
+
+def test_names_every_gene_outside_its_contig(files):
+    gff = (
+        gff_row("g1", start=0, end=3)
+        + gff_row("g2", start=3, end=1)
+        + gff_row("g3", "c2", start=1, end=5)
+        + gff_row("g4", "c2", start=1, end=4)
+    )
+    assert problems(
+        *files({"g1": "MKV", "g2": "MKV", "g3": "MAG", "g4": "MAG"}, gff=gff)
+    ) == [
+        "g1: start 0 and end 3 are not 1 <= start <= end <= 9, the length of contig c1",
+        "g2: start 3 and end 1 are not 1 <= start <= end <= 9, the length of contig c1",
+        "g3: start 1 and end 5 are not 1 <= start <= end <= 4, the length of contig c2",
     ]
+
+
+def test_contig_names_must_be_unique(files):
+    assert problems(
+        *files({"g1": "MKV"}, gff=gff_row("g1", end=2), contigs=">c1\nAC\n>c1\nAC\n")
+    ) == ["contig c1: more than one record"]
 
 
 def test_only_contigs_carrying_a_gene_are_kept(files):
@@ -166,7 +193,7 @@ def test_only_contigs_carrying_a_gene_are_kept(files):
 
 def test_contig_hash_is_of_the_sequence(files):
     (contig,) = read_predicted_genes(
-        *files({"g1": "MKV"}, gff=gff_row("g1", "c2"))
+        *files({"g1": "MKV"}, gff=gff_row("g1", "c2", end=4))
     ).contigs
     assert contig.hash == hashlib.sha256(b"ACGT").digest()
 

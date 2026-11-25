@@ -166,6 +166,12 @@ def read_predicted_genes(
         for o in occurrences
         if o.contig not in in_file
     ]
+    problems += [
+        f"{o.gene_id}: start {o.start} and end {o.end} are not 1 <= start <= end <= {found[o.contig].length},"
+        f" the length of contig {o.contig}"
+        for o in occurrences
+        if o.contig in found and not 1 <= o.start <= o.end <= found[o.contig].length
+    ]
 
     if problems:
         raise InvalidInput(problems)
