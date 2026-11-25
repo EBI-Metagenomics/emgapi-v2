@@ -42,5 +42,9 @@ def get_v6_family_pipeline_versions_for_experiment_type(
         else Analysis.ExperimentTypes(experiment_type)
     )
     if normalized_experiment_type == Analysis.ExperimentTypes.AMPLICON:
-        return (Analysis.PipelineVersions.v6, Analysis.PipelineVersions.v6_1)
+        return (
+            Analysis.PipelineVersions.v6,
+            Analysis.PipelineVersions.v6_1,
+            Analysis.PipelineVersions.v6_2,
+        )
     return (Analysis.PipelineVersions.v6,)
