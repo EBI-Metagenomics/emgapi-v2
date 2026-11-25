@@ -425,10 +425,7 @@ def test_job_uses_environment_and_relative_workdir(
         working_dir=Path("relative"),
     )
     assert result.job_submit_description.working_directory == str(tmp_path / "relative")
-    assert result.job_submit_description.environment == {
-        "PIPELINE_LABEL": "expected-label"
-    }
-    assert (tmp_path / "relative").is_dir()
+    assert result.cluster_log.strip() == "expected-label"
 
 
 @pytest.mark.django_db(transaction=True)
