@@ -16,9 +16,11 @@ from workflows.prefect_utils.slurm_flow import (
     SubprocessFailedException,
     check_cluster_job,
     compute_hash_of_input_file,
-    run_cluster_job,
     run_subprocess,
     start_or_attach_cluster_job,
+)
+from workflows.prefect_utils.slurm_flow import (
+    run_cluster_job as run_cluster_job_task,
 )
 from workflows.prefect_utils.slurm_policies import (
     DontResubmitIfOnlyInputFilesChangePolicy,
@@ -31,6 +33,12 @@ from workflows.prefect_utils.testing_utils import (
     combine_caplog_records,
     run_flow_and_capture_logs,
 )
+
+
+@flow
+def run_cluster_job(**kwargs):
+    """Run job tasks within a flow for integration tests."""
+    return run_cluster_job_task(**kwargs)
 
 
 @pytest.fixture

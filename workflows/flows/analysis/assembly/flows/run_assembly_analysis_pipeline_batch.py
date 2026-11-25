@@ -11,9 +11,11 @@ from activate_django_first import EMG_CONFIG
 
 from analyses.models import Study
 from workflows.flows.analysis.assembly.flows.import_asa_batch import import_asa_batch
-from workflows.flows.analysis.assembly.flows.run_map_batch import run_map_batch
+from workflows.flows.analysis.assembly.flows.run_map_batch import (
+    run_map_batch_task as run_map_batch,
+)
 from workflows.flows.analysis.assembly.flows.run_virify_batch import (
-    run_virify_batch,
+    run_virify_batch_task as run_virify_batch,
 )
 from workflows.flows.analysis.assembly.flows.sync_assembly_batch_results import (
     copy_assembly_batch_results,

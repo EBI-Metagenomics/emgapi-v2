@@ -4,6 +4,7 @@ from pathlib import Path
 
 from django.db import transaction
 from prefect import get_run_logger
+from prefect.cache_policies import NONE
 from prefect.runtime import flow_run
 
 from activate_django_first import EMG_CONFIG
@@ -24,6 +25,7 @@ from workflows.models import (
 )
 from workflows.prefect_utils.build_cli_command import cli_command
 from workflows.prefect_utils.flows_utils import django_db_flow as flow
+from workflows.prefect_utils.flows_utils import django_db_task as task
 from workflows.prefect_utils.slurm_flow import (
     ClusterJobFailedException,
     run_cluster_job,
@@ -59,6 +61,29 @@ def run_virify_batch(assembly_analyses_batch_id: uuid.UUID):
     :raises ClusterJobFailedException: If the VIRify pipeline execution job fails.
     :raises Exception: For any unexpected errors during pipeline execution.
     """
+    return run_virify_batch_task(assembly_analyses_batch_id)
+
+
+@task(
+    task_run_name="Run VIRIFY Batch: {assembly_analyses_batch_id}",
+    cache_policy=NONE,
+    log_prints=True,
+)
+def run_virify_batch_task(assembly_analyses_batch_id: uuid.UUID):
+    """Run VIRIFY within the parent flow and refresh batch counts.
+
+    :param assembly_analyses_batch_id: The assembly analysis batch identifier.
+    :return: None.
+    """
+    try:
+        return _run_virify_batch(assembly_analyses_batch_id)
+    finally:
+        batch = AssemblyAnalysisBatch.objects.get(id=assembly_analyses_batch_id)
+        batch.update_pipeline_status_counts()
+
+
+def _run_virify_batch(assembly_analyses_batch_id: uuid.UUID):
+    """Execute VIRIFY for the selected batch."""
     logger = get_run_logger()
 
     # Lock the batch row to prevent two concurrent flows from both passing

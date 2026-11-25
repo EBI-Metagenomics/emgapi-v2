@@ -13,6 +13,7 @@ from django.urls import reverse
 from django.utils.timezone import now
 from prefect import get_run_logger
 from prefect.artifacts import create_markdown_artifact
+from prefect.cache_policies import NONE
 from prefect.runtime import flow_run
 from prefect_slurm.worker import SlurmWorker
 
@@ -22,9 +23,6 @@ from workflows.nextflow_utils.tower import get_nextflow_tower_url
 from workflows.nextflow_utils.trace import maybe_get_nextflow_trace_df
 from workflows.prefect_utils.flows_utils import (
     close_stale_connections,
-)
-from workflows.prefect_utils.flows_utils import (
-    django_db_flow as flow,
 )
 from workflows.prefect_utils.flows_utils import (
     django_db_task as task,
@@ -314,7 +312,8 @@ def start_or_attach_cluster_job(
 
 
 @task(
-    task_run_name="Job submission (as process): {name}",
+    task_run_name="Run process: {name}",
+    cache_policy=NONE,
 )
 def run_subprocess(
     name: str,
@@ -600,9 +599,10 @@ def store_nextflow_trace(orchestrated_cluster_job: OrchestratedClusterJob):
         orchestrated_cluster_job.save()
 
 
-@flow(
-    flow_run_name="Cluster job: {name}",
-    persist_result=True,
+@task(
+    task_run_name="Run job: {name}",
+    cache_policy=NONE,
+    log_prints=True,
     timeout_seconds=EMG_CONFIG.slurm.cluster_job_flow_timeout_seconds,
 )
 def run_cluster_job(
