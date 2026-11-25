@@ -108,6 +108,11 @@ def test_files_refuse_an_incomplete_day_an_unknown_table_and_no_complete_day(
         parquet_files.files(tmp_path, "protein")
 
 
+def test_a_merge_refuses_a_dataset_with_no_complete_day(tmp_path):
+    with pytest.raises(parquet_files.DatasetError, match="no complete day"):
+        monthly_merge.merge_dataset(tmp_path, OWNED)
+
+
 def test_files_refuse_a_day_older_than_the_oldest_base(dataset):
     monthly_merge.merge_dataset(dataset, OWNED)
     assert ids(dataset, DAY3) == [1, 2, 3, 4, 6, 7]

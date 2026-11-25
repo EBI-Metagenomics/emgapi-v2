@@ -82,6 +82,8 @@ def build_mgyp_database(
         highest + 1, or for a rebuild + LOST_MGYP_MARGIN.
     """
     days = parquet_files.complete_days(root)
+    if not days:
+        raise BuildError("The protein dataset has no complete day")
     if not rebuild and len(days) > 1:
         raise BuildError(
             f"The protein dataset has {len(days)} complete days, so this is a rebuild, which needs --rebuild"

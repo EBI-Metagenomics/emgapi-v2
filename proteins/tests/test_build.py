@@ -246,6 +246,12 @@ def test_a_duplicate_in_a_registry_stops_the_build_before_the_partitions(migrate
     assert query("SELECT count(*) FROM proteindb.assembly_proteins") == [(0,)]
 
 
+def test_refuses_a_protein_dataset_with_no_complete_day(tmp_path):
+    with pytest.raises(BuildError, match="no complete day"):
+        build_mgyp_database(owner_dsn(), tmp_path)
+    assert loaded() == {}
+
+
 def test_a_build_after_the_migration_refuses_days_after_it(migrated):
     write_day(migrated, D, {hash_of(0x80, 1): 50}, "day")
     with pytest.raises(BuildError, match="needs --rebuild"):

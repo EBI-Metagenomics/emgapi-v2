@@ -37,7 +37,7 @@ def accession_assembly_proteins(
     pipeline_version: str,
     predicted_genes: PredictedGenes,
     analysis_accession: str,
-    connections: int = 16,
+    threads: int = 16,
 ) -> dict[bytes, int]:
     """Each protein's id, giving new ids to the proteins that have none and staging them.
 
@@ -49,12 +49,12 @@ def accession_assembly_proteins(
     :param pipeline_version: The source pipeline's version, reduced to major.minor.
     :param predicted_genes: The proteins, contigs and occurrences, from read_predicted_genes().
     :param analysis_accession: The MGYA of the assembly analysis.
-    :param connections: How many connections the lookups use.
+    :param threads: How many threads look up partitions at once, each on its own connection.
     :raises InvalidInput: When the version is not major.minor with one digit each, before any query.
     """
     pipeline_version = major_minor(pipeline_version)
     hashes = [hash for hash, _ in predicted_genes.proteins]
-    ids = lookup(hashes, connections)
+    ids = lookup(hashes, threads)
     assembly_id = register_assembly(assembly)
     callers = register_gene_callers(
         sorted({(o.caller_name, o.caller_version) for o in predicted_genes.occurrences})
@@ -72,7 +72,7 @@ def accession_assembly_proteins(
         return ids | staged
 
     # A rerun: the first attempt may have committed the proteins the lookup missed since.
-    ids |= lookup([hash for hash in hashes if hash not in ids], connections)
+    ids |= lookup([hash for hash in hashes if hash not in ids], threads)
     missing = len(hashes) - len(ids)
     if missing:
         raise IncompleteRerun(

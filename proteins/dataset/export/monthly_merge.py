@@ -41,7 +41,10 @@ def merge_dataset(root: Path, owner: Owner) -> int:
     :param owner: This run's ownership of the protein dataset, checked before each prefix.
     :return: The number of prefixes merged.
     """
-    day = parquet_files.complete_days(root)[-1]
+    days = parquet_files.complete_days(root)
+    if not days:
+        raise parquet_files.DatasetError("The protein dataset has no complete day")
+    day = days[-1]
     by_prefix = defaultdict(list)
     for path in parquet_files.files(root, "protein", day):
         by_prefix[path.parent].append(path)

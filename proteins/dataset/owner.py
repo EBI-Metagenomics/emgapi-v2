@@ -29,9 +29,18 @@ from proteins.routers import MGYP
 
 logger = logging.getLogger(__name__)
 
-# A job that ended in one of these on a working node has no process left: SLURM ended them all.
-# NODE_FAIL is not one of them, since a node SLURM cannot reach may still be writing.
-ENDED = {"COMPLETED", "FAILED", "CANCELLED", "TIMEOUT", "OUT_OF_MEMORY"}
+# A job that ended in one of these on a working node has no process left: SLURM ended them all,
+# or never started them (BOOT_FAIL). NODE_FAIL is not one of them, since a node SLURM cannot reach
+# may still be writing.
+ENDED = {
+    "COMPLETED",
+    "FAILED",
+    "CANCELLED",
+    "TIMEOUT",
+    "OUT_OF_MEMORY",
+    "DEADLINE",
+    "BOOT_FAIL",
+}
 
 
 class OwnershipError(Exception):

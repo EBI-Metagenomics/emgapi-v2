@@ -121,7 +121,16 @@ def test_an_owner_not_known_to_have_ended_stops_the_next_flow(slurm, sacct_outpu
 
 
 @pytest.mark.parametrize(
-    "state", ["COMPLETED", "FAILED", "CANCELLED by 1000", "TIMEOUT", "OUT_OF_MEMORY"]
+    "state",
+    [
+        "COMPLETED",
+        "FAILED",
+        "CANCELLED by 1000",
+        "TIMEOUT",
+        "OUT_OF_MEMORY",
+        "DEADLINE",
+        "BOOT_FAIL",
+    ],
 )
 def test_an_owner_whose_job_ended_is_taken_over(slurm, state):
     sacct, as_job = slurm

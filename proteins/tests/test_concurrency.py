@@ -61,7 +61,7 @@ core.stage_occurrences = before_occurrences
 if point == "kill-after-commit":
     core.stage = stage_then_kill
 input = read_predicted_genes(directory / "in.faa", directory / "in.gff", directory / "contigs.fasta")
-ids = core.accession_assembly_proteins(assembly, "assembly_analysis", "6.0", input, mgya, connections=4)
+ids = core.accession_assembly_proteins(assembly, "assembly_analysis", "6.0", input, mgya, threads=4)
 (directory / f"{name}.json").write_text(json.dumps({s: ids[h] for h, s in input.proteins}))
 """
 

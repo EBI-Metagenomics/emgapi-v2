@@ -292,9 +292,7 @@ class StagedContig(MGnifyProteinsBase):
     id = models.BigAutoField(primary_key=True)  # from contig_id_seq
     assembly_proteins = models.ForeignKey(AssemblyProteins, on_delete=models.DO_NOTHING)
     name = models.TextField()  # the pipeline's name, for example ERZ101_17
-    original_name = models.TextField(
-        null=True
-    )  # the submitted name; empty when unknown
+    original_name = models.TextField(null=True)  # the submitted name; NULL when unknown
     length = models.IntegerField()
     hash = models.BinaryField()
     kmer_coverage = models.FloatField(null=True)

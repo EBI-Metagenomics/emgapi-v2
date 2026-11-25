@@ -103,7 +103,7 @@ def stage(study):
             analysis.pipeline_major_minor,
             input or read(assembly),
             analysis.accession,
-            connections=4,
+            threads=4,
         )
         if not known:
             id = analysis.id
@@ -645,7 +645,7 @@ def test_a_rebuild_after_an_analysis_committed_while_an_update_read_stages_it_on
         analysis.pipeline_major_minor,
         read(late[0]),
         analysis.accession,
-        connections=4,
+        threads=4,
     )
     assert {table: len(rows) for table, rows in staged().items()} == {
         table: len(rows) for table, rows in waiting.items()
@@ -704,7 +704,7 @@ def test_a_rebuild_restores_a_withheld_record_and_never_gives_its_id_to_another(
         withheld.pipeline_major_minor,
         read("ERZ29562087"),
         withheld.accession,
-        connections=4,
+        threads=4,
     )
     added = staged()
 
