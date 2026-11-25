@@ -62,7 +62,7 @@ The source is the pipeline that called the genes. Today it is always `assembly_a
 |---|---|---|
 | `ingest_assembly_proteins_deployment` | Trigger on the completion of the `copy_assembly_batch_results` flow, which `run_assembly_batch` runs at its end, or by hand | Lists the pending analyses (state `ANALYSIS_ANNOTATIONS_IMPORTED`, a pipeline version with gene-caller rules, no assembly proteins record yet, the lowest id of each ERZ and version), and starts one chunk flow for each chunk of one study. Does not wait. |
 | `ingest_assembly_proteins_chunk_deployment` | Started by the flow above | Ingests each analysis of the chunk. A failed analysis does not stop the others. |
-| `ingest_analysis_proteins_deployment` | By hand | Ingests one MGYA, or every annotated analysis of one ERZ. |
+| `ingest_analysis_proteins_deployment` | By hand | Ingests one MGYA, or every annotated analysis of one ERZ, of a pipeline version with gene-caller rules. |
 | `update_protein_dataset_deployment` | 02:00 UTC | Moves the staged rows into a new day of the protein dataset. Holds the `protein-dataset` limit. Only adds files. |
 | `merge_protein_dataset_deployment` | 04:00 UTC on the 1st | Merges the base file and the day files of each hash prefix. Holds the `protein-dataset` limit. |
 | `check_proteins_status_deployment` | 08:00 UTC | Logs the state, and fails if any check fails. |

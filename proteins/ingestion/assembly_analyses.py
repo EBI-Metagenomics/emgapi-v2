@@ -96,13 +96,17 @@ def chunk_by_study(analyses: list[Analysis], size: int) -> list[list[str]]:
 
 
 def resolve_accession(accession: str) -> list[str]:
-    """The MGYAs to ingest for one MGYA, or for one ERZ (each annotated analysis of that assembly).
+    """The MGYAs to ingest for one MGYA, or for one ERZ (each annotated analysis of that assembly), of the pipeline versions with gene-caller rules.
 
     :param accession: An MGYA or an ERZ accession.
     :return: MGYA accessions.
-    :raises ValueError: When the accession is neither, or matches no annotated analysis.
+    :raises ValueError: When the accession is neither, or matches no annotated analysis of those versions.
     """
-    analyses = annotated_assembly_analyses().order_by("id")
+    analyses = (
+        annotated_assembly_analyses()
+        .filter(pipeline_version__in=versions_with_rules())
+        .order_by("id")
+    )
     if MGYA.fullmatch(accession):
         analyses = analyses.filter(accession=accession)
     elif ERZ.fullmatch(accession):
@@ -111,7 +115,10 @@ def resolve_accession(accession: str) -> list[str]:
         raise ValueError(f"{accession} is neither an MGYA nor an ERZ accession")
     accessions = list(analyses.values_list("accession", flat=True))
     if not accessions:
-        raise ValueError(f"{accession} matches no assembly analysis with annotations")
+        raise ValueError(
+            f"{accession} matches no assembly analysis with annotations"
+            " of a pipeline version with gene-caller rules"
+        )
     return accessions
 
 

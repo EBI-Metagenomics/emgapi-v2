@@ -136,8 +136,9 @@ def test_a_listing_after_a_chunk_commits_takes_none_of_its_analyses(results):
 
 
 @pytest.mark.usefixtures("prefect_harness")
-def test_by_hand_one_mgya_or_every_analysis_of_one_erz(results):
+def test_by_hand_one_mgya_or_every_analysis_of_one_erz_of_versions_with_rules(results):
     study = make_study("PRJ1")
+    legacy = make_analysis(study, "ERZ1", version="V5")
     v6 = make_analysis(study, "ERZ1", external_results_dir=results("ERZ1"))
     v6_1 = make_analysis(
         study, "ERZ1", version="V6.1", external_results_dir=v6.external_results_dir
@@ -152,6 +153,8 @@ def test_by_hand_one_mgya_or_every_analysis_of_one_erz(results):
         ("ERZ1", "6.1", v6_1.accession),
         ("ERZ2", "6.0", other.accession),
     ]
+    with pytest.raises(ValueError, match="gene-caller rules"):
+        flows.ingest_analysis_proteins(legacy.accession)
 
 
 def test_genes_are_staged_with_the_gene_callers_of_the_version(results):
