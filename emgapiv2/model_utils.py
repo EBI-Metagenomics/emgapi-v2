@@ -275,6 +275,11 @@ class JSONFieldWithSchema(models.JSONField):
 
         if isinstance(value, BaseModel):
             return value.model_dump()
+        if self.is_list and isinstance(value, list):
+            return [
+                item.model_dump() if isinstance(item, BaseModel) else item
+                for item in value
+            ]
         if isinstance(value, _PydanticValidatingDict):
             return dict(value)
         if isinstance(value, _PydanticValidatingList):

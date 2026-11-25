@@ -1,0 +1,5 @@
+seq_name	length	topology	coordinates	n_genes	genetic_code	virus_score	fdr	n_hallmarks	marker_enrichment	taxonomy
+MGYV0000125952	11747	No terminal repeats	NA	11	11	0.9590	NA	3	6.8653	Viruses;Duplodnaviria;Heunggongvirae;Uroviricota;Caudoviricetes;;
+MGYV0000022602	9000	No terminal repeats	NA	4	11	0.9801	NA	0	6.8731	Viruses;Duplodnaviria;Heunggongvirae;Uroviricota;Caudoviricetes;;Pervagoviridae
+MGYV0000123871	14896	No terminal repeats	NA	19	11	0.9238	NA	10	22.7920	Viruses;Duplodnaviria;Heunggongvirae;Uroviricota;Caudoviricetes;;
+MGYV0000027847	5894	No terminal repeats	NA	8	11	0.9069	NA	2	2.6592	Viruses;Duplodnaviria;Heunggongvirae;Uroviricota;Caudoviricetes;;

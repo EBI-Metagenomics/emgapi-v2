@@ -1,0 +1,449 @@
+{
+  "files": {
+    "additional_data/catalogue_excluded_records_metadata.tsv": {
+      "bytes": 288,
+      "sha256": "b883d8b197ba5d37196a2408c86f20e9004ecbaf86d496f47a6474fc5980ebf2"
+    },
+    "additional_data/catalogue_filtered_metadata.tsv": {
+      "bytes": 3458,
+      "sha256": "6ff181e99af3893e52ef1e517ad2f1bfa5c294be728876c66f66ab8a5c61f69d"
+    },
+    "additional_data/rename_mapfile.tsv": {
+      "bytes": 1140,
+      "sha256": "3b9e6253ab015ba1dc08a2815e29682de499d428e0c92e4d7d88daf7fb7521c0"
+    },
+    "catalogue.json": {
+      "bytes": 310,
+      "sha256": "b56d1530ee0ad3c1c3f18e404f1782e540feb0bdeb007007ca3c0ee8a7616073"
+    },
+    "plasmids/cluster_representatives/functional_annotation/amr/integrated_plasmids.gff": {
+      "bytes": 482,
+      "sha256": "f0dd6c82165ae7afba449547126f7d6d73d76faf1602cc7a655b1277aedf449a"
+    },
+    "plasmids/cluster_representatives/functional_annotation/amr/plasmids.tsv": {
+      "bytes": 1057,
+      "sha256": "80727eb3f9e7dede2f9ed9e64cbe22295b8edfff3677c57e3743e249245a04ae"
+    },
+    "plasmids/cluster_representatives/functional_annotation/mobsuite-typer/mobsuite_typer_report.txt": {
+      "bytes": 1097,
+      "sha256": "5df733cfead8a0d0985525f6ee3c2511a82730e89d66f7fc3278666c1a931757"
+    },
+    "plasmids/cluster_representatives/functional_annotation/mobsuite-typer/plasmids_biomarker_report.txt": {
+      "bytes": 156,
+      "sha256": "5401b8485487a707b4a199e1b31d8ef445513145b43e8acf2f874714afa958aa"
+    },
+    "plasmids/cluster_representatives/functional_annotation/mobsuite-typer/plasmids_mge_report.txt": {
+      "bytes": 293,
+      "sha256": "2a35211c0f9d4380b195858ee1e3a13ec9efb5ffccf8fcfc6db8949f0c0b8998"
+    },
+    "plasmids/cluster_representatives/functional_annotation/plasquid/final_report_per_contig.tsv": {
+      "bytes": 84,
+      "sha256": "dc0cb47cae0688ae06ffc4ad6f3eb7101bdef32e339942fd1aff0e71c2108987"
+    },
+    "plasmids/cluster_representatives/functional_annotation/plasquid/final_report_per_protein.tsv": {
+      "bytes": 93,
+      "sha256": "d482d83dc8e031a954228e3e3e573c9f16800bee68e8114b83463492f3bab655"
+    },
+    "plasmids/cluster_representatives/functional_annotation/plasquid/mobility_classification.tsv": {
+      "bytes": 43,
+      "sha256": "836b26b58acfa215a47cc2c426188e55445c7f4b7ff908a80a90a76e1b4601cd"
+    },
+    "plasmids/cluster_representatives/functional_annotation/plasquid/mobility_stats_base.json": {
+      "bytes": 656,
+      "sha256": "d02825501119a781227015de5bb71b3288a669d8c07b834903ae81bc8da9f4a9"
+    },
+    "plasmids/cluster_representatives/functional_annotation/plasquid/mobility_stats_final.json": {
+      "bytes": 284,
+      "sha256": "50553fdb12e12153bd583ac5d45a32d0dba3ce1b20ba53673d9f2a5ab0159bb6"
+    },
+    "plasmids/cluster_representatives/plasmids.faa.gz": {
+      "bytes": 3382,
+      "sha256": "0d8bdda302b2b4f2c160eff3107a6b7898ebb5be821938560ef1e07f75009e5b"
+    },
+    "plasmids/cluster_representatives/plasmids.fasta.gz": {
+      "bytes": 6253,
+      "sha256": "8d0623bd61556e6353899ac7a5b51a79bf0c2c13de42389dbcf0a523ee14cad7"
+    },
+    "plasmids/cluster_representatives/plasmids_annotated.gff": {
+      "bytes": 4330,
+      "sha256": "33ced6721b79306180c10258c0aacaf5316c072cfd71985f1bc8211d52c4bc28"
+    },
+    "plasmids/plasmid.faa.gz": {
+      "bytes": 3453,
+      "sha256": "d1e306a4a1613aeb8b4b436d77f8a41b0cb10bc8af8c0aff36785b0e0b09ff71"
+    },
+    "plasmids/plasmid.fna.gz": {
+      "bytes": 6654,
+      "sha256": "8f36be0a586f7440fa2f6fb33024c0be4507b044653638c852fd65206ff0d613"
+    },
+    "plasmids/plasmid.gff.gz": {
+      "bytes": 1086,
+      "sha256": "393b26d916b6daead07e4ab4fd0cf20eba80cdefbe7cdf79f506325c82edc11f"
+    },
+    "plasmids/plasmids-all-metadata.tsv.gz": {
+      "bytes": 562,
+      "sha256": "17dfe6ab0c70b8be9bc2c1eb670fe4326700ebc00ec69c15e9f17045699a6d41"
+    },
+    "plasmids/plasmids.fasta.gz": {
+      "bytes": 6654,
+      "sha256": "8f36be0a586f7440fa2f6fb33024c0be4507b044653638c852fd65206ff0d613"
+    },
+    "plasmids/plasmids_host_sankey.html": {
+      "bytes": 910,
+      "sha256": "41f24f0ce17ae1038a4f61f3cd8049071634b95e6c001eae401e8183e62d11e9"
+    },
+    "viruses/cluster_representatives/functional_annotation/amr/integrated_viruses.gff": {
+      "bytes": 1940,
+      "sha256": "a5e44e80a64951307083a00a4afe2ee3600f93a3cf3ede02e9ebdd6ca40ba720"
+    },
+    "viruses/cluster_representatives/functional_annotation/amr/viruses.tsv": {
+      "bytes": 1090,
+      "sha256": "986018566260a7c51334d26f9a3366419ad3019da011edc97713cb7daa7078d4"
+    },
+    "viruses/cluster_representatives/functional_annotation/hmmer/AMRFinder.tbl.gz": {
+      "bytes": 7320,
+      "sha256": "7d5fae9d78606017c0856ecbdb78cf4fd187f06a3ff7282edbb4b2309dbc9208"
+    },
+    "viruses/cluster_representatives/functional_annotation/hmmer/AMRFinder_summary.tsv.gz": {
+      "bytes": 2992,
+      "sha256": "787071b7800a8535d277a9513289d51206396e1b6bdb6857c02618bb8cfffb95"
+    },
+    "viruses/cluster_representatives/functional_annotation/hmmer/CAZy.tbl.gz": {
+      "bytes": 2187,
+      "sha256": "ada808a15cf965ef30ce8abbfda4eb2f2ec1853be36ef0397273f7bd181cb653"
+    },
+    "viruses/cluster_representatives/functional_annotation/hmmer/CAZy_summary.tsv.gz": {
+      "bytes": 689,
+      "sha256": "3011143bd1bdf935b3f9f85605e7b62e2a10d84923ef807d284d9901db833b7e"
+    },
+    "viruses/cluster_representatives/functional_annotation/hmmer/COG.tbl.gz": {
+      "bytes": 98365,
+      "sha256": "b975701cb656b378aadc3b4076a2d4a99cd0732498038d37f8645af1c13c200b"
+    },
+    "viruses/cluster_representatives/functional_annotation/hmmer/COG_summary.tsv.gz": {
+      "bytes": 37740,
+      "sha256": "f89e7bb93832f81bfcb2d8c2d6bb7216e294807a784e355e23bb1ecd151506b8"
+    },
+    "viruses/cluster_representatives/functional_annotation/hmmer/GVDB.tbl.gz": {
+      "bytes": 17947,
+      "sha256": "21ebd2c3e7b251beec07ce72a4a4368e76d0769463deb642120f126f36b5e3be"
+    },
+    "viruses/cluster_representatives/functional_annotation/hmmer/GVDB_summary.tsv.gz": {
+      "bytes": 2930,
+      "sha256": "52e9c498525634ab4329a5043a95b555e5112b0936a2c032f21c55a937eb83af"
+    },
+    "viruses/cluster_representatives/functional_annotation/hmmer/KOFam_all.tbl.gz": {
+      "bytes": 358325,
+      "sha256": "b9dce4a810c4ca72a54b0da9352823258dddde902a525ef7e12c655a4df620b9"
+    },
+    "viruses/cluster_representatives/functional_annotation/hmmer/KOFam_eukaryote.tbl.gz": {
+      "bytes": 96967,
+      "sha256": "a3839098193e843b9b52e3fdc910f105f6bb072bd45f9dd1b632f4592580b5ee"
+    },
+    "viruses/cluster_representatives/functional_annotation/hmmer/KOFam_prokaryote.tbl.gz": {
+      "bytes": 281075,
+      "sha256": "8fb0691f5b2af04176c0a3f488aba0823fea6ff67e94b946c7e1c44ae85c4030"
+    },
+    "viruses/cluster_representatives/functional_annotation/hmmer/MetHMMDB.tbl.gz": {
+      "bytes": 2841,
+      "sha256": "396714efe69b9890f6de8e9c481eb372e5da205c376d8bac6494cd27bcec7feb"
+    },
+    "viruses/cluster_representatives/functional_annotation/hmmer/MetHMMDB_summary.tsv.gz": {
+      "bytes": 621,
+      "sha256": "a15be3ace47be1cc36825e0803110adc9688a059b7c298156d1fc05642e492b8"
+    },
+    "viruses/cluster_representatives/functional_annotation/hmmer/NFixDB.tbl.gz": {
+      "bytes": 177,
+      "sha256": "fecfb5e5527f838ce7587a63443081fe1190c76cefc2bbc4218a6e0fe90f0d48"
+    },
+    "viruses/cluster_representatives/functional_annotation/hmmer/NFixDB_summary.tsv.gz": {
+      "bytes": 43,
+      "sha256": "ab93163dc634a4b3ffa7a058d66908a754c0182ec710e591cf072d8e9b350159"
+    },
+    "viruses/cluster_representatives/functional_annotation/hmmer/PFAM.tbl.gz": {
+      "bytes": 53573,
+      "sha256": "57f01b431e3abfeff059acde21c66fc9803372be83b3c59275a258cb6701d233"
+    },
+    "viruses/cluster_representatives/functional_annotation/hmmer/PFAM_summary.tsv.gz": {
+      "bytes": 19153,
+      "sha256": "fc6d8a90ab9c8271956506e05c278eefd8608ae6a4b4850c5646014367731893"
+    },
+    "viruses/cluster_representatives/functional_annotation/hmmer/PGAP.tbl.gz": {
+      "bytes": 214399,
+      "sha256": "92e5953886346a5cbd22c3dc4f7d4479dc197ac430f68de2f4067df5e8dcf729"
+    },
+    "viruses/cluster_representatives/functional_annotation/hmmer/PGAP_summary.tsv.gz": {
+      "bytes": 52107,
+      "sha256": "658ee23a1c9b4af0f85bdd2fd9bcdfb309cc1658bcbfe5f47b9c299fde288e3c"
+    },
+    "viruses/cluster_representatives/functional_annotation/hmmer/PHROG.tbl.gz": {
+      "bytes": 38263,
+      "sha256": "24492cc84b170866b44e520b3537b7efd17c4e521753dde53222a7a158014940"
+    },
+    "viruses/cluster_representatives/functional_annotation/hmmer/PHROG_summary.tsv.gz": {
+      "bytes": 6074,
+      "sha256": "8f3dace0071c07d296ff159fd7944c5cb5e99d194319225ce679db6872ed8124"
+    },
+    "viruses/cluster_representatives/functional_annotation/hmmer/PVOG.tbl.gz": {
+      "bytes": 10541,
+      "sha256": "9fdcd807afb8206db0d4caef7866b479ec298f25a6e805c0038586d912312b65"
+    },
+    "viruses/cluster_representatives/functional_annotation/hmmer/PVOG_summary.tsv.gz": {
+      "bytes": 2360,
+      "sha256": "275d4d6ae0567a2fde66e887d161f790ab9560b7297ddee0cda583003476f17c"
+    },
+    "viruses/cluster_representatives/functional_annotation/hmmer/TIGRFAM.tbl.gz": {
+      "bytes": 58284,
+      "sha256": "c3a2b245a0e2aa78fb464c8067a19db4a886a6b56de746f8bb4b14e20fbbc4e6"
+    },
+    "viruses/cluster_representatives/functional_annotation/hmmer/TIGRFAM_summary.tsv.gz": {
+      "bytes": 16129,
+      "sha256": "1618eb70bea5469b80f7cd24d803355602e5c2b6a98b61aa95ff6280853c4d69"
+    },
+    "viruses/cluster_representatives/functional_annotation/hmmer/VOG.tbl.gz": {
+      "bytes": 48110,
+      "sha256": "58c614e8268d69664c7e529c57139aeec03786b649d36ca11bacbfd78e22ce0d"
+    },
+    "viruses/cluster_representatives/functional_annotation/hmmer/VOG_summary.tsv.gz": {
+      "bytes": 15811,
+      "sha256": "a927f98049d8d31c8d1076869981531db96930af254ef6bf27d9d8b4a0160270"
+    },
+    "viruses/cluster_representatives/functional_annotation/lifestyle/viruses.bacphlip.gz": {
+      "bytes": 248,
+      "sha256": "62ab9d7fad35e05e0114e4792de213095dcb1975d220b7ecda6f75f94f7b707e"
+    },
+    "viruses/cluster_representatives/functional_annotation/lifestyle/viruses.bacphlip.gz.tbi": {
+      "bytes": 248,
+      "sha256": "4adb843698c274b175856ae38d8f343da29c7e4fdfcbe9412c85544a49aa60f5"
+    },
+    "viruses/cluster_representatives/host_detection/iphop/iphop_genome.csv": {
+      "bytes": 4829,
+      "sha256": "d5b1cc283ddb6cb8f0d7ae2f035785416f99ed62f6336b1b3c3725b02b8835a0"
+    },
+    "viruses/cluster_representatives/host_detection/iphop/iphop_genus.csv": {
+      "bytes": 715,
+      "sha256": "c007cec309058903698180a3bb03099a15efcd2ac384a4b483fa76bfb63496df"
+    },
+    "viruses/cluster_representatives/host_detection/spacepharer/custom_chosen_host.tsv": {
+      "bytes": 340,
+      "sha256": "902a988b2367e91d731c9fb9178a2624c3ae3736f67291a9c56654789e94a9cf"
+    },
+    "viruses/cluster_representatives/host_detection/spacepharer/lineage_comparison.json": {
+      "bytes": 3,
+      "sha256": "ca3d163bab055381827226140568f3bef7eaac187cebd76878e0b63e9e442356"
+    },
+    "viruses/cluster_representatives/host_detection/spacepharer/spacers_predictions.tsv": {
+      "bytes": 430,
+      "sha256": "107198486963f0f98864d183895d7c9c9457729b18b638aa469e13772f455437"
+    },
+    "viruses/cluster_representatives/protein_clusters_phammseqs/viruses_phams.tsv": {
+      "bytes": 23968,
+      "sha256": "ac2447eaedfbaf97a5d74ca30d4b00667b5c4214443130d13606f11a567c114e"
+    },
+    "viruses/cluster_representatives/taxonomy/genomad/genomad_krona.html": {
+      "bytes": 225031,
+      "sha256": "6ee5e9cba79805d7ef9520eab9ac6f7caa58d50912d41bfd825457ae6eaa280a"
+    },
+    "viruses/cluster_representatives/taxonomy/genomad/genomad_sankey.html": {
+      "bytes": 532,
+      "sha256": "18edc01396b5ea07f44af96886a721a0ca85f61a33d9d96f5b8c0958f3422b0b"
+    },
+    "viruses/cluster_representatives/taxonomy/genomad/itol_genomad/genomad_counts.txt": {
+      "bytes": 463,
+      "sha256": "e02d03ecd80350da5803b755fbdcd04b0e21afbef956ecddc3a8d944149c5d15"
+    },
+    "viruses/cluster_representatives/taxonomy/genomad/itol_genomad/genomad_labels.txt": {
+      "bytes": 1409,
+      "sha256": "cb301e104fec19126056391287c6b5196b07c5399a7f2394075f3aadc7eaee16"
+    },
+    "viruses/cluster_representatives/taxonomy/genomad/itol_genomad/genomad_tree.biomes.binary.txt": {
+      "bytes": 141,
+      "sha256": "85b09cfc45eb822c380004a7665952bac53dd06113fc4f63ff82ad99fc970499"
+    },
+    "viruses/cluster_representatives/taxonomy/genomad/itol_genomad/genomad_tree.nwk": {
+      "bytes": 1446,
+      "sha256": "4c9741eb3d286360cd05115fa6e2644369db3fded1667e361f0330c4b429bced"
+    },
+    "viruses/cluster_representatives/taxonomy/genomad/itol_genomad/genomad_tree.type.binary.txt": {
+      "bytes": 139,
+      "sha256": "60fd6e6a230bcca03c31d16fb45354d8bcc8c5cc152e94a58886d603f00ac234"
+    },
+    "viruses/cluster_representatives/taxonomy/genomad/viruses.tsv": {
+      "bytes": 665,
+      "sha256": "942fdac65e446360cd45e06710e1234a6f8b716e65d6dba5b8e6cef61eb243db"
+    },
+    "viruses/cluster_representatives/taxonomy/genomad/viruses_genomad_taxonomy_counts.tsv": {
+      "bytes": 162,
+      "sha256": "4010849b4a404b84bdcc0c8e70547eb12ed30f16c22ebd41508084cdf762e8c4"
+    },
+    "viruses/cluster_representatives/taxonomy/viphogs/itol_viphogs/viphogs_counts.txt": {
+      "bytes": 388,
+      "sha256": "523e0a5ad83ace392d798a7074c5fe1e73ba3ecf51dbb060f0483c9ef3b7eb21"
+    },
+    "viruses/cluster_representatives/taxonomy/viphogs/itol_viphogs/viphogs_labels.txt": {
+      "bytes": 1090,
+      "sha256": "0b8fa4350e011a6d67a1ff4b801b2f641fc851eaa59fa40b719a19b2231f074c"
+    },
+    "viruses/cluster_representatives/taxonomy/viphogs/itol_viphogs/viphogs_tree.biomes.binary.txt": {
+      "bytes": 128,
+      "sha256": "bf79649580131e7374eedaa4b73cfbd003b42dd2f9076734e22f86e50e7b0a54"
+    },
+    "viruses/cluster_representatives/taxonomy/viphogs/itol_viphogs/viphogs_tree.nwk": {
+      "bytes": 1589,
+      "sha256": "a5258289f33d610aa18012f24d1008eb83771eed1666512b643dfe86e561893d"
+    },
+    "viruses/cluster_representatives/taxonomy/viphogs/itol_viphogs/viphogs_tree.type.binary.txt": {
+      "bytes": 126,
+      "sha256": "a69cce746a3279fc188a2d266d75229f95d2bef54890d636026ed0808526a9d2"
+    },
+    "viruses/cluster_representatives/taxonomy/viphogs/viphogs_krona.html": {
+      "bytes": 224622,
+      "sha256": "20273ee042ccfa249fd5f1a77e2e1594451f08c8b0c7c10b2e19a4aec3d0475a"
+    },
+    "viruses/cluster_representatives/taxonomy/viphogs/viphogs_sankey.html": {
+      "bytes": 381,
+      "sha256": "8e2afb4df4e7cc062f9edbfbf2614a7944e34deed566f549a634d49998d29eaf"
+    },
+    "viruses/cluster_representatives/taxonomy/viphogs/viruses_modified.tsv": {
+      "bytes": 66797,
+      "sha256": "04cbc3fdbe484f663780ce6a959573120c2370c9c427d3c3cf5954b161b8a842"
+    },
+    "viruses/cluster_representatives/taxonomy/viphogs/viruses_modified_informative.tsv": {
+      "bytes": 40,
+      "sha256": "cc04ba8e3eb78154d244cd74ab9743c539ae1604fece947b65a547650e171451"
+    },
+    "viruses/cluster_representatives/taxonomy/viphogs/viruses_reps_annotation.tsv": {
+      "bytes": 26277,
+      "sha256": "8382053fd1b7d8c9d79f6d3a1155daaa8eec14fdbadf7ac5eefbf4b9b0d5018b"
+    },
+    "viruses/cluster_representatives/taxonomy/viphogs/viruses_reps_annotation_taxonomy.tsv": {
+      "bytes": 219,
+      "sha256": "864a5b72c99b87b0d8d4c45c26d65c53f55b4b731a6b30af94d8c77aea68b600"
+    },
+    "viruses/cluster_representatives/taxonomy/viphogs/viruses_viphogs_taxonomy_counts.tsv": {
+      "bytes": 15,
+      "sha256": "ebf253b0f93b086417967eb4065fee145830c45e89e3e9ccec54374362b72bcd"
+    },
+    "viruses/cluster_representatives/taxonomy/vitap/itol_vitap/vitap_counts.txt": {
+      "bytes": 2883,
+      "sha256": "52bb6e11af19be343cc6abb784d0ed280c2cf0903c49f83a5ecc52f253f5461b"
+    },
+    "viruses/cluster_representatives/taxonomy/vitap/itol_vitap/vitap_labels.txt": {
+      "bytes": 10777,
+      "sha256": "ac9119754acd0873ff88372d76e30d77e7c64e9c795fa520cb608e0a8f2a3923"
+    },
+    "viruses/cluster_representatives/taxonomy/vitap/itol_vitap/vitap_tree.biomes.binary.txt": {
+      "bytes": 138,
+      "sha256": "43f8234490793b6dcef749458db4d5756dff926a8a0f6007dc2577e51597cc3b"
+    },
+    "viruses/cluster_representatives/taxonomy/vitap/itol_vitap/vitap_tree.nwk": {
+      "bytes": 5430,
+      "sha256": "545890d3097f81d2498cd06991c0e39fa24384065b57a605e30d628f719dfb73"
+    },
+    "viruses/cluster_representatives/taxonomy/vitap/itol_vitap/vitap_tree.type.binary.txt": {
+      "bytes": 136,
+      "sha256": "7428511618956611beb3ab6ba7bcbc23db05324e782f7104fe298532a40abbbe"
+    },
+    "viruses/cluster_representatives/taxonomy/vitap/viruses_vitap_taxonomy_counts.tsv": {
+      "bytes": 165,
+      "sha256": "f5bc6448726505aa8cc77f793db419430eceb0c1d1756c45d9d3e2cadb014e73"
+    },
+    "viruses/cluster_representatives/taxonomy/vitap/vitap_krona.html": {
+      "bytes": 225042,
+      "sha256": "9c540c0f4fe70240b65f86b09b0193ed4d67768453fd205cb04c65ef55d27370"
+    },
+    "viruses/cluster_representatives/taxonomy/vitap/vitap_sankey.html": {
+      "bytes": 541,
+      "sha256": "047352fa680b7ba839b8356f89e8ac756f6b29b6d9f74995d7365c41e8e03ec9"
+    },
+    "viruses/cluster_representatives/viruses.faa.gz": {
+      "bytes": 76423,
+      "sha256": "584938e9b6641d2854622080d1714078b9ddc8cdadf2ba1cd5b871be8489c7e2"
+    },
+    "viruses/cluster_representatives/viruses.faa.gz.fai": {
+      "bytes": 15775,
+      "sha256": "42073b05395fc6461e3e35435df54a75f9b33090d46d5e864b82cede5024a4fb"
+    },
+    "viruses/cluster_representatives/viruses.faa.gz.gzi": {
+      "bytes": 40,
+      "sha256": "4f1d2c1ad3bde0ad55d4dfac882777a68c1dd2962987ba93f5f836ee194bc864"
+    },
+    "viruses/cluster_representatives/viruses.fasta.gz": {
+      "bytes": 19989,
+      "sha256": "1d7805894a99f27c1320141a19e06e10db2538a28ab6acb444cafaf31046d82d"
+    },
+    "viruses/cluster_representatives/viruses.fasta.gz.fai": {
+      "bytes": 333,
+      "sha256": "34020f4fa7aefe6208aae0e36ae53ae9083e370ce55ba8962ab162ba029c9aa1"
+    },
+    "viruses/cluster_representatives/viruses.fasta.gz.gzi": {
+      "bytes": 24,
+      "sha256": "849d47c15d383e3c27037f86b9dc6d7dcb6376cee05b32b9ea3991c8df3cb41a"
+    },
+    "viruses/cluster_representatives/viruses.gff.gz": {
+      "bytes": 29808,
+      "sha256": "ce5dfca1dc99bb338ae5c207a9be918954cd5324999eb17f3c217ae84d3262ee"
+    },
+    "viruses/cluster_representatives/viruses.gff.gz.tbi": {
+      "bytes": 374,
+      "sha256": "12ff087526dfd44f68a63826a7babd77d703787f602d1e5c671245bf34c1ce2f"
+    },
+    "viruses/cluster_representatives/viruses_final.gff.gz": {
+      "bytes": 46325,
+      "sha256": "b1acf37f1672c7e349664bc90f7c654da5e885831110b8297cb0c90983d2949c"
+    },
+    "viruses/prophage.faa.gz": {
+      "bytes": 74740,
+      "sha256": "e4a737d6692c3dd974d52c2cdce3c1cfe3d1dcae5c09a3942242ea53404fd3b3"
+    },
+    "viruses/prophage.fna.gz": {
+      "bytes": 4754,
+      "sha256": "ac8135869b7940cfaafb7b962a7b300dd0f24fc8be5af6b3ddee61ebceb15f1a"
+    },
+    "viruses/prophage.gff.gz": {
+      "bytes": 26556,
+      "sha256": "5af5ecac6aeb444806757ba70c41fd9ed5c829e7a9ad1e85dab27811bc5fc7e2"
+    },
+    "viruses/virus.faa.gz": {
+      "bytes": 9367,
+      "sha256": "9530fb7dcfd316591889c34c2250b888fbf4c01c8403a4000916fb1f2e59c089"
+    },
+    "viruses/virus.fna.gz": {
+      "bytes": 19543,
+      "sha256": "c05714cb1e6c61eab27940e729c58594609de68c84b8f3bea9428e560c29099b"
+    },
+    "viruses/virus.gff.gz": {
+      "bytes": 2925,
+      "sha256": "cfe66bd542efd40eb68b1db496f935a4f0805629b96bd27f1f37885034dcf2d0"
+    },
+    "viruses/viruses-all-metadata.tsv.gz": {
+      "bytes": 1737,
+      "sha256": "9a54a0fe62086e17903ce1d35f1cb249c7b1ff7c148adcc8ee0ccdd7cfdc7d92"
+    },
+    "viruses/viruses-cluster-stats.tsv.gz": {
+      "bytes": 465,
+      "sha256": "6ecfcc4b745b5748e582103543becb5577d541d0ef6d723935321fc4f95a5ad4"
+    },
+    "viruses/viruses.fasta.gz": {
+      "bytes": 21509,
+      "sha256": "dedaab3af9b867e7f559196f4957ad77a826e6cf364956272ac8975831ef02ea"
+    }
+  },
+  "viral_ids": [
+    "MGYV0000022602",
+    "MGYV0000022715",
+    "MGYV0000025065",
+    "MGYV0000027847",
+    "MGYV0000098716",
+    "MGYV0000104487",
+    "MGYV0000111872",
+    "MGYV0000123871",
+    "MGYV0000125952",
+    "MGYV9999999999"
+  ],
+  "plasmid_ids": [
+    "MGYV0000022586",
+    "MGYV0000056305",
+    "MGYV0000132735"
+  ]
+}

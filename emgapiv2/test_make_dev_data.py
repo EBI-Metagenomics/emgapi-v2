@@ -8,6 +8,7 @@ from django.utils import timezone
 
 from analyses.models import Analysis, Biome, Run
 from genomes.models import GenomeCatalogue, GenomeSearchIndex
+from viruses.dev_data import seed_dev_viral_catalogue
 from workflows.data_io_utils.mgnify_v6_utils.assembly import AssemblyResultImporter
 from workflows.data_io_utils.schemas import AssemblyResultSchema, MapResultSchema
 from workflows.flows.analyse_study_tasks.amplicon.import_completed_amplicon_analyses import (
@@ -316,6 +317,7 @@ def test_make_dev_data(
 
     seed_dev_searchable_sourmash_catalogue(top_level_biomes)
     seed_dev_runs_to_curate(raw_reads_mgnify_study, raw_reads_mgnify_sample[0])
+    seed_dev_viral_catalogue()
 
     assert raw_reads_mgnify_study.accession == "MGYS00000001"
     assert raw_reads_mgnify_study.runs.count() == 604  # 600 to curate, 4 from fixtures

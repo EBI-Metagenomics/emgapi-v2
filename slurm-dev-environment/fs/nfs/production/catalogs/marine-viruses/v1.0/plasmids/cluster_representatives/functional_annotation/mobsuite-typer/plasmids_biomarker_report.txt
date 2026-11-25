@@ -1,0 +1,1 @@
+qseqid  sseqid  qlen    slen    qstart  qend    sstart  send    length  mismatch        pident  qcovhsp   qcovs   sstrand evalue  bitscore        biomarker
