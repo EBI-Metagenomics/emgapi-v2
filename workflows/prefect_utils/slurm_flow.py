@@ -16,6 +16,7 @@ from prefect.runtime import flow_run
 
 from emgapiv2.log_utils import mask_sensitive_data as safe
 from workflows.models import OrchestratedClusterJob
+from workflows.nextflow_utils.logs import log_nextflow_log
 from workflows.nextflow_utils.tower import get_nextflow_tower_url
 from workflows.nextflow_utils.trace import maybe_get_nextflow_trace_df
 from workflows.prefect_utils.flows_utils import (
@@ -140,166 +141,192 @@ def run_cluster_job(
     :return: The completed or reused job record.
     :raises SubprocessFailedException: If the process fails, times out, or reuses an unsuccessful job.
     """
-    logger = get_run_logger()
+    try:
+        logger = get_run_logger()
 
-    ### Prepare working directory for job
-    job_workdir = _ensure_absolute_workdir(
-        working_dir or Path(EMG_CONFIG.slurm.default_workdir)
-    )
-    job_workdir.mkdir(parents=True, exist_ok=True)
-    resubmit_policy = resubmit_policy or ResubmitIfFailedPolicy
-    logger.info(f"Will use {job_workdir=}")
-
-    ### Prepare job submission description
-    script = _(f"""\
-        set -euo pipefail
-        {command}
-        """)
-
-    logger.info(f"Will run the script ```{safe(script)}```")
-    job_submit_description = OrchestratedClusterJob.SlurmJobSubmitDescription(
-        name=name,
-        time_limit=slurm_timedelta(expected_time),
-        memory_per_node=memory,
-        script=script,
-        working_directory=str(job_workdir),
-        environment=environment,
-        **kwargs,
-    )
-
-    # check if a job already exists for this
-    hashed_inputs = [
-        OrchestratedClusterJob.JobInputFile(
-            path=input_file,
-            hash=compute_hash_of_input_file([input_file]),
+        ### Prepare working directory for job
+        job_workdir = _ensure_absolute_workdir(
+            working_dir or Path(EMG_CONFIG.slurm.default_workdir)
         )
-        for input_file in input_files_to_hash or []
-    ]
-    logger.info(f"Have hashed {len(hashed_inputs)} input files")
+        job_workdir.mkdir(parents=True, exist_ok=True)
+        resubmit_policy = resubmit_policy or ResubmitIfFailedPolicy
+        logger.info(f"Will use {job_workdir=}")
 
-    last_submitted_similar_job: Optional[OrchestratedClusterJob] = (
-        OrchestratedClusterJob.objects.get_previous_job(
-            job=job_submit_description,
-            policy=resubmit_policy,
-            input_file_hashes=hashed_inputs,
+        ### Prepare job submission description
+        script = _(f"""\
+            set -euo pipefail
+            {command}
+            """)
+
+        logger.info(f"Will run the script ```{safe(script)}```")
+        job_submit_description = OrchestratedClusterJob.SlurmJobSubmitDescription(
+            name=name,
+            time_limit=slurm_timedelta(expected_time),
+            memory_per_node=memory,
+            script=script,
+            working_directory=str(job_workdir),
+            environment=environment,
+            **kwargs,
         )
-    )
 
-    if last_submitted_similar_job:
-        logger.info(f"A similar job exists in history: {last_submitted_similar_job}")
-        if last_submitted_similar_job.should_resubmit_according_to_policy(
-            resubmit_policy
+        # check if a job already exists for this
+        hashed_inputs = [
+            OrchestratedClusterJob.JobInputFile(
+                path=input_file,
+                hash=compute_hash_of_input_file([input_file]),
+            )
+            for input_file in input_files_to_hash or []
+        ]
+        logger.info(f"Have hashed {len(hashed_inputs)} input files")
+
+        last_submitted_similar_job: Optional[OrchestratedClusterJob] = (
+            OrchestratedClusterJob.objects.get_previous_job(
+                job=job_submit_description,
+                policy=resubmit_policy,
+                input_file_hashes=hashed_inputs,
+            )
+        )
+
+        if last_submitted_similar_job:
+            logger.info(
+                f"A similar job exists in history: {last_submitted_similar_job}"
+            )
+            if last_submitted_similar_job.should_resubmit_according_to_policy(
+                resubmit_policy
+            ):
+                logger.info(
+                    f"Policy {resubmit_policy.policy_name} states we should resubmit the job."
+                )
+            else:
+                logger.info(
+                    f"Policy {resubmit_policy.policy_name} states we should not resubmit the job. Using {last_submitted_similar_job}."
+                )
+                if not slurm_status_is_finished_successfully(
+                    last_submitted_similar_job.last_known_state
+                ):
+                    raise SubprocessFailedException(
+                        last_submitted_similar_job.cluster_job_id,
+                        None,
+                        f"Reused job is not successful: {last_submitted_similar_job.last_known_state}",
+                    )
+                return last_submitted_similar_job
+
+        if (
+            last_submitted_similar_job
+            and resubmit_policy.resubmit_needs_preparation_command
         ):
             logger.info(
-                f"Policy {resubmit_policy.policy_name} states we should resubmit the job."
+                f"Policy {resubmit_policy.policy_name} requires a pre-resubmit command: {resubmit_policy.resubmit_needs_preparation_command}."
             )
-        else:
-            logger.info(
-                f"Policy {resubmit_policy.policy_name} states we should not resubmit the job. Using {last_submitted_similar_job}."
+            run_cluster_job(
+                name=f"Preparation for: {name}",
+                command=resubmit_policy.resubmit_needs_preparation_command,
+                expected_time=timedelta(hours=1),
+                memory=f"{EMG_CONFIG.slurm.preparation_command_job_memory_gb}G",
+                working_dir=job_workdir,
+                resubmit_policy=ResubmitAlwaysPolicy,
+                environment={},
             )
-            if not slurm_status_is_finished_successfully(
-                last_submitted_similar_job.last_known_state
-            ):
-                raise SubprocessFailedException(
-                    last_submitted_similar_job.cluster_job_id,
-                    None,
-                    f"Reused job is not successful: {last_submitted_similar_job.last_known_state}",
-                )
-            return last_submitted_similar_job
 
-    if (
-        last_submitted_similar_job
-        and resubmit_policy.resubmit_needs_preparation_command
-    ):
-        logger.info(
-            f"Policy {resubmit_policy.policy_name} requires a pre-resubmit command: {resubmit_policy.resubmit_needs_preparation_command}."
-        )
-        run_cluster_job(
-            name=f"Preparation for: {name}",
-            command=resubmit_policy.resubmit_needs_preparation_command,
-            expected_time=timedelta(hours=1),
-            memory=f"{EMG_CONFIG.slurm.preparation_command_job_memory_gb}G",
-            working_dir=job_workdir,
-            resubmit_policy=ResubmitAlwaysPolicy,
-            environment={},
+        # Refresh Django connections before the first DB write after any preparation job.
+        close_stale_connections()
+        env = make_environment(environment)
+
+        # need to submit new job
+        process = subprocess.Popen(
+            ["/bin/bash", "-e", "-u", "-o", "pipefail", "-c", command],
+            cwd=job_workdir,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            env=env,
+            text=True,
+            start_new_session=True,
         )
 
-    # Refresh Django connections before the first DB write after any preparation job.
-    close_stale_connections()
-    env = make_environment(environment)
+        nf_link = get_nextflow_tower_url()
+        nf_link_markdown = f"[Watch Nextflow Workflow]({nf_link})" if nf_link else ""
 
-    # need to submit new job
-    process = subprocess.Popen(
-        ["/bin/bash", "-e", "-u", "-o", "pipefail", "-c", command],
-        cwd=job_workdir,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        env=env,
-        text=True,
-        start_new_session=True,
-    )
+        ocj = OrchestratedClusterJob.objects.create(
+            cluster_job_id=process.pid,
+            flow_run_id=flow_run.id,
+            job_submit_description=job_submit_description,
+            input_files_hashes=hashed_inputs,
+        )
 
-    nf_link = get_nextflow_tower_url()
-    nf_link_markdown = f"[Watch Nextflow Workflow]({nf_link})" if nf_link else ""
+        create_markdown_artifact(
+            key="slurm-job-submission",
+            markdown=_(f"""\
+                # Subprocess with pid {process.pid}
+                [Orchestrated Cluster Job {ocj.id}]({EMG_CONFIG.service_urls.app_root}/{reverse("admin:workflows_orchestratedclusterjob_change", kwargs={"object_id": ocj.id})})
+                Submitted a script as a subprocess:
+                ~~~
+                <<SCRIPT>>
+                ~~~
+                It will be terminated if not done in {slurm_timedelta(expected_time)}.
+                Working dir is {job_workdir}.
+                {nf_link_markdown}
+                """).replace("<<SCRIPT>>", safe(script)),
+        )
 
-    ocj = OrchestratedClusterJob.objects.create(
-        cluster_job_id=process.pid,
-        flow_run_id=flow_run.id,
-        job_submit_description=job_submit_description,
-        input_files_hashes=hashed_inputs,
-    )
-
-    create_markdown_artifact(
-        key="slurm-job-submission",
-        markdown=_(f"""\
-            # Subprocess with pid {process.pid}
-            [Orchestrated Cluster Job {ocj.id}]({EMG_CONFIG.service_urls.app_root}/{reverse("admin:workflows_orchestratedclusterjob_change", kwargs={"object_id": ocj.id})})
-            Submitted a script as a subprocess:
-            ~~~
-            <<SCRIPT>>
-            ~~~
-            It will be terminated if not done in {slurm_timedelta(expected_time)}.
-            Working dir is {job_workdir}.
-            {nf_link_markdown}
-            """).replace("<<SCRIPT>>", safe(script)),
-    )
-
-    try:
-        stdout, stderr = process.communicate(timeout=expected_time.total_seconds())
-    except (TimeoutError, subprocess.TimeoutExpired) as e:
-        logger.error(f"Failed to run subprocess: {e}")
         try:
-            os.killpg(process.pid, signal.SIGKILL)
-        except ProcessLookupError:
-            pass
-        stdout, stderr = process.communicate()
+            stdout, stderr = process.communicate(timeout=expected_time.total_seconds())
+        except (TimeoutError, subprocess.TimeoutExpired) as e:
+            logger.error(f"Failed to run subprocess: {e}")
+            try:
+                os.killpg(process.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+            stdout, stderr = process.communicate()
+
+            # Refresh Django connections before saving after the subprocess wait.
+            close_stale_connections()
+            ocj.last_known_state = SlurmStatus.failed
+            ocj.cluster_log = "\n".join(
+                (stdout + "\n" + stderr).splitlines()[
+                    -EMG_CONFIG.slurm.job_log_tail_lines :
+                ]
+            )
+            logger.info("Process output:\n%s", safe(ocj.cluster_log))
+            ocj.save()
+
+            raise SubprocessFailedException(
+                process.pid, process.returncode, "Timed out"
+            ) from e
 
         # Refresh Django connections before saving after the subprocess wait.
         close_stale_connections()
-        ocj.last_known_state = SlurmStatus.failed
-        ocj.save()
-
-        raise SubprocessFailedException(
-            process.pid, process.returncode, "Timed out"
-        ) from e
-
-    # Refresh Django connections before saving after the subprocess wait.
-    close_stale_connections()
-    if process.returncode == 0:
-        logger.info(f"Job {ocj} finished successfully.")
-
-        ocj.last_known_state = SlurmStatus.completed
-        ocj.save()
-
-        store_nextflow_trace(ocj)
-    else:
-        ocj.last_known_state = SlurmStatus.failed
-        ocj.save()
-
-        error_details = "\n".join(
-            stderr.splitlines()[-EMG_CONFIG.slurm.job_log_failure_tail_lines :]
+        ocj.cluster_log = "\n".join(
+            (stdout + "\n" + stderr).splitlines()[
+                -EMG_CONFIG.slurm.job_log_tail_lines :
+            ]
         )
+        logger.info("Process output:\n%s", safe(ocj.cluster_log))
+        if process.returncode == 0:
+            logger.info(f"Job {ocj} finished successfully.")
 
-        raise SubprocessFailedException(process.pid, process.returncode, error_details)
+            ocj.last_known_state = SlurmStatus.completed
+            ocj.save()
 
-    return ocj
+            store_nextflow_trace(ocj)
+        else:
+            ocj.last_known_state = SlurmStatus.failed
+            ocj.save()
+
+            error_details = "\n".join(
+                (stdout + "\n" + stderr).splitlines()[
+                    -EMG_CONFIG.slurm.job_log_failure_tail_lines :
+                ]
+            )
+
+            raise SubprocessFailedException(
+                process.pid, process.returncode, error_details
+            )
+
+        return ocj
+    finally:
+        log_nextflow_log(
+            _ensure_absolute_workdir(
+                working_dir or Path(EMG_CONFIG.slurm.default_workdir)
+            ),
+            command,
+        )

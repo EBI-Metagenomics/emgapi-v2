@@ -1,14 +1,84 @@
 """Regression tests for process failures and parent flow logs."""
 
 import importlib
+import time
+from datetime import timedelta
 from unittest.mock import Mock, patch
 
 import pytest
+from prefect import flow, get_client
+from prefect.client.schemas.filters import FlowRunFilter, FlowRunFilterId
 from prefect.tasks import Task
 
+from workflows.models import OrchestratedClusterJob
 from workflows.prefect_utils.slurm_flow import (
     SubprocessFailedException,
+    run_cluster_job,
 )
+from workflows.prefect_utils.slurm_policies import NeverResubmitPolicy
+from workflows.prefect_utils.slurm_status import SlurmStatus
+from workflows.prefect_utils.testing_utils import get_logs_for_flow_run
+
+
+@pytest.mark.django_db(transaction=True)
+def test_subprocess_failure_reaches_parent_and_logs(prefect_harness, tmp_path):
+    """Fail the parent and report process output without a job subflow."""
+
+    @flow
+    def parent():
+        return run_cluster_job(
+            name="failing pipeline",
+            command="printf 'pipeline stdout marker\\n'; printf 'stderr marker\\n' >&2; exit 7",
+            expected_time=timedelta(seconds=5),
+            memory="100M",
+            environment={},
+            working_dir=tmp_path,
+            resubmit_policy=NeverResubmitPolicy,
+        )
+
+    state = parent(return_state=True)
+    assert state.is_failed()
+    with pytest.raises(SubprocessFailedException, match="exit code 7"):
+        state.result()
+    # A failed historical process must not become a successful task on reuse.
+    repeated = parent(return_state=True)
+    assert repeated.is_failed()
+    with pytest.raises(SubprocessFailedException, match="Reused job is not successful"):
+        repeated.result()
+
+    job = OrchestratedClusterJob.objects.get()
+    assert job.last_known_state == SlurmStatus.failed
+    assert "pipeline stdout marker" in job.cluster_log
+    assert "stderr marker" in job.cluster_log
+    assert str(job.flow_run_id) == str(state.state_details.flow_run_id)
+    # Prefect saves task states and logs asynchronously after the flow returns.
+    deadline = time.monotonic() + 10
+    with get_client(sync_client=True) as client:
+        while True:
+            tasks = client.read_task_runs(
+                flow_run_filter=FlowRunFilter(
+                    id=FlowRunFilterId(any_=[job.flow_run_id])
+                )
+            )
+            failed_job_tasks = [
+                task
+                for task in tasks
+                if task.name == "Run job: failing pipeline"
+                and task.state is not None
+                and task.state.is_failed()
+            ]
+            logs = get_logs_for_flow_run(state.state_details.flow_run_id)
+            output_recorded = (
+                "pipeline stdout marker" in logs and "stderr marker" in logs
+            )
+            if (failed_job_tasks and output_recorded) or time.monotonic() >= deadline:
+                break
+            time.sleep(0.1)
+    assert failed_job_tasks, [(task.name, task.state) for task in tasks]
+    assert "pipeline stdout marker" in logs
+    assert "stderr marker" in logs
+    assert all(task.flow_run_id == job.flow_run_id for task in tasks)
+    assert not any(task.flow_run_id is None for task in tasks)
 
 
 @pytest.mark.parametrize(
@@ -147,3 +217,42 @@ def test_asa_dispatch_reports_scheduled_state(
     assert "not yet completed" in state.message
     assert deploy.call_count == 2
     assert all(call.kwargs["timeout"] == 0 for call in deploy.call_args_list)
+
+
+@pytest.mark.parametrize("failed", [False, True])
+def test_nextflow_log_is_reported_after_process_exit(tmp_path, failed):
+    """Report Nextflow diagnostics after success and preserve process exceptions."""
+    module = importlib.import_module("workflows.prefect_utils.slurm_flow")
+    log_path = tmp_path / ".nextflow.log"
+    log_path.write_text("INFO starting\nERROR test diagnostic\n")
+    with (
+        patch.object(module, "get_run_logger"),
+        patch.object(
+            module.OrchestratedClusterJob.objects, "get_previous_job", return_value=None
+        ),
+        patch.object(module.OrchestratedClusterJob.objects, "create"),
+        patch.object(module, "create_markdown_artifact"),
+        patch.object(module, "store_nextflow_trace"),
+        patch.object(module.subprocess, "Popen") as popen,
+        patch("workflows.nextflow_utils.logs.get_run_logger") as get_logger,
+    ):
+        process = popen.return_value
+        process.pid = 123
+        process.returncode = 7 if failed else 0
+        process.communicate.return_value = ("", "")
+        kwargs = dict(
+            name="Nextflow diagnostic test",
+            command="nextflow run pipeline",
+            expected_time=timedelta(seconds=5),
+            memory="100M",
+            environment={},
+            working_dir=tmp_path,
+        )
+        if failed:
+            with pytest.raises(SubprocessFailedException, match="exit code 7"):
+                run_cluster_job.fn(**kwargs)
+        else:
+            run_cluster_job.fn(**kwargs)
+    get_logger.return_value.log.assert_called_once_with(
+        40, "Nextflow log: %s", log_path
+    )
