@@ -182,6 +182,33 @@ def test_prefect_assembly_upload_flow_post_assembly_sanity_check_not_passed(
 
 
 @pytest.mark.django_db(transaction=True)
+def test_prefect_assembly_upload_flow_fails_if_contigs_file_missing(
+    prefect_harness,
+    mock_start_cluster_job,
+    mgnify_assemblies_completed,
+    tmp_path,
+):
+    """
+    A missing contigs file should fail the flow loudly,
+    not mark the assembly as post-assembly QC failed (which silently excludes it from upload).
+    """
+    assembly = mgnify_assemblies_completed.first()
+    assembly.dir = str(tmp_path / "moved-or-archived")
+    assembly.save()
+
+    with pytest.raises(FileNotFoundError, match="Contigs file for assembly"):
+        upload_assembly(assembly_id=assembly.id, dry_run=True)
+
+    mock_start_cluster_job.assert_not_called()
+
+    assembly.refresh_from_db()
+    assert not assembly.status.get(
+        mg_models.Assembly.AssemblyStates.POST_ASSEMBLY_QC_FAILED
+    )
+    assert not assembly.status.get(mg_models.Assembly.AssemblyStates.ASSEMBLY_UPLOADED)
+
+
+@pytest.mark.django_db(transaction=True)
 def test_process_study_multiple_assemblies(
     raw_reads_mgnify_study,
     raw_read_run,

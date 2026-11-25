@@ -30,5 +30,4 @@ def upload_assemblies(study: analyses.models.Study, dry_run: bool = False):
     for assembly in assemblies_to_upload:
         upload_assembly(assembly.id, dry_run=dry_run)
 
-    # Make the TPA study public, but only if every assembly is now uploaded
     release_tpa_study_if_complete(study, dry_run=dry_run)

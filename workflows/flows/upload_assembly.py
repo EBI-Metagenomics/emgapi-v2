@@ -58,10 +58,11 @@ def check_assembly(assembly: analyses.models.Assembly, assembly_path: Path):
     logger = get_run_logger()
     accession = assembly.runs_label
     logger.info(f"Check assembly {assembly}")
-    # check filesize
     if not assembly_path.is_file():
-        logger.warning(f"{assembly_path} does not exist")
-        return False
+        raise FileNotFoundError(
+            f"Contigs file for assembly {assembly} not found at {assembly_path}"
+        )
+    # check filesize
     file_size = os.path.getsize(assembly_path)
     if not file_size:
         logger.warning(f"Contigs file is empty for assembly {assembly}")
@@ -231,12 +232,12 @@ def handle_tpa_study(
         )
         logger.info(f"Study submitted successfully under {registered_study}")
 
-        # New TPA studies are held private by ENA until we release them
-        # (see release_tpa_study_if_complete), once all assemblies are uploaded.
         newly_registered_ena_study, created = ena.models.Study.objects.get_or_create(
             accession=registered_study,
             title=assembly_study_title,
-            defaults={"is_private": True},
+            defaults={
+                "is_private": True
+            },  # new TPA studies are private until we release them
         )
         if created:
             logger.info(f"Created new ENA study {newly_registered_ena_study}")
@@ -268,15 +269,14 @@ def release_tpa_study_if_complete(
     reads_study: analyses.models.Study, dry_run: bool = True
 ) -> Optional[analyses.models.Study]:
     """
-    Publicly release the TPA (assembly) study registered for a reads study's assemblies,
-    but only once every assembly that should be uploaded has been uploaded.
+    Publicly release the TPA (assembly) study, but only once every assembly that
+    should be uploaded has been uploaded.
 
     Assemblies that failed post-assembly QC are not expected to be uploaded and are ignored.
-    Private assemblies brokered into the reads study itself are never released.
     The study is only released if it is marked private in the DB, so this is safe to call repeatedly.
 
     :param reads_study: The raw-reads MGnify study whose assemblies were uploaded.
-    :param dry_run: If True, use the ENA TEST (wwwdev) dropbox.
+    :param dry_run: If True, use the ENA TEST server.
     :return: The released study, or None if nothing was released.
     """
     logger = get_run_logger()
