@@ -131,4 +131,3 @@ host taxonomy, functional annotation, and protein catalogue.
 Additional count files support the website charts.
 Raw HMMER outputs, HTML exports, tree files, indexes and intermediate reports remain on FTP.
 Indexes for selected FASTA files remain attached to their download records.
-

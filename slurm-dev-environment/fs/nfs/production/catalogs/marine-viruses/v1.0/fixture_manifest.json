@@ -241,8 +241,8 @@
       "sha256": "ac2447eaedfbaf97a5d74ca30d4b00667b5c4214443130d13606f11a567c114e"
     },
     "viruses/cluster_representatives/taxonomy/genomad/genomad_krona.html": {
-      "bytes": 226822,
-      "sha256": "461ab1176f77b7f5ce281fe109f04390ccefcebad02bd6835604fc55037cda24"
+      "bytes": 225031,
+      "sha256": "6ee5e9cba79805d7ef9520eab9ac6f7caa58d50912d41bfd825457ae6eaa280a"
     },
     "viruses/cluster_representatives/taxonomy/genomad/genomad_sankey.html": {
       "bytes": 532,
@@ -261,8 +261,8 @@
       "sha256": "85b09cfc45eb822c380004a7665952bac53dd06113fc4f63ff82ad99fc970499"
     },
     "viruses/cluster_representatives/taxonomy/genomad/itol_genomad/genomad_tree.nwk": {
-      "bytes": 1445,
-      "sha256": "2a5ec7248eb302cd77a5bc11dd29ebd0def5e11195b860ca239747f49c40fc0d"
+      "bytes": 1446,
+      "sha256": "4c9741eb3d286360cd05115fa6e2644369db3fded1667e361f0330c4b429bced"
     },
     "viruses/cluster_representatives/taxonomy/genomad/itol_genomad/genomad_tree.type.binary.txt": {
       "bytes": 139,
@@ -289,16 +289,16 @@
       "sha256": "bf79649580131e7374eedaa4b73cfbd003b42dd2f9076734e22f86e50e7b0a54"
     },
     "viruses/cluster_representatives/taxonomy/viphogs/itol_viphogs/viphogs_tree.nwk": {
-      "bytes": 1588,
-      "sha256": "2058a92d4ed02b31385580252abe4266af8446066933a27fa6f53c6e0ae6ab34"
+      "bytes": 1589,
+      "sha256": "a5258289f33d610aa18012f24d1008eb83771eed1666512b643dfe86e561893d"
     },
     "viruses/cluster_representatives/taxonomy/viphogs/itol_viphogs/viphogs_tree.type.binary.txt": {
       "bytes": 126,
       "sha256": "a69cce746a3279fc188a2d266d75229f95d2bef54890d636026ed0808526a9d2"
     },
     "viruses/cluster_representatives/taxonomy/viphogs/viphogs_krona.html": {
-      "bytes": 226413,
-      "sha256": "f15198251297ecfb9591fb32f593e18ef2ba81ce48d95a72939c3b989da8f73b"
+      "bytes": 224622,
+      "sha256": "20273ee042ccfa249fd5f1a77e2e1594451f08c8b0c7c10b2e19a4aec3d0475a"
     },
     "viruses/cluster_representatives/taxonomy/viphogs/viphogs_sankey.html": {
       "bytes": 381,
@@ -313,8 +313,8 @@
       "sha256": "cc04ba8e3eb78154d244cd74ab9743c539ae1604fece947b65a547650e171451"
     },
     "viruses/cluster_representatives/taxonomy/viphogs/viruses_reps_annotation.tsv": {
-      "bytes": 25447,
-      "sha256": "ebd2fea1134fbde73b884fd8c8c945d9307f1497a01615bb47e5c9b7718037db"
+      "bytes": 26277,
+      "sha256": "8382053fd1b7d8c9d79f6d3a1155daaa8eec14fdbadf7ac5eefbf4b9b0d5018b"
     },
     "viruses/cluster_representatives/taxonomy/viphogs/viruses_reps_annotation_taxonomy.tsv": {
       "bytes": 219,
@@ -337,8 +337,8 @@
       "sha256": "43f8234490793b6dcef749458db4d5756dff926a8a0f6007dc2577e51597cc3b"
     },
     "viruses/cluster_representatives/taxonomy/vitap/itol_vitap/vitap_tree.nwk": {
-      "bytes": 5429,
-      "sha256": "9737c712558359fb8fa60ca267244a270d305e0f27839104b29ee058c60a8832"
+      "bytes": 5430,
+      "sha256": "545890d3097f81d2498cd06991c0e39fa24384065b57a605e30d628f719dfb73"
     },
     "viruses/cluster_representatives/taxonomy/vitap/itol_vitap/vitap_tree.type.binary.txt": {
       "bytes": 136,
@@ -349,8 +349,8 @@
       "sha256": "f5bc6448726505aa8cc77f793db419430eceb0c1d1756c45d9d3e2cadb014e73"
     },
     "viruses/cluster_representatives/taxonomy/vitap/vitap_krona.html": {
-      "bytes": 226833,
-      "sha256": "c18bbab0aed7cfd317a911f797a6a695da64abc0bac16316f2aa1a806e93b994"
+      "bytes": 225042,
+      "sha256": "9c540c0f4fe70240b65f86b09b0193ed4d67768453fd205cb04c65ef55d27370"
     },
     "viruses/cluster_representatives/taxonomy/vitap/vitap_sankey.html": {
       "bytes": 541,

@@ -134,6 +134,9 @@ fileignoreconfig:
 - filename: slurm-dev-environment/configs/slurm-web.key
   checksum: fa15c0de5c2acfe9a1872526026eb9a9110c782257c2fde6575361d3d2701fcb
 
+- filename: slurm-dev-environment/fs/nfs/production/catalogs/marine-viruses/v1.0/fixture_manifest.json
+  ignore_detectors: [filecontent]
+
 - filename: slurm-dev-environment/fs/nfs/public/tests/amplicon_v6_output/SRR1111111/taxonomy-summary/DADA2-SILVA/SRR1111111_16S-V3-V4.html
   checksum: cbba3d78df18143c2d69885815740506ea76787d481f94748c79627737222ce4
 
