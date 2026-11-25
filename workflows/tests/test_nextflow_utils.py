@@ -15,7 +15,6 @@ from workflows.nextflow_utils.samplesheets import (
 )
 from workflows.prefect_utils.slurm_flow import run_cluster_job as run_job_task
 from workflows.prefect_utils.slurm_policies import ResubmitAlwaysPolicy
-from workflows.prefect_utils.slurm_status import SlurmStatus
 
 
 @flow
@@ -260,18 +259,17 @@ def test_nextflow_trace_from_flag(
     prefect_harness,
     nextflow_hello_world_command,
     write_nextflow_tracefile,
-    mock_start_cluster_job,
-    mock_cluster_can_accept_jobs_yes,
-    mock_check_cluster_job_all_completed,
+    mock_job_process,
+    mock_process_completion,
     tmp_path,
 ):
     trace_file_location = tmp_path / "hello-nextflow" / "trace-hello.txt"
 
     def make_trace_file(*args, **kwargs):
         write_nextflow_tracefile(trace_file_location)
-        return SlurmStatus.completed.value
+        return "", ""
 
-    mock_check_cluster_job_all_completed.side_effect = make_trace_file
+    mock_process_completion.side_effect = make_trace_file
 
     hello_nextfow_flow = run_cluster_job(
         name="Runs the nextflow hello world pipeline",
@@ -295,9 +293,8 @@ def test_nextflow_trace_from_pipeline_info(
     prefect_harness,
     nextflow_hello_world_command,
     write_nextflow_tracefile,
-    mock_start_cluster_job,
-    mock_cluster_can_accept_jobs_yes,
-    mock_check_cluster_job_all_completed,
+    mock_job_process,
+    mock_process_completion,
     tmp_path,
 ):
     trace_file_location = (
@@ -306,9 +303,9 @@ def test_nextflow_trace_from_pipeline_info(
 
     def make_trace_file(*args, **kwargs):
         write_nextflow_tracefile(trace_file_location)
-        return SlurmStatus.completed.value
+        return "", ""
 
-    mock_check_cluster_job_all_completed.side_effect = make_trace_file
+    mock_process_completion.side_effect = make_trace_file
 
     hello_nextfow_flow = run_cluster_job(
         name="Runs the nextflow hello world pipeline",

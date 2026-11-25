@@ -105,10 +105,6 @@ RUN chmod +x /usr/local/bin/submitter-entrypoint.sh
 COPY slurm-dev-environment/entrypoints/prefect-slurm-entrypoint.sh /usr/local/bin/prefect-slurm-entrypoint.sh
 RUN chmod +x /usr/local/bin/prefect-slurm-entrypoint.sh
 
-ENV SLURM_LIB_DIR=/usr/local/lib
-ENV SLURM_INCLUDE_DIR=/usr/local/include
-RUN pip install --upgrade pip setuptools wheel
-RUN pip install --ignore-installed --upgrade --use-pep517 --no-build-isolation https://github.com/PySlurm/pyslurm/archive/refs/tags/v24.11.0.tar.gz
 ENV TZ="Etc/UTC"
 
 ENTRYPOINT ["/usr/local/bin/submitter-entrypoint.sh", "python", "manage.py"]

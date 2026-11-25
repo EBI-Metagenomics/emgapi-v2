@@ -1,7 +1,7 @@
 # Docker-composed Slurm cluster for local development
 
-This directory is a configuration of a minimal but functioning Slurm cluster, running on Docker Compose,
-intended for development and testing of Slurm-integrated code, e.g. job submission/running/polling via [PySlurm](https://github.com/PySlurm/pyslurm).
+This directory contains a minimal Slurm cluster configuration for Docker Compose.
+It supports local tests of Prefect flows through the SlurmWorker allocation.
 
 It also includes helper type config for running [Prefect](https://prefect.io) flows on the Slurm cluster.
 

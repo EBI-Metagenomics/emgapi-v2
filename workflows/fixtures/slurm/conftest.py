@@ -1,48 +1,28 @@
-import time
-from unittest.mock import MagicMock, patch
+"""Subprocess fixtures for flows within a SlurmWorker allocation."""
+
+from itertools import count
+from unittest.mock import MagicMock, Mock, patch
 
 import pytest
-from prefect import task
-
-from workflows.prefect_utils.cache_control import context_agnostic_task_input_hash
-from workflows.prefect_utils.slurm_status import SlurmStatus
 
 
 @pytest.fixture
-def mock_cluster_can_accept_jobs_yes():
-    with patch(
-        "workflows.prefect_utils.slurm_limits.cluster_can_accept_jobs"
-    ) as mock_cluster_can_accept_jobs:
-        mock_cluster_can_accept_jobs.return_value = 1000
-        yield mock_cluster_can_accept_jobs
-
-
-@task(
-    task_run_name="Dummy job submission",
-    persist_result=True,
-    cache_key_fn=context_agnostic_task_input_hash,
-)
-def _dummy_start_cluster_job(*args, **kwargs):
-    return int(
-        str(int(time.time() * 1000))[-6:]
-    )  #  A 6-digit number that shouldn't clash within 1ms
+def mock_process_completion():
+    """Allow tests to create pipeline outputs when a process finishes."""
+    return Mock(return_value=("", ""))
 
 
 @pytest.fixture
-def mock_start_cluster_job():
-    with patch(
-        "workflows.prefect_utils.slurm_flow.submit_cluster_job",
-    ) as mock_start_cluster_job_task:
-        mock_start_cluster_job_task.side_effect = MagicMock(
-            wraps=_dummy_start_cluster_job
-        )
-        yield mock_start_cluster_job_task
+def mock_job_process(mock_process_completion):
+    """Replace command execution with successful process objects."""
+    pids = count(10000)
 
+    def make_process(*args, **kwargs):
+        process = MagicMock(pid=next(pids), returncode=0)
+        process.communicate = mock_process_completion
+        return process
 
-@pytest.fixture
-def mock_check_cluster_job_all_completed():
     with patch(
-        "workflows.prefect_utils.slurm_flow.check_cluster_job"
-    ) as mock_check_cluster_job:
-        mock_check_cluster_job.return_value = SlurmStatus.completed.value
-        yield mock_check_cluster_job
+        "workflows.prefect_utils.slurm_flow.subprocess.Popen", side_effect=make_process
+    ) as mock_popen:
+        yield mock_popen

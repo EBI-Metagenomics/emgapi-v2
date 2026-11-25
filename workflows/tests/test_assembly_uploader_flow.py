@@ -15,9 +15,8 @@ from workflows.prefect_utils.testing_utils import run_flow_and_capture_logs
 @pytest.mark.django_db(transaction=True)
 def test_prefect_assembly_upload_flow_assembly_metaspades(
     prefect_harness,
-    mock_cluster_can_accept_jobs_yes,
-    mock_start_cluster_job,
-    mock_check_cluster_job_all_completed,
+    mock_job_process,
+    mock_process_completion,
     raw_read_ena_study,
     raw_reads_mgnify_study,
     raw_read_run,
@@ -113,8 +112,8 @@ def test_prefect_assembly_upload_flow_assembly_metaspades(
     assert ena_api_read_run.call_count == 1
 
     # webin-cli cluster job
-    mock_start_cluster_job.assert_called()
-    mock_check_cluster_job_all_completed.assert_called()
+    mock_job_process.assert_called()
+    mock_process_completion.assert_called()
 
     assert (
         mg_models.Assembly.objects.filter(status__assembly_uploaded=True).count() == 1
@@ -208,7 +207,7 @@ def test_process_study_multiple_assemblies(
 @pytest.mark.django_db(transaction=True)
 def test_prefect_assembly_upload_flow_blocked_for_unsupported_experiment_type(
     prefect_harness,
-    mock_start_cluster_job,
+    mock_job_process,
     raw_reads_mgnify_study,
     raw_read_run,
     mgnify_assemblies_completed,
@@ -229,7 +228,7 @@ def test_prefect_assembly_upload_flow_blocked_for_unsupported_experiment_type(
     with pytest.raises(Exception, match=curation_url):
         upload_assembly(assembly_id=assembly.id, dry_run=True)
 
-    mock_start_cluster_job.assert_not_called()
+    mock_job_process.assert_not_called()
 
     assembly.refresh_from_db()
     assert assembly.status.get(

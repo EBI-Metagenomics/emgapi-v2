@@ -31,7 +31,6 @@ from workflows.models import (
     AssemblyAnalysisPipeline,
     AssemblyAnalysisPipelineStatus,
 )
-from workflows.prefect_utils.slurm_status import SlurmStatus
 from workflows.prefect_utils.testing_utils import (
     generate_assembly_v6_pipeline_results,
     should_not_mock_httpx_requests_to_prefect_server,
@@ -395,9 +394,8 @@ def test_prefect_analyse_assembly_flow(
     assembly_test_scenario,
     httpx_mock,
     prefect_harness,
-    mock_cluster_can_accept_jobs_yes,
-    mock_start_cluster_job,
-    mock_check_cluster_job_all_completed,
+    mock_job_process,
+    mock_process_completion,
     mock_suspend_flow_run,
     assembly_analysis_ena_study,
     assembly_analysis_ena_samples,
@@ -459,9 +457,9 @@ def test_prefect_analyse_assembly_flow(
         map_workspace = batch.get_pipeline_workspace(AssemblyAnalysisPipeline.MAP)
         setup_map_batch_fixtures(map_workspace, assembly_test_scenario)
 
-        return SlurmStatus.completed.value
+        return "", ""
 
-    mock_check_cluster_job_all_completed.side_effect = check_job_and_setup_fixtures
+    mock_process_completion.side_effect = check_job_and_setup_fixtures
 
     # Mock ENA response for assemblies
     httpx_mock.add_response(
@@ -553,8 +551,8 @@ def test_prefect_analyse_assembly_flow(
     )
 
     # Verify mocks were called
-    mock_start_cluster_job.assert_called()
-    mock_check_cluster_job_all_completed.assert_called()
+    mock_job_process.assert_called()
+    mock_process_completion.assert_called()
     mock_suspend_flow_run.assert_called()
 
     # Get study for assertions
@@ -787,10 +785,9 @@ def test_prefect_analyse_assembly_flow_missing_directory(
     mock_run_virify_batch,
     httpx_mock,
     prefect_harness,
-    mock_cluster_can_accept_jobs_yes,
     disable_assembly_pipeline_retries,
-    mock_start_cluster_job,
-    mock_check_cluster_job_all_completed,
+    mock_job_process,
+    mock_process_completion,
     assembly_analysis_ena_study,
     assembly_analysis_ena_samples,
     mock_suspend_flow_run,
@@ -852,11 +849,9 @@ def test_prefect_analyse_assembly_flow_missing_directory(
     def check_job_and_setup_incomplete_fixtures(*args, **kwargs):
         """Mock cluster job check that sets up incomplete test fixtures."""
         setup_assembly_batch_fixtures_missing_dir(scenario)
-        return SlurmStatus.completed.value
+        return "", ""
 
-    mock_check_cluster_job_all_completed.side_effect = (
-        check_job_and_setup_incomplete_fixtures
-    )
+    mock_process_completion.side_effect = check_job_and_setup_incomplete_fixtures
 
     # Mock ENA response for assemblies
     httpx_mock.add_response(
@@ -971,10 +966,9 @@ def test_prefect_analyse_assembly_flow_invalid_schema(
     mock_run_virify_batch,
     httpx_mock,
     prefect_harness,
-    mock_cluster_can_accept_jobs_yes,
     disable_assembly_pipeline_retries,
-    mock_start_cluster_job,
-    mock_check_cluster_job_all_completed,
+    mock_job_process,
+    mock_process_completion,
     assembly_analysis_ena_study,
     assembly_analysis_ena_samples,
     mock_suspend_flow_run,
@@ -1035,11 +1029,9 @@ def test_prefect_analyse_assembly_flow_invalid_schema(
     def check_job_and_setup_invalid_fixtures(*args, **kwargs):
         """Mock cluster job check that sets up fixtures with invalid content."""
         setup_assembly_batch_fixtures_invalid_content(scenario)
-        return SlurmStatus.completed.value
+        return "", ""
 
-    mock_check_cluster_job_all_completed.side_effect = (
-        check_job_and_setup_invalid_fixtures
-    )
+    mock_process_completion.side_effect = check_job_and_setup_invalid_fixtures
 
     # Mock ENA response for assemblies
     httpx_mock.add_response(
