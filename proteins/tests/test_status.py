@@ -6,6 +6,7 @@ import pytest
 from analyses.models import Analysis
 from proteins import status as status_module
 from proteins.dataset.owner import take
+from proteins.models import AssemblyProteins, GeneCaller
 from proteins.routers import MGYP
 from proteins.status import status
 from proteins.tests.conftest import (
@@ -61,9 +62,8 @@ def test_no_check_fails_on_a_healthy_state(root, slurm):
     sacct, _ = slurm
     study = make_study("PRJ1")
     v6 = make_analysis(study, "ERZ1")
-    make_analysis(study, "ERZ2", "V4.1")
-    make_analysis(study, "ERZ3", "V5")
-    make_analysis(study, "ERZ4", "V4", state=Analysis.AnalysisStates.ANALYSIS_STARTED)
+    for n, version in enumerate(["V1", "V2", "V3", "V4", "V4.1", "V5"], start=2):
+        make_analysis(study, f"ERZ{n}", version)
     record(v6.accession, timedelta(hours=47))
     done(D1, timedelta(hours=35), root)
     # A day after the last update: the one being written.
@@ -88,9 +88,16 @@ def test_no_check_fails_on_a_healthy_state(root, slurm):
 def test_each_failed_check_is_reported_and_fails_the_flow(root, slurm, monkeypatch):
     sacct, as_job = slurm
     study = make_study("PRJ1")
-    make_analysis(study, "ERZ1", "V4")
-    make_analysis(study, "ERZ2", "V4")
-    make_analysis(study, "ERZ3", "V1")
+    for version in ("6.1", "6.2"):
+        monkeypatch.delitem(
+            GeneCaller.BY_PIPELINE_VERSION,
+            (AssemblyProteins.Source.ASSEMBLY_ANALYSIS, version),
+        )
+    make_analysis(study, "ERZ1", "V6.2")
+    make_analysis(study, "ERZ2", "V6.2")
+    make_analysis(study, "ERZ3", "V6.1")
+    make_analysis(study, "ERZ4", "V6.1", state=Analysis.AnalysisStates.ANALYSIS_STARTED)
+    make_analysis(study, "ERZ5", "V4")
     record("MGYA99999999", timedelta(hours=49))
     done(D2, timedelta(hours=37), root)
     (root / "occurrence" / f"day={D1}").mkdir(parents=True)
@@ -107,7 +114,7 @@ def test_each_failed_check_is_reported_and_fails_the_flow(root, slurm, monkeypat
         f"incomplete days of the protein dataset before the last dataset update: {D1}",
         f"protein ids are at {now.last_protein_id}, above 90% of {now.last_protein_id}",
         "annotated assembly analyses of pipeline versions with no gene-caller rule,"
-        " which the listing skips: V1 1, V4 2",
+        " which the listing skips: V6.1 1, V6.2 2",
         "1 MGYAs of assembly proteins records are in neither emgapi-v2 nor MGnify v1,"
         " so releases publish none of their proteins",
         "the protein dataset is owned by job 1, whose states are FAILED",

@@ -75,7 +75,7 @@ The schedules and the trigger are inactive until cutover.
 - a staged row is more than 48 h old;
 - the protein dataset has an incomplete day before the last dataset update;
 - protein ids are above 90 % of 10¹²;
-- annotated assembly analyses have a pipeline version with no gene-caller rule, other than 4.1 and 5.0, whose records come from the migration. The listing skips them;
+- annotated assembly analyses have a pipeline version with no gene-caller rule, other than the legacy versions 1.0 to 5.0: the migration gives 4.1 and 5.0 their records, and the older versions have none. The listing skips them;
 - an assembly proteins record has an MGYA that is not in emgapi-v2, so releases publish none of its proteins;
 - the protein dataset has an owner whose SLURM job is not running.
 

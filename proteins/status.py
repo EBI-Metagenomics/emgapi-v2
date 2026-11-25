@@ -31,8 +31,16 @@ STAGED_OVERDUE = timedelta(hours=48)
 MAX_PROTEIN_ID = 10**12 - 1
 HEADROOM_WARNING = 0.9
 STAGED_MODELS = (StagedProtein, StagedContig, StagedOccurrence)
-# Their records come from the migration of the current protein database, not from the listing.
-MIGRATED_VERSIONS = (Analysis.PipelineVersions.v4_1, Analysis.PipelineVersions.v5)
+# The versions of MGnify v1. The migration of the current protein database gives 4.1 and 5.0 their
+# records, and the current protein database holds none of the older ones.
+LEGACY_VERSIONS = (
+    Analysis.PipelineVersions.v1,
+    Analysis.PipelineVersions.v2,
+    Analysis.PipelineVersions.v3,
+    Analysis.PipelineVersions.v4,
+    Analysis.PipelineVersions.v4_1,
+    Analysis.PipelineVersions.v5,
+)
 
 
 class Status(NamedTuple):
@@ -170,7 +178,7 @@ def status(root: Path) -> Status:
 
     no_rule = dict(
         annotated_assembly_analyses()
-        .exclude(pipeline_version__in=[*versions_with_rules(), *MIGRATED_VERSIONS])
+        .exclude(pipeline_version__in=[*versions_with_rules(), *LEGACY_VERSIONS])
         .values_list("pipeline_version")
         .annotate(Count("id"))
         .order_by("pipeline_version")
