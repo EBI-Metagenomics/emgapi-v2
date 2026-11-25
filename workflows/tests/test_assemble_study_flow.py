@@ -161,9 +161,8 @@ def test_prefect_assemble_study_flow(
     httpx_mock,
     ena_any_sample_metadata,
     mock_suspend_flow_run,
-    mock_cluster_can_accept_jobs_yes,
-    mock_start_cluster_job,
-    mock_check_cluster_job_all_completed,
+    mock_job_process,
+    mock_process_completion,
     top_level_biomes,
     assemblers,
     admin_user,
@@ -487,8 +486,8 @@ def test_prefect_assemble_study_flow(
 
     ### MOCKS WERE ALL CALLED ###
     mock_suspend_flow_run.assert_called()
-    mock_start_cluster_job.assert_called()
-    mock_check_cluster_job_all_completed.assert_called()
+    mock_job_process.assert_called()
+    mock_process_completion.assert_called()
 
     ### CLUSTER JOBS WERE SUBMITTED AND LOGGED AS EXPECTED ###
     assembly_samplesheet_table = Artifact.get("miassembler-initial-sample-sheet")
@@ -688,9 +687,8 @@ def test_prefect_assemble_private_study_flow(
     ena_any_sample_metadata,
     httpx_mock,
     mock_suspend_flow_run,
-    mock_cluster_can_accept_jobs_yes,
-    mock_start_cluster_job,
-    mock_check_cluster_job_all_completed,
+    mock_job_process,
+    mock_process_completion,
     top_level_biomes,
     assemblers,
     admin_user,
@@ -905,9 +903,8 @@ def test_assembly_statuses(prefect_harness, mgnify_assemblies):
 def test_assembler_changed_in_samplesheet(
     prefect_harness,
     mgnify_assemblies,
-    mock_cluster_can_accept_jobs_yes,
-    mock_start_cluster_job,
-    mock_check_cluster_job_all_completed,
+    mock_job_process,
+    mock_process_completion,
     top_level_biomes,
 ):
     # all assemblies should be initially metaspades, except one which was initially megahit
@@ -1125,9 +1122,8 @@ def _run_samplesheet_with_reports(
 def test_run_assembler_for_samplesheet_all_runs_qc_failed(
     prefect_harness,
     mgnify_assemblies,
-    mock_cluster_can_accept_jobs_yes,
-    mock_start_cluster_job,
-    mock_check_cluster_job_all_completed,
+    mock_job_process,
+    mock_process_completion,
     tmp_path,
     assembled_runs_csv_content,
 ):
@@ -1156,9 +1152,8 @@ def test_run_assembler_for_samplesheet_all_runs_qc_failed(
 def test_run_assembler_for_samplesheet_missing_assembled_runs_csv_not_all_qc_failed(
     prefect_harness,
     mgnify_assemblies,
-    mock_cluster_can_accept_jobs_yes,
-    mock_start_cluster_job,
-    mock_check_cluster_job_all_completed,
+    mock_job_process,
+    mock_process_completion,
     tmp_path,
 ):
     """

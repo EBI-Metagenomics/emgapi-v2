@@ -14,34 +14,20 @@ from workflows.ena_utils.abstract import ENAPortalDataPortal
 
 
 class SlurmConfig(BaseModel):
-    default_job_status_checks_limit: int = 10
     default_workdir: str = "/path/to/pipeline-results-dir"
     default_nextflow_workdir: str = "/path/to/pipeline-workdir"
     pipelines_root_dir: str = "/app/workflows/pipelines"
     ftp_results_dir: str = "/nfs/ftp/public/databases/metagenomics/mgnify_results"
     private_results_dir: str = "/nfs/public/services/private-data"
-    user: str = "root"
-
-    incomplete_job_limit: int = 100
-    # if this many jobs are RUNNING or PENDING, no more are submitted
-
-    default_seconds_between_job_checks: int = 10
-    # when a job is running, we wait this long between status checks
-
-    default_seconds_between_submission_attempts: int = 10
-    default_submission_attempts_limit: int = 100
-    # if the cluster is "full", we wait this long before checking again for space,
-    #   and only attempt submission a limited number of times before giving up.
 
     cluster_job_flow_timeout_seconds: int = timedelta(days=14).total_seconds()
-    # if a cluster job flow is still running after this long, it is timed out to clear
-    #   up cases where the prefect worker has been ended whilst the slurm job ran.
+    # Maximum duration of the job task.
 
     job_log_tail_lines: int = 10
-    # how many lines of slurm log to send to prefect each time we check it
+    # Number of final process output lines for the database and Prefect logs.
 
     job_log_failure_tail_lines: int = 100
-    # how many lines of final slurm log to send to prefect if a job fails
+    # Number of final process output lines in failure exceptions.
 
     use_nextflow_tower: bool = False
     nextflow_tower_org: str = "EMBL-EBI"

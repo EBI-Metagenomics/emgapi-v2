@@ -370,9 +370,8 @@ def test_prefect_analyse_rawreads_flow(
     prefect_harness,
     httpx_mock,
     ena_any_sample_metadata,
-    mock_cluster_can_accept_jobs_yes,
-    mock_start_cluster_job,
-    mock_check_cluster_job_all_completed,
+    mock_job_process,
+    mock_process_completion,
     raw_read_ena_study,
     mock_suspend_flow_run,
     admin_user,
@@ -568,8 +567,8 @@ def test_prefect_analyse_rawreads_flow(
     # RUN MAIN FLOW
     analysis_rawreads_study(study_accession=study_accession)
 
-    mock_start_cluster_job.assert_called()
-    mock_check_cluster_job_all_completed.assert_called()
+    mock_job_process.assert_called()
+    mock_process_completion.assert_called()
     mock_suspend_flow_run.assert_called()
 
     # Check samplesheet
@@ -897,9 +896,8 @@ def test_prefect_analyse_rawreads_flow_private_data(
     prefect_harness,
     httpx_mock,
     ena_any_sample_metadata,
-    mock_cluster_can_accept_jobs_yes,
-    mock_start_cluster_job,
-    mock_check_cluster_job_all_completed,
+    mock_job_process,
+    mock_process_completion,
     raw_read_ena_study,
     mock_suspend_flow_run,
     admin_user,
@@ -1116,8 +1114,8 @@ def test_prefect_analyse_rawreads_flow_private_data(
     # RUN MAIN FLOW
     analysis_rawreads_study(study_accession=study_accession)
 
-    mock_start_cluster_job.assert_called()
-    mock_check_cluster_job_all_completed.assert_called()
+    mock_job_process.assert_called()
+    mock_process_completion.assert_called()
     mock_suspend_flow_run.assert_called()
 
     # Check samplesheet
@@ -1365,9 +1363,8 @@ def test_prefect_analyse_rawreads_flow_no_functional(
     prefect_harness,
     httpx_mock,
     ena_any_sample_metadata,
-    mock_cluster_can_accept_jobs_yes,
-    mock_start_cluster_job,
-    mock_check_cluster_job_all_completed,
+    mock_job_process,
+    mock_process_completion,
     raw_read_ena_study,
     mock_suspend_flow_run,
     admin_user,
@@ -1500,8 +1497,8 @@ def test_prefect_analyse_rawreads_flow_no_functional(
     # RUN MAIN FLOW
     analysis_rawreads_study(study_accession=study_accession)
 
-    mock_start_cluster_job.assert_called()
-    mock_check_cluster_job_all_completed.assert_called()
+    mock_job_process.assert_called()
+    mock_process_completion.assert_called()
 
     study = analyses.models.Study.objects.get_or_create_for_ena_study(study_accession)
     study.refresh_from_db()

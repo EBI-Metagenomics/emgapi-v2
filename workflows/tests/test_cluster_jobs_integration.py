@@ -8,16 +8,13 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from django.db import connection
-from prefect import flow, runtime, task
+from prefect import flow
 from prefect.runtime import flow_run
 
 from workflows.models import OrchestratedClusterJob
 from workflows.prefect_utils.slurm_flow import (
     SubprocessFailedException,
-    check_cluster_job,
     compute_hash_of_input_file,
-    run_subprocess,
-    start_or_attach_cluster_job,
 )
 from workflows.prefect_utils.slurm_flow import (
     run_cluster_job as run_cluster_job_task,
@@ -51,7 +48,7 @@ def mock_slurm_flow_run():
 
 
 @flow(log_prints=True, retries=2)
-def intermittently_buggy_flow_that_includes_a_cluster_job_subflow(workdir: Path):
+def intermittently_buggy_flow_that_includes_a_job_task(workdir: Path):
     print("starting flow")
     orchestrated_job = run_cluster_job(
         name="test job in buggy flow",
@@ -75,8 +72,6 @@ def intermittently_buggy_flow_that_includes_a_cluster_job_subflow(workdir: Path)
 @pytest.mark.django_db
 def test_run_cluster_job_state_persistence(
     prefect_harness,
-    mock_cluster_can_accept_jobs_yes,
-    mock_check_cluster_job_all_completed,
     tmp_path,
 ):
     job_initial = run_cluster_job(
@@ -122,8 +117,8 @@ def test_run_cluster_job_state_persistence(
         working_dir=tmp_path / "work2",
     )
     assert (
-        int(job_altered_call.cluster_job_id) == int(job_initial.cluster_job_id) + 1
-    )  # slurm job ids just increment up. assumes tests are not being run in parallel :)
+        job_altered_call.cluster_job_id != job_initial.cluster_job_id
+    )  # A new process has a different PID.
 
     # we can use a different policy to ensure a job is resubmitted even if it previously ran
     job_explicitly_resubmitted_call = run_cluster_job(
@@ -141,7 +136,7 @@ def test_run_cluster_job_state_persistence(
 
     # automatic retries of a buggy flow that fails after a cluster job should not resubmit cluster job
     logged_buggy_flow = run_flow_and_capture_logs(
-        intermittently_buggy_flow_that_includes_a_cluster_job_subflow,
+        intermittently_buggy_flow_that_includes_a_job_task,
         workdir=tmp_path / "work-buggy",
     )
     assert "Failing first time" in logged_buggy_flow.logs
@@ -308,44 +303,11 @@ def test_slurm_resubmit_policies():
     assert matching_jobs.count() == 0
 
 
-@flow(log_prints=True)
-def retryable_subflow(param: str, **kwargs):
-    print(f"Retryable subflow for {param}")
-    if runtime.flow_run.run_count == 1:
-        print(
-            f"Flow_run is {runtime.flow_run.run_count}, {runtime.flow_run.name}, {runtime.flow_run.parameters}"
-        )
-        print(
-            f"Task_run is {runtime.task_run}, {runtime.task_run.name}, {runtime.task_run.parameters}"
-        )
-        raise Exception("Failing first time")
-    return f"Did {param}"
-
-
-@task(log_prints=True)
-def task_that_includes_a_retriable_subflow(subflow_max_retries: int):
-    print("starting task")
-    subflow_result = retryable_subflow.with_options(retries=subflow_max_retries)(
-        "yellow"
-    )
-    return subflow_result
-
-
-def test_passing_retries_to_task_subflow(prefect_harness):
-    # This logic can be used to let cluster job subflows include their own retries.
-    # Test here is a MWE not using the cluster job flow itself.
-    with pytest.raises(Exception) as excinfo:
-        task_that_includes_a_retriable_subflow(subflow_max_retries=0)
-    assert str(excinfo.value) == "Failing first time"
-
-    assert task_that_includes_a_retriable_subflow(subflow_max_retries=2) == "Did yellow"
-
-
 @patch("workflows.prefect_utils.slurm_flow.store_nextflow_trace")
 @patch("workflows.prefect_utils.slurm_flow.get_run_logger", return_value=MagicMock())
 @patch("workflows.prefect_utils.slurm_flow.create_markdown_artifact")
 @pytest.mark.django_db(transaction=True)
-def test_run_subprocess_recovers_stale_connection(
+def test_run_cluster_job_recovers_stale_connection(
     mock_create_markdown_artifact,
     mock_get_run_logger,
     mock_store_nextflow_trace,
@@ -355,14 +317,14 @@ def test_run_subprocess_recovers_stale_connection(
     with connection.cursor() as cursor:
         cursor.execute("SET SESSION idle_session_timeout = '200ms'")
 
-    result = run_subprocess.fn(
+    result = run_cluster_job_task.fn(
         name="subprocess stale connection test",
         command="sleep 0.5",
         expected_time=timedelta(seconds=2),
         memory="100M",
         environment={},
-        slurm_resubmit_policy=ResubmitAlwaysPolicy,
-        workdir=tmp_path / "work",
+        resubmit_policy=ResubmitAlwaysPolicy,
+        working_dir=tmp_path / "work",
     )
 
     assert result.last_known_state == SlurmStatus.completed
@@ -380,7 +342,7 @@ def test_run_subprocess_recovers_stale_connection(
 @patch("workflows.prefect_utils.slurm_flow.get_run_logger", return_value=MagicMock())
 @patch("workflows.prefect_utils.slurm_flow.create_markdown_artifact")
 @pytest.mark.django_db(transaction=True)
-def test_run_subprocess_recovers_stale_connection_after_preparation_job(
+def test_run_cluster_job_recovers_stale_connection_after_preparation_job(
     mock_create_markdown_artifact,
     mock_get_run_logger,
     mock_get_previous_job,
@@ -402,14 +364,14 @@ def test_run_subprocess_recovers_stale_connection_after_preparation_job(
     with connection.cursor() as cursor:
         cursor.execute("SET SESSION idle_session_timeout = '200ms'")
 
-    result = run_subprocess.fn(
+    result = run_cluster_job_task.fn(
         name="subprocess stale connection with preparation test",
         command="echo 'test'",
         expected_time=timedelta(seconds=2),
         memory="100M",
         environment={},
-        slurm_resubmit_policy=resubmit_policy,
-        workdir=tmp_path / "work",
+        resubmit_policy=resubmit_policy,
+        working_dir=tmp_path / "work",
     )
 
     assert result.last_known_state == SlurmStatus.completed
@@ -421,7 +383,7 @@ def test_run_subprocess_recovers_stale_connection_after_preparation_job(
 @patch("workflows.prefect_utils.slurm_flow.get_run_logger", return_value=MagicMock())
 @patch("workflows.prefect_utils.slurm_flow.create_markdown_artifact")
 @pytest.mark.django_db(transaction=True)
-def test_run_subprocess_timeout_recovers_stale_connection(
+def test_run_cluster_job_timeout_recovers_stale_connection(
     mock_create_markdown_artifact,
     mock_get_run_logger,
     mock_store_nextflow_trace,
@@ -432,105 +394,58 @@ def test_run_subprocess_timeout_recovers_stale_connection(
         cursor.execute("SET SESSION idle_session_timeout = '200ms'")
 
     with pytest.raises(SubprocessFailedException, match="Timed out"):
-        run_subprocess.fn(
+        run_cluster_job_task.fn(
             name="subprocess stale connection timeout test",
             command="sleep 0.5",
             expected_time=timedelta(seconds=0.3),
             memory="100M",
             environment={},
-            slurm_resubmit_policy=ResubmitAlwaysPolicy,
-            workdir=tmp_path / "work",
+            resubmit_policy=ResubmitAlwaysPolicy,
+            working_dir=tmp_path / "work",
         )
 
     connection.close()
 
 
-@patch("workflows.prefect_utils.slurm_flow.pyslurm.db.Job")
-@patch("workflows.prefect_utils.slurm_flow.close_stale_connections")
-@patch("workflows.prefect_utils.slurm_flow.get_run_logger", return_value=MagicMock())
-@pytest.mark.django_db
-def test_check_cluster_job_refreshes_stale_connection_before_poll(
-    mock_get_run_logger, mock_close_stale_connections, mock_slurm_job, tmp_path
-):
-    orchestrated_job = OrchestratedClusterJob.objects.create(
-        cluster_job_id=123,
-        flow_run_id=uuid.uuid4(),
-        job_submit_description=OrchestratedClusterJob.SlurmJobSubmitDescription(
-            name="check stale connection test",
-            time_limit="00-00:01:00",
-            memory_per_node="100M",
-            script="echo test",
-            working_directory=str(tmp_path),
-            environment="ALL",
-        ),
-        input_files_hashes=[],
-    )
-
-    fake_slurm_job = MagicMock(
-        state=SlurmStatus.completed.value,
-        working_directory=str(tmp_path),
-    )
-    mock_slurm_job.return_value.load.return_value = fake_slurm_job
-    status = check_cluster_job(orchestrated_job)
-
-    assert status == SlurmStatus.completed.value
-    mock_close_stale_connections.assert_called_once_with()
-
-
-@patch(
-    "workflows.prefect_utils.slurm_flow.run_cluster_job",
-    side_effect=lambda *args, **kwargs: time.sleep(0.5),
-)
-@patch("workflows.prefect_utils.slurm_flow.submit_cluster_job", return_value=2)
-@patch("workflows.prefect_utils.slurm_flow.get_run_logger", return_value=MagicMock())
-@patch("workflows.prefect_utils.slurm_flow.create_markdown_artifact")
 @pytest.mark.django_db(transaction=True)
-def test_start_or_attach_cluster_job_recovers_stale_connection_after_preparation(
-    mock_create_markdown_artifact,
-    mock_get_run_logger,
-    mock_submit_cluster_job,
-    mock_run_cluster_job,
-    mock_slurm_flow_run,
-    tmp_path,
+def test_job_uses_environment_and_relative_workdir(
+    prefect_harness, tmp_path, monkeypatch
 ):
-    workdir = tmp_path / "work"
-    workdir.mkdir()
-    prior_job_description = OrchestratedClusterJob.SlurmJobSubmitDescription(
-        name="slurm stale connection test",
-        time_limit="00-00:01:00",
-        memory_per_node="100M",
-        script="#!/bin/bash\nset -euo pipefail\necho 'test'\n",
-        working_directory=str(workdir),
-        environment="ALL",
+    """Preserve environment exports and resolve the job directory."""
+    monkeypatch.setattr(
+        "workflows.prefect_utils.slurm_flow.EMG_CONFIG.slurm.default_workdir",
+        str(tmp_path),
     )
-    OrchestratedClusterJob.objects.create(
-        cluster_job_id=1,
-        flow_run_id=uuid.uuid4(),
-        job_submit_description=prior_job_description,
-        input_files_hashes=[],
-        last_known_state=SlurmStatus.failed,
-    )
-    resubmit_policy = _SlurmResubmitPolicy(
-        policy_name="Resubmit with preparation command",
-        if_status_matches=[SlurmStatus.failed],
-        then_resubmit=True,
-        resubmit_needs_preparation_command="sleep 0.5",
-    )
-
-    with connection.cursor() as cursor:
-        cursor.execute("SET SESSION idle_session_timeout = '200ms'")
-
-    result = start_or_attach_cluster_job.fn(
-        name="slurm stale connection test",
-        command="echo 'test'",
-        expected_time=timedelta(minutes=1),
+    result = run_cluster_job(
+        name="environment test",
+        command='printf "%s" "$PIPELINE_LABEL"',
+        expected_time=timedelta(seconds=5),
         memory="100M",
-        slurm_resubmit_policy=resubmit_policy,
-        workdir=workdir,
-        make_workdir_first=True,
-        environment={},
+        environment={"PIPELINE_LABEL": "expected-label"},
+        working_dir=Path("relative"),
     )
+    assert result.job_submit_description.working_directory == str(tmp_path / "relative")
+    assert result.job_submit_description.environment == {
+        "PIPELINE_LABEL": "expected-label"
+    }
+    assert (tmp_path / "relative").is_dir()
 
-    assert result.id is not None
-    assert result.cluster_job_id != 1
-    connection.close()
+
+@pytest.mark.django_db(transaction=True)
+def test_default_policy_retries_failed_process(prefect_harness, tmp_path):
+    """Retry failed commands and reuse their subsequent successful result."""
+    kwargs = dict(
+        name="retry failed process",
+        command="if [ ! -f attempted ]; then touch attempted; exit 7; fi",
+        expected_time=timedelta(seconds=5),
+        memory="100M",
+        environment={},
+        working_dir=tmp_path,
+    )
+    with pytest.raises(SubprocessFailedException, match="exit code 7"):
+        run_cluster_job(**kwargs)
+    completed = run_cluster_job(**kwargs)
+    reused = run_cluster_job(**kwargs)
+    assert completed.last_known_state == SlurmStatus.completed
+    assert reused.id == completed.id
+    assert OrchestratedClusterJob.objects.count() == 2
