@@ -89,6 +89,7 @@ def run_rawreads_pipeline_via_samplesheet(
     samplesheet = make_samplesheet_rawreads(runs, nextflow_outdir / "samplesheet.csv")
 
     if wait_for_samplesheet_editing:
+
         class ResumeAfterSamplesheetEditingInput(RunInput):
             okay: bool = Field(
                 True, description="Resume the flow after editing the samplesheet."
