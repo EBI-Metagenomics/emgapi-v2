@@ -421,14 +421,13 @@ def prepare_assembly(
             private=mgnify_assembly.is_private,
             tpa=mgnify_assembly.assembly_study.id != mgnify_assembly.reads_study.id,
         )
-        assembly_manifest_writer.write()
+        manifest_paths = assembly_manifest_writer.write()
 
-    # assembly_uploader names manifests by the first 12 characters of the assembly's MD5.
-    # TODO: use the paths returned by write() once an assembly_uploader release (>1.3.6) returns them.
-    assembly_md5 = assembly_manifest.get_md5(assembly_path)
-    manifest = assembly_manifest_writer.upload_dir / Path(
-        f"{assembly_md5[:12]}.manifest"
-    )
+    if len(manifest_paths) != 1:
+        raise Exception(
+            f"Expected one manifest for assembly {mgnify_assembly}, got {len(manifest_paths)}: {manifest_paths}"
+        )
+    manifest = Path(manifest_paths[0])
     return manifest
 
 
