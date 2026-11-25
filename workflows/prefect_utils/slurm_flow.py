@@ -1,6 +1,7 @@
 import hashlib
 import logging
 import os
+import signal
 import subprocess
 import time
 from datetime import timedelta
@@ -203,7 +204,7 @@ def start_or_attach_cluster_job(
 
     ### Prepare working directory for job
     job_workdir = workdir
-    _ensure_absolute_workdir(job_workdir)
+    job_workdir = _ensure_absolute_workdir(job_workdir)
     if make_workdir_first and not job_workdir.exists():
         job_workdir.mkdir(parents=True)
     logger.info(f"Will use {job_workdir=}")
@@ -360,7 +361,7 @@ def run_subprocess(
 
     ### Prepare working directory for job
     job_workdir = workdir
-    _ensure_absolute_workdir(job_workdir)
+    job_workdir = _ensure_absolute_workdir(job_workdir)
     if make_workdir_first and not job_workdir.exists():
         job_workdir.mkdir(parents=True)
     logger.info(f"Will use {job_workdir=}")
@@ -411,6 +412,14 @@ def run_subprocess(
             logger.info(
                 f"Policy {slurm_resubmit_policy.policy_name} states we should not resubmit the job. Using {last_submitted_similar_job}."
             )
+            if not slurm_status_is_finished_successfully(
+                last_submitted_similar_job.last_known_state
+            ):
+                raise SubprocessFailedException(
+                    last_submitted_similar_job.cluster_job_id,
+                    None,
+                    f"Reused job is not successful: {last_submitted_similar_job.last_known_state}",
+                )
             return last_submitted_similar_job
 
     if (
@@ -442,6 +451,7 @@ def run_subprocess(
         stderr=subprocess.PIPE,
         env=env,
         text=True,
+        start_new_session=True,
     )
 
     nf_link = get_nextflow_tower_url()
@@ -473,7 +483,10 @@ def run_subprocess(
         _stdout, stderr = process.communicate(timeout=expected_time.total_seconds())
     except (TimeoutError, subprocess.TimeoutExpired) as e:
         logger.error(f"Failed to run subprocess: {e}")
-        process.kill()
+        try:
+            os.killpg(process.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
         process.wait()
 
         # Refresh Django connections before saving after the subprocess wait.
@@ -481,7 +494,9 @@ def run_subprocess(
         ocj.last_known_state = SlurmStatus.failed
         ocj.save()
 
-        raise SubprocessFailedException(process.pid, process.returncode, "Timed out")
+        raise SubprocessFailedException(
+            process.pid, process.returncode, "Timed out"
+        ) from e
 
     # Refresh Django connections before saving after the subprocess wait.
     close_stale_connections()

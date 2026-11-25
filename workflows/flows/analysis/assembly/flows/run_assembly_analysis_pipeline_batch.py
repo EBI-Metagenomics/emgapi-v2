@@ -37,7 +37,7 @@ from workflows.models import (
 from workflows.prefect_utils.build_cli_command import cli_command
 from workflows.prefect_utils.flows_utils import django_db_flow as flow
 from workflows.prefect_utils.slurm_flow import (
-    ClusterJobFailedException,
+    SubprocessFailedException,
     run_cluster_job,
 )
 from workflows.prefect_utils.slurm_policies import ResubmitAlwaysPolicy
@@ -71,7 +71,7 @@ def run_assembly_batch(
 
     :param assembly_analyses_batch_id: Unique identifier for the assembly analysis batch to process.
     :type assembly_analyses_batch_id: uuid.UUID
-    :raises ClusterJobFailedException: If the cluster job fails during the ASA pipeline execution.
+    :raises SubprocessFailedException: If the cluster job fails during the ASA pipeline execution.
     :raises Exception: For any unexpected errors encountered during the pipeline execution.
     """
     logger = get_run_logger()
@@ -205,7 +205,7 @@ def run_assembly_batch(
 
             error_type = (
                 "ASA pipeline failed"
-                if isinstance(e, ClusterJobFailedException)
+                if isinstance(e, SubprocessFailedException)
                 else "Unexpected error in ASA pipeline"
             )
             logger.error(
@@ -218,7 +218,7 @@ def run_assembly_batch(
                 asa_status=AssemblyAnalysisPipelineStatus.RUNNING
             ).update(asa_status=AssemblyAnalysisPipelineStatus.FAILED)
 
-            return
+            raise
 
     ######################
     # Import the results #

@@ -30,7 +30,7 @@ from workflows.prefect_utils.build_cli_command import cli_command
 from workflows.prefect_utils.flows_utils import django_db_flow as flow
 from workflows.prefect_utils.flows_utils import django_db_task as task
 from workflows.prefect_utils.slurm_flow import (
-    ClusterJobFailedException,
+    SubprocessFailedException,
     run_cluster_job,
 )
 from workflows.prefect_utils.slurm_policies import ResubmitAlwaysPolicy
@@ -165,7 +165,7 @@ def _run_map_batch(assembly_analyses_batch_id: uuid.UUID):
         assembly_analysis_batch.batch_analyses.filter(
             id__in=analyses_to_process_ids
         ).update(map_status=AssemblyAnalysisPipelineStatus.FAILED)
-        return
+        raise FileNotFoundError(error)
 
     analyses_to_process.update(map_status=AssemblyAnalysisPipelineStatus.RUNNING)
 
@@ -242,7 +242,7 @@ def _run_map_batch(assembly_analyses_batch_id: uuid.UUID):
     except Exception as e:
         error_type = (
             "MAP pipeline failed"
-            if isinstance(e, ClusterJobFailedException)
+            if isinstance(e, SubprocessFailedException)
             else "Unexpected error in MAP pipeline"
         )
         logger.error(f"{error_type} for study {mgnify_study.ena_study.accession}: {e}")
@@ -255,7 +255,7 @@ def _run_map_batch(assembly_analyses_batch_id: uuid.UUID):
             map_status=AssemblyAnalysisPipelineStatus.RUNNING
         ).update(map_status=AssemblyAnalysisPipelineStatus.FAILED)
 
-        return
+        raise
     else:
         remove_dir(nextflow_workdir)  # will also delete past "abandoned" nextflow files
 

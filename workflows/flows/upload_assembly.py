@@ -26,7 +26,6 @@ from workflows.prefect_utils.analyses_models_helpers import mark_assembly_status
 from workflows.prefect_utils.build_cli_command import cli_command
 from workflows.prefect_utils.env_context import UNSET, TemporaryEnv
 from workflows.prefect_utils.slurm_flow import (
-    ClusterJobFailedException,
     run_cluster_job,
 )
 from workflows.prefect_utils.slurm_policies import ResubmitIfFailedPolicy
@@ -430,7 +429,7 @@ def submit_assembly_slurm(
             resubmit_policy=ResubmitIfFailedPolicy,
             working_dir=manifest.parent,
         )
-    except ClusterJobFailedException:
+    except Exception:
         logger.error(
             f"Something went wrong running webin-cli upload for {mgnify_assembly}"
         )
@@ -438,6 +437,7 @@ def submit_assembly_slurm(
             mgnify_assembly,
             status=mgnify_assembly.AssemblyStates.ASSEMBLY_UPLOAD_FAILED,
         )
+        raise
     else:
         logger.info(f"Successfully ran webin-cli upload for {mgnify_assembly}")
         if dry_run:
@@ -469,6 +469,9 @@ def submit_assembly_slurm(
                 mark_assembly_status(
                     mgnify_assembly,
                     status=mgnify_assembly.AssemblyStates.ASSEMBLY_UPLOAD_FAILED,
+                )
+                raise RuntimeError(
+                    f"No assembly accession found after upload of {mgnify_assembly}"
                 )
 
 
@@ -528,7 +531,7 @@ def upload_assembly(
         logger.error(
             f"Assembly {mgnify_assembly} did not pass sanity check. No further action."
         )
-        return
+        raise ValueError(f"Assembly {mgnify_assembly} failed the sanity check")
 
     runs_with_unsupported_experiment_type = [
         run

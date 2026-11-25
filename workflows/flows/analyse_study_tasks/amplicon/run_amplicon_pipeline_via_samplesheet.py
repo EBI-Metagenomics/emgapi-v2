@@ -39,7 +39,6 @@ from workflows.nextflow_utils.samplesheets import queryset_hash
 from workflows.prefect_utils.build_cli_command import cli_command
 from workflows.prefect_utils.flows_utils import django_db_task as task
 from workflows.prefect_utils.slurm_flow import (
-    ClusterJobFailedException,
     run_cluster_job,
 )
 from workflows.prefect_utils.slurm_policies import ResubmitIfFailedPolicy
@@ -133,9 +132,10 @@ def run_amplicon_pipeline_via_samplesheet(
             working_dir=nextflow_outdir,
             resubmit_policy=ResubmitIfFailedPolicy,
         )
-    except ClusterJobFailedException:
+    except Exception:
         for analysis in amplicon_analyses:
             mark_analysis_as_failed(analysis)
+        raise
     else:
         # assume that if job finished, all finished... set statuses
         set_post_analysis_states(nextflow_outdir, amplicon_analyses)

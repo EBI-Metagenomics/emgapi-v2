@@ -1182,3 +1182,24 @@ def test_run_assembler_for_samplesheet_missing_assembled_runs_csv_not_all_qc_fai
             assembly.status["assembly_failed_reason"]
             == f"The miassembler output is missing the {tmp_path / 'out' / 'assembled_runs.csv'} file."
         )
+
+
+@pytest.mark.django_db(transaction=True)
+def test_assembler_process_failure_propagates(
+    prefect_harness, mgnify_assemblies, tmp_path
+):
+    """Mark failed assemblies and propagate the process failure."""
+    from workflows.prefect_utils.slurm_flow import (
+        SubprocessFailedException,
+    )
+
+    error = SubprocessFailedException(123, 7)
+    study = mgnify_assemblies[0].reads_study
+    with patch(
+        "workflows.flows.assemble_study_tasks.assemble_samplesheets.run_cluster_job",
+        side_effect=error,
+    ):
+        with pytest.raises(type(error)):
+            _run_samplesheet_with_reports(tmp_path, study, {})
+    for assembly in study.assemblies_reads.all():
+        assert assembly.status[assembly.AssemblyStates.ASSEMBLY_FAILED]

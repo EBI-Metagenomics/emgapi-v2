@@ -150,16 +150,10 @@ def test_prefect_assembly_upload_flow_post_assembly_sanity_check_not_passed(
 
     assembly = mgnify_assembly_completed_uploader_sanity_check.first()
 
-    logged_uploader_result = run_flow_and_capture_logs(
-        upload_assembly,
-        assembly_id=assembly.id,
-        dry_run=True,
-    )
-
-    assert (
-        f"Assembly {assembly} did not pass sanity check. No further action."
-        in logged_uploader_result.logs
-    )
+    state = upload_assembly(assembly_id=assembly.id, dry_run=True, return_state=True)
+    assert state.is_failed()
+    with pytest.raises(ValueError, match="failed the sanity check"):
+        state.result()
 
     assert (
         mg_models.Assembly.objects.filter(status__post_assembly_qc_failed=True).count()

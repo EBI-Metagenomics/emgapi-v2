@@ -30,7 +30,6 @@ from workflows.prefect_utils.build_cli_command import cli_command
 from workflows.prefect_utils.flows_utils import django_db_flow as flow
 from workflows.prefect_utils.flows_utils import django_db_task as task
 from workflows.prefect_utils.slurm_flow import (
-    ClusterJobFailedException,
     run_cluster_job,
 )
 from workflows.prefect_utils.slurm_policies import (
@@ -235,11 +234,12 @@ def run_assembler_for_samplesheet(
             resubmit_policy=ResubmitIfFailedPolicy,
             working_dir=nextflow_outdir,
         )
-    except ClusterJobFailedException:
+    except Exception:
         for assembly in assemblies:
             mark_assembly_status(
                 assembly, status=analyses.models.Assembly.AssemblyStates.ASSEMBLY_FAILED
             )
+        raise
     else:
         # The pipeline produces top level end of execution reports, which contain
         # the list of the runs that were assembled, and those that were not.

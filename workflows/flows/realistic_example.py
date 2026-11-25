@@ -12,7 +12,7 @@ from activate_django_first import EMG_CONFIG
 from ena.models import Sample, Study
 from workflows.prefect_utils.input_helpers import ask_every_time_suspend_for_input_key
 from workflows.prefect_utils.slurm_flow import (
-    ClusterJobFailedException,
+    SubprocessFailedException,
     run_cluster_job,
 )
 from workflows.prefect_utils.slurm_policies import (
@@ -147,13 +147,13 @@ def realistic_example(accession: str):
                 / "realistic-example-workdir",
                 environment="ALL",  # copy env vars from the prefect agent into the slurm job
             )
-        except ClusterJobFailedException as e:
-            # We can optionally handle errors by catching this exception, rather than crashing the entire flow.
+        except SubprocessFailedException as e:
+            # Preserve the process failure in the parent flow.
             logger.warning(
                 f"Something went wrong running pipeline for {sample_accession}"
             )
             logger.error(e)
-            slurm_job_results.append(False)
+            raise
         else:
             slurm_job_results.append(orchestrated_cluster_job)
 

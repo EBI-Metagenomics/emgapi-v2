@@ -11,7 +11,7 @@ from workflows.models import (
     AssemblyAnalysisBatch,
     AssemblyAnalysisPipelineStatus,
 )
-from workflows.prefect_utils.slurm_flow import ClusterJobFailedException
+from workflows.prefect_utils.slurm_flow import SubprocessFailedException
 
 
 @pytest.mark.django_db(transaction=True)
@@ -166,7 +166,7 @@ def test_run_map_batch_skips_failed_virify_without_qc_status(
 @patch("workflows.flows.analysis.assembly.flows.run_map_batch.run_cluster_job")
 @patch("workflows.flows.analysis.assembly.flows.run_map_batch.flow_run")
 @patch("workflows.flows.analysis.assembly.flows.run_map_batch.make_samplesheet_for_map")
-def test_run_map_batch_cluster_job_failed(
+def test_run_map_batch_process_failed(
     mock_make_samplesheet,
     mock_flow_run,
     mock_run_cluster_job,
@@ -186,9 +186,7 @@ def test_run_map_batch_cluster_job_failed(
     samplesheet_path.write_text("sample,assembly,proteins,virify_gff\n")
     mock_make_samplesheet.return_value = (samplesheet_path, 1)
 
-    mock_run_cluster_job.side_effect = ClusterJobFailedException(
-        "Cluster job failed", "FAILED"
-    )
+    mock_run_cluster_job.side_effect = SubprocessFailedException(123, 1)
 
     # Create analyses with assemblies using fixtures
     Analysis.objects.create(
@@ -218,7 +216,8 @@ def test_run_map_batch_cluster_job_failed(
         map_status=AssemblyAnalysisPipelineStatus.PENDING,
     )
 
-    run_map_batch(assembly_analyses_batch_id=batch.id)
+    with pytest.raises(SubprocessFailedException):
+        run_map_batch.with_options(retries=0)(assembly_analyses_batch_id=batch.id)
 
     # Verify that the task was called with the correct IDs
     mock_make_samplesheet.assert_called_once()
@@ -271,7 +270,8 @@ def test_run_map_batch_no_samplesheet(
     )
 
     # Call the flow-function-batch results dir won't have samplesheet
-    run_map_batch(assembly_analyses_batch_id=batch.id)
+    with pytest.raises(FileNotFoundError):
+        run_map_batch.with_options(retries=0)(assembly_analyses_batch_id=batch.id)
 
     # Verify that the task was called with the correct IDs
     mock_make_samplesheet.assert_called_once()
