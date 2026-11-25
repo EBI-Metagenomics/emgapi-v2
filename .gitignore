@@ -43,3 +43,5 @@ slurm-dev-environment/fs/hps/ebi-search-e2e
 .claude/*
 CLAUDE.md
 slurm-*.out
+
+.mi/

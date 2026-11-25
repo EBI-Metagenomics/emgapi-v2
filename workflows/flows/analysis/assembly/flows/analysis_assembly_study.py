@@ -5,6 +5,7 @@ from typing import List, Optional, Type
 from prefect import get_run_logger, suspend_flow_run
 from prefect.deployments import run_deployment
 from prefect.input import RunInput
+from prefect.states import Completed
 from pydantic import Field
 
 from activate_django_first import EMG_CONFIG
@@ -204,4 +205,13 @@ def analysis_assembly_study(
     logger.info(
         f"All {len(batches)} batches submitted successfully. "
         "Finalization will be triggered automatically when all batches complete."
+    )
+
+    return Completed(
+        name="Completed (pipeline runs are scheduled)",
+        message=(
+            f"Scheduled {len(batches)} assembly analysis batches. "
+            "Pipeline runs are not yet completed. "
+            "Finalization will run after all batches complete."
+        ),
     )
