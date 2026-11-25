@@ -127,6 +127,10 @@ def analysis_amplicon_study(study_accession: str):
             None,
             description="Webin ID of study owner, if data is private. Can be left as None, if public.",
         )
+        wait_for_samplesheet_editing: bool = Field(
+            False,
+            description="If True, suspend before each amplicon pipeline run to allow samplesheet editing.",
+        )
 
     analyse_study_input: AnalyseStudyInput = suspend_flow_run(
         wait_for_input=AnalyseStudyInput.with_initial_data(
@@ -229,7 +233,13 @@ def analysis_amplicon_study(study_accession: str):
             f"Working on amplicon analyses: {analyses_chunk[0]}-{analyses_chunk[-1]}"
         )
         run_amplicon_pipeline_via_samplesheet(
-            mgnify_study, analyses_chunk, study_workdir, study_outdir
+            mgnify_study,
+            analyses_chunk,
+            study_workdir,
+            study_outdir,
+            wait_for_samplesheet_editing=getattr(
+                analyse_study_input, "wait_for_samplesheet_editing", False
+            ),
         )
 
     merge_study_summaries(

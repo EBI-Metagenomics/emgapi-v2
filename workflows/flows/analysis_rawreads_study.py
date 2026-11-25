@@ -131,6 +131,10 @@ def analysis_rawreads_study(study_accession: str):
             None,
             description="Webin ID of study owner, if data is private. Can be left as None, if public.",
         )
+        wait_for_samplesheet_editing: bool = Field(
+            False,
+            description="If True, suspend before each raw-reads pipeline run to allow samplesheet editing.",
+        )
 
     analyse_study_input: AnalyseStudyInput = suspend_flow_run(
         wait_for_input=AnalyseStudyInput.with_initial_data(description=(f"""\
@@ -252,6 +256,9 @@ def analysis_rawreads_study(study_accession: str):
             study_workdir,
             study_outdir,
             functional_analysis=analyse_study_input.functional_analysis,
+            wait_for_samplesheet_editing=getattr(
+                analyse_study_input, "wait_for_samplesheet_editing", False
+            ),
         )
 
     merge_study_summaries(
