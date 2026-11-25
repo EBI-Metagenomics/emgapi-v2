@@ -27,6 +27,10 @@ class IncompleteRerun(Exception):
     """The assembly proteins record already exists, but some of its proteins have no MGYP."""
 
 
+class AnalysisAlreadyRecorded(Exception):
+    """The MGYA already has an assembly proteins record, of another assembly, source or pipeline version."""
+
+
 def accession_assembly_proteins(
     assembly: str,
     source: str,
@@ -154,6 +158,8 @@ def stage(
 ) -> dict[bytes, int] | None:
     """The transaction: the ids of the proteins the lookup did not find, or None if the assembly proteins record exists.
 
+    Raises AnalysisAlreadyRecorded when only the MGYA has a record.
+
     :param assembly_id: The assembly's id, from register_assembly().
     :param source: The pipeline that predicted the genes: "assembly_analysis" or "gene_calling".
     :param pipeline_version: The source pipeline's major.minor.
@@ -175,7 +181,19 @@ def stage(
         except IntegrityError as e:
             if not isinstance(e.__cause__, UniqueViolation):
                 raise
-            return None
+            if AssemblyProteins.objects.filter(
+                assembly_id=assembly_id,
+                source=source,
+                pipeline_version=pipeline_version,
+            ).exists():
+                return None
+            existing = AssemblyProteins.objects.select_related("assembly").get(
+                analysis_accession=analysis_accession
+            )
+            raise AnalysisAlreadyRecorded(
+                f"{analysis_accession} already has the assembly proteins record"
+                f" {existing.assembly.accession} {existing.source} {existing.pipeline_version}"
+            ) from e
 
         # Including the ones another job committed since the lookup.
         staged = Protein.objects.allocate(

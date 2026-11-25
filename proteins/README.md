@@ -88,6 +88,7 @@ The schedules and the trigger are inactive until cutover.
 | An analysis fails in a chunk | Read its error in the chunk flow run. Fix the cause, then run `ingest_analysis_proteins` for that MGYA, or `ingest_assembly_proteins` again. |
 | `InvalidInput` | Investigate the gene caller output of that analysis. Nothing was written. |
 | `IncompleteRerun` | Find out why a second run of the same ERZ and `major.minor` predicted proteins that the first did not. Nothing was written. |
+| `AnalysisAlreadyRecorded` | The MGYA already has a record of another ERZ or `major.minor`, named in the error. Find out which is right, that record or the analysis in emgapi-v2. Nothing was written. |
 | `UnsupportedPipelineVersion`, `NotImplementedError`, or the check reports a pipeline version with no gene-caller rule | The pipeline version of the analysis has no rule yet. Add it to `GeneCaller.BY_PIPELINE_VERSION` and `Analysis.predicted_genes_files()`. |
 | A dataset update failed | Run it again, or wait for the next run. Its first step deletes what a failed update left, and marks a committed day complete. |
 | The dataset update logs "withholding the records of N MGYAs", and the check reports MGYAs not in emgapi-v2 | Those MGYAs of the MGYP database are not in emgapi-v2, so releases publish none of their proteins. Find out why the analyses were deleted, and restore them: the next update puts them back. |

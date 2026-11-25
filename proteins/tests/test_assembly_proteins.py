@@ -7,6 +7,7 @@ import pytest
 from django.db import connections
 
 from proteins.accessioning.assembly_proteins import (
+    AnalysisAlreadyRecorded,
     IncompleteRerun,
     accession_assembly_proteins,
     lookup,
@@ -159,6 +160,18 @@ def test_rerun_with_a_protein_without_mgyp_fails(erz101):
             erz101._replace(proteins=sorted([*erz101.proteins, new])),
             "MGYA1",
         )
+    assert counts() == before
+
+
+def test_an_mgya_recorded_under_another_version_fails_and_names_its_record(erz101):
+    accession_assembly_proteins("ERZ101", SOURCE, "6.0", erz101, "MGYA1")
+    before = counts()
+
+    with pytest.raises(
+        AnalysisAlreadyRecorded,
+        match="MGYA1 already has the assembly proteins record ERZ101 assembly_analysis 6.0",
+    ):
+        accession_assembly_proteins("ERZ101", SOURCE, "6.1", erz101, "MGYA1")
     assert counts() == before
 
 
