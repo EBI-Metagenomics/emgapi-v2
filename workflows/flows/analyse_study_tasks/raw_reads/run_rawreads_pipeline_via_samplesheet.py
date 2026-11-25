@@ -4,6 +4,7 @@ from typing import List, Optional, Union
 
 from django.conf import settings
 from django.utils.text import slugify
+from prefect.cache_policies import NONE
 
 from activate_django_first import EMG_CONFIG
 
@@ -30,7 +31,7 @@ from workflows.flows.analyse_study_tasks.shared.study_summary import (
 from workflows.flows.analysis import AnalysisType
 from workflows.nextflow_utils.samplesheets import queryset_hash
 from workflows.prefect_utils.build_cli_command import cli_command
-from workflows.prefect_utils.flows_utils import django_db_flow as flow
+from workflows.prefect_utils.flows_utils import django_db_task as task
 from workflows.prefect_utils.slurm_flow import (
     ClusterJobFailedException,
     run_cluster_job,
@@ -38,7 +39,11 @@ from workflows.prefect_utils.slurm_flow import (
 from workflows.prefect_utils.slurm_policies import ResubmitIfFailedPolicy
 
 
-@flow(name="Run raw-reads analysis pipeline-v6 via samplesheet", log_prints=True)
+@task(
+    cache_policy=NONE,
+    name="Run raw-reads analysis pipeline-v6 via samplesheet",
+    log_prints=True,
+)
 def run_rawreads_pipeline_via_samplesheet(
     mgnify_study: analyses.models.Study,
     rawreads_analysis_ids: List[Union[str, int]],

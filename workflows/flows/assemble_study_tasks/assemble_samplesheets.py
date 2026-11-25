@@ -4,7 +4,8 @@ from typing import Iterable, Optional
 
 import pandas as pd
 from django.db.models import Q
-from prefect import flow, get_run_logger, task
+from prefect import get_run_logger
+from prefect.cache_policies import NONE
 
 from activate_django_first import EMG_CONFIG
 
@@ -26,6 +27,8 @@ from workflows.flows.assemble_study_tasks.miassembler_reports import (
 )
 from workflows.prefect_utils.analyses_models_helpers import mark_assembly_status
 from workflows.prefect_utils.build_cli_command import cli_command
+from workflows.prefect_utils.flows_utils import django_db_flow as flow
+from workflows.prefect_utils.flows_utils import django_db_task as task
 from workflows.prefect_utils.slurm_flow import (
     ClusterJobFailedException,
     run_cluster_job,
@@ -152,7 +155,7 @@ def update_assemblers_and_contaminant_ref_of_assemblies_from_samplesheet(
             latest_assembly.save()
 
 
-@flow(flow_run_name="Assemble {samplesheet_csv}", persist_result=True)
+@task(task_run_name="Assemble {samplesheet_csv}", cache_policy=NONE, log_prints=True)
 def run_assembler_for_samplesheet(
     mgnify_study: analyses.models.Study,
     samplesheet_csv: Path,
@@ -335,4 +338,6 @@ def run_standalone_assembler_for_samplesheet(
         Path(EMG_CONFIG.slurm.default_workdir) / f"{mgys_study_accession}_miassembler"
     )
     study = analyses.models.Study.objects.get(accession=mgys_study_accession)
-    run_assembler_for_samplesheet(study, samplesheet_csv, samplesheet_hash, workdir)
+    run_assembler_for_samplesheet(
+        study, samplesheet_csv, samplesheet_hash, workdir, None
+    )

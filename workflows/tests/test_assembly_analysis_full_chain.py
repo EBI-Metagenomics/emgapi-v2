@@ -223,7 +223,8 @@ def test_full_chain_success(
     setup_map_output_helpers(map_outdir, assembly_accession)
 
     # Run the full chain
-    run_assembly_batch(assembly_analyses_batch_id=batch.id)
+    state = run_assembly_batch(assembly_analyses_batch_id=batch.id, return_state=True)
+    assert state.is_completed()
 
     # Verify ASA execution
     batch.refresh_from_db()
@@ -243,6 +244,15 @@ def test_full_chain_success(
 
     # Verify summary generation was called
     assert mock_generate_summary.called
+
+    from workflows.prefect_utils.testing_utils import get_logs_for_flow_run
+
+    logs = get_logs_for_flow_run(state.state_details.flow_run_id)
+    assert "VIRify pipeline completed successfully" in logs
+    assert "MAP pipeline completed successfully" in logs
+    batch.refresh_from_db()
+    assert batch.virify_flow_run_id == str(state.state_details.flow_run_id)
+    assert batch.map_flow_run_id == str(state.state_details.flow_run_id)
 
 
 @pytest.mark.django_db(transaction=True)

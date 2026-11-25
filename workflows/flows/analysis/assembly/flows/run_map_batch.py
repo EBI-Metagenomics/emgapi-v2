@@ -5,6 +5,7 @@ from pathlib import Path
 from django.db import transaction
 from django.db.models import Q
 from prefect import get_run_logger
+from prefect.cache_policies import NONE
 from prefect.runtime import flow_run
 
 from activate_django_first import EMG_CONFIG
@@ -27,6 +28,7 @@ from workflows.models import (
 )
 from workflows.prefect_utils.build_cli_command import cli_command
 from workflows.prefect_utils.flows_utils import django_db_flow as flow
+from workflows.prefect_utils.flows_utils import django_db_task as task
 from workflows.prefect_utils.slurm_flow import (
     ClusterJobFailedException,
     run_cluster_job,
@@ -56,13 +58,32 @@ def run_map_batch(assembly_analyses_batch_id: uuid.UUID):
 
     It doesn't validate the results or import them, but the results will be stored in the batch workspace.
 
-    This flow won't raise an exception if the MAP pipeline fails unless raise_on_failure is set to True.
-    This behavior is useful for batch processing, where we want to continue processing batches even if one fails.
-
     :param assembly_analyses_batch_id: The AssemblyAnalysisBatch to process
-    :param raise_on_failure: Raise an exception if the MAP pipeline fails
     """
 
+    return run_map_batch_task(assembly_analyses_batch_id)
+
+
+@task(
+    task_run_name="Run MAP Batch: {assembly_analyses_batch_id}",
+    cache_policy=NONE,
+    log_prints=True,
+)
+def run_map_batch_task(assembly_analyses_batch_id: uuid.UUID):
+    """Run MAP within the parent flow and refresh batch counts.
+
+    :param assembly_analyses_batch_id: The assembly analysis batch identifier.
+    :return: None.
+    """
+    try:
+        return _run_map_batch(assembly_analyses_batch_id)
+    finally:
+        batch = AssemblyAnalysisBatch.objects.get(id=assembly_analyses_batch_id)
+        batch.update_pipeline_status_counts()
+
+
+def _run_map_batch(assembly_analyses_batch_id: uuid.UUID):
+    """Execute MAP for the selected batch."""
     # TODO: REFACTOR: There is a bit of repetition on this method:
     # `make_samplesheet_for_map` will also pull the analyses-batches from the DB
     # The status update process is done in a very "manual" way.. a few more generalistic methods in

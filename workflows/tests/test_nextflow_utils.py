@@ -4,6 +4,7 @@ from datetime import timedelta
 from pathlib import Path
 
 import pytest
+from prefect import flow
 
 import analyses.models
 import ena.models
@@ -12,9 +13,15 @@ from workflows.nextflow_utils.samplesheets import (
     queryset_hash,
     queryset_to_samplesheet,
 )
-from workflows.prefect_utils.slurm_flow import run_cluster_job
+from workflows.prefect_utils.slurm_flow import run_cluster_job as run_job_task
 from workflows.prefect_utils.slurm_policies import ResubmitAlwaysPolicy
 from workflows.prefect_utils.slurm_status import SlurmStatus
+
+
+@flow
+def run_cluster_job(**kwargs):
+    """Run the job task with a parent flow identifier."""
+    return run_job_task(**kwargs)
 
 
 @pytest.mark.django_db(transaction=True, reset_sequences=True)

@@ -10,6 +10,7 @@ from unittest.mock import patch
 import pandas as pd
 import pytest
 from django.conf import settings
+from prefect import flow
 from prefect.artifacts import Artifact
 from pydantic import BaseModel
 
@@ -1087,6 +1088,7 @@ def test_reference_genome_selection(prefect_harness, mgnify_assemblies, caplog):
     assert ref.startswith("chicken")
 
 
+@flow
 def _run_samplesheet_with_reports(
     tmp_path: Path,
     study: analyses.models.Study,
