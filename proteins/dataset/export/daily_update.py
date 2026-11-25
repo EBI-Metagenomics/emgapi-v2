@@ -73,12 +73,16 @@ HELD = (
     " GROUP BY r.assembly_id HAVING count(l.id) BETWEEN 1 AND count(*) - 1"
 )
 # The lowest id of each contig hash, and of each occurrence's contig, start, end, strand and
-# protein, in the held assemblies' rows.
+# protein, in the held assemblies' rows. An occurrence's contig is the lowest id of its hash, since
+# a migrated occurrence may be on a higher-id copy of its contig.
 EXISTING = {
-    "contig": "SELECT assembly_id, hash, min(id) AS id FROM {}"
+    "contig": "SELECT assembly_id, hash, min(id) AS id FROM contig_files"
     " WHERE assembly_id IN (SELECT assembly_id FROM held) GROUP BY ALL",
-    "occurrence": "SELECT contig_id, start_position, end_position, strand, protein_id, min(id) AS id"
-    " FROM {} WHERE assembly_id IN (SELECT assembly_id FROM held) GROUP BY ALL",
+    "occurrence": "SELECT e.id AS contig_id, o.start_position, o.end_position, o.strand,"
+    " o.protein_id, min(o.id) AS id FROM occurrence_files o"
+    " JOIN contig_files c ON c.id = o.contig_id"
+    " JOIN existing_contig e ON e.assembly_id = c.assembly_id AND e.hash = c.hash"
+    " WHERE o.assembly_id IN (SELECT assembly_id FROM held) GROUP BY ALL",
 }
 # The id each staged contig and occurrence takes: the lowest existing one of its assembly that it
 # matches, or else the lowest staged one.
@@ -326,9 +330,7 @@ def write_day_files(root: Path, day: date, staged: Staged) -> dict[str, int]:
                 con.register(
                     f"{table}_files", parquet_files.SCHEMAS[table].empty_table()
                 )
-            con.execute(
-                f"CREATE TEMP TABLE existing_{table} AS {sql.format(f'{table}_files')}"
-            )
+            con.execute(f"CREATE TEMP TABLE existing_{table} AS {sql}")
         for sql in MATCH:
             con.execute(sql)
         for table, sql in DAY_FILES.items():

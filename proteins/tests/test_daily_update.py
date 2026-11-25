@@ -373,15 +373,19 @@ def test_copies_of_a_contig_in_one_record_are_one_contig_with_their_genes_merged
     assert sorted((id,) for id, *_ in dataset["occurrence_analysis"]) == sorted(links)
 
 
+@pytest.mark.parametrize("occurrences_on", ["contigs", "contig-copies"])
 def test_an_assembly_holding_a_contig_and_an_occurrence_twice_matches_their_lowest_ids(
-    root, stage
+    root, stage, occurrences_on
 ):
     stage("ERZ101")
     run(D1)
-    # As migrated data may have: each contig and occurrence again, with a higher id.
+    # As migrated data may have: each contig and occurrence again, with a higher id, and the
+    # occurrences either on their contigs or on the contigs' copies.
     for table in ("contig", "occurrence"):
         path = root / table / f"day={D1}" / "part-000.parquet"
         rows = pq.read_table(path).to_pylist()
+        if table == "occurrence" and occurrences_on == "contig-copies":
+            rows = [{**row, "contig_id": row["contig_id"] + 10**9} for row in rows]
         copies = [{**row, "id": row["id"] + 10**9} for row in rows]
         parquet_files.write(path, table, pa.Table.from_pylist(rows + copies))
     originals = {id for id, *_ in day_rows(root, "occurrence", D1) if id < 10**9}
