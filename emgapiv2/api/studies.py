@@ -7,6 +7,7 @@ from ninja_extra.schemas import NinjaPaginationResponseSchema
 from pydantic import Field
 
 import analyses.models
+from analyses.pipeline_versions import is_v6_family
 from analyses.schemas import (
     MGnifyAnalysis,
     MGnifyPublication,
@@ -51,7 +52,7 @@ class StudyListFilters(BiomeFilter):
     def filter_has_analyses_from_pipeline(self, version: str | None) -> Q:
         if not version:
             return Q()
-        if version.lower().startswith("v6"):
+        if is_v6_family(version):
             return Q(features__has_v6_analyses=True)
         if version == analyses.models.Analysis.PipelineVersions.v5:
             # TODO

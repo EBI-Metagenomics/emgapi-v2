@@ -11,6 +11,7 @@ from pydantic import Field
 from activate_django_first import EMG_CONFIG
 
 import analyses.models
+from analyses.pipeline_versions import V6_FAMILY_PATTERN
 from workflows.data_io_utils.schemas import (
     AssemblyResultSchema,
     MapResultSchema,
@@ -299,7 +300,7 @@ def import_out_of_production_assembly_analysis_results(
 
     mgnify_study.refresh_from_db()
     mgnify_study.features.has_v6_analyses = mgnify_study.analyses.filter(
-        pipeline_version=analyses.models.Analysis.PipelineVersions.v6, is_ready=True
+        pipeline_version__iregex=V6_FAMILY_PATTERN, is_ready=True
     ).exists()
     mgnify_study.save()
 

@@ -186,7 +186,7 @@ def test_finalize_assembly_study_features_update(
     # The finalization flow needs at least one v6 analysis to be ready (which is imported through the generated field
     # is ready)
     analysis = study.analyses.first()
-    analysis.pipeline_version = Analysis.PipelineVersions.v6
+    analysis.pipeline_version = "V6.99"
     analysis.status[Analysis.AnalysisStates.ANALYSIS_ANNOTATIONS_IMPORTED] = True
     analysis.save()
 
@@ -196,9 +196,7 @@ def test_finalize_assembly_study_features_update(
     assert study.features.has_v6_analyses is True
 
     # Now test with no ready v6 analyses
-    Analysis.objects.filter(
-        study=study, pipeline_version=Analysis.PipelineVersions.v6
-    ).delete()
+    Analysis.objects.filter(study=study, pipeline_version="V6.99").delete()
 
     finalize_assembly_study(study.accession)
     study.refresh_from_db()

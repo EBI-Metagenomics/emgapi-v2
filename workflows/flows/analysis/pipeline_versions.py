@@ -30,21 +30,3 @@ def get_current_pipeline_version_for_experiment_type(
     pipeline_config = get_pipeline_config_for_experiment_type(experiment_type)
     pipeline_config.check_pipeline_version()
     return Analysis.pipeline_version_from_config(pipeline_config.pipeline_version)
-
-
-def get_v6_family_pipeline_versions_for_experiment_type(
-    experiment_type: Analysis.ExperimentTypes | str,
-) -> tuple[Analysis.PipelineVersions, ...]:
-    # TODO: remove after all legacy data are imported
-    normalized_experiment_type = (
-        experiment_type
-        if isinstance(experiment_type, Analysis.ExperimentTypes)
-        else Analysis.ExperimentTypes(experiment_type)
-    )
-    if normalized_experiment_type == Analysis.ExperimentTypes.AMPLICON:
-        return (
-            Analysis.PipelineVersions.v6,
-            Analysis.PipelineVersions.v6_1,
-            Analysis.PipelineVersions.v6_2,
-        )
-    return (Analysis.PipelineVersions.v6,)

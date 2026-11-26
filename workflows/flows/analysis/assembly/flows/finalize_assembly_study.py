@@ -5,6 +5,7 @@ from activate_django_first import EMG_CONFIG  # noqa
 
 import analyses.models
 import workflows.models
+from analyses.pipeline_versions import V6_FAMILY_PATTERN
 from workflows.flows.analyse_study_tasks.shared.copy_v6_pipeline_results import (
     copy_v6_study_summaries,
 )
@@ -101,7 +102,7 @@ def finalize_assembly_study(study_accession: str):
     mgnify_study.refresh_from_db()
 
     mgnify_study.features.has_v6_analyses = mgnify_study.analyses.filter(
-        pipeline_version=analyses.models.Analysis.PipelineVersions.v6, is_ready=True
+        pipeline_version__iregex=V6_FAMILY_PATTERN, is_ready=True
     ).exists()
 
     mgnify_study.save()

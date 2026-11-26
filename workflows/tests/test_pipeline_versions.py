@@ -5,24 +5,11 @@ import pytest
 from analyses.models import Analysis
 from workflows.flows.analysis.pipeline_versions import (
     get_current_pipeline_version_for_experiment_type,
-    get_v6_family_pipeline_versions_for_experiment_type,
 )
 
 AMPLICON_CONFIG = (
     "workflows.flows.analysis.pipeline_versions.EMG_CONFIG.amplicon_pipeline"
 )
-
-
-@pytest.mark.parametrize(
-    "experiment_type",
-    [Analysis.ExperimentTypes.AMPLICON, Analysis.ExperimentTypes.AMPLICON.value],
-)
-def test_get_amplicon_v6_family_pipeline_versions(experiment_type):
-    assert get_v6_family_pipeline_versions_for_experiment_type(experiment_type) == (
-        Analysis.PipelineVersions.v6,
-        Analysis.PipelineVersions.v6_1,
-        Analysis.PipelineVersions.v6_2,
-    )
 
 
 @pytest.mark.parametrize(

@@ -5,13 +5,9 @@ from django.conf import settings
 from django.core.management.base import BaseCommand
 
 import analyses.models
+from analyses.pipeline_versions import V6_FAMILY_PATTERN, is_v6_family
 from workflows.data_io_utils.mgnify_v6_utils.amplicon import (
     import_primer_identification,
-)
-
-V6_PRIMER_IDENTIFICATION_PIPELINE_VERSIONS = (
-    analyses.models.Analysis.PipelineVersions.v6,
-    analyses.models.Analysis.PipelineVersions.v6_1,
 )
 
 
@@ -37,7 +33,7 @@ def import_primer_identification_for_analysis(
     if analysis.experiment_type != analysis.ExperimentTypes.AMPLICON:
         return (analysis.accession, False, "Not an amplicon analysis")
 
-    if analysis.pipeline_version not in V6_PRIMER_IDENTIFICATION_PIPELINE_VERSIONS:
+    if not is_v6_family(analysis.pipeline_version):
         return (analysis.accession, False, "Pipeline version is older than v6")
 
     if not analysis.status.get(analysis.AnalysisStates.ANALYSIS_ANNOTATIONS_IMPORTED):
@@ -82,7 +78,7 @@ class Command(BaseCommand):
             analyses.models.Analysis.objects.select_related("run")
             .filter(
                 experiment_type=analyses.models.Analysis.ExperimentTypes.AMPLICON,
-                pipeline_version__in=V6_PRIMER_IDENTIFICATION_PIPELINE_VERSIONS,
+                pipeline_version__iregex=V6_FAMILY_PATTERN,
             )
             .filter_by_statuses(
                 [analyses.models.Analysis.AnalysisStates.ANALYSIS_ANNOTATIONS_IMPORTED]
