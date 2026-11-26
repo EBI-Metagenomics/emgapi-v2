@@ -13,6 +13,7 @@ from activate_django_first import EMG_CONFIG
 import analyses.base_models.with_experiment_type_models
 import analyses.models
 import ena.models
+from analyses.pipeline_versions import V6_FAMILY_PATTERN
 from workflows.ena_utils.ena_api_requests import (
     get_study_from_ena,
     get_study_readruns_from_ena,
@@ -47,7 +48,6 @@ from workflows.flows.analyse_study_tasks.shared.study_summary import (
 from workflows.flows.analysis import AnalysisType
 from workflows.flows.analysis.pipeline_versions import (
     get_current_pipeline_version_for_experiment_type,
-    get_v6_family_pipeline_versions_for_experiment_type,
 )
 from workflows.flows.assemble_study import get_biomes_as_choices
 from workflows.prefect_utils.analyses_models_helpers import (
@@ -252,9 +252,7 @@ def analysis_amplicon_study(study_accession: str):
 
     mgnify_study.refresh_from_db()
     mgnify_study.features.has_v6_analyses = mgnify_study.analyses.filter(
-        pipeline_version__in=get_v6_family_pipeline_versions_for_experiment_type(
-            analyses.models.Analysis.ExperimentTypes.AMPLICON
-        ),
+        pipeline_version__iregex=V6_FAMILY_PATTERN,
         is_ready=True,
     ).exists()
     # TODO: remove has_v6_analyses from features json once all legacy data imported

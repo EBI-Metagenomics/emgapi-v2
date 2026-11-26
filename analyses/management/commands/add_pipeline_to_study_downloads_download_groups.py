@@ -1,7 +1,9 @@
 from django.core.management.base import BaseCommand
+from semver import Version
 
 from analyses.base_models.with_experiment_type_models import WithExperimentTypeModel
-from analyses.models import Analysis, Study
+from analyses.models import Study
+from analyses.pipeline_versions import is_v6_family
 
 
 class Command(BaseCommand):
@@ -9,15 +11,22 @@ class Command(BaseCommand):
 
     @staticmethod
     def _infer_pipeline_version(analyses, inferred_type: str) -> str:
-        if inferred_type == "amplicon":
-            pipeline_versions = set(analyses.values_list("pipeline_version", flat=True))
-            if Analysis.PipelineVersions.v6_2 in pipeline_versions:
-                return "v6.2"
-            if Analysis.PipelineVersions.v6_1 in pipeline_versions:
-                return "v6.1"
-            if Analysis.PipelineVersions.v6 in pipeline_versions:
-                return "v6"
-        return "v6"
+        if inferred_type != "amplicon":
+            return "v6"
+
+        v6_versions = [
+            version
+            for version in analyses.values_list("pipeline_version", flat=True)
+            if is_v6_family(version)
+        ]
+        latest_version = max(
+            v6_versions,
+            key=lambda version: Version.parse(
+                version[1:], optional_minor_and_patch=True
+            ),
+            default="v6",
+        )
+        return latest_version.lower()
 
     def handle(self, *args, **options):
         # Filter studies with non-empty downloads list. In Django JSONField, we can exclude []
