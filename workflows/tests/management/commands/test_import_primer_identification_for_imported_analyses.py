@@ -24,7 +24,7 @@ def analyses_for_primer_identification_import(
             "accession": "MGYA00000002",
             "run_accession": "SRR00000002",
             "experiment_type": Analysis.ExperimentTypes.AMPLICON,
-            "pipeline_version": Analysis.PipelineVersions.v6_1,
+            "pipeline_version": "V6.99",
             "annotations_imported": True,
             "results_dir": "/tmp/r2",
         },

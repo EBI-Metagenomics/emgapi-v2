@@ -12,6 +12,7 @@ from activate_django_first import EMG_CONFIG
 import analyses.base_models.with_experiment_type_models
 import analyses.models
 import ena.models
+from analyses.pipeline_versions import V6_FAMILY_PATTERN
 from workflows.ena_utils.ena_api_requests import (
     get_study_from_ena,
     get_study_readruns_from_ena,
@@ -269,7 +270,7 @@ def analysis_rawreads_study(study_accession: str):
 
     mgnify_study.refresh_from_db()
     mgnify_study.features.has_v6_analyses = mgnify_study.analyses.filter(
-        pipeline_version=analyses.models.Analysis.PipelineVersions.v6, is_ready=True
+        pipeline_version__iregex=V6_FAMILY_PATTERN, is_ready=True
     ).exists()
     mgnify_study.save()
 
