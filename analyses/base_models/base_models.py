@@ -171,6 +171,35 @@ class ENADerivedManager(
 ): ...
 
 
+class _FirstAccessionExpression(models.Func):
+    """Select the first array value matching a regex, or the array's first value."""
+
+    output_field = models.CharField()
+
+    def __init__(self, array_field, preferred_accession_pattern: str):
+        self.preferred_accession_pattern = f"^(?:{preferred_accession_pattern})"
+        super().__init__(array_field)
+
+    def as_sql(self, compiler, connection, **extra_context):
+        array_sql, array_parameters = compiler.compile(self.source_expressions[0])
+        sql = f"""COALESCE(
+            (
+                SELECT accession
+                FROM unnest({array_sql}) WITH ORDINALITY
+                    AS accessions(accession, position)
+                WHERE accession ~ %s
+                ORDER BY position
+                LIMIT 1
+            ),
+            ({array_sql})[1]
+        )"""
+        return sql, [
+            *array_parameters,
+            self.preferred_accession_pattern,
+            *array_parameters,
+        ]
+
+
 class ENADerivedModel(VisibilityControlledModel):
     objects = ENADerivedManager()
 
@@ -195,6 +224,18 @@ class ENADerivedModel(VisibilityControlledModel):
                 self.ena_accessions[0],
             )
         return None
+
+    @classmethod
+    def build_first_accession_expression(
+        cls, field_name: str = "ena_accessions"
+    ) -> _FirstAccessionExpression:
+        """Build SQL that selects the first accession matching this model's regex,
+        falling back to the array's first accession.
+        """
+        return _FirstAccessionExpression(
+            field_name,
+            cls.PREFERRED_ENA_ACCESSION_REGEX.pattern,
+        )
 
     @property
     def ena_browser_url(self):
