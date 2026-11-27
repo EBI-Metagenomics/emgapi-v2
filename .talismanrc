@@ -26,6 +26,12 @@ fileignoreconfig:
 - filename: analyses/models.py
   allowed_patterns: [key]
 
+- filename: analyses/chemical_api.py
+  checksum: 217fd9f914373e64137b2674c32e6fdb06ebf932426e5902dbb06e923c2c7d09
+
+- filename: analyses/molecule_search.py
+  checksum: a9181141c704a23a20abb92f203604cecf2b65eb40fce8e8655f1d5decad93fd
+
 - filename: analyses/management/commands/merge_assemblies_duplicates.py
   checksum: 88d8816aedddb6d0303df338854a283092fbc2d697fc08d37f5838d3423814af
 

@@ -10,6 +10,7 @@ from typing import ClassVar, Literal, Optional, Union
 from aenum import extend_enum
 from db_file_storage.model_utils import delete_file, delete_file_if_needed
 from django.conf import settings
+from django.contrib.postgres.fields import ArrayField
 from django.contrib.postgres.indexes import GinIndex
 from django.core.exceptions import MultipleObjectsReturned, ObjectDoesNotExist
 from django.core.files.storage import storages
@@ -1288,3 +1289,18 @@ class Publication(TimeStampedModel):
 
     def __str__(self):
         return f"Publication {self.pk}: {Truncator(self.title).words(5)}"
+
+
+class AnalysisMoleculeIndex(models.Model):
+    """The unique ChEBI reaction participants for one assembly analysis."""
+
+    analysis = models.OneToOneField(
+        Analysis,
+        on_delete=models.CASCADE,
+        primary_key=True,
+        related_name="molecule_index",
+    )
+    chebi_ids = ArrayField(models.PositiveIntegerField(), default=list)
+
+    class Meta:
+        indexes = [GinIndex(fields=["chebi_ids"], name="analysis_molecules_gin")]

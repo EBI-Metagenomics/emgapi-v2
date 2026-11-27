@@ -2,6 +2,8 @@ from textwrap import dedent
 
 from ninja_extra import NinjaExtraAPI
 
+from analyses.chemical_api import MoleculeSearchController
+
 # Avoid circular imports between analyses and genomes apps' schemas by resolving forward references here
 from analyses.schemas import Biome, MGnifyAnalysisDownloadFile  # noqa
 from emgapiv2.api.schema_utils import ApiSections, OpenApiKeywords
@@ -164,3 +166,5 @@ api.register_controllers(BranchwaterController)
 
 # Private data auth token provider (Webin JWTs)
 api.register_controllers(WebinJwtController)
+
+api.register_controllers(MoleculeSearchController)

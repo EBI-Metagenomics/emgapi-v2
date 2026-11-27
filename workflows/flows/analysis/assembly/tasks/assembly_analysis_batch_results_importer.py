@@ -16,6 +16,7 @@ from workflows.data_io_utils.schemas import (
     VirifyResultSchema,
 )
 from workflows.data_io_utils.schemas.assembly import ImportResult
+from workflows.flows.analysis.assembly.tasks.import_rhea import import_rhea_annotations
 from workflows.models import (
     AssemblyAnalysisBatch,
     AssemblyAnalysisPipeline,
@@ -183,6 +184,16 @@ def assembly_analysis_results_importer(
                     base_path=base_path,
                     validate_first=True,
                 )
+                if pipeline_type == AssemblyAnalysisPipeline.ASA:
+                    identifier = analysis.assembly.first_accession
+                    import_rhea_annotations(
+                        analysis.id,
+                        base_path
+                        / identifier
+                        / "functional-annotation"
+                        / "rhea-reactions"
+                        / f"{identifier}_proteins2rhea.tsv.gz",
+                    )
                 logger.info(
                     f"Successfully imported {downloads_count} downloads for {analysis}"
                 )

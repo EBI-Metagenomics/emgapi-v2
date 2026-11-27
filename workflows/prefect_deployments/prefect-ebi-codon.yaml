@@ -6,6 +6,15 @@ pull:
 - prefect.deployments.steps.set_working_directory:
     directory: /nfs/production/rdf/metagenomics/jenkins-slurm/dev-prefect-agent/
 deployments:
+- name: initialise_molecule_index_deployment
+  description: |-
+    Populate the compact ChEBI index from public, completed ASAv6 analyses.
+    Copy Rhea files through the datamover deployment, one study at a time.
+    Supply workdir under the configured shared filesystem root.
+  entrypoint: workflows/flows/analysis/assembly/flows/initialise_molecule_index.py:initialise_molecule_index
+  work_pool:
+    name: slurm
+
 - name: assemble_study_deployment
   version: null
   tags: []

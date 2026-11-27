@@ -27,6 +27,15 @@ from workflows.models import (
 )
 
 
+@pytest.fixture(autouse=True)
+def mock_rhea_index_task():
+    # These tests isolate download imports from the separate molecule index task.
+    with patch(
+        "workflows.flows.analysis.assembly.tasks.assembly_analysis_batch_results_importer.import_rhea_annotations"
+    ) as task:
+        yield task
+
+
 @pytest.mark.django_db
 class TestAssemblyAnalysisBatchResultsImporter:
     """Test the assembly_analysis_batch_results_importer task."""
@@ -98,6 +107,18 @@ class TestAssemblyAnalysisBatchResultsImporter:
         assert results[0].success is True
         assert results[0].analysis_id == analysis.id
         assert results[0].downloads_count == 10
+        from workflows.flows.analysis.assembly.tasks.assembly_analysis_batch_results_importer import (
+            import_rhea_annotations,
+        )
+
+        import_rhea_annotations.assert_called_once_with(
+            analysis.id,
+            batch.get_pipeline_workspace(AssemblyAnalysisPipeline.ASA)
+            / analysis.assembly.first_accession
+            / "functional-annotation"
+            / "rhea-reactions"
+            / f"{analysis.assembly.first_accession}_proteins2rhea.tsv.gz",
+        )
         assert results[0].error is None
 
     @patch(
